@@ -1,3 +1,4 @@
+import { getApiV1DevicesByDeviceDeviceAccess } from './generated/mdm'
 import { it, expect, vi } from 'vitest'
 import axios from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
@@ -9,14 +10,8 @@ it('separates public DA routes from explicit demo and credential transports', as
     spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance),
     transport = createDeviceAccessTransport()
   spy.mockRestore()
-  mock.onAny().reply(200, { ok: true })
-  await transport.request({
-    method: 'GET',
-    path: '/api/v1/devices/{device}/device-access',
-    pathParams: { device: 'space device' },
-    successStatus: 200,
-    decode: (v) => v,
-  })
+  mock.onAny().reply(200, { items: [], nextCursor: null }, { 'Content-Type': 'application/json' })
+  await getApiV1DevicesByDeviceDeviceAccess(transport, { pathParams: { device: 'space device' } })
   expect(mock.history.get[0]?.url).toBe('/api/v1/devices/space%20device/device-access')
   for (const path of [
     '/api/da-demo/computers',

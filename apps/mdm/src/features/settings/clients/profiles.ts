@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedRow,
@@ -224,17 +225,17 @@ export function createProfilesClient(transport: HttpTransport) {
     definitions: <F extends keyof typeof definitionFields = keyof typeof definitionFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/user-attribute-definitions',
-        query: queryParameters({
-          limit: 20,
-          ...query,
-          fields: query.fields ?? Object.keys(definitionFields),
-        }),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor', 'sources'])
+      api.getApiV1UserAttributeDefinitions(
+        transport,
+        {
+          query: queryParameters({
+            limit: 20,
+            ...query,
+            fields: query.fields ?? Object.keys(definitionFields),
+          }),
+        },
+        (value) => {
+          const v = value
           return {
             items: array(v['items'], (row) => projectedRow(row, definitionFields, query.fields)),
             nextCursor: nextCursor(v['nextCursor']),
@@ -254,46 +255,39 @@ export function createProfilesClient(transport: HttpTransport) {
             }),
           }
         },
-      }),
+      ),
     definition: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/user-attribute-definitions/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: definition,
-      }),
+      api.getApiV1UserAttributeDefinitionsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        definition,
+      ),
     save: (
       id: string,
       operationId: string,
       expectedRevision: number,
       value: DefinitionValue | null,
     ) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/user-attribute-definitions/{id}',
-        pathParams: { id: uuid(id) },
-        body: { operationId: uuid(operationId), expectedRevision, value },
-        successStatus: 200,
-        decode: (v) => definitionReceipt(v, operationId, id),
-      }),
+      api.putApiV1UserAttributeDefinitionsById(
+        transport,
+        {
+          pathParams: { id: uuid(id) },
+          body: { operationId: uuid(operationId), expectedRevision, value },
+        },
+        (v) => definitionReceipt(v, operationId, id),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/user-attribute-operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: (v) => definitionReceipt(v, id),
-      }),
+      api.getApiV1UserAttributeOperationsById(transport, { pathParams: { id: uuid(id) } }, (v) =>
+        definitionReceipt(v, id),
+      ),
     read: (principal: string | null, view: 'current' | 'latest' = 'current', preview = false) =>
-      transport.request({
-        method: 'GET',
-        path: principal ? '/api/v1/user-profiles/{id}' : '/api/v1/user-profiles/me',
-        ...(principal ? { pathParams: { id: uuid(principal) } } : {}),
-        query: { view, preview: String(preview) },
-        successStatus: 200,
-        decode: profile,
-      }),
+      principal
+        ? api.getApiV1UserProfilesById(
+            transport,
+            { pathParams: { id: uuid(principal) }, query: { view, preview } },
+            profile,
+          )
+        : api.getApiV1UserProfilesMe(transport, { query: { view, preview } }, profile),
   }
 }
 export function sourceKey(value: ProfileSource) {

@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import { operationReceipt, origin, positive, sha256 } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
@@ -143,31 +144,24 @@ export function registryReceipt(value: unknown) {
   }
   return { operationId, action, result: tenant(v['result']) }
 }
-const base = '/api/v1/tenant-administration'
 export function createPlatformClient(transport: HttpTransport) {
   return {
     registryOperation(id: string) {
-      return transport.request({
-        method: 'GET',
-        path: base + '/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode(value) {
+      return api.getApiV1TenantAdministrationOperationsByOperation(
+        transport,
+        { pathParams: { operation: uuid(id) } },
+        (value) => {
           const r = registryReceipt(value)
           if (r.operationId !== id) throw new Error('Wrong operation')
           return r
         },
-      })
+      )
     },
     administrator(tenantId: string, id: string, body: { login: string; password: string }) {
-      return transport.request({
-        method: 'POST',
-        path: base + '/tenants/{id}/administrators',
-        pathParams: { id: uuid(tenantId) },
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 200,
-        decode(value) {
+      return api.postApiV1TenantAdministrationTenantsByTenantAdministrators(
+        transport,
+        { pathParams: { tenant: uuid(tenantId) }, headers: { 'Idempotency-Key': uuid(id) }, body },
+        (value) => {
           const r = registryReceipt(value)
           if (
             r.operationId !== id ||
@@ -177,81 +171,70 @@ export function createPlatformClient(transport: HttpTransport) {
             throw new Error('Wrong administrator receipt')
           return r
         },
-      })
+      )
     },
     remove(tenantId: string, id: string, expectedRevision: number) {
-      return transport.request({
-        method: 'DELETE',
-        path: base + '/tenants/{id}',
-        pathParams: { id: uuid(tenantId) },
-        headers: { 'Idempotency-Key': uuid(id) },
-        body: { expectedRevision },
-        successStatus: 200,
-        decode(value) {
+      return api.deleteApiV1TenantAdministrationTenantsByTenant(
+        transport,
+        {
+          pathParams: { tenant: uuid(tenantId) },
+          headers: { 'Idempotency-Key': uuid(id) },
+          body: { expectedRevision },
+        },
+        (value) => {
           const r = registryReceipt(value)
           if (r.operationId !== id || r.action !== 'delete' || r.result.tenantId !== tenantId)
             throw new Error('Wrong deletion receipt')
           return r
         },
-      })
+      )
     },
     tenant(id: string) {
-      return transport.request({
-        method: 'GET',
-        path: base + '/tenants/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode(value) {
+      return api.getApiV1TenantAdministrationTenantsByTenant(
+        transport,
+        { pathParams: { tenant: uuid(id) } },
+        (value) => {
           const row = tenant(value)
           if (row.tenantId !== id) throw new Error('Wrong tenant')
           return row
         },
-      })
+      )
     },
     async tenants(query: DirectoryQuery = {}) {
-      return transport.request({
-        method: 'GET',
-        path: base + '/tenants',
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode(value) {
+      return api.getApiV1TenantAdministrationTenants(
+        transport,
+        { query: queryParameters({ limit: 100, ...query }) },
+        (value) => {
           return windowPage(value, tenant)
         },
-      })
+      )
     },
     async provisionings(query: DirectoryQuery = {}) {
-      return transport.request({
-        method: 'GET',
-        path: base + '/provisionings',
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode(value) {
+      return api.getApiV1TenantAdministrationProvisionings(
+        transport,
+        { query: queryParameters({ limit: 100, ...query }) },
+        (value) => {
           return windowPage(value, provisionReceipt)
         },
-      })
+      )
     },
     operation(id: string) {
-      return transport.request({
-        method: 'GET',
-        path: base + '/provisionings/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, provisionReceipt),
-      })
+      return api.getApiV1TenantAdministrationProvisioningsByOperation(
+        transport,
+        { pathParams: { operation: uuid(id) } },
+        operationReceipt(id, provisionReceipt),
+      )
     },
     provision(id: string, input: ProvisionInput) {
-      return transport.request({
-        method: 'POST',
-        path: base + '/provisionings',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body: input,
-        successStatus: [200, 202],
-        decode(value) {
+      return api.postApiV1TenantAdministrationProvisionings(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body: input },
+        (value) => {
           const receipt = provisionReceipt(value)
           if (receipt.operationId !== id) throw new Error('Wrong operation')
           return receipt
         },
-      })
+      )
     },
     update(
       id: string,
@@ -259,22 +242,22 @@ export function createPlatformClient(transport: HttpTransport) {
       expectedRevision: number,
       input: { name: string | null; notes: string | null },
     ) {
-      return transport.request({
-        method: 'PUT',
-        path: base + '/tenants/{id}',
-        pathParams: { id: uuid(id) },
-        headers: { 'Idempotency-Key': uuid(operationId) },
-        body: { expectedRevision, ...input },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['operationId', 'action', 'result'])
+      return api.putApiV1TenantAdministrationTenantsByTenant(
+        transport,
+        {
+          pathParams: { tenant: uuid(id) },
+          headers: { 'Idempotency-Key': uuid(operationId) },
+          body: { expectedRevision, ...input },
+        },
+        (value) => {
+          const v = value
           if (v['operationId'] !== operationId || v['action'] !== 'update')
             throw new Error('Wrong receipt')
           const result = tenant(v['result'])
           if (result.tenantId !== id) throw new Error('Wrong tenant')
           return result
         },
-      })
+      )
     },
   }
 }

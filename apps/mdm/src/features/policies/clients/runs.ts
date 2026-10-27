@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { windowParameters, windowPage, type WindowQuery } from '../../../services/directory-query'
 import { subject } from '../../security/clients/credentials'
 import { jsonValue } from '../../../services/json'
@@ -487,26 +488,17 @@ export type PolicyRun = ReturnType<typeof policyRun>
 export function createRunsClient(transport: HttpTransport) {
   return {
     list: (id: string, page: WindowQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/policies/{id}/runs',
-        pathParams: { id },
-        query: windowParameters({ limit: 20, ...page }, 1000),
-        successStatus: 200,
-        decode: (value) => windowPage(value, (v) => policyRun(v, false)),
-      }),
+      api.getApiV1PoliciesByIdRuns(
+        transport,
+        { pathParams: { id }, query: windowParameters({ limit: 20, ...page }, 1000) },
+        (value) => windowPage(value, (v) => policyRun(v, false)),
+      ),
     read: (id: string, task: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/policies/{id}/runs/{task}',
-        pathParams: { id, task },
-        successStatus: 200,
-        decode(value) {
-          const run = policyRun(value, true)
-          if (!('policyId' in run) || run.policyId !== id || run.taskId !== task)
-            throw new Error('Wrong software run')
-          return run
-        },
+      api.getApiV1PoliciesByIdRunsByTask(transport, { pathParams: { id, task } }, (value) => {
+        const run = policyRun(value, true)
+        if (!('policyId' in run) || run.policyId !== id || run.taskId !== task)
+          throw new Error('Wrong software run')
+        return run
       }),
   }
 }

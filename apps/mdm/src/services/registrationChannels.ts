@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import { array, closed, count, enumeration, nullable, string, unique, uuid } from './decode'
 
@@ -76,29 +77,24 @@ export type ChannelStatus = ReturnType<typeof decodeChannels>['channels'][number
 export function createRegistrationChannelsClient(transport: HttpTransport, tenant: string) {
   return {
     read: (instance: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/registration-channels',
-        successStatus: 200,
-        decode: (v) => decodeChannels(v, tenant, instance),
-      }),
+      api.getApiV1RegistrationChannels(transport, {}, (v) => decodeChannels(v, tenant, instance)),
     change: (
       channel: RegistrationChannel,
       operationId: string,
       expectedRevision: number,
       admission: Admission,
     ) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/registration-channels/{channel}/admission',
-        pathParams: { channel: enumeration(channel, registrationChannels) },
-        headers: { 'Idempotency-Key': uuid(operationId) },
-        body: {
-          expectedRevision: count(expectedRevision),
-          admission: enumeration(admission, ['allowed', 'paused'] as const),
+      api.putApiV1RegistrationChannelsByChannelAdmission(
+        transport,
+        {
+          pathParams: { channel: enumeration(channel, registrationChannels) },
+          headers: { 'Idempotency-Key': uuid(operationId) },
+          body: {
+            expectedRevision: count(expectedRevision),
+            admission: admission,
+          },
         },
-        successStatus: 200,
-        decode: (v) => {
+        (v) => {
           const result = setting(v)
           if (
             result.channel !== channel ||
@@ -108,6 +104,6 @@ export function createRegistrationChannelsClient(transport: HttpTransport, tenan
             throw new Error('Wrong admission receipt')
           return result
         },
-      }),
+      ),
   }
 }

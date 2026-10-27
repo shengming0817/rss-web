@@ -35,7 +35,11 @@
       "@rss/device-access/model": ["packages/device-access/src/model.ts"],
       "@rss/device-access/components": ["packages/device-access/src/components.ts"],
       "@rss/api/device-access": ["packages/api/src/device-access.ts"],
-      "@rss/api/device-access-demo": ["packages/api/src/device-access-demo.ts"]
+      "@rss/api/device-access-demo": ["packages/api/src/device-access-demo.ts"],
+      "@rss/api/mdm-operations": ["packages/api/src/generated/mdm/index.ts"],
+      "@rss/api/mdm-types": ["packages/api/src/generated/mdm/owners.ts"],
+      "@rss/api/mdm-validators": ["packages/api/src/generated/mdm/owner-validators.ts"],
+      "@rss/api/mdm-demo": ["packages/api/src/mdm-demo.ts"]
     }
   }
 }

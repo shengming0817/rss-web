@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { authorization, reauthorizationEligibility } from './authorization'
 import {
   queryParameters,
@@ -65,12 +66,10 @@ export function createExecutionsClient(transport: HttpTransport) {
     directory: <F extends keyof typeof executionFields = keyof typeof executionFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/operations',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1Operations(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (value) => {
           const page = projectedPage(value, executionFields, query.fields, ['id', 'kind'])
           for (const row of page.items) {
             if (
@@ -96,16 +95,14 @@ export function createExecutionsClient(transport: HttpTransport) {
           }
           return page
         },
-      }),
+      ),
     statistics: (filter?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/operations/statistics',
-        query: queryParameters({ filter }),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['statistics', 'asOf']),
-            stats = closed(v['statistics'], ['total', 'commands', 'actionRuns', 'unknown'])
+      api.getApiV1OperationsStatistics(
+        transport,
+        { query: queryParameters({ filter }) },
+        (value) => {
+          const v = value,
+            stats = v['statistics']
           return {
             statistics: {
               total: count(stats['total']),
@@ -116,6 +113,6 @@ export function createExecutionsClient(transport: HttpTransport) {
             asOf: integer(v['asOf']),
           }
         },
-      }),
+      ),
   }
 }

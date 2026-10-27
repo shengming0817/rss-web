@@ -7,7 +7,7 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import type { FieldDefinition } from '../../devices/clients/assets'
-import type { ValueMapping, Platform } from '../../../contracts/collection/generated/ResourceWrite'
+import type { ValueMapping, Platform } from '@rss/api/mdm-types'
 import { identityMapping } from '../collection-draft'
 import ValueMappingEditor from './ValueMappingEditor.vue'
 const props = defineProps<{ source: string; platform?: Platform | undefined }>()

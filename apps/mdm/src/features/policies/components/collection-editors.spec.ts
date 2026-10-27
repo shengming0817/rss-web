@@ -15,7 +15,7 @@ import { identityMapping } from '../collection-draft'
 import { decodeResource } from '../clients/resources'
 import { fieldDefinition } from '../../devices/clients/assets'
 import blueprints from '../../../../demo/policies/blueprints.json'
-import type { ValueMapping } from '../../../contracts/collection/generated/ResourceWrite'
+import type { ValueMapping } from '@rss/api/mdm-types'
 const wrappers: VueWrapper[] = []
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount())

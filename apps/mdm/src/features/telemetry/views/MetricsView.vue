@@ -25,7 +25,7 @@ import { sourceIds } from '../../devices/clients/asset-model'
 import type {
   FieldDefinition as Definition,
   FieldWrite,
-} from '../../../contracts/collection/generated/FieldWrite'
+} from '@rss/api/mdm-types'
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.devices.assets

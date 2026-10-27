@@ -1,0 +1,543 @@
+import process from 'node:process'
+/** One producer projection, static TypeScript and CSP-safe validators.
+ * ref: ajv lib/standalone/index.ts@v8.20.0
+ * ref: json-schema-to-typescript src/index.ts@7f72770eb854328c96b112be445da0306bebdbaf
+ */
+import { readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
+import Ajv2020 from 'ajv/dist/2020.js'
+import standaloneCode from 'ajv/dist/standalone/index.js'
+import { compile } from 'json-schema-to-typescript'
+import { build } from 'esbuild'
+import { format } from 'prettier'
+import { contractSource } from './contract-source.mjs'
+
+const root = new URL('../', import.meta.url)
+const target = new URL('packages/api/src/generated/mdm/', root)
+const checking = process.argv.includes('--check')
+const { document, source } = await contractSource(root)
+const outputFiles = new Set()
+const digest = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
+const schemas = { ...document.schemas }
+const endpoints = document.endpoints.filter((e) => e.listener === 'browser')
+const schemaKeys = new Set([
+  '$schema',
+  '$ref',
+  '$defs',
+  'type',
+  'const',
+  'enum',
+  'properties',
+  'required',
+  'additionalProperties',
+  'patternProperties',
+  'propertyNames',
+  'allOf',
+  'anyOf',
+  'oneOf',
+  'not',
+  'if',
+  'then',
+  'else',
+  'items',
+  'prefixItems',
+  'contains',
+  'minContains',
+  'maxContains',
+  'uniqueItems',
+  'minItems',
+  'maxItems',
+  'minLength',
+  'maxLength',
+  'pattern',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minProperties',
+  'maxProperties',
+  'title',
+  'description',
+  'default',
+  'readOnly',
+  'examples',
+  '$comment',
+  'format',
+  'x-rss-extension',
+  'x-rss-owner',
+])
+const annotationKeys = new Set([
+  'title',
+  'description',
+  'default',
+  'readOnly',
+  'examples',
+  '$comment',
+  'x-rss-extension',
+  'x-rss-owner',
+])
+const schemaMaps = new Set(['properties', '$defs', 'patternProperties'])
+const schemaLists = new Set(['allOf', 'anyOf', 'oneOf', 'prefixItems'])
+const schemaChildren = new Set([
+  'items',
+  'contains',
+  'additionalProperties',
+  'propertyNames',
+  'not',
+  'if',
+  'then',
+  'else',
+])
+// Visit only schema positions. A const/enum/example containing JSON Schema is ordinary data.
+function transform(schema, mode) {
+  if (typeof schema === 'boolean') return schema
+  const result = {}
+  for (const [key, value] of Object.entries(schema)) {
+    if (!schemaKeys.has(key)) throw new Error(`Unsupported schema assertion: ${key}`)
+    if (annotationKeys.has(key) || key === '$schema') continue
+    result[key] = schemaMaps.has(key)
+      ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, transform(v, mode)]))
+      : schemaLists.has(key)
+        ? value.map((v) => transform(v, mode))
+        : schemaChildren.has(key)
+          ? transform(value, mode)
+          : value
+  }
+  // Consumer core records are closed; only the producer's explicit extension positions remain open.
+  if (
+    result.properties &&
+    result.additionalProperties === undefined &&
+    !schema['x-rss-extension'] &&
+    !result.allOf &&
+    !result['$ref']
+  )
+    result.additionalProperties = false
+  if (mode === 'types') {
+    if (result.prefixItems) {
+      result.additionalItems = result.items ?? true
+      result.items = result.prefixItems
+      delete result.prefixItems
+    }
+    if (Object.keys(result).every((key) => key === '$defs')) result.tsType = 'unknown'
+  }
+  return result
+}
+const ajv = new Ajv2020({
+  strict: true,
+  strictRequired: false,
+  strictTypes: false,
+  allowMatchingProperties: true,
+  inlineRefs: false,
+  messages: false,
+  allErrors: false,
+  removeAdditional: false,
+  useDefaults: false,
+  coerceTypes: false,
+  code: { source: true, esm: true, optimize: 2 },
+  formats: Object.fromEntries([
+    ...[
+      'uint',
+      'uint8',
+      'uint16',
+      'uint32',
+      'uint64',
+      'uint128',
+      'int16',
+      'int32',
+      'int64',
+      'int128',
+      'double',
+      'binary',
+    ].map((k) => [k, true]),
+    ['uuid', /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i],
+    ['uri', /^[a-z][a-z0-9+.-]*:[^\s]*$/i],
+  ]),
+})
+if (!checking) await mkdir(target, { recursive: true })
+async function output(name, code, parser = 'typescript') {
+  outputFiles.add(name)
+  const value = await format(code, { parser, singleQuote: true, semi: false, printWidth: 96 })
+  const path = new URL(name, target)
+  if (checking) {
+    if ((await readFile(path, 'utf8').catch(() => '')) !== value)
+      throw new Error(`Regenerate HTTP contract: ${name}`)
+  } else await writeFile(path, value)
+}
+const short = (id) => 's' + id.replace('sha256-', '').slice(0, 20)
+function rootFor(ref) {
+  if (!ref || !schemas[ref.schemaId]) throw new Error('Missing schema binding')
+  return short(ref.schemaId)
+}
+// Also export owner definitions used for editing, canonical bytes, and display mappings.
+const ownerNames = new Map()
+for (const e of endpoints) {
+  if (e.method === 'POST' && e.path === '/api/v1/resources/{id}') {
+    const id = e.request.body.schema.schemaId
+    for (const name of Object.keys(schemas[id].$defs)) ownerNames.set(name, { id, name })
+    ownerNames.set('ResourceWrite', { id, name: 'Root', pointer: '' })
+    ownerNames.set('ResourceResponse', {
+      id: e.responses.find((r) => r.status === 200).body.schema.schemaId,
+      name: 'Root',
+      pointer: '',
+    })
+  }
+  if (e.method === 'PUT' && e.path === '/api/v1/asset-fields/{field}') {
+    const id = e.request.body.schema.schemaId
+    ownerNames.set('FieldWrite', { id, name: 'Root', pointer: '' })
+    for (const name of Object.keys(schemas[id].$defs))
+      if (!ownerNames.has(name)) ownerNames.set(name, { id, name })
+  }
+  if (e.method === 'GET' && e.path === '/api/v1/asset-fields/{field}') {
+    const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
+    for (const name of ['FieldView', 'FieldImpact', 'FieldMappingReference'])
+      ownerNames.set(name, { id, name })
+  }
+  if (e.method === 'GET' && e.path === '/api/v1/asset-fields/{field}/references')
+    ownerNames.set('FieldReferenceQuery', {
+      id: e.request.query.schemaId,
+      name: 'Root',
+      pointer: '',
+    })
+  if (e.method === 'GET' && e.path === '/api/v1/policies/{id}') {
+    const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
+    ownerNames.set('PolicyRead', { id, name: 'Root', pointer: '' })
+    for (const name of Object.keys(schemas[id].$defs)) ownerNames.set('Policy' + name, { id, name })
+  }
+  if (e.method === 'POST' && e.path === '/api/v1/policies/previews') {
+    const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
+    for (const name of ['TaskAdmission', 'TaskAdmissionState']) ownerNames.set(name, { id, name })
+  }
+}
+const needed = new Set()
+function binding(ref) {
+  if (ref) needed.add(ref.schemaId)
+}
+for (const e of endpoints) {
+  binding(e.request.path)
+  binding(e.request.query)
+  binding(e.request.body?.schema)
+  for (const v of Object.values(e.request.headers)) binding(v)
+  for (const r of e.responses) {
+    binding(r.body?.schema)
+    for (const v of Object.values(r.headers)) binding(v)
+  }
+  if (e.configuredPath) {
+    const schema = e.configuredPath.schema.value
+    const id = 'sha256-' + digest(schema)
+    schemas[id] = schema
+    needed.add(id)
+    e.configuredSchema = id
+  }
+}
+// Intern TypeScript definitions by their resolved reference graph, never by a local $defs name.
+// Cyclic nodes retain scope identity; unrelated roots cannot accidentally share a recursive type.
+const typeNodes = new Map(),
+  fingerprints = new Map(),
+  visiting = new Set()
+function resolveNode(id, pointer) {
+  let node = schemas[id]
+  if (pointer)
+    for (const part of pointer.slice(1).split('/'))
+      node = node[part.replaceAll('~1', '/').replaceAll('~0', '~')]
+  return node
+}
+function schemaWalk(node, visitRef) {
+  if (typeof node === 'boolean') return node
+  const result = {}
+  for (const [key, value] of Object.entries(node)) {
+    if (key === '$defs') continue
+    if (key === '$ref') result[key] = visitRef(value)
+    else if (schemaMaps.has(key))
+      result[key] = Object.fromEntries(
+        Object.entries(value).map(([k, v]) => [k, schemaWalk(v, visitRef)]),
+      )
+    else if (schemaLists.has(key)) result[key] = value.map((v) => schemaWalk(v, visitRef))
+    else if (schemaChildren.has(key)) result[key] = schemaWalk(value, visitRef)
+    else if (!annotationKeys.has(key) && key !== '$schema') result[key] = value
+  }
+  return result
+}
+function typeName(id, pointer = '') {
+  const key = id + '#' + pointer
+  if (fingerprints.has(key)) return fingerprints.get(key)
+  if (visiting.has(key)) return 'cycle:' + key
+  visiting.add(key)
+  const node = schemaWalk(resolveNode(id, pointer), (ref) => typeName(id, ref.slice(1)))
+  const name =
+    'T' + [...digest(node)].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('')
+  visiting.delete(key)
+  fingerprints.set(key, name)
+  typeNodes.set(key, { id, pointer, name })
+  return name
+}
+for (const id of [...needed].sort()) typeName(id)
+for (const { id, name, pointer } of ownerNames.values())
+  typeName(id, pointer === '' ? '' : '/$defs/' + name)
+const definitions = {}
+for (const { id, pointer, name } of typeNodes.values()) {
+  const node = schemaWalk(
+    resolveNode(id, pointer),
+    (ref) => '#/$defs/' + typeName(id, ref.slice(1)),
+  )
+  const typed = transform(node, 'types')
+  definitions[name] =
+    typeof typed === 'boolean'
+      ? { tsType: typed ? 'unknown' : 'never', title: name }
+      : { ...typed, title: name }
+}
+await output(
+  'types.ts',
+  '/* Generated shared types. Do not edit. */\n' +
+    (await compile(
+      { type: 'object', additionalProperties: false, $defs: definitions, title: 'TypeGraph' },
+      'TypeGraph',
+      {
+        bannerComment: '',
+        unknownAny: true,
+        ignoreMinAndMaxItems: true,
+        unreachableDefinitions: true,
+        format: false,
+      },
+    )),
+)
+const exports = {}
+for (const id of [...needed].sort()) {
+  const name = short(id)
+  ajv.addSchema(transform(schemas[id], 'validation'), id)
+  exports[name] = id
+  await output(
+    name + '.ts',
+    `/* Generated from ${source.revision}. Do not edit. */\nexport type {${typeName(id)} as Root} from './types'\n`,
+  )
+}
+let ownerTypes = ''
+for (const [name, { id, name: original, pointer }] of [...ownerNames].sort(([a], [b]) =>
+  a.localeCompare(b),
+)) {
+  ownerTypes += `export type {${typeName(id, pointer === '' ? '' : '/$defs/' + original)} as ${name}} from './types'\n`
+  exports['validate' + name] = pointer === '' ? id : `${id}#/$defs/${original}`
+}
+await output('owners.ts', ownerTypes)
+for (const [name, ref] of Object.entries(exports)) {
+  const bundled = await build({
+    stdin: {
+      contents: standaloneCode(ajv, ajv.getSchema(ref)),
+      resolveDir: fileURLToPath(root),
+      sourcefile: 'validator.js',
+    },
+    bundle: true,
+    write: false,
+    minify: true,
+    platform: 'browser',
+    format: 'esm',
+    legalComments: 'none',
+  })
+  const code = '/* Generated. Do not edit. */\n' + bundled.outputFiles[0].text
+  const filename = name + '.validator.js'
+  outputFiles.add(filename)
+  if (checking) {
+    if ((await readFile(new URL(filename, target), 'utf8').catch(() => '')) !== code)
+      throw new Error(`Regenerate HTTP validator: ${name}`)
+  } else await writeFile(new URL(filename, target), code)
+  const type = name.startsWith('validate')
+    ? `import('./owners').${name.slice(8)}`
+    : `import('./${name}').Root`
+  await output(
+    name + '.validator.d.ts',
+    `declare function validate(value:unknown):value is ${type}\nexport default validate\n`,
+  )
+}
+await output(
+  'owner-validators.ts',
+  [...ownerNames.keys()]
+    .sort()
+    .map((name) => `export {default as validate${name}} from './validate${name}.validator.js'`)
+    .join('\n'),
+)
+const errorResponses = new Map()
+for (const e of endpoints)
+  for (const r of e.responses)
+    if (r.status >= 400 && r.body?.content_type === 'application/json')
+      errorResponses.set(`${r.status}:${r.body.schema.schemaId}`, {
+        status: r.status,
+        id: r.body.schema.schemaId,
+      })
+const errorIds = [...new Set([...errorResponses.values()].map((r) => r.id))].sort()
+await output(
+  'errors.ts',
+  errorIds.map((id) => `import ${short(id)} from './${short(id)}.validator.js'`).join('\n') +
+    '\nexport const errorResponses = [' +
+    [...errorResponses.values()]
+      .map((r) => `{status:${r.status},validate:${short(r.id)}}`)
+      .join(',') +
+    '] as const\n',
+)
+// Shared response branches avoid repeating the same mounted failure contracts in every operation.
+const responseBranches = new Map()
+for (const e of endpoints)
+  for (const r of e.responses) responseBranches.set('r' + digest(r).slice(0, 20), r)
+const responseValidationIds = [
+  ...new Set(
+    [...responseBranches.values()].flatMap((r) => [
+      ...(r.body ? [r.body.schema.schemaId] : []),
+      ...Object.values(r.headers).map((h) => h.schemaId),
+    ]),
+  ),
+].sort()
+await output(
+  'responses.ts',
+  responseValidationIds
+    .map((id) => `import ${short(id)} from './${short(id)}.validator.js'`)
+    .join('\n') +
+    '\n' +
+    [...responseBranches]
+      .map(
+        ([name, r]) =>
+          `export const ${name}={status:${r.status},media:${JSON.stringify(r.body?.content_type ?? null)},validate:${r.body ? short(r.body.schema.schemaId) : 'null'},headers:{${Object.entries(
+            r.headers,
+          )
+            .map(([k, v]) => `${JSON.stringify(k)}:${short(v.schemaId)}`)
+            .join(',')}}}`,
+      )
+      .join('\n'),
+)
+const operationName = (e) =>
+  e.method.toLowerCase() +
+  e.path
+    .replace(/\{([^}]+)\}/g, 'by-$1')
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((s) => s[0].toUpperCase() + s.slice(1))
+    .join('')
+const names = new Set()
+let index = ''
+for (const e of endpoints) {
+  const name = operationName(e)
+  if (names.has(name)) throw new Error(`Duplicate generated operation ${name}`)
+  names.add(name)
+  const captures = [...e.path.matchAll(/\{([^}]+)\}/g)].map((m) => m[1])
+  const refs = new Set()
+  const validationRefs = new Set()
+  const typeOf = (ref) => {
+    const key = rootFor(ref)
+    refs.add(key)
+    return `${key}.Root`
+  }
+  const validatorOf = (ref) => {
+    const key = rootFor(ref)
+    validationRefs.add(key)
+    return `v_${key}`
+  }
+  const args = []
+  if (captures.length) {
+    const schema = e.request.path && schemas[e.request.path.schemaId]
+    let types
+    if (schema?.prefixItems)
+      types = schema.prefixItems.map((s) => (s.type === 'integer' ? 'number' : 'string'))
+    else if (schema?.type === 'object')
+      types = captures.map((k) => (schema.properties[k]?.type === 'integer' ? 'number' : 'string'))
+    else types = captures.map(() => 'string')
+    args.push(`pathParams: {${captures.map((c, i) => `${c}: ${types[i] ?? 'string'}`).join(';')}}`)
+  }
+  if (e.request.query) args.push(`query?: WireInput<${typeOf(e.request.query)}> | undefined`)
+  if (e.request.body)
+    args.push(
+      `body: ${e.request.body.content_type === 'application/octet-stream' ? 'ArrayBuffer' : `WireInput<${typeOf(e.request.body.schema)}>`}`,
+    )
+  args.push('headers?: Readonly<Record<string, string>> | undefined')
+  args.push('signal?: AbortSignal | undefined', 'timeoutMs?: number | undefined')
+  const success = e.responses.filter(
+    (r) => r.status < 400 || (e.path === '/readyz' && r.status === 503),
+  )
+  const binary = success.some((r) => r.body && !r.body.content_type.startsWith('application/json'))
+  const returns =
+    [
+      ...new Set(
+        success.map((r) => (!r.body ? 'void' : binary ? 'BinaryResponse' : typeOf(r.body.schema))),
+      ),
+    ].join(' | ') || 'never'
+  const descriptor = {
+    operationId: e.operationId,
+    method: e.method,
+    path: e.path,
+    captures,
+    pathShape: e.configuredSchema
+      ? 'scalar'
+      : e.request.path
+        ? schemas[e.request.path.schemaId]?.type === 'object'
+          ? 'object'
+          : captures.length === 1
+            ? 'scalar'
+            : 'tuple'
+        : null,
+    queryOwner: e.request.query_owner,
+    publicRead: !e.authentication,
+    contentType: e.request.body?.content_type ?? null,
+    requestHeaders: Object.keys(e.request.headers).filter(
+      (k) =>
+        ![
+          'cookie',
+          'origin',
+          'x-csrf-token',
+          'x-identity-request',
+          'authorization',
+          'x-api-key',
+        ].includes(k.toLowerCase()),
+    ),
+    requiredHeaders: e.request.required_headers.filter(
+      (k) =>
+        ![
+          'cookie',
+          'host',
+          'origin',
+          'x-csrf-token',
+          'x-identity-request',
+          'authorization',
+          'x-api-key',
+        ].includes(k.toLowerCase()),
+    ),
+    binary,
+    statuses: [...new Set(success.map((r) => r.status))],
+  }
+  const responses = e.responses.map((r) => 'r.r' + digest(r).slice(0, 20))
+  const headerChecks = Object.entries(e.request.headers)
+    .filter(([key]) => descriptor.requestHeaders.includes(key))
+    .map(([key, ref]) => `${JSON.stringify(key)}:${validatorOf(ref)}`)
+    .join(',')
+  let checks = `headers:{${headerChecks}},path: ${e.request.path ? validatorOf(e.request.path) : e.configuredSchema ? (validationRefs.add(short(e.configuredSchema)), `v_${short(e.configuredSchema)}`) : 'null'}, query: ${e.request.query ? validatorOf(e.request.query) : 'null'}, body: ${e.request.body ? validatorOf(e.request.body.schema) : 'null'}`
+  const imports = [...refs]
+    .sort()
+    .map((k) => `import type * as ${k} from './${k}'`)
+    .join('\n')
+  await output(
+    `${name}.ts`,
+    `/* Generated. Do not edit. */
+    import { defineEndpoint${e.request.query || (e.request.body && e.request.body.content_type !== 'application/octet-stream') ? ', type WireInput' : ''} } from '../../mdm-endpoint'
+    ${binary ? "import type { BinaryResponse } from '../../types'" : ''}
+    import * as r from './responses'
+    ${[...validationRefs]
+      .sort()
+      .map((key) => `import v_${key} from './${key}.validator.js'`)
+      .join('\n')}
+    ${imports}
+    export type Input = {${args.join(';')}}
+    export type Output = ${returns}
+    export const ${name} = /* @__PURE__ */ defineEndpoint<Input, Output>({
+      ...${JSON.stringify(descriptor)}, checks: {${checks}}, responses: [${responses.join(',')}]
+    })
+  `,
+  )
+  index += `export { ${name} } from './${name}'\n`
+}
+await output('index.ts', index)
+for (const name of await readdir(target)) {
+  if (!outputFiles.has(name)) {
+    if (checking) throw new Error(`Obsolete generated contract: ${name}`)
+    await rm(new URL(name, target))
+  }
+}
+console.log(
+  `${checking ? 'Checked' : 'Generated'} ${endpoints.length} browser operations from ${source.revision}`,
+)

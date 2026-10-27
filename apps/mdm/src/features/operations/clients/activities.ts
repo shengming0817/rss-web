@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -32,23 +33,7 @@ export interface ActivityQuery extends WindowQuery {
 }
 function queryParameters(query: ActivityQuery) {
   const { limit, cursor, ...context } = query
-  closed(
-    context,
-    [],
-    [
-      'from',
-      'until',
-      'source',
-      'kind',
-      'status',
-      'policy',
-      'request',
-      'batch',
-      'task',
-      'operation',
-      'related',
-    ],
-  )
+
   const result: Record<string, string | number> = windowParameters({ limit, cursor }, 200)
   for (const [key, value] of Object.entries(context)) {
     if (value === undefined) continue
@@ -195,21 +180,11 @@ export type ManagementActivity = ReturnType<typeof managementActivity>
 export function createActivitiesClient(transport: HttpTransport) {
   return {
     list: (device: string, query: ActivityQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/management-activities',
-        pathParams: { device },
-        query: queryParameters(query),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, [
-            'items',
-            'nextCursor',
-            'syncCursor',
-            'asOf',
-            'coverage',
-            'retainedFrom',
-          ])
+      api.getApiV1DevicesByDeviceManagementActivities(
+        transport,
+        { pathParams: { device }, query: queryParameters(query) },
+        (value) => {
+          const v = value
           return {
             items: array(v['items'], (v) => managementActivity(v, device)),
             nextCursor: nextCursor(v['nextCursor']),
@@ -226,25 +201,15 @@ export function createActivitiesClient(transport: HttpTransport) {
             }),
           }
         },
-      }),
+      ),
     read: (device: string, id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/management-activities/{id}',
-        pathParams: { device, id },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, [
-              'activity',
-              'personal',
-              'related',
-              'relatedCursor',
-              'missing',
-              'asOf',
-            ]),
+      api.getApiV1DevicesByDeviceManagementActivitiesById(
+        transport,
+        { pathParams: { device, id } },
+        (value) => {
+          const v = value,
             activity = managementActivity(v['activity'], device)
-          if (activity.id !== id || boolean(v['personal']))
-            throw new Error('Wrong management activity')
+          if (activity.id !== id || v['personal']) throw new Error('Wrong management activity')
           return {
             activity,
             related: array(v['related'], (v) => managementActivity(v, device)),
@@ -253,6 +218,6 @@ export function createActivitiesClient(transport: HttpTransport) {
             asOf: integer(v['asOf']),
           }
         },
-      }),
+      ),
   }
 }

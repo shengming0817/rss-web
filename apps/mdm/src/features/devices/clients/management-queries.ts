@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -96,22 +97,16 @@ export function ddmPage(value: unknown) {
 export function createManagementQueries(transport: HttpTransport) {
   return {
     groups: (device: string, cursor?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/groups',
-        pathParams: { device },
-        query: { cursor, limit: 20 },
-        successStatus: 200,
-        decode: memberships,
-      }),
+      api.getApiV1DevicesByDeviceGroups(
+        transport,
+        { pathParams: { device }, query: { cursor, limit: 20 } },
+        memberships,
+      ),
     ddm: (device: string, cursor?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/ddm',
-        pathParams: { device },
-        query: { cursor, limit: 16 },
-        successStatus: 200,
-        decode: ddmPage,
-      }),
+      api.getApiV1DevicesByDeviceDdm(
+        transport,
+        { pathParams: { device }, query: { cursor, limit: 16 } },
+        ddmPage,
+      ),
   }
 }

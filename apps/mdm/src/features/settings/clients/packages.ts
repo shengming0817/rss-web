@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -99,7 +100,6 @@ const packageFields = {
   installerSha256: digest,
 }
 export function createManagedPackages(transport: HttpTransport, tenant: string) {
-  const uploadPath = '/api/v1/resources/{resource}/uploads/{upload}'
   function uploadStatus(value: unknown, id: string) {
     const v = closed(value, ['id', 'binding', 'offset', 'expires', 'complete'])
     const b = closed(v['binding'], ['purpose', 'reference', 'length', 'sha256', 'actor'])
@@ -120,22 +120,19 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
     }
   }
   function inspection(method: 'GET' | 'POST', id: string, signal?: AbortSignal) {
-    return transport.request({
-      method,
-      ...(method === 'POST' ? { timeoutMs: MDM_CONTENT_TIMEOUT_MS } : {}),
-      path: '/api/v1/agent-packages/uploads/{id}',
-      pathParams: { id: uuid(id) },
-      ...(signal ? { signal } : {}),
-      successStatus: 200,
-      decode: (value) => {
-        const v = closed(value, [
-          'packageId',
-          'filename',
-          'length',
-          'sha256',
-          'format',
-          'inspection',
-        ])
+    return (
+      method === 'POST'
+        ? api.postApiV1AgentPackagesUploadsById
+        : api.getApiV1AgentPackagesUploadsById
+    )(
+      transport,
+      {
+        ...(method === 'POST' ? { timeoutMs: MDM_CONTENT_TIMEOUT_MS } : {}),
+        pathParams: { id: uuid(id) },
+        ...(signal ? { signal } : {}),
+      },
+      (value) => {
+        const v = value
         if (uuid(v['packageId']) !== id) throw new Error('Wrong inspected package')
         return {
           packageId: id,
@@ -146,7 +143,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
           inspection: installerInspection(v['inspection']),
         }
       },
-    })
+    )
   }
   return {
     begin: (
@@ -156,22 +153,11 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
       sha256: number[],
       signal?: AbortSignal,
     ) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-packages/uploads',
-        body: { operationId, filename, length, sha256 },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode: (value) => {
-          const v = closed(value, [
-            'packageId',
-            'resource',
-            'upload',
-            'offset',
-            'length',
-            'complete',
-            'href',
-          ])
+      api.postApiV1AgentPackagesUploads(
+        transport,
+        { body: { operationId, filename, length, sha256 }, ...(signal ? { signal } : {}) },
+        (value) => {
+          const v = value
           if (
             uuid(v['packageId']) !== operationId ||
             v['resource'] !== operationId ||
@@ -182,39 +168,32 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
             throw new Error('Wrong upload preparation')
           const offset = count(v['offset'])
           if (offset > length) throw new Error('Invalid frontier')
-          return { packageId: operationId, offset, complete: boolean(v['complete']) }
+          return { packageId: operationId, offset, complete: v['complete'] }
         },
-      }),
+      ),
     status: (id: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'GET',
-        path: uploadPath,
-        pathParams: { resource: uuid(id), upload: uuid(id) },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode: (v) => uploadStatus(v, id),
-      }),
+      api.getApiV1ResourcesByIdUploadsByUpload(
+        transport,
+        { pathParams: { id: uuid(id), upload: uuid(id) }, ...(signal ? { signal } : {}) },
+        (v) => uploadStatus(v, id),
+      ),
     append: (id: string, offset: number, body: ArrayBuffer, signal?: AbortSignal) =>
-      transport.request({
-        method: 'PATCH',
-        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
-        path: uploadPath,
-        pathParams: { resource: uuid(id), upload: uuid(id) },
-        query: { offset },
-        body,
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode: (v) => uploadStatus(v, id),
-      }),
+      api.patchApiV1ResourcesByIdUploadsByUpload(
+        transport,
+        {
+          timeoutMs: MDM_CONTENT_TIMEOUT_MS,
+          pathParams: { id: uuid(id), upload: uuid(id) },
+          query: { offset },
+          body,
+          ...(signal ? { signal } : {}),
+        },
+        (v) => uploadStatus(v, id),
+      ),
     complete: (id: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'POST',
+      api.postApiV1ResourcesByIdUploadsByUploadComplete(transport, {
         timeoutMs: MDM_CONTENT_TIMEOUT_MS,
-        path: uploadPath + '/complete',
-        pathParams: { resource: uuid(id), upload: uuid(id) },
+        pathParams: { id: uuid(id), upload: uuid(id) },
         ...(signal ? { signal } : {}),
-        successStatus: 201,
-        responseType: 'empty',
       }),
     inspect: (id: string, signal?: AbortSignal) => inspection('GET', id, signal),
     parse: (id: string, signal?: AbortSignal) => inspection('POST', id, signal),
@@ -224,50 +203,35 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
       version: string | null,
       selected: ReturnType<typeof target>,
     ) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-packages/save',
-        body: { operationId, packageId, version, target: selected, behavior: null },
-        successStatus: 200,
-        decode: (v) => savedInstaller(v, packageId),
-      }),
+      api.postApiV1AgentPackagesSave(
+        transport,
+        { body: { operationId, packageId, version, target: selected, behavior: null } },
+        (v) => savedInstaller(v, packageId),
+      ),
     publish: (operationId: string, packageId: string) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-packages',
-        body: { operationId, packageId },
-        successStatus: 200,
-        decode: (v) => installer(v, tenant),
-      }),
+      api.postApiV1AgentPackages(transport, { body: { operationId, packageId } }, (v) =>
+        installer(v, tenant),
+      ),
     operation: (id: string, action: 'save' | 'publish' | 'withdraw', packageId: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-packages/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: (v) => {
-          if (v === null) return null
-          if (action === 'save')
-            return { kind: 'save' as const, value: savedInstaller(v, packageId) }
-          if (action === 'publish') {
-            const value = installer(v, tenant)
-            return { kind: 'publish' as const, value }
-          }
-          const result = closed(v, ['withdrawn'])
-          if (uuid(result['withdrawn']) !== packageId) throw new Error('Wrong withdrawal')
-          return { kind: 'withdraw' as const, value: packageId }
-        },
+      api.getApiV1AgentPackagesOperationsById(transport, { pathParams: { id: uuid(id) } }, (v) => {
+        if (v === null) return null
+        if (action === 'save') return { kind: 'save' as const, value: savedInstaller(v, packageId) }
+        if (action === 'publish') {
+          const value = installer(v, tenant)
+          return { kind: 'publish' as const, value }
+        }
+        const result = closed(v, ['withdrawn'])
+        if (uuid(result['withdrawn']) !== packageId) throw new Error('Wrong withdrawal')
+        return { kind: 'withdraw' as const, value: packageId }
       }),
 
     list: <F extends keyof typeof packageFields = keyof typeof packageFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-packages',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1AgentPackages(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (value) => {
           const page = projectedPage(value, packageFields, query.fields, ['releaseId'])
           for (const row of page.items) {
             if ('tenantId' in row && row.tenantId !== tenant)
@@ -288,14 +252,11 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
           }
           return page
         },
-      }),
+      ),
     withdraw: (id: string, release: string) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-packages/{id}/withdraw',
+      api.postApiV1AgentPackagesByIdWithdraw(transport, {
         pathParams: { id: uuid(release) },
         body: { operationId: uuid(id) },
-        successStatus: 204,
       }),
   }
 }

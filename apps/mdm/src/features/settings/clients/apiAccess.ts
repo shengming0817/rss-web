@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -75,93 +76,91 @@ export function networkPolicy(value: unknown) {
 export function createApiAccess(transport: HttpTransport, tenant: string) {
   return {
     keys: (query: Omit<DirectoryQuery, 'fields'> = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/api-keys',
-        query: queryParameters({
-          limit: 100,
-          ...query,
-          fields: [
-            'id',
-            'revision',
-            'authorityRevision',
-            'credentialRevision',
-            'metadata',
-            'createdBy',
-            'createdAt',
-            'revoked',
-          ],
-        }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1ApiKeys(
+        transport,
+        {
+          query: queryParameters({
+            limit: 100,
+            ...query,
+            fields: [
+              'id',
+              'revision',
+              'authorityRevision',
+              'credentialRevision',
+              'metadata',
+              'createdBy',
+              'createdAt',
+              'revoked',
+            ],
+          }),
+        },
+        (value) => {
           return windowPage(value, (x) => keyRecord(x, tenant))
         },
-      }),
+      ),
     key: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/api-keys/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode(v) {
-          const k = keyRecord(v, tenant)
-          if (k.id !== id) throw new Error('Wrong key')
-          return k
-        },
+      api.getApiV1ApiKeysById(transport, { pathParams: { id } }, (v) => {
+        const k = keyRecord(v, tenant)
+        if (k.id !== id) throw new Error('Wrong key')
+        return k
       }),
-    change: (operationId: string, input: KeyIntent) =>
-      transport.request({
-        method: input.kind === 'update' ? 'PUT' : 'POST',
-        path:
-          input.kind === 'create'
-            ? '/api/v1/api-keys'
-            : input.kind === 'update'
-              ? '/api/v1/api-keys/{id}'
-              : `/api/v1/api-keys/{id}/${input.kind}`,
-        ...(input.kind === 'create' ? {} : { pathParams: { id: input.id } }),
-        body: {
-          operationId,
-          ...(input.kind === 'create' ? { id: input.id } : { expectedRevision: input.revision }),
-          ...('metadata' in input ? { metadata: keyMetadata(input.metadata) } : {}),
-        },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['receipt', 'secret']),
-            r = closed(v['receipt'], ['id', 'revision', 'deleted'])
-          if (
-            r['id'] !== input.id ||
-            r['revision'] !== input.revision + 1 ||
-            r['deleted'] !== (input.kind === 'revoke')
-          )
-            throw new Error('Wrong key receipt')
-          return {
-            receipt: {
-              id: uuid(r['id']),
-              revision: count(r['revision']),
-              deleted: boolean(r['deleted']),
+    change: (operationId: string, input: KeyIntent) => {
+      const project = (value: unknown) => {
+        const v = closed(value, ['receipt', 'secret']),
+          r = closed(v['receipt'], ['id', 'revision', 'deleted'])
+        if (
+          r['id'] !== input.id ||
+          r['revision'] !== input.revision + 1 ||
+          r['deleted'] !== (input.kind === 'revoke')
+        )
+          throw new Error('Wrong key receipt')
+        return {
+          receipt: {
+            id: uuid(r['id']),
+            revision: count(r['revision']),
+            deleted: r['deleted'],
+          },
+          secret: nullable(v['secret'], string),
+        }
+      }
+      if (input.kind === 'create')
+        return api.postApiV1ApiKeys(
+          transport,
+          { body: { operationId, id: input.id, metadata: keyMetadata(input.metadata) } },
+          project,
+        )
+      if (input.kind === 'update')
+        return api.putApiV1ApiKeysById(
+          transport,
+          {
+            pathParams: { id: input.id },
+            body: {
+              operationId,
+              expectedRevision: input.revision,
+              metadata: keyMetadata(input.metadata),
             },
-            secret: nullable(v['secret'], string),
-          }
-        },
-      }),
+          },
+          project,
+        )
+      const parameters = {
+        pathParams: { id: input.id },
+        body: { operationId, expectedRevision: input.revision },
+      }
+      return input.kind === 'rotate'
+        ? api.postApiV1ApiKeysByIdRotate(transport, parameters, project)
+        : api.postApiV1ApiKeysByIdRevoke(transport, parameters, project)
+    },
     network: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/tenant-administration/api-access/network-policy',
-        successStatus: 200,
-        decode: networkPolicy,
-      }),
+      api.getApiV1TenantAdministrationApiAccessNetworkPolicy(transport, {}, networkPolicy),
     changeNetwork: (operationId: string, expectedRevision: number, networks: string[]) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/tenant-administration/api-access/network-policy',
-        body: { operationId, expectedRevision, networks },
-        successStatus: 200,
-        decode(value) {
+      api.putApiV1TenantAdministrationApiAccessNetworkPolicy(
+        transport,
+        { body: { operationId, expectedRevision, networks } },
+        (value) => {
           const v = networkPolicy(value)
           if (v.revision !== expectedRevision + 1) throw new Error('Wrong network receipt')
           return v
         },
-      }),
+      ),
   }
 }

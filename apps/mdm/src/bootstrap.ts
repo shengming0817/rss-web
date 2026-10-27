@@ -37,6 +37,7 @@ export function createMdm(
   transport: HttpTransport,
   config: HostConfig,
   host: ReturnType<typeof decodeMdmConfig>,
+  publicTransport: HttpTransport = createMdmTransport(),
 ) {
   const platform =
     window.location.pathname === '/platform' ||
@@ -54,7 +55,6 @@ export function createMdm(
   const realm = platform ? 'platform' : 'tenant'
   const tenant = platform ? host.managementTenant : host.tenant
   const session = createSession(transport, platform ? { ...config, oidcEnabled: false } : config)
-  const publicTransport = createMdmTransport()
   const business = bindSession(publicTransport, session)
   const router = identityRouter(
     session,
@@ -148,9 +148,8 @@ export function createMdm(
   const mdm: MdmRuntime = {
     session,
     registrationChannels,
-    transport: business,
     onboarding: createOnboardingClients(business, publicTransport, tenant, host.serviceId),
-    workspace: createWorkspaceClient(business, false),
+    workspace: createWorkspaceClient(business),
     devices: createDeviceClients(business, tenant),
     policies: createPolicyClients(business),
     software: createSoftwareClients(business),

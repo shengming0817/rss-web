@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import { array, enumeration, record, string, uuid } from './decode'
 export const moduleIds = ['devices', 'policies', 'software', 'security', 'operations'] as const
@@ -38,19 +39,14 @@ export function decodeMdmConfig(value: unknown, origin: string) {
   if (tenant === managementTenant) throw new Error('Invalid tenant binding')
   return { canonicalOrigin, tenant, managementTenant, serviceId: uuid(v['serviceId']) }
 }
-export function createWorkspaceClient(transport: HttpTransport, demo: boolean) {
+export function createWorkspaceClient(transport: HttpTransport) {
   return {
     async read() {
-      return transport.request({
-        method: 'GET',
-        path: '/api/v1/mdm-candidate/workspace',
-        successStatus: 200,
-        decode(value) {
-          const workspace = decodeWorkspace(value)
-          if (!demo && workspace.modules.some((m) => m.source !== 'real'))
-            throw new Error('Unexpected simulated data')
-          return workspace
-        },
+      return api.getApiV1MdmCandidateWorkspace(transport, {}, (value) => {
+        const workspace = decodeWorkspace(value)
+        if (workspace.modules.some((m) => m.source !== 'real'))
+          throw new Error('Unexpected simulated data')
+        return workspace
       })
     },
   }

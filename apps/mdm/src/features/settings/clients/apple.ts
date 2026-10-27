@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { operationReceipt, positive, publicText, sha256 } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -106,59 +107,75 @@ export type AppleKeyInput = {
   source: { kind: 'generate' } | { kind: 'import'; private_key_pem: string }
 }
 export function createAppleMaterials(transport: HttpTransport) {
-  function write(
-    id: string,
-    purpose: ApplePurpose,
-    action: 'keys' | 'certificates' | 'apply' | 'revoke',
-    body: unknown,
-  ) {
-    return transport.request({
-      method: 'POST',
-      path: '/api/v1/apple/materials/{purpose}/' + action,
-      pathParams: { purpose: enumeration(purpose, applePurposes) },
-      headers: { 'Idempotency-Key': uuid(id) },
-      body,
-      successStatus: 200,
-      decode(value) {
-        const v = appleReceipt(value)
-        if (v.operationId !== id) throw new Error('Wrong operation')
-        return v
-      },
-    })
+  const receiptFor = (id: string) => (value: unknown) => {
+    const v = appleReceipt(value)
+    if (v.operationId !== id) throw new Error('Wrong operation')
+    return v
   }
   return {
     read: (purpose: ApplePurpose) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/materials/{purpose}',
-        pathParams: { purpose: enumeration(purpose, applePurposes) },
-        successStatus: 200,
-        decode: appleDirectory,
-      }),
+      api.getApiV1AppleMaterialsByPurpose(
+        transport,
+        { pathParams: { purpose: enumeration(purpose, applePurposes) } },
+        appleDirectory,
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/material-operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, appleReceipt),
-      }),
+      api.getApiV1AppleMaterialOperationsByOperation(
+        transport,
+        { pathParams: { operation: uuid(id) } },
+        operationReceipt(id, appleReceipt),
+      ),
     key: (id: string, purpose: ApplePurpose, input: AppleKeyInput) =>
-      write(id, purpose, 'keys', input),
+      api.postApiV1AppleMaterialsByPurposeKeys(
+        transport,
+        {
+          pathParams: { purpose: enumeration(purpose, applePurposes) },
+          headers: { 'Idempotency-Key': uuid(id) },
+          body: input,
+        },
+        receiptFor(id),
+      ),
     certificate: (
       id: string,
       purpose: ApplePurpose,
       input: { expectedRevision: number; keyRevision: number; certificateChainPem: string },
-    ) => write(id, purpose, 'certificates', input),
+    ) =>
+      api.postApiV1AppleMaterialsByPurposeCertificates(
+        transport,
+        {
+          pathParams: { purpose: enumeration(purpose, applePurposes) },
+          headers: { 'Idempotency-Key': uuid(id) },
+          body: input,
+        },
+        receiptFor(id),
+      ),
     apply: (
       id: string,
       purpose: ApplePurpose,
       input: { expectedRevision: number; materialRevision: number; accountAlias: string | null },
-    ) => write(id, purpose, 'apply', input),
+    ) =>
+      api.postApiV1AppleMaterialsByPurposeApply(
+        transport,
+        {
+          pathParams: { purpose: enumeration(purpose, applePurposes) },
+          headers: { 'Idempotency-Key': uuid(id) },
+          body: input,
+        },
+        receiptFor(id),
+      ),
     revoke: (
       id: string,
       purpose: ApplePurpose,
       input: { expectedRevision: number; materialRevision: number },
-    ) => write(id, purpose, 'revoke', input),
+    ) =>
+      api.postApiV1AppleMaterialsByPurposeRevoke(
+        transport,
+        {
+          pathParams: { purpose: enumeration(purpose, applePurposes) },
+          headers: { 'Idempotency-Key': uuid(id) },
+          body: input,
+        },
+        receiptFor(id),
+      ),
   }
 }

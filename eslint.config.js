@@ -41,7 +41,7 @@ export default tseslint.config(
       '.specify/**',
       'docs/design/**', // Approved standalone design references are not product source
       '**/node_modules/**',
-      'apps/mdm/src/contracts/collection/generated/**',
+      'packages/api/src/generated/**',
     ],
   },
 
@@ -62,7 +62,8 @@ export default tseslint.config(
       parserOptions: {
         parser: tseslint.parser,
         extraFileExtensions: ['.vue'],
-        project: true,
+        // Enabled lint rules are syntax based; TypeScript semantics are checked by vue-tsc.
+        project: false,
         tsconfigRootDir: __dirname,
       },
     },
@@ -71,6 +72,8 @@ export default tseslint.config(
       'vuejs-accessibility': pluginA11y,
     },
     settings: {
+      // Generated imports are fixed by generate-contracts/--check; do not expand their compiled validator ASTs for cycle analysis.
+      'import-x/ignore': ['/packages/api/src/generated/'],
       'import-x/resolver-next': [
         createTypeScriptImportResolver({
           alwaysTryTypes: true,
@@ -265,7 +268,8 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-limits)$)',
+            regex:
+              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-limits|mdm-operations|mdm-types|mdm-validators)$)',
             message: 'Use public product boundaries.',
           },
         ],
@@ -280,7 +284,8 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!core(?:/|$)|auth(?:/profile-json)?$|api/(?:mdm|mdm-limits)$)',
+            regex:
+              '^@rss/(?!core(?:/|$)|auth(?:/profile-json)?$|api/(?:mdm|mdm-limits|mdm-operations|mdm-types|mdm-validators)$)',
             message: 'Features consume injected clients and public UI.',
           },
         ],
@@ -301,17 +306,47 @@ export default tseslint.config(
     },
   },
   {
+    files: ['apps/mdm/demo/**/*.{ts,vue}'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-demo|mdm-limits|mdm-operations|mdm-types|mdm-validators)$)',
+            message: 'Demo uses explicit public boundaries.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
     files: ['apps/mdm/**/*.spec.ts'],
     rules: {
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|testing)$)',
+            regex:
+              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|testing|mdm-operations|mdm-types|mdm-validators)$)',
             message: 'Tests use public product exports and sanitized failures only.',
           },
         ],
         [NO_AXIOS_PATH],
       ),
+    },
+  },
+  {
+    files: ['apps/mdm/src/**/*.{ts,vue}', 'packages/device-access/src/clients/live.ts'],
+    ignores: ['apps/mdm/src/main.ts', 'apps/mdm/src/bootstrap.ts', '**/*.spec.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.type='MemberExpression'][callee.property.name='request'], CallExpression[callee.type='MemberExpression'][callee.computed=true][callee.property.value='request']",
+          message: 'Production MDM HTTP calls must use generated operations.',
+        },
+      ],
     },
   },
   // ── Prettier: 放最后关闭格式类规则，交给 prettier ─────────────────────────
@@ -398,7 +433,7 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!api/(?:identity|mdm)$)',
+            regex: '^@rss/(?!api/(?:identity|mdm|mdm-operations|mdm-types|mdm-validators)$)',
             message: 'The domain owns no session or application composition.',
           },
         ],
@@ -418,7 +453,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm)$)',
+              '^@rss/(?!auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm|mdm-operations|mdm-types|mdm-validators)$)',
             message: 'Features consume injected clients.',
           },
         ],
@@ -461,7 +496,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm|testing)$)',
+              '^@rss/(?!auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm|testing|mdm-operations|mdm-types|mdm-validators)$)',
             message: 'Tests use declared public boundaries.',
           },
         ],

@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -59,22 +60,15 @@ export function retirement(value: unknown, id: string) {
 export function createLifecycleClient(transport: HttpTransport) {
   return {
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/device-retirements/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => retirement(v, id),
-      }),
+      api.getApiV1DeviceRetirementsById(transport, { pathParams: { id } }, (v) =>
+        retirement(v, id),
+      ),
     force: (id: string, operationId: string, reason: string) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/device-retirements/{id}/force-revoke',
-        pathParams: { id },
-        body: { operationId, reason },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['operationId', 'retirementId', 'revocation'])
+      api.postApiV1DeviceRetirementsByIdForceRevoke(
+        transport,
+        { pathParams: { id }, body: { operationId, reason } },
+        (value) => {
+          const v = value
           if (
             v['operationId'] !== operationId ||
             v['retirementId'] !== id ||
@@ -83,20 +77,17 @@ export function createLifecycleClient(transport: HttpTransport) {
             throw new Error('Wrong force receipt')
           return { operationId, retirementId: id, revocation: 'pending' as const }
         },
-      }),
+      ),
     asset: (target: ObjectRef, operationId: string, state: 'active' | 'archived' | 'deleted') =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/device-views/{kind}/{id}/asset-state',
-        pathParams: { ...target },
-        body: { operationId, state },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['operationId', 'devices', 'state'])
+      api.postApiV1DeviceViewsByKindByIdAssetState(
+        transport,
+        { pathParams: { ...target }, body: { operationId, state } },
+        (value) => {
+          const v = value
           if (v['operationId'] !== operationId || v['state'] !== state)
             throw new Error('Wrong asset receipt')
           return { operationId, devices: array(v['devices'], identifier), state }
         },
-      }),
+      ),
   }
 }

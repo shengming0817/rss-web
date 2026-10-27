@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -111,37 +112,20 @@ export type TaskChange =
 export function createTaskTrustClient(transport: HttpTransport, tenant: string, service: string) {
   const decode = (v: unknown) => taskTrust(v, tenant, service)
   return {
-    read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/task-signing/trust',
-        successStatus: 200,
-        decode,
-      }),
+    read: () => api.getApiV1TaskSigningTrust(transport, {}, decode),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/task-signing/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode,
-      }),
+      api.getApiV1TaskSigningOperationsById(transport, { pathParams: { id: uuid(id) } }, decode),
     change: (id: string, body: TaskChange) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/task-signing/trust',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 200,
+      api.postApiV1TaskSigningTrust(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
         decode,
-      }),
+      ),
     observation: (device: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/task-signing/trust/devices/{device}/observation',
-        pathParams: { device: identifier(device) },
-        successStatus: 200,
-        decode: installationObservation,
-      }),
+      api.getApiV1TaskSigningTrustDevicesByDeviceObservation(
+        transport,
+        { pathParams: { device: identifier(device) } },
+        installationObservation,
+      ),
   }
 }

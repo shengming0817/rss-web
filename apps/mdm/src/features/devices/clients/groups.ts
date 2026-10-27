@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -304,20 +305,20 @@ export function createGroupsClient(transport: HttpTransport) {
   return {
     list: <F extends GroupDirectoryField = GroupDirectoryField>(query: GroupQuery<F> = {}) => {
       const { referenceableFor, ...parameters } = query
-      return transport.request({
-        method: 'GET',
-        path: '/api/v1/groups',
-        query: {
-          ...queryParameters({ limit: 20, ...parameters }),
-          ...(referenceableFor === undefined ? {} : { referenceableFor: uuid(referenceableFor) }),
+      return api.getApiV1Groups(
+        transport,
+        {
+          query: {
+            ...queryParameters({ limit: 20, ...parameters }),
+            ...(referenceableFor === undefined ? {} : { referenceableFor: uuid(referenceableFor) }),
+          },
         },
-        successStatus: 200,
-        decode(value) {
+        (value) => {
           const page = projectedPage(value, groupFields, query.fields, ['id'])
           if (query.fields === undefined) page.items.forEach(groupSummary)
           return page
         },
-      })
+      )
     },
     references: (
       id: string,
@@ -327,22 +328,13 @@ export function createGroupsClient(transport: HttpTransport) {
         cursor?: string | undefined
       } = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/groups/{id}/references',
-        pathParams: { id: uuid(id) },
-        query: { ...query, limit: 20 },
-        successStatus: 200,
-        decode: groupReferences,
-      }),
+      api.getApiV1GroupsByIdReferences(
+        transport,
+        { pathParams: { id: uuid(id) }, query: { ...query, limit: 20 } },
+        groupReferences,
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/groups/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => decodeGroup(v, id),
-      }),
+      api.getApiV1GroupsById(transport, { pathParams: { id } }, (v) => decodeGroup(v, id)),
     change: (id: string, body: Operation<GroupChange>) => {
       if (
         body.input.action === 'rule' ||
@@ -351,8 +343,6 @@ export function createGroupsClient(transport: HttpTransport) {
         groupCondition(body.input.criteria)
 
       const options = {
-        method: 'POST' as const,
-        path: '/api/v1/groups/{id}',
         pathParams: { id },
         body,
       }
@@ -362,62 +352,43 @@ export function createGroupsClient(transport: HttpTransport) {
         body.input.action === 'rule' ||
         (body.input.action === 'create' && body.input.criteria !== null)
       )
-        return transport.request({
-          ...options,
-          successStatus: 202,
-          decode: (v) =>
-            accepted(
-              v,
-              id,
-              body.operationId,
-              body.input.action === 'rule' || body.input.action === 'create'
-                ? 'group_definition'
-                : 'group',
-            ),
-        })
-      return transport.request({
-        ...options,
-        successStatus: 200,
-        decode: (value) => {
-          const v = closed(value, ['operation', 'group', 'added', 'removed', 'task'])
-          const group = groupSummary(v['group'])
-          if (uuid(v['operation']) !== body.operationId || group.id !== id)
-            throw new Error('Wrong group receipt')
-          return {
-            operation: body.operationId,
-            group,
-            added: count(v['added']),
-            removed: count(v['removed']),
-            task: nullable(v['task'], uuid),
-          }
-        },
+        return api.postApiV1GroupsById(transport, { ...options }, (v) =>
+          accepted(
+            v,
+            id,
+            body.operationId,
+            body.input.action === 'rule' || body.input.action === 'create'
+              ? 'group_definition'
+              : 'group',
+          ),
+        )
+      return api.postApiV1GroupsById(transport, { ...options }, (value) => {
+        const v = closed(value, ['operation', 'group', 'added', 'removed', 'task'])
+        const group = groupSummary(v['group'])
+        if (uuid(v['operation']) !== body.operationId || group.id !== id)
+          throw new Error('Wrong group receipt')
+        return {
+          operation: body.operationId,
+          group,
+          added: count(v['added']),
+          removed: count(v['removed']),
+          task: nullable(v['task'], uuid),
+        }
       })
     },
     preview: (id: string, body: Operation<Record<string, never>>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/groups/{id}/previews',
-        pathParams: { id },
-        body,
-        successStatus: 202,
-        decode: (v) => accepted(v, id, body.operationId, 'group_preview'),
-      }),
+      api.postApiV1GroupsByIdPreviews(transport, { pathParams: { id }, body }, (v) =>
+        accepted(v, id, body.operationId, 'group_preview'),
+      ),
     status: (group: string, task: string, kind: GroupTaskKind = 'group') =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/groups/{group}/tasks/{task}',
-        pathParams: { group, task },
-        successStatus: 200,
-        decode: (value) => calculationTask(value, kind, group, task),
-      }),
+      api.getApiV1GroupsByGroupTasksByTask(transport, { pathParams: { group, task } }, (value) =>
+        calculationTask(value, kind, group, task),
+      ),
     page: (group: string, result: string, kind: GroupProjection, next?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/groups/{group}/results/{result}/{kind}',
-        pathParams: { group, result, kind },
-        query: { limit: 20, cursor: next },
-        successStatus: 200,
-        decode: (v) => decodeGroupPage(v, group, result, kind),
-      }),
+      api.getApiV1GroupsByGroupResultsByResultByKind(
+        transport,
+        { pathParams: { group, result, kind }, query: { limit: 20, cursor: next } },
+        (v) => decodeGroupPage(v, group, result, kind),
+      ),
   }
 }

@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -118,35 +119,23 @@ function receipt(value: unknown) {
   return { operationId: uuid(v['operationId']), saved: result }
 }
 export function createFirstUseClient(transport: HttpTransport, tenant: string) {
-  const path = '/api/v1/settings/first-use'
   return {
-    read: () =>
-      transport.request({
-        method: 'GET',
-        path,
-        successStatus: 200,
-        decode: (v) => decodeFirstUse(v, tenant),
-      }),
+    read: () => api.getApiV1SettingsFirstUse(transport, {}, (v) => decodeFirstUse(v, tenant)),
     update: (id: string, expectedRevision: number, intent: FirstUseIntent) => {
       const body = { expectedRevision: count(expectedRevision), intent: decodeIntent(intent) }
       if (new TextEncoder().encode(JSON.stringify(body)).length > 16384)
         throw new Error('First-use input too large')
-      return transport.request({
-        method: 'PUT',
-        path,
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 200,
-        decode: operationReceipt(id, receipt),
-      })
+      return api.putApiV1SettingsFirstUse(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        operationReceipt(id, receipt),
+      )
     },
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: path + '/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, receipt),
-      }),
+      api.getApiV1SettingsFirstUseOperationsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        operationReceipt(id, receipt),
+      ),
   }
 }

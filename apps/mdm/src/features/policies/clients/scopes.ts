@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -139,42 +140,23 @@ export function createScopesClient(transport: HttpTransport) {
     list: <F extends keyof typeof scopeFields = keyof typeof scopeFields>(
       query: ScopeQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/scopes',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode: (value) => projectedPage(value, scopeFields, query.fields, ['id']),
-      }),
+      api.getApiV1Scopes(transport, { query: queryParameters({ limit: 20, ...query }) }, (value) =>
+        projectedPage(value, scopeFields, query.fields, ['id']),
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/scopes/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => decodeScope(v, id),
-      }),
+      api.getApiV1ScopesById(transport, { pathParams: { id } }, (v) => decodeScope(v, id)),
     change: (id: string, body: Operation<ScopeChange>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/scopes/{id}',
-        pathParams: { id },
-        body,
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['id', 'revision', 'task'])
-          if (uuid(v['id']) !== id) throw new Error('Wrong scope receipt')
-          return { id, revision: count(v['revision']), task: nullable(v['task'], uuid) }
-        },
+      api.postApiV1ScopesById(transport, { pathParams: { id }, body }, (value) => {
+        const v = closed(value, ['id', 'revision', 'task'])
+        if (uuid(v['id']) !== id) throw new Error('Wrong scope receipt')
+        return { id, revision: count(v['revision']), task: nullable(v['task'], uuid) }
       }),
     status: (id: string, task: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/scopes/{id}/tasks/{task}',
-        pathParams: { id, task },
-        successStatus: 200,
-        decode: (value) => calculationTask(value, 'scope', id, task),
-      }),
+      api.getApiV1ScopesByScopeTasksByTask(
+        transport,
+        { pathParams: { scope: id, task: task } },
+        (value) => calculationTask(value, 'scope', id, task),
+      ),
     page: (
       id: string,
       result: string,
@@ -182,13 +164,13 @@ export function createScopesClient(transport: HttpTransport) {
       channel: Channel,
       cursor?: string,
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/scopes/{id}/results/{result}/{projection}',
-        pathParams: { id, result, projection },
-        query: { limit: 20, cursor, channel },
-        successStatus: 200,
-        decode: (v) => decodeScopePage(v, id, result, projection, channel),
-      }),
+      api.getApiV1ScopesByScopeResultsByResultByKind(
+        transport,
+        {
+          pathParams: { scope: id, result: result, kind: projection },
+          query: { limit: 20, cursor, channel },
+        },
+        (v) => decodeScopePage(v, id, result, projection, channel),
+      ),
   }
 }

@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { windowParameters, windowPage, type WindowQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -241,73 +242,55 @@ export function windowsEnrollmentLink(instructions: {
 export function createEnrollmentClient(transport: HttpTransport) {
   return {
     create: (operation: string, body: EnrollmentInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/enrollments',
-        headers: { 'Idempotency-Key': operation },
-        body,
-        successStatus: 200,
-        decode: (v) => {
+      api.postApiV1Enrollments(
+        transport,
+        { headers: { 'Idempotency-Key': operation }, body },
+        (v) => {
           const result = receipt(v, operation)
           if (result.source !== body.source) throw new Error('Wrong enrollment source')
           return result
         },
-      }),
+      ),
     status: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/enrollments/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => decodeEnrollment(v, id),
-      }),
+      api.getApiV1EnrollmentsById(transport, { pathParams: { id } }, (v) =>
+        decodeEnrollment(v, id),
+      ),
     resume: (id: string, operation: string, password: string) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/enrollments/{id}/resume',
-        pathParams: { id },
-        headers: { 'Idempotency-Key': operation },
-        body: { password },
-        successStatus: 200,
-        decode: (v) => receipt(v, operation, id),
-      }),
+      api.postApiV1EnrollmentsByIdResume(
+        transport,
+        { pathParams: { id }, headers: { 'Idempotency-Key': operation }, body: { password } },
+        (v) => receipt(v, operation, id),
+      ),
     cancel: (id: string, operation: string) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/enrollments/{id}/cancel',
-        pathParams: { id },
-        headers: { 'Idempotency-Key': operation },
-        body: {},
-        successStatus: 200,
-        decode: (v) => receipt(v, operation, id),
-      }),
+      api.postApiV1EnrollmentsByIdCancel(
+        transport,
+        { pathParams: { id }, headers: { 'Idempotency-Key': operation }, body: {} },
+        (v) => receipt(v, operation, id),
+      ),
     registrations: (device: string, page: WindowQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/registrations',
-        pathParams: { device },
-        query: windowParameters({ limit: 20, ...page }, 1000),
-        successStatus: 200,
-        decode: (value) => {
+      api.getApiV1DevicesByDeviceRegistrations(
+        transport,
+        { pathParams: { device }, query: windowParameters({ limit: 20, ...page }, 1000) },
+        (value) => {
           const page = windowPage(value, registration)
           return { ...page, items: unique(page.items, (r) => r.registrationId) }
         },
-      }),
+      ),
     revoke: (device: string, registration: string, operation: string) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/devices/{device}/registrations/{registration}/revoke',
-        pathParams: { device, registration },
-        headers: { 'Idempotency-Key': operation },
-        body: {},
-        successStatus: 200,
-        decode: (value) => {
+      api.postApiV1DevicesByDeviceRegistrationsByRegistrationRevoke(
+        transport,
+        {
+          pathParams: { device, registration },
+          headers: { 'Idempotency-Key': operation },
+          body: {},
+        },
+        (value) => {
           // DeviceService's published receipt deliberately has no camelCase serde rename.
-          const v = closed(value, ['operation_id', 'registration'])
+          const v = value
           if (uuid(v['operation_id']) !== operation || uuid(v['registration']) !== registration)
             throw new Error('Wrong revocation receipt')
           return { operationId: operation, registration }
         },
-      }),
+      ),
   }
 }

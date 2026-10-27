@@ -1,5 +1,6 @@
+import { createMdmDemoTransport } from '@rss/api/mdm-demo'
 import { createMdm } from '../src/bootstrap'
-import { createWorkspaceClient } from '../src/services/workspace'
+import { createDemoWorkspaceClient } from './workspace'
 import { demoKey } from './context'
 import { createSecurityClients } from './features/security/client'
 import { createOperationsClients } from './features/operations/client'
@@ -9,9 +10,9 @@ import { registerDemoSoftwareAssetRoutes } from './software-assets/routes'
 import { navigation, navigationKey } from '../src/components/navigation'
 import { registerDemoGroupRoutes } from './features/groups/routes'
 export function createDemo(...args: Parameters<typeof createMdm>) {
-  const composition = createMdm(...args)
+  const composition = createMdm(args[0], args[1], args[2], createMdmDemoTransport())
   const { mdm, app, transport, router } = composition
-  mdm.workspace = createWorkspaceClient(transport, true)
+  mdm.workspace = createDemoWorkspaceClient(transport)
   if (mdm.realm === 'tenant') {
     registerDemoSoftwareAssetRoutes(router)
     registerDemoGroupRoutes(router)
@@ -34,6 +35,7 @@ export function createDemo(...args: Parameters<typeof createMdm>) {
   }
   app.provide(demoKey, {
     ...mdm,
+    transport,
     security: createSecurityClients(transport, mdm.tenant, true),
     operations: createOperationsClients(transport, mdm.tenant, true, mdm.realm),
   })

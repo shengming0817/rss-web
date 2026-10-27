@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -214,47 +215,30 @@ export function createPublicationClient(transport: HttpTransport) {
     targets: <F extends keyof typeof targetFields = keyof typeof targetFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/publication-targets',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode: (value) => projectedPage(value, targetFields, query.fields),
-      }),
+      api.getApiV1SoftwarePublicationTargets(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (value) => projectedPage(value, targetFields, query.fields),
+      ),
     list: <F extends keyof typeof publicationFields = keyof typeof publicationFields>(
       query: PublicationQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/publications',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode: (value) => projectedPage(value, publicationFields, query.fields),
-      }),
+      api.getApiV1SoftwarePublications(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (value) => projectedPage(value, publicationFields, query.fields),
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/publications/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => decodePublication(v, id),
-      }),
+      api.getApiV1SoftwarePublicationsById(transport, { pathParams: { id } }, (v) =>
+        decodePublication(v, id),
+      ),
     publish: (body: Operation<Publish>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/software/publications',
-        body,
-        successStatus: 202,
-        decode: (v) => decodePublication(v, body.operationId),
-      }),
+      api.postApiV1SoftwarePublications(transport, { body }, (v) =>
+        decodePublication(v, body.operationId),
+      ),
     change: (id: string, body: Operation<Exclude<PublicationChange, Publish>>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/software/publications/{id}',
-        pathParams: { id },
-        body,
-        successStatus: 200,
-        decode: (v) => decodePublication(v, id),
-      }),
+      api.postApiV1SoftwarePublicationsById(transport, { pathParams: { id }, body }, (v) =>
+        decodePublication(v, id),
+      ),
   }
 }

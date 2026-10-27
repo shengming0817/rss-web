@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -245,12 +246,6 @@ export function runtimeSnapshot(value: unknown) {
 }
 export function createRuntimeDiagnostics(transport: HttpTransport) {
   return {
-    read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/runtime/diagnostics',
-        successStatus: 200,
-        decode: runtimeSnapshot,
-      }),
+    read: () => api.getApiV1RuntimeDiagnostics(transport, {}, runtimeSnapshot),
   }
 }

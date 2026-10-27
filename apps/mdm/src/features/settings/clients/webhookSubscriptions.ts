@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -116,119 +117,99 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
   }
   return {
     types: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/event-types',
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'version'])
-          if (v['version'] !== 1) throw new Error('Invalid event contract')
-          return array(v['items'], (x) => enumeration(x, eventTypes))
-        },
+      api.getApiV1WebhooksEventTypes(transport, {}, (value) => {
+        const v = value
+        if (v['version'] !== 1) throw new Error('Invalid event contract')
+        return array(v['items'], (x) => enumeration(x, eventTypes))
       }),
     list: (query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/subscriptions',
-        query: queryParameters({ limit: 32, ...query }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1WebhooksSubscriptions(
+        transport,
+        { query: queryParameters({ limit: 32, ...query }) },
+        (value) => {
           return windowPage(value, subscription)
         },
-      }),
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/subscriptions/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode(v) {
-          const s = subscription(v)
-          if (s.id !== id) throw new Error('Wrong subscription')
-          return s
-        },
+      api.getApiV1WebhooksSubscriptionsById(transport, { pathParams: { id } }, (v) => {
+        const s = subscription(v)
+        if (s.id !== id) throw new Error('Wrong subscription')
+        return s
       }),
     deliveries: (query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/deliveries',
-        query: queryParameters({ limit: 32, ...query }),
-        successStatus: 200,
-        decode: page,
-      }),
+      api.getApiV1WebhooksDeliveries(
+        transport,
+        { query: queryParameters({ limit: 32, ...query }) },
+        page,
+      ),
     delivery: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/deliveries/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode(value) {
-          const v = page(value)
-          if (v.items.length !== 1 || v.items[0]?.id !== id) throw new Error('Wrong delivery')
-          return v.items[0]
-        },
+      api.getApiV1WebhooksDeliveriesById(transport, { pathParams: { id } }, (value) => {
+        const v = page(value)
+        if (v.items.length !== 1 || v.items[0]?.id !== id) throw new Error('Wrong delivery')
+        return v.items[0]
       }),
     async write(operationId: string, input: WebhookIntent): Promise<unknown> {
       if (input.kind === 'subscription')
-        return transport.request({
-          method: 'PUT',
-          path: '/api/v1/webhooks/subscriptions/{id}',
-          pathParams: { id: input.id },
-          body: { operationId, expectedRevision: input.revision, change: input.change },
-          successStatus: 200,
-          decode(v) {
+        return api.putApiV1WebhooksSubscriptionsById(
+          transport,
+          {
+            pathParams: { id: input.id },
+            body: { operationId, expectedRevision: input.revision, change: input.change },
+          },
+          (v) => {
             const s = subscription(v)
             if (s.id !== input.id || s.revision !== input.revision + 1)
               throw new Error('Wrong subscription receipt')
             return s
           },
-        })
+        )
       if (input.kind === 'test')
-        return transport.request({
-          method: 'POST',
-          path: '/api/v1/webhooks/subscriptions/{id}/test',
-          pathParams: { id: input.id },
-          body: { operationId, deviceId: input.deviceId },
-          successStatus: 200,
-          decode(value) {
-            const v = closed(value, ['id', 'eventId'])
+        return api.postApiV1WebhooksSubscriptionsByIdTest(
+          transport,
+          { pathParams: { id: input.id }, body: { operationId, deviceId: input.deviceId } },
+          (value) => {
+            const v = value
             return { id: uuid(v['id']), eventId: uuid(v['eventId']) }
           },
-        })
-      return transport.request({
-        method: 'POST',
-        path: `/api/v1/webhooks/deliveries/{id}/${input.kind}`,
-        pathParams: { id: input.id },
-        body: {
-          operationId,
-          ...(input.kind === 'redrive' ? { expectedVersion: input.expectedVersion } : {}),
-        },
-        successStatus: 200,
-        decode(value) {
-          if (input.kind === 'redrive') {
-            const v = closed(value, ['id', 'operationId', 'status', 'recoveryVersion'])
-            if (
-              v['id'] !== input.id ||
-              v['operationId'] !== operationId ||
-              v['status'] !== 'redriven'
-            )
-              throw new Error('Wrong redrive receipt')
-            return {
-              id: input.id,
-              operationId,
-              status: 'redriven',
-              recoveryVersion: count(v['recoveryVersion']),
-            }
-          }
-          const v = closed(value, ['id', 'eventId', 'sourceDelivery'])
-          if (v['sourceDelivery'] !== input.id) throw new Error('Wrong replay source')
+        )
+      const project = (value: unknown) => {
+        if (input.kind === 'redrive') {
+          const v = closed(value, ['id', 'operationId', 'status', 'recoveryVersion'])
+          if (
+            v['id'] !== input.id ||
+            v['operationId'] !== operationId ||
+            v['status'] !== 'redriven'
+          )
+            throw new Error('Wrong redrive receipt')
           return {
-            id: uuid(v['id']),
-            eventId: uuid(v['eventId']),
-            sourceDelivery: uuid(v['sourceDelivery']),
+            id: input.id,
+            operationId,
+            status: 'redriven',
+            recoveryVersion: count(v['recoveryVersion']),
           }
-        },
-      })
+        }
+        const v = closed(value, ['id', 'eventId', 'sourceDelivery'])
+        if (v['sourceDelivery'] !== input.id) throw new Error('Wrong replay source')
+        return {
+          id: uuid(v['id']),
+          eventId: uuid(v['eventId']),
+          sourceDelivery: uuid(v['sourceDelivery']),
+        }
+      }
+      return input.kind === 'redrive'
+        ? api.postApiV1WebhooksDeliveriesByIdRedrive(
+            transport,
+            {
+              pathParams: { id: input.id },
+              body: { operationId, expectedVersion: input.expectedVersion },
+            },
+            project,
+          )
+        : api.postApiV1WebhooksDeliveriesByIdReplay(
+            transport,
+            { pathParams: { id: input.id }, body: { operationId } },
+            project,
+          )
     },
   }
 }

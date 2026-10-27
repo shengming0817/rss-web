@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 /** Native content-service upload sessions. No retry or session ownership here. */
 import type { HttpTransport } from '@rss/api/mdm'
 import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
@@ -75,17 +76,12 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
 }
 export type UploadSession = ReturnType<typeof decodeUpload>
 export function createUploadsClient(transport: HttpTransport) {
-  const path = '/api/v1/resources/{id}/uploads/{upload}'
   return {
     begin: (id: string, upload: string, target: UploadTarget, signal?: AbortSignal) =>
-      transport.request({
-        method: 'POST',
-        path,
-        pathParams: { id, upload },
-        query: { ...target },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode(v) {
+      api.postApiV1ResourcesByIdUploadsByUpload(
+        transport,
+        { pathParams: { id, upload }, query: { ...target }, ...(signal ? { signal } : {}) },
+        (v) => {
           const value = decodeUpload(v, id, upload),
             b = value.binding
           if (
@@ -98,58 +94,38 @@ export function createUploadsClient(transport: HttpTransport) {
             throw new Error('Wrong upload selection')
           return value
         },
-      }),
+      ),
     read: (id: string, upload: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'GET',
-        path,
-        pathParams: { id, upload },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode: (v) => decodeUpload(v, id, upload),
-      }),
+      api.getApiV1ResourcesByIdUploadsByUpload(
+        transport,
+        { pathParams: { id, upload }, ...(signal ? { signal } : {}) },
+        (v) => decodeUpload(v, id, upload),
+      ),
     append: (id: string, upload: string, offset: number, body: ArrayBuffer, signal?: AbortSignal) =>
-      transport.request({
-        method: 'PATCH',
-        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
-        path,
-        pathParams: { id, upload },
-        query: { offset },
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body,
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode: (v) => decodeUpload(v, id, upload),
-      }),
-    complete: (id: string, upload: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'POST',
-        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
-        path: `${path}/complete`,
-        pathParams: { id, upload },
-        ...(signal ? { signal } : {}),
-        successStatus: 201,
-        decode(v): void {
-          if (v !== '' && v !== undefined) throw new Error('Invalid completion acknowledgement')
+      api.patchApiV1ResourcesByIdUploadsByUpload(
+        transport,
+        {
+          timeoutMs: MDM_CONTENT_TIMEOUT_MS,
+          pathParams: { id, upload },
+          query: { offset },
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body,
+          ...(signal ? { signal } : {}),
         },
+        (v) => decodeUpload(v, id, upload),
+      ),
+    complete: (id: string, upload: string, signal?: AbortSignal) =>
+      api.postApiV1ResourcesByIdUploadsByUploadComplete(transport, {
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
+        pathParams: { id, upload },
+        ...(signal ? { signal } : {}),
       }),
     receipt: (id: string, upload: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/resources/{id}/content/operations/{upload}',
-        pathParams: { id, upload },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode(v) {
-          const r = closed(v, [
-            'operationId',
-            'committed',
-            'resource',
-            'version',
-            'reference',
-            'length',
-            'sha256',
-          ])
+      api.getApiV1ResourcesByIdContentOperationsByOperation(
+        transport,
+        { pathParams: { id: id, operation: upload }, ...(signal ? { signal } : {}) },
+        (v) => {
+          const r = v
           if (uuid(r['operationId']) !== upload || r['resource'] !== id || r['committed'] !== true)
             throw new Error('Wrong content receipt')
           return {
@@ -161,6 +137,6 @@ export function createUploadsClient(transport: HttpTransport) {
             sha256: digest(r['sha256']),
           }
         },
-      }),
+      ),
   }
 }

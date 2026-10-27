@@ -83,3 +83,11 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 用户字段配置与资料显示的实际 HTTPS 验证：`MDM_PROFILE_BACKEND=/absolute/rss-mdm IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:mdm:profiles-browser`。当前固定后端与验证边界见 [用户字段与登录资料](docs/architecture/20260926-2544-mdm-web.md#用户字段与登录资料2878)。
 
 新增能力的正式控制台验证使用 `MDM_CONSOLE_BACKEND=/absolute/rss-mdm pnpm test:mdm:console-browser`，覆盖恢复凭据、Policy 退役、Webhook 订阅原请求恢复/投递观察及 Key/平台白名单。复用既有构建租约、隔离 HTTPS 宿主和独立清理；只使用可丢弃合成输入，设备实际效果另行验收。接口与恢复边界见 [控制台新增能力](docs/architecture/20260926-2544-mdm-web.md#控制台新增能力2799)。
+
+## 固定 MDM HTTP 契约
+
+`contracts/mdm/source.json` 是唯一 producer pin。`pnpm generate:contracts` 从指定 Git 对象生成静态端点、类型和校验器；`pnpm check:contracts` 同时核对 Git 来源与生成漂移，已进入 `make ci`。常规生产构建消费已提交生成物，不访问后端。
+
+Git 对象缓存位于 `~/.cache/rss-web/rss-mdm.git`，缺失时只获取 pin 指定的完整提交；可用 `RSS_MDM_CONTRACT_GIT=/absolute/git-store` 复用已有对象库。无需相邻 checkout、干净 HEAD 或重建 Rust。Git 使用已有凭据；CI 冷缓存访问私有 Azure 源时使用只读 secret `RSS_MDM_GIT_TOKEN`，token 只通过子进程环境传给 Git，不写入缓存或日志。无法取得指定对象时检查明确失败。
+
+升级时显式更新 pin 的 revision、blob、SHA-256，重新生成并迁移实际消费者；不会追随远端 develop。生产领域调用仅引用 `@rss/api/mdm-operations`；作者模型和 canonical 编码复用 `@rss/api/mdm-types`、`@rss/api/mdm-validators`，不维护第二套 wire 定义。Identity 与宿主静态配置继续使用原有边界。

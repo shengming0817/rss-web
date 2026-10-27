@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -108,44 +109,42 @@ export function pkiPublications(value: unknown): Publication[] {
 export function createPkiClient(transport: HttpTransport, tenant: string, service: string) {
   return {
     read: (purpose: PkiPurpose) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/pki/{purpose}/trust',
-        pathParams: { purpose: enumeration(purpose, pkiPurposes) },
-        successStatus: 200,
-        decode: (v) => pkiTrust(v, tenant, purpose, service),
-      }),
+      api.getApiV1PkiByPurposeTrust(
+        transport,
+        { pathParams: { purpose: enumeration(purpose, pkiPurposes) } },
+        (v) => pkiTrust(v, tenant, purpose, service),
+      ),
     prepare: (id: string, purpose: PkiPurpose, expectedRevision: number, candidate: PkiTrust) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/pki/rotations',
-        body: {
-          id: uuid(id),
-          purpose: enumeration(purpose, pkiPurposes),
-          expected_revision: positive(expectedRevision),
-          candidate: pkiTrust(candidate, tenant, purpose, service),
+      api.postApiV1PkiRotations(
+        transport,
+        {
+          body: {
+            id: uuid(id),
+            purpose: enumeration(purpose, pkiPurposes),
+            expected_revision: positive(expectedRevision),
+            candidate: pkiTrust(candidate, tenant, purpose, service),
+          },
         },
-        successStatus: 200,
-        decode(value) {
+        (value) => {
           const result = pkiReceipt(value)
           if (result.operation !== id || result.state !== 'distributing')
             throw new Error('Wrong original rotation')
           return result
         },
-      }),
+      ),
     transition: (
       id: string,
       purpose: PkiPurpose,
       expectedRevision: number,
       action: 'activate' | 'retire',
     ) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/pki/{purpose}/rotations',
-        pathParams: { purpose: enumeration(purpose, pkiPurposes) },
-        body: { id: uuid(id), expected_revision: positive(expectedRevision), action },
-        successStatus: 200,
-        decode(value) {
+      api.postApiV1PkiByPurposeRotations(
+        transport,
+        {
+          pathParams: { purpose: enumeration(purpose, pkiPurposes) },
+          body: { id: uuid(id), expected_revision: positive(expectedRevision), action },
+        },
+        (value) => {
           const result = pkiReceipt(value)
           if (
             result.operation !== id ||
@@ -154,41 +153,36 @@ export function createPkiClient(transport: HttpTransport, tenant: string, servic
             throw new Error('Wrong original rotation')
           return result
         },
-      }),
+      ),
     publish: (id: string, purpose: PkiPurpose, publications: Publication[]) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/pki/crls',
+      api.postApiV1PkiCrls(transport, {
         body: {
           operation: uuid(id),
           purpose,
           publications: pkiPublications(publications),
         },
-        successStatus: 204,
       }),
     recover: (id: string, attempt: string, chain: string[]) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/pki/signing/recover',
-        body: {
-          operation: uuid(id),
-          attempt: uuid(attempt),
-          chain: chain.map((v) => encoded(v, 45000)),
+      api.postApiV1PkiSigningRecover(
+        transport,
+        {
+          body: {
+            operation: uuid(id),
+            attempt: uuid(attempt),
+            chain: chain.map((v) => encoded(v, 45000)),
+          },
         },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['attempt', 'fingerprint'])
+        (value) => {
+          const v = value
           if (v['attempt'] !== attempt) throw new Error('Wrong signing attempt')
           return { attempt: uuid(v['attempt']), fingerprint: sha256(v['fingerprint']) }
         },
-      }),
+      ),
     observation: (device: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/pki/agent/trust/devices/{device}/observation',
-        pathParams: { device: identifier(device) },
-        successStatus: 200,
-        decode: installationObservation,
-      }),
+      api.getApiV1PkiAgentTrustDevicesByDeviceObservation(
+        transport,
+        { pathParams: { device: identifier(device) } },
+        installationObservation,
+      ),
   }
 }

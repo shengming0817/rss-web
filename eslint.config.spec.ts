@@ -12,6 +12,23 @@ async function ruleIds(code: string, file: string): Promise<string[]> {
 }
 
 describe('ESLint package boundaries', () => {
+  it('requires generated MDM operations while preserving ordinary request data', async () => {
+    const file = 'apps/mdm/src/features/policies/clients/policies.ts'
+    for (const code of [
+      'export const send = (transport: {request(): void}) => transport.request()',
+      "export const send = (transport: {request(): void}) => transport['request']()",
+    ])
+      expect(await ruleIds(code, file)).toContain('no-restricted-syntax')
+    expect(
+      await ruleIds('export const label = (value: {request: string}) => value.request', file),
+    ).not.toContain('no-restricted-syntax')
+    expect(
+      await ruleIds(
+        "import {getApiV1Policies} from '@rss/api/mdm-operations'\nexport const op = getApiV1Policies",
+        file,
+      ),
+    ).not.toContain('no-restricted-imports')
+  })
   it('ignores generated application assets', async () => {
     expect(await eslint.isPathIgnored(path.resolve(root, 'apps/identity/dist/app.js'))).toBe(true)
   })

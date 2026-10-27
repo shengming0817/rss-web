@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { operationReceipt, positive, sha256 } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -87,45 +88,32 @@ export interface WebhookTransition {
 export function createWebhookMaterials(transport: HttpTransport) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/materials',
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['configurationSha256', 'keys']),
-            keys = closed(v['keys'], ['heads', 'materials'])
-          return {
-            configurationSha256: sha256(v['configurationSha256']),
-            heads: unique(array(keys['heads'], webhookHead), (v) => v.reference),
-            materials: array(keys['materials'], webhookMaterial),
-          }
-        },
+      api.getApiV1WebhooksMaterials(transport, {}, (value) => {
+        const v = value,
+          keys = v['keys']
+        return {
+          configurationSha256: sha256(v['configurationSha256']),
+          heads: unique(array(keys['heads'], webhookHead), (v) => v.reference),
+          materials: array(keys['materials'], webhookMaterial),
+        }
       }),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/materials/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, webhookOperation),
-      }),
+      api.getApiV1WebhooksMaterialsOperationsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        operationReceipt(id, webhookOperation),
+      ),
     prepare: (id: string, body: WebhookInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/webhooks/materials',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 200,
-        decode: operationReceipt(id, webhookMaterial),
-      }),
+      api.postApiV1WebhooksMaterials(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        operationReceipt(id, webhookMaterial),
+      ),
     transition: (id: string, body: WebhookTransition) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/webhooks/materials/transitions',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 200,
-        decode: operationReceipt(id, webhookOperation),
-      }),
+      api.postApiV1WebhooksMaterialsTransitions(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        operationReceipt(id, webhookOperation),
+      ),
   }
 }

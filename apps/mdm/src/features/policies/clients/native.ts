@@ -1,9 +1,9 @@
+import * as api from '@rss/api/mdm-operations'
 import { authorization, reauthorizationEligibility } from './authorization'
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
-  boolean,
   closed,
   count,
   enumeration,
@@ -173,17 +173,14 @@ export function createNativeClient(transport: HttpTransport) {
     action: 'reauthorize' | 'cancel',
     body: NativeChange | Reauthorization,
   ) {
-    return transport.request({
-      method: 'POST',
-      path: `/api/v1/devices/{device}/operations/{operation}/${action}`,
-      pathParams: { device, operation },
-      body,
-      successStatus: 200,
-      decode(value) {
-        const v = closed(value, ['operationId', 'revision'])
-        if (uuid(v['operationId']) !== operation) throw new Error('Wrong operation receipt')
-        return { operationId: operation, revision: count(v['revision']) }
-      },
+    return (
+      action === 'reauthorize'
+        ? api.postApiV1DevicesByDeviceOperationsByIdReauthorize
+        : api.postApiV1DevicesByDeviceOperationsByIdCancel
+    )(transport, { pathParams: { device, id: operation }, body }, (value) => {
+      const v = value
+      if (uuid(v['operationId']) !== operation) throw new Error('Wrong operation receipt')
+      return { operationId: operation, revision: count(v['revision']) }
     })
   }
   return {
@@ -191,14 +188,11 @@ export function createNativeClient(transport: HttpTransport) {
       device: string,
       body: { operationId: string; action: DeviceControlAction; deadline: number },
     ) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/devices/{device}/operations',
-        pathParams: { device },
-        body: { ...body, action: deviceControlAction(body.action) },
-        successStatus: 202,
-        decode(value) {
-          const v = closed(value, ['operationId', 'commandId', 'revision', 'accepted'])
+      api.postApiV1DevicesByDeviceOperations(
+        transport,
+        { pathParams: { device }, body: { ...body, action: deviceControlAction(body.action) } },
+        (value) => {
+          const v = value
           if (
             uuid(v['operationId']) !== body.operationId ||
             uuid(v['commandId']) !== body.operationId ||
@@ -209,18 +203,16 @@ export function createNativeClient(transport: HttpTransport) {
             operationId: body.operationId,
             commandId: body.operationId,
             revision: count(v['revision']),
-            accepted: boolean(v['accepted']),
+            accepted: v['accepted'],
           }
         },
-      }),
+      ),
     read: (device: string, operation: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/operations/{operation}',
-        pathParams: { device, operation },
-        successStatus: 200,
-        decode: (v) => decodeNativeOperation(v, operation),
-      }),
+      api.getApiV1DevicesByDeviceOperationsById(
+        transport,
+        { pathParams: { device: device, id: operation } },
+        (v) => decodeNativeOperation(v, operation),
+      ),
     reauthorize: (device: string, operation: string, body: Reauthorization) =>
       change(device, operation, 'reauthorize', body),
     cancel: (device: string, operation: string, body: NativeChange) =>

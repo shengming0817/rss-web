@@ -41,11 +41,12 @@
     "test:mdm:profiles-browser": "node e2e/mdm/profiles-run.mjs",
     "test:mdm:telemetry-browser": "node e2e/mdm/telemetry-run.mjs",
     "test:mdm:console-browser": "node e2e/mdm/console-run.mjs",
-    "generate:collection": "node scripts/generate-collection.mjs",
-    "check:collection": "node scripts/generate-collection.mjs --check",
     "dev:device-access": "pnpm -F @rss/device-access-app dev",
     "dev:device-access:demo": "pnpm -F @rss/device-access-app demo",
-    "build:device-access": "pnpm -F @rss/device-access-app build && node scripts/check-device-access-app-build.mjs"
+    "build:device-access": "pnpm -F @rss/device-access-app build && node scripts/check-device-access-app-build.mjs",
+    "generate:contracts": "node scripts/generate-contracts.mjs",
+    "check:contracts": "node scripts/generate-contracts.mjs --check",
+    "test:contracts": "node --test scripts/contract-source.test.mjs"
   },
   "lint-staged": {
     "*.{ts,vue}": [

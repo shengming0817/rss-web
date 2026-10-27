@@ -1,7 +1,9 @@
+import * as api from '@rss/api/mdm-operations'
 /** Safe formal FactView, shared by audit queries and path-bound device timelines. */
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
+  enumeration,
   boolean,
   closed,
   count,
@@ -10,7 +12,6 @@ import {
   nullable,
   uuid,
   string,
-  enumeration,
 } from '../../../services/decode'
 const cursor = (v: unknown) =>
   nullable(v, (value) => {
@@ -32,28 +33,11 @@ export interface AuditQuery {
   cursor?: string
 }
 export function auditQuery(query: AuditQuery): AuditQuery {
-  closed(
-    query,
-    [],
-    [
-      'targetId',
-      'targetType',
-      'device',
-      'operationId',
-      'actor',
-      'action',
-      'outcome',
-      'from',
-      'until',
-      'limit',
-      'cursor',
-    ],
-  )
   for (const text of [query.targetId, query.targetType, query.device, query.actor, query.action])
     if (text !== undefined) identifier(text)
   if (query.operationId !== undefined) uuid(query.operationId)
   if (query.outcome !== undefined)
-    enumeration(query.outcome, ['succeeded', 'denied', 'failed', 'unknown'] as const)
+    enumeration(query.outcome, ['succeeded', 'denied', 'failed', 'unknown'])
   if (query.from !== undefined) count(query.from)
   if (query.until !== undefined) count(query.until)
   if (query.from !== undefined && query.until !== undefined && query.from >= query.until)
@@ -133,12 +117,10 @@ export type AuditFact = AuditPage['items'][number]
 export function createAuditClient(transport: HttpTransport) {
   return {
     list: (filter: AuditQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/audit-events',
-        query: { ...auditQuery(filter), limit: filter.limit ?? 20 },
-        successStatus: 200,
-        decode: timelinePage,
-      }),
+      api.getApiV1AuditEvents(
+        transport,
+        { query: { ...auditQuery(filter), limit: filter.limit ?? 20 } },
+        timelinePage,
+      ),
   }
 }

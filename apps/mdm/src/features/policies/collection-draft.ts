@@ -1,7 +1,4 @@
-import type {
-  Applicability,
-  ValueMapping,
-} from '../../contracts/collection/generated/ResourceWrite'
+import type { Applicability, ValueMapping } from '@rss/api/mdm-types'
 export const defaultApplicability = (): Applicability => ({
   minimumOsVersion: null,
   minimumBuild: null,

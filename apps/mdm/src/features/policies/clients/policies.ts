@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { decodeCapability, decodeSelector, toolName, type CapabilitySelector } from './addressing'
 import {
   queryParameters,
@@ -9,16 +10,7 @@ import {
 } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
-import {
-  count,
-  array,
-  closed,
-  nullable,
-  uuid,
-  string,
-  enumeration,
-  boolean,
-} from '../../../services/decode'
+import { count, array, closed, nullable, uuid, string, enumeration } from '../../../services/decode'
 import {
   decodePolicy,
   policyName,
@@ -66,27 +58,19 @@ function baseTargetFacts(v: Record<string, unknown>) {
 export function createPoliciesClient(transport: HttpTransport) {
   return {
     capabilities: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/policies/capabilities',
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['defaultSoftwareChannel', 'mdmSoftwareDistributionEnabled'])
-          return {
-            defaultSoftwareChannel: enumeration(v['defaultSoftwareChannel'], ['agent'] as const),
-            mdmSoftwareDistributionEnabled: boolean(v['mdmSoftwareDistributionEnabled']),
-          }
-        },
+      api.getApiV1PoliciesCapabilities(transport, {}, (value) => {
+        const v = value
+        return {
+          defaultSoftwareChannel: v['defaultSoftwareChannel'],
+          mdmSoftwareDistributionEnabled: v['mdmSoftwareDistributionEnabled'],
+        }
       }),
     rerun: (id: string, operationId: string, expectedRevision: number, deadline: number) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/policies/{id}/reruns',
-        pathParams: { id },
-        body: { operationId, expectedRevision, input: { deadline } },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['operationId', 'policyId', 'versionId', 'deadline'])
+      api.postApiV1PoliciesByIdReruns(
+        transport,
+        { pathParams: { id }, body: { operationId, expectedRevision, input: { deadline } } },
+        (value) => {
+          const v = value
           if (
             v['operationId'] !== operationId ||
             v['policyId'] !== id ||
@@ -100,16 +84,13 @@ export function createPoliciesClient(transport: HttpTransport) {
             deadline,
           }
         },
-      }),
+      ),
     preview: (input: PreviewInput, page: WindowQuery = {}) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/policies/previews',
-        body: input,
-        query: windowParameters({ limit: 20, ...page }, 1000),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['action', 'scopeResult', 'items', 'nextCursor']),
+      api.postApiV1PoliciesPreviews(
+        transport,
+        { body: input, query: windowParameters({ limit: 20, ...page }, 1000) },
+        (value) => {
+          const v = value,
             action = policyAction(v['action']),
             result = uuid(v['scopeResult'])
           const basis = (value: unknown) =>
@@ -146,16 +127,13 @@ export function createPoliciesClient(transport: HttpTransport) {
             nextCursor: nextCursor(v['nextCursor']),
           }
         },
-      }),
+      ),
     assignments: (id: string, page: WindowQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/policies/{id}/assignments',
-        pathParams: { id },
-        query: windowParameters({ limit: 20, ...page }, 1000),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
+      api.getApiV1PoliciesByIdAssignments(
+        transport,
+        { pathParams: { id }, query: windowParameters({ limit: 20, ...page }, 1000) },
+        (value) => {
+          const v = value
           return {
             items: array(v['items'], (value) => {
               const d = closed(value, [
@@ -181,20 +159,20 @@ export function createPoliciesClient(transport: HttpTransport) {
             nextCursor: nextCursor(v['nextCursor']),
           }
         },
-      }),
+      ),
     list: <F extends keyof typeof policyFields = keyof typeof policyFields>(
       query: PolicyDirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/policies',
-        query: queryParameters({
-          limit: 20,
-          ...query,
-          fields: query.fields ?? Object.keys(policyFields),
-        }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1Policies(
+        transport,
+        {
+          query: queryParameters({
+            limit: 20,
+            ...query,
+            fields: query.fields ?? Object.keys(policyFields),
+          }),
+        },
+        (value) => {
           const page = projectedPage(value, policyFields, query.fields, ['id'])
           for (const row of page.items)
             if (
@@ -205,50 +183,44 @@ export function createPoliciesClient(transport: HttpTransport) {
               throw new Error('Wrong tool identity')
           return page
         },
-      }),
+      ),
     resolve: (selector: CapabilitySelector) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/policies/resolve',
-        body: decodeSelector(selector),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['capability', 'policy'])
-          const policy = decodePolicy(v['policy']),
-            capability = decodeCapability(v['capability'])
-          if (
-            capability.id !== policy.id ||
-            capability.revision !== policy.revision ||
-            capability.version !== policy.versionId ||
-            capability.alias !== policy.definition.alias ||
-            policy.state === 'archived' ||
-            (selector.kind === 'id' && selector.id !== policy.id) ||
-            (selector.kind === 'tool_name' && selector.name !== capability.toolName) ||
-            (selector.kind === 'alias' && policyName(selector.alias) !== capability.alias)
-          )
-            throw new Error('Wrong resolved Policy')
-          return { capability, policy }
-        },
+      api.postApiV1PoliciesResolve(transport, { body: decodeSelector(selector) }, (value) => {
+        const v = value
+        const policy = decodePolicy(v['policy']),
+          capability = decodeCapability(v['capability'])
+        if (
+          capability.id !== policy.id ||
+          capability.revision !== policy.revision ||
+          capability.version !== policy.versionId ||
+          capability.alias !== policy.definition.alias ||
+          policy.state === 'archived' ||
+          (selector.kind === 'id' && selector.id !== policy.id) ||
+          (selector.kind === 'tool_name' && selector.name !== capability.toolName) ||
+          (selector.kind === 'alias' && policyName(selector.alias) !== capability.alias)
+        )
+          throw new Error('Wrong resolved Policy')
+        return { capability, policy }
       }),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/policies/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => decodePolicy(v, id),
-      }),
-    change: (id: string, body: Operation<PolicyChange>) =>
-      transport.request({
-        method: body.input.action === 'archive' ? 'DELETE' : 'POST',
-        path: '/api/v1/policies/{id}',
-        pathParams: { id },
-        body:
-          body.input.action === 'archive'
-            ? { operationId: body.operationId, expectedRevision: body.expectedRevision }
-            : body,
-        successStatus: 200,
-        decode: (v) => decodePolicy(v, id),
-      }),
+      api.getApiV1PoliciesById(transport, { pathParams: { id } }, (v) => decodePolicy(v, id)),
+    change: (id: string, body: Operation<PolicyChange>) => {
+      const input = body.input
+      const project = (v: unknown) => decodePolicy(v, id)
+      if (input.action === 'archive')
+        return api.deleteApiV1PoliciesById(
+          transport,
+          {
+            pathParams: { id },
+            body: { operationId: body.operationId, expectedRevision: body.expectedRevision },
+          },
+          project,
+        )
+      return api.postApiV1PoliciesById(
+        transport,
+        { pathParams: { id }, body: { ...body, input } },
+        project,
+      )
+    },
   }
 }

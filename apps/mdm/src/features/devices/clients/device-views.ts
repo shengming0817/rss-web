@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -185,27 +186,23 @@ export function createDeviceViewsClient(transport: HttpTransport, tenant: string
   }
   return {
     list: <F extends keyof typeof viewFields = keyof typeof viewFields>(query: ViewQuery<F> = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/device-views',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode: (v) => {
+      api.getApiV1DeviceViews(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (v) => {
           const page = decodeViews(v, query.fields)
           for (const item of page.items)
             if ('endpoints' in item) bound(item as { endpoints: ViewEndpoint[] })
           return page
         },
-      }),
+      ),
     statistics: (filter?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/device-views/statistics',
-        query: queryParameters({ filter }),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['statistics', 'asOf']),
-            stats = closed(v['statistics'], ['endpointCount', 'deviceViewCount'])
+      api.getApiV1DeviceViewsStatistics(
+        transport,
+        { query: queryParameters({ filter }) },
+        (value) => {
+          const v = value,
+            stats = v['statistics']
           return {
             statistics: {
               endpointCount: count(stats['endpointCount']),
@@ -214,37 +211,22 @@ export function createDeviceViewsClient(transport: HttpTransport, tenant: string
             asOf: integer(v['asOf']),
           }
         },
-      }),
+      ),
     detail: (ref: ObjectRef) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/device-views/{kind}/{id}',
-        pathParams: { ...ref },
-        successStatus: 200,
-        decode: (v) => bound(decodeView(v, ref)),
-      }),
+      api.getApiV1DeviceViewsByKindById(transport, { pathParams: { ...ref } }, (v) =>
+        bound(decodeView(v, ref)),
+      ),
     items: (
       ref: ObjectRef,
       field: string,
       source: DeviceView['lists'][string]['sources'][number],
       token = source.cursor,
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/device-views/{kind}/{id}/inventory-lists/{field}',
-        pathParams: { ...ref, field },
-        query: { cursor: token, limit: 20 },
-        successStatus: 200,
-        decode: (value) => {
-          const v = closed(value, [
-              'reference',
-              'field',
-              'source',
-              'endpoint',
-              'total',
-              'items',
-              'nextCursor',
-            ]),
+      api.getApiV1DeviceViewsByKindByIdInventoryListsByField(
+        transport,
+        { pathParams: { ...ref, field }, query: { cursor: token, limit: 20 } },
+        (value) => {
+          const v = value,
             e = evidence(v['source'])
           if (
             !matches(objectRef(v['reference']), ref) ||
@@ -263,6 +245,6 @@ export function createDeviceViewsClient(transport: HttpTransport, tenant: string
             nextCursor: cursor(v['nextCursor']),
           }
         },
-      }),
+      ),
   }
 }

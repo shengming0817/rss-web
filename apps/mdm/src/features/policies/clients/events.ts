@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -98,21 +99,19 @@ const memberFields = {
 export function createEventsClient(transport: HttpTransport) {
   return {
     list: (device: string, query: DirectoryQuery<keyof typeof batchFields> = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/policy-event-batches',
-        pathParams: { device },
-        query: queryParameters({ limit: 20, ...query, fields: Object.keys(batchFields) }),
-        successStatus: 200,
-        decode: (v) => projectedPage(v, batchFields, undefined, ['id']),
-      }),
+      api.getApiV1DevicesByDevicePolicyEventBatches(
+        transport,
+        {
+          pathParams: { device },
+          query: queryParameters({ limit: 20, ...query, fields: Object.keys(batchFields) }),
+        },
+        (v) => projectedPage(v, batchFields, undefined, ['id']),
+      ),
     read: (device: string, batch: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/policy-event-batches/{batch}',
-        pathParams: { device, batch },
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1DevicesByDevicePolicyEventBatchesByBatch(
+        transport,
+        { pathParams: { device, batch } },
+        (value) => {
           const row = projectedRow(value, batchFields)
           if (
             row.id !== batch ||
@@ -122,19 +121,19 @@ export function createEventsClient(transport: HttpTransport) {
             throw new Error('Wrong batch')
           return row
         },
-      }),
+      ),
     members: (
       device: string,
       batch: string,
       query: DirectoryQuery<keyof typeof memberFields> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/policy-event-batches/{batch}/members',
-        pathParams: { device, batch },
-        query: queryParameters({ limit: 20, ...query, fields: Object.keys(memberFields) }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1DevicesByDevicePolicyEventBatchesByBatchMembers(
+        transport,
+        {
+          pathParams: { device, batch },
+          query: queryParameters({ limit: 20, ...query, fields: Object.keys(memberFields) }),
+        },
+        (value) => {
           const page = projectedPage(value, memberFields, undefined, ['id'])
           for (const item of page.items)
             if (
@@ -145,7 +144,7 @@ export function createEventsClient(transport: HttpTransport) {
               throw new Error('Wrong member operations')
           return page
         },
-      }),
+      ),
   }
 }
 export type EventBatch = Awaited<ReturnType<ReturnType<typeof createEventsClient>['read']>>

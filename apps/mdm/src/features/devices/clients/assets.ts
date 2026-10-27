@@ -1,11 +1,12 @@
+import * as api from '@rss/api/mdm-operations'
 import { checked } from '../../../contracts/collection/check'
 import {
   validateFieldWrite,
   validateFieldImpact,
   validateFieldMappingReference,
   validateFieldReferenceQuery,
-} from '../../../contracts/collection/generated/validators'
-import type { FieldWrite } from '../../../contracts/collection/generated/FieldWrite'
+} from '@rss/api/mdm-validators'
+import type { FieldWrite } from '@rss/api/mdm-types'
 import {
   queryParameters,
   nextCursor,
@@ -191,35 +192,22 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
   }
   return {
     fieldLayout: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/asset-field-layout',
-        successStatus: 200,
-        decode: (v) => decodeFieldLayout(v, tenant),
-      }),
+      api.getApiV1AssetFieldLayout(transport, {}, (v) => decodeFieldLayout(v, tenant)),
     saveFieldLayout: (body: Operation<{ groups: FieldDisplayGroup[] }>) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/asset-field-layout',
-        body,
-        successStatus: 200,
-        decode: (value) => {
-          const v = assetEnvelope(value, tenant, 'field_layout_written', ['revision'])
-          return { revision: count(v['revision']) }
-        },
+      api.putApiV1AssetFieldLayout(transport, { body }, (value) => {
+        const v = assetEnvelope(value, tenant, 'field_layout_written', ['revision'])
+        return { revision: count(v['revision']) }
       }),
     async catalog() {
       const fields: ReturnType<typeof fieldDefinition>[] = [],
         seen = new Set<string>()
       let cursor: string | undefined
       do {
-        const page = await transport.request({
-          method: 'GET',
-          path: '/api/v1/asset-fields',
-          query: queryParameters({ limit: 100, cursor }),
-          successStatus: 200,
-          decode: (v) => decodeCatalog(v, tenant),
-        })
+        const page = await api.getApiV1AssetFields(
+          transport,
+          { query: queryParameters({ limit: 100, cursor }) },
+          (v) => decodeCatalog(v, tenant),
+        )
         fields.push(...page.items)
         if (fields.length > 1024) throw new Error('Invalid field catalog budget')
         if (page.nextCursor !== null && seen.has(page.nextCursor))
@@ -230,13 +218,10 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
       return { dictionary: 'assets-v1', fields: unique(fields, (field) => field.key) }
     },
     writeField: (field: string, body: FieldWrite) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/asset-fields/{field}',
-        pathParams: { field },
-        body: checked(validateFieldWrite, body),
-        successStatus: 200,
-        decode(value) {
+      api.putApiV1AssetFieldsByField(
+        transport,
+        { pathParams: { field }, body: checked(validateFieldWrite, body) },
+        (value) => {
           const v = assetEnvelope(value, tenant, 'field', ['field', 'version', 'definition'])
           if (v['field'] !== field || v['version'] !== body.expectedRevision + 1)
             throw new Error('Wrong field receipt')
@@ -244,18 +229,18 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             fieldDefinition({ ...record(v['definition']), operations: [] })
           return { version: count(v['version']) }
         },
-      }),
+      ),
     fieldReferences: (field: string, cursor?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/asset-fields/{field}/references',
-        pathParams: { field },
-        query: {
-          ...checked(validateFieldReferenceQuery, { cursor: cursor ?? null, limit: 64 }),
-          cursor,
+      api.getApiV1AssetFieldsByFieldReferences(
+        transport,
+        {
+          pathParams: { field },
+          query: {
+            ...checked(validateFieldReferenceQuery, { cursor: cursor ?? null, limit: 64 }),
+            cursor,
+          },
         },
-        successStatus: 200,
-        decode(value) {
+        (value) => {
           const v = assetEnvelope(value, tenant, 'field_references', [
             'field',
             'impact',
@@ -271,43 +256,32 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             nextCursor: nextCursor(v['nextCursor']),
           }
         },
-      }),
+      ),
     retention: (key: string, revision: number) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/asset-retention-policies/{key}/{revision}',
-        pathParams: { key, revision: String(revision) },
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1AssetRetentionPoliciesByKeyByRevision(
+        transport,
+        { pathParams: { key, revision } },
+        (value) => {
           const v = assetEnvelope(value, tenant, 'retention_policy', ['policy'])
           const p = nullable(v['policy'], retentionPolicy)
           if (p && (p.key !== key || p.revision !== revision))
             throw new Error('Wrong retention version')
           return p
         },
-      }),
+      ),
     writeRetention: (body: Operation<ReturnType<typeof retentionPolicy>>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/asset-retention-policies',
-        body,
-        successStatus: 200,
-        decode(value) {
-          const v = assetEnvelope(value, tenant, 'retention_policy', ['policy']),
-            p = retentionPolicy(v['policy'])
-          if (p.key !== body.input.key || p.revision !== body.expectedRevision + 1)
-            throw new Error('Wrong retention receipt')
-          return p
-        },
+      api.postApiV1AssetRetentionPolicies(transport, { body }, (value) => {
+        const v = assetEnvelope(value, tenant, 'retention_policy', ['policy']),
+          p = retentionPolicy(v['policy'])
+        if (p.key !== body.input.key || p.revision !== body.expectedRevision + 1)
+          throw new Error('Wrong retention receipt')
+        return p
       }),
     inventory: (device: string, scope: CollectionScope = { kind: 'device' }) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/inventory',
-        pathParams: { device },
-        query: { scope: JSON.stringify(collectionScope(scope)) },
-        successStatus: 200,
-        decode: (v) => {
+      api.getApiV1DevicesByIdInventory(
+        transport,
+        { pathParams: { id: device }, query: { scope: JSON.stringify(collectionScope(scope)) } },
+        (v) => {
           const result = decodeInventory(v, tenant)
           if (
             result.device !== device ||
@@ -316,24 +290,21 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             throw new Error('Wrong inventory scope')
           return result
         },
-      }),
+      ),
     collectionRun: (device: string, id: string, scope: CollectionScope = { kind: 'device' }) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/collections/{run}',
-        pathParams: { device, run: uuid(id) },
-        query: { scope: JSON.stringify(collectionScope(scope)) },
-        successStatus: 200,
-        decode: (v) => decodeCollectionRun(v, tenant, id),
-      }),
+      api.getApiV1DevicesByIdCollectionsByRun(
+        transport,
+        {
+          pathParams: { id: device, run: uuid(id) },
+          query: { scope: JSON.stringify(collectionScope(scope)) },
+        },
+        (v) => decodeCollectionRun(v, tenant, id),
+      ),
     scopes: (device: string, next?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/inventory-scopes',
-        pathParams: { device },
-        query: { cursor: next, limit: 20 },
-        successStatus: 200,
-        decode: (value) => {
+      api.getApiV1DevicesByIdInventoryScopes(
+        transport,
+        { pathParams: { id: device }, query: { cursor: next, limit: 20 } },
+        (value) => {
           const v = assetEnvelope(value, tenant, 'inventory_scopes', [
             'device',
             'watermark',
@@ -356,15 +327,15 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             nextCursor: cursor(v['nextCursor']),
           }
         },
-      }),
+      ),
     listItems: (device: string, field: string, scope: CollectionScope, next: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/inventory-lists/{field}',
-        pathParams: { device, field },
-        query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 20 },
-        successStatus: 200,
-        decode: (value) => {
+      api.getApiV1DevicesByIdInventoryListsByField(
+        transport,
+        {
+          pathParams: { id: device, field: field },
+          query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 20 },
+        },
+        (value) => {
           const v = assetEnvelope(value, tenant, 'list_items', [
             'device',
             'field',
@@ -381,7 +352,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             nextCursor: cursor(v['nextCursor']),
           }
         },
-      }),
+      ),
     collectionItems: (
       device: string,
       id: string,
@@ -389,13 +360,13 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
       scope: CollectionScope,
       next?: string,
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/collections/{run}/fields/{field}/items',
-        pathParams: { device, run: uuid(id), field },
-        query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 100 },
-        successStatus: 200,
-        decode: (value) => {
+      api.getApiV1DevicesByIdCollectionsByRunFieldsByFieldItems(
+        transport,
+        {
+          pathParams: { id: device, run: uuid(id), field: field },
+          query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 100 },
+        },
+        (value) => {
           const v = assetEnvelope(value, tenant, 'collection_items', [
             'run',
             'field',
@@ -424,68 +395,49 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             nextCursor: nextCursor(v['nextCursor']),
           }
         },
-      }),
+      ),
     search: (body: Operation<QueryInput>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/device-queries',
-        body: { ...body, input: queryInput(body.input) },
-        successStatus: 202,
-        decode: (v) => accepted(v, body.operationId),
-      }),
+      api.postApiV1DeviceQueries(
+        transport,
+        { body: { ...body, input: queryInput(body.input) } },
+        (v) => accepted(v, body.operationId),
+      ),
     status: (task: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/device-queries/{task}',
-        pathParams: { task },
-        successStatus: 200,
-        decode: (value) => {
-          const v = assetEnvelope(value, tenant, 'query_status', [
-            'task',
-            'status',
-            'summary',
-            'failure',
-            'resultUrl',
-          ])
-          if (uuid(v['task']) !== task) throw new Error('Wrong task')
-          const resultUrl = cursor(v['resultUrl'])
-          if (resultUrl !== null && resultUrl !== `/api/v1/device-queries/${task}/items`)
-            throw new Error('Wrong result URL')
-          return {
-            task,
-            status: enumeration(v['status'], [
-              'pending',
-              'running',
-              'completed',
-              'failed',
-            ] as const),
-            summary: summary(v['summary']),
-            failure: nullable(v['failure'], identifier),
-            resultUrl,
-          }
-        },
+      api.getApiV1DeviceQueriesById(transport, { pathParams: { id: task } }, (value) => {
+        const v = assetEnvelope(value, tenant, 'query_status', [
+          'task',
+          'status',
+          'summary',
+          'failure',
+          'resultUrl',
+        ])
+        if (uuid(v['task']) !== task) throw new Error('Wrong task')
+        const resultUrl = cursor(v['resultUrl'])
+        if (resultUrl !== null && resultUrl !== `/api/v1/device-queries/${task}/items`)
+          throw new Error('Wrong result URL')
+        return {
+          task,
+          status: enumeration(v['status'], ['pending', 'running', 'completed', 'failed'] as const),
+          summary: summary(v['summary']),
+          failure: nullable(v['failure'], identifier),
+          resultUrl,
+        }
       }),
     items: (task: string, next?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/device-queries/{task}/items',
-        pathParams: { task },
-        query: { limit: 20, cursor: next },
-        successStatus: 200,
-        decode: (v) => {
+      api.getApiV1DeviceQueriesByIdItems(
+        transport,
+        { pathParams: { id: task }, query: { limit: 20, cursor: next } },
+        (v) => {
           const result = decodeAssetPage(v, tenant)
           if (result.snapshot !== task) throw new Error('Wrong search snapshot')
           return result
         },
-      }),
+      ),
     facets: (task: string, facet: 'os_versions' | 'channels' | 'asset_states', next?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/device-queries/{task}/facets/{facet}',
-        pathParams: { task, facet },
-        query: { limit: 20, cursor: next },
-        successStatus: 200,
-        decode: (value) => {
+      api.getApiV1DeviceQueriesByIdFacetsByFacet(
+        transport,
+        { pathParams: { id: task, facet: facet }, query: { limit: 20, cursor: next } },
+        (value) => {
           const v = assetEnvelope(value, tenant, 'facets', ['task', 'facet', 'items', 'nextCursor'])
           if (uuid(v['task']) !== task || v['facet'] !== facet) throw new Error('Wrong facet')
           return {
@@ -498,30 +450,25 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             nextCursor: cursor(v['nextCursor']),
           }
         },
-      }),
+      ),
     assign: (device: string, field: string, body: Operation<ManualChange>) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/devices/{device}/manual-fields/{field}',
-        pathParams: { device, field },
-        body,
-        successStatus: 200,
-        decode: (value) => {
+      api.putApiV1DevicesByIdManualFieldsByField(
+        transport,
+        { pathParams: { id: device, field: field }, body },
+        (value) => {
           const v = assetEnvelope(value, tenant, 'assignment', ['device', 'field', 'revision'])
           if (identifier(v['device']) !== device || fieldKey(v['field']) !== field)
             throw new Error('Wrong assignment')
           return { device, field, revision: count(v['revision']) }
         },
-      }),
+      ),
     saved: <F extends keyof typeof savedFields = keyof typeof savedFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/saved-queries',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1SavedQueries(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (value) => {
           const v = assetEnvelope(value, tenant, 'saved_list', ['items', 'nextCursor'])
           return {
             items: array(v['items'], (item) => {
@@ -537,38 +484,19 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
             nextCursor: nextCursor(v['nextCursor']),
           }
         },
-      }),
+      ),
     readSaved: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/saved-queries/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => saved(v, id),
-      }),
+      api.getApiV1SavedQueriesById(transport, { pathParams: { id } }, (v) => saved(v, id)),
     save: (
       id: string,
       body: Operation<
         { action: 'put'; definition: { name: string; query: QueryInput } } | { action: 'delete' }
       >,
-    ) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/saved-queries/{id}',
-        pathParams: { id },
-        body,
-        successStatus: 200,
-        decode: (v) => saved(v, id),
-      }),
+    ) => api.putApiV1SavedQueriesById(transport, { pathParams: { id }, body }, (v) => saved(v, id)),
     executeSaved: (id: string, body: Operation<Record<string, never>>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/saved-queries/{id}/execute',
-        pathParams: { id },
-        body,
-        successStatus: 202,
-        decode: (v) => accepted(v, body.operationId),
-      }),
+      api.postApiV1SavedQueriesByIdExecute(transport, { pathParams: { id }, body }, (v) =>
+        accepted(v, body.operationId),
+      ),
   }
 }
 

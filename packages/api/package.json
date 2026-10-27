@@ -9,7 +9,11 @@
     "./mdm": "./src/mdm.ts",
     "./mdm-limits": "./src/mdm-limits.ts",
     "./device-access": "./src/device-access.ts",
-    "./device-access-demo": "./src/device-access-demo.ts"
+    "./device-access-demo": "./src/device-access-demo.ts",
+    "./mdm-operations": "./src/generated/mdm/index.ts",
+    "./mdm-types": "./src/generated/mdm/owners.ts",
+    "./mdm-validators": "./src/generated/mdm/owner-validators.ts",
+    "./mdm-demo": "./src/mdm-demo.ts"
   },
   "files": [
     "src"

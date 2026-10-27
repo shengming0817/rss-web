@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import { windowParameters, windowPage } from '../../../services/directory-query'
 import { operationReceipt, positive } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
@@ -134,137 +135,92 @@ export type WnsInput = {
 export function createStorageClient(transport: HttpTransport) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/storage/connections',
-        successStatus: 200,
-        decode: (v) => providerState(v, 'desiredRevision', storageReceipt),
-      }),
+      api.getApiV1StorageConnections(transport, {}, (v) =>
+        providerState(v, 'desiredRevision', storageReceipt),
+      ),
     history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/storage/connections/versions',
-        query: windowParameters({ limit: 64, ...query }),
-        successStatus: 200,
-        decode: (v) => windowPage(v, storageReceipt),
-      }),
+      api.getApiV1StorageConnectionsVersions(
+        transport,
+        { query: windowParameters({ limit: 64, ...query }) },
+        (v) => windowPage(v, storageReceipt),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/storage/connections/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, storageReceipt),
-      }),
+      api.getApiV1StorageConnectionsOperationsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        operationReceipt(id, storageReceipt),
+      ),
     save: (id: string, body: StorageInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/storage/connections',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 202,
-        decode(v) {
+      api.postApiV1StorageConnections(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        (v) => {
           const r = storageReceipt(v)
           if (r.operationId !== id) throw new Error('Wrong operation')
           return r
         },
-      }),
+      ),
   }
 }
 export function createMailClient(transport: HttpTransport) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/smtp',
-        successStatus: 200,
-        decode: (v) => providerState(v, 'selectedRevision', mailReceipt),
-      }),
+      api.getApiV1Smtp(transport, {}, (v) => providerState(v, 'selectedRevision', mailReceipt)),
     history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/smtp/versions',
-        query: windowParameters({ limit: 64, ...query }),
-        successStatus: 200,
-        decode: (v) => windowPage(v, mailReceipt),
-      }),
+      api.getApiV1SmtpVersions(
+        transport,
+        { query: windowParameters({ limit: 64, ...query }) },
+        (v) => windowPage(v, mailReceipt),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/smtp/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, mailReceipt),
-      }),
+      api.getApiV1SmtpOperationsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        operationReceipt(id, mailReceipt),
+      ),
     save: (id: string, body: MailInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/smtp',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 202,
-        decode(v) {
-          const r = mailReceipt(v)
-          if (r.operationId !== id) throw new Error('Wrong operation')
-          return r
-        },
+      api.postApiV1Smtp(transport, { headers: { 'Idempotency-Key': uuid(id) }, body }, (v) => {
+        const r = mailReceipt(v)
+        if (r.operationId !== id) throw new Error('Wrong operation')
+        return r
       }),
   }
 }
 export function createWnsClient(transport: HttpTransport) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/windows/wns',
-        successStatus: 200,
-        decode: (v) => providerState(v, 'desiredRevision', wnsReceipt),
-      }),
+      api.getApiV1WindowsWns(transport, {}, (v) => providerState(v, 'desiredRevision', wnsReceipt)),
     history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/windows/wns/versions',
-        query: windowParameters({ limit: 64, ...query }),
-        successStatus: 200,
-        decode: (v) => windowPage(v, wnsReceipt),
-      }),
+      api.getApiV1WindowsWnsVersions(
+        transport,
+        { query: windowParameters({ limit: 64, ...query }) },
+        (v) => windowPage(v, wnsReceipt),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/windows/wns/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode(value) {
-          const result = wnsOperation(value)
-          if (result.receipt.operationId !== id) throw new Error('Wrong original operation')
-          return result
-        },
+      api.getApiV1WindowsWnsOperationsById(transport, { pathParams: { id: uuid(id) } }, (value) => {
+        const result = wnsOperation(value)
+        if (result.receipt.operationId !== id) throw new Error('Wrong original operation')
+        return result
       }),
     save: (id: string, body: WnsInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/windows/wns',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 202,
-        decode(value) {
+      api.postApiV1WindowsWns(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        (value) => {
           const result = wnsOperation(value)
           if (result.receipt.operationId !== id) throw new Error('Wrong original operation')
           return result
         },
-      }),
+      ),
     revoke: (id: string, body: { expectedRevision: number; materialRevision: number }) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/windows/wns/revoke',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 202,
-        decode(value) {
+      api.postApiV1WindowsWnsRevoke(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        (value) => {
           const result = wnsOperation(value)
           if (result.receipt.operationId !== id) throw new Error('Wrong original operation')
           return result
         },
-      }),
+      ),
   }
 }

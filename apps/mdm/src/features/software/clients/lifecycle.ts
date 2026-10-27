@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -116,16 +117,16 @@ export function createLifecycleClient(transport: HttpTransport) {
     sources: <F extends keyof typeof sourceFields = keyof typeof sourceFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/sources',
-        query: queryParameters({
-          limit: 20,
-          ...query,
-          fields: query.fields ?? Object.keys(sourceFields),
-        }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1SoftwareSources(
+        transport,
+        {
+          query: queryParameters({
+            limit: 20,
+            ...query,
+            fields: query.fields ?? Object.keys(sourceFields),
+          }),
+        },
+        (value) => {
           const page = projectedPage(value, sourceFields, query.fields)
           if (!query.fields)
             page.items.forEach((item) => {
@@ -136,39 +137,25 @@ export function createLifecycleClient(transport: HttpTransport) {
             })
           return page
         },
-      }),
+      ),
     source: (id: string, revision: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/sources/{id}/revisions/{revision}',
-        pathParams: { id, revision },
-        successStatus: 200,
-        decode: (v) => sourceRead(v, id, revision),
-      }),
+      api.getApiV1SoftwareSourcesByIdRevisionsByRevision(
+        transport,
+        { pathParams: { id, revision } },
+        (v) => sourceRead(v, id, revision),
+      ),
     changeSource: (id: string, revision: string, body: Operation<SourceChange>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/software/sources/{id}/revisions/{revision}',
-        pathParams: { id, revision },
-        body,
-        successStatus: 200,
-        decode: (v) => mutationReceipt(sourceRead(v, id, revision), body.operationId),
-      }),
+      api.postApiV1SoftwareSourcesByIdRevisionsByRevision(
+        transport,
+        { pathParams: { id, revision }, body },
+        (v) => mutationReceipt(sourceRead(v, id, revision), body.operationId),
+      ),
     version: (id: string, version: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/resources/{id}/versions/{version}',
-        pathParams: { id, version },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, [
-            'resource',
-            'version',
-            'resourceDigest',
-            'resourceRevision',
-            'presentation',
-            'lifecycle',
-          ])
+      api.getApiV1SoftwareResourcesByIdVersionsByVersion(
+        transport,
+        { pathParams: { id, version } },
+        (value) => {
+          const v = value
           if (v['resource'] !== id || v['version'] !== version)
             throw new Error('Wrong software version')
           return {
@@ -180,15 +167,12 @@ export function createLifecycleClient(transport: HttpTransport) {
             lifecycle: nullable(v['lifecycle'], lifecycle),
           }
         },
-      }),
+      ),
     changeVersion: (id: string, version: string, body: Operation<VersionChange>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/software/resources/{id}/versions/{version}',
-        pathParams: { id, version },
-        body,
-        successStatus: 200,
-        decode: (v) => mutationReceipt(versionReceipt(v, id, version), body.operationId),
-      }),
+      api.postApiV1SoftwareResourcesByIdVersionsByVersion(
+        transport,
+        { pathParams: { id, version }, body },
+        (v) => mutationReceipt(versionReceipt(v, id, version), body.operationId),
+      ),
   }
 }

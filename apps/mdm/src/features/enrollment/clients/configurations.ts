@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -161,12 +162,10 @@ export function createConfigurationsClient(
     list: <F extends keyof typeof configurationFields = keyof typeof configurationFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-configurations',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1AgentConfigurations(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (value) => {
           const page = projectedPage(value, configurationFields, query.fields, ['configurationId'])
           if (!query.fields)
             for (const item of page.items) {
@@ -185,25 +184,17 @@ export function createConfigurationsClient(
             }
           return page
         },
-      }),
-    settings: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-enrollment-settings',
-        successStatus: 200,
-        decode: settings,
-      }),
+      ),
+    settings: () => api.getApiV1AgentEnrollmentSettings(transport, {}, settings),
     saveSettings: (
       operationId: string,
       expectedRevision: number,
       values: ReturnType<typeof settings>['values'],
     ) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/agent-enrollment-settings',
-        body: { operationId: uuid(operationId), expectedRevision, values },
-        successStatus: 200,
-        decode: (v) => {
+      api.putApiV1AgentEnrollmentSettings(
+        transport,
+        { body: { operationId: uuid(operationId), expectedRevision, values } },
+        (v) => {
           const result = settings(v)
           if (
             result.revision !== expectedRevision + 1 ||
@@ -212,60 +203,44 @@ export function createConfigurationsClient(
             throw new Error('Wrong settings receipt')
           return result
         },
-      }),
+      ),
     create: (body: ConfigurationInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-configurations',
-        body,
-        responseType: 'arraybuffer',
-        successStatus: 200,
-        decode: (v) => {
-          const file = attachment(v, 'application/json', configurationFilename, 16_384)
-          try {
-            const raw = closed(
-              JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
-              ['configuration', 'secret', 'signature'],
-            )
-            const metadata = configuration(raw['configuration'], tenant, service)
-            base64url(raw['secret'], 32)
-            base64url(raw['signature'], 64)
-            if (
-              raw['secret'] !== body.secret ||
-              JSON.stringify(metadata.targets) !== JSON.stringify(body.targets) ||
-              JSON.stringify(metadata.quantity) !== JSON.stringify(body.quantity)
-            )
-              throw new Error('Wrong configuration receipt')
-            return { file, configuration: metadata }
-          } catch (error) {
-            new Uint8Array(file.bytes).fill(0)
-            throw error
-          }
-        },
+      api.postApiV1AgentConfigurations(transport, { body }, (v) => {
+        const file = attachment(v, 'application/json', configurationFilename, 16_384)
+        try {
+          const raw = closed(
+            JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
+            ['configuration', 'secret', 'signature'],
+          )
+          const metadata = configuration(raw['configuration'], tenant, service)
+          base64url(raw['secret'], 32)
+          base64url(raw['signature'], 64)
+          if (
+            raw['secret'] !== body.secret ||
+            JSON.stringify(metadata.targets) !== JSON.stringify(body.targets) ||
+            JSON.stringify(metadata.quantity) !== JSON.stringify(body.quantity)
+          )
+            throw new Error('Wrong configuration receipt')
+          return { file, configuration: metadata }
+        } catch (error) {
+          new Uint8Array(file.bytes).fill(0)
+          throw error
+        }
       }),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-configurations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: (v) => readConfiguration(v, tenant, id, service),
-      }),
+      api.getApiV1AgentConfigurationsById(transport, { pathParams: { id: uuid(id) } }, (v) =>
+        readConfiguration(v, tenant, id, service),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-configuration-operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: (v) => nullable(v, (v) => readConfiguration(v, tenant, undefined, service)),
-      }),
+      api.getApiV1AgentConfigurationOperationsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        (v) => nullable(v, (v) => readConfiguration(v, tenant, undefined, service)),
+      ),
     revoke: (id: string, operationId: string) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-configurations/{id}/revoke',
+      api.postApiV1AgentConfigurationsByIdRevoke(transport, {
         pathParams: { id: uuid(id) },
         body: { operationId: uuid(operationId) },
-        successStatus: 204,
       }),
   }
 }

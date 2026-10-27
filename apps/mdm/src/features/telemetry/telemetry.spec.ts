@@ -27,7 +27,7 @@ import DeviceActivity from './components/DeviceActivity.vue'
 import { fieldDefinition, fieldInput } from '../devices/clients/assets'
 import { bucket, numeric, health, gaps } from './model'
 import { checked } from '../../contracts/collection/check'
-import { validateValueMapping } from '../../contracts/collection/generated/validators'
+import { validateValueMapping } from '@rss/api/mdm-validators'
 import { telemetryProfile } from '../policies/clients/telemetry-profile'
 const wrappers: VueWrapper[] = []
 const cleanups: (() => void)[] = []

@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   windowPage,
@@ -284,21 +285,16 @@ export function createAppleClient(transport: HttpTransport) {
   }
   return {
     organizations: (query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations',
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode: appleOrganizations,
-      }),
+      api.getApiV1AppleOrganizations(
+        transport,
+        { query: queryParameters({ limit: 100, ...query }) },
+        appleOrganizations,
+      ),
     accounts: (id: string, query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/account-enrollment/accounts',
-        pathParams: params(id),
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode: (v) =>
+      api.getApiV1AppleOrganizationsByIdAccountEnrollmentAccounts(
+        transport,
+        { pathParams: params(id), query: queryParameters({ limit: 100, ...query }) },
+        (v) =>
           windowPage(v, (value) => {
             const a = closed(value, ['account', 'principalId', 'instanceId', 'revision', 'enabled'])
             return {
@@ -309,45 +305,33 @@ export function createAppleClient(transport: HttpTransport) {
               enabled: boolean(a['enabled']),
             }
           }),
-      }),
+      ),
     accountOrganization: (id: string, operation: string, body: AccountOrganization) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/apple/organizations/{id}/account-enrollment',
-        pathParams: params(id),
-        headers: { 'Idempotency-Key': uuid(operation) },
-        body,
-        successStatus: 200,
-        decode: (v) => revision(v, body.expectedRevision),
-      }),
+      api.putApiV1AppleOrganizationsByIdAccountEnrollment(
+        transport,
+        { pathParams: params(id), headers: { 'Idempotency-Key': uuid(operation) }, body },
+        (v) => revision(v, body.expectedRevision),
+      ),
     accountMapping: (id: string, name: string, operation: string, body: AccountMapping) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/apple/organizations/{id}/account-enrollment/accounts/{account}',
-        pathParams: { ...params(id), account: account(name) },
-        headers: { 'Idempotency-Key': uuid(operation) },
-        body,
-        successStatus: 200,
-        decode: (v) => revision(v, body.expectedRevision),
-      }),
+      api.putApiV1AppleOrganizationsByIdAccountEnrollmentAccountsByAccount(
+        transport,
+        {
+          pathParams: { ...params(id), account: account(name) },
+          headers: { 'Idempotency-Key': uuid(operation) },
+          body,
+        },
+        (v) => revision(v, body.expectedRevision),
+      ),
     ade: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade',
-        pathParams: params(id),
-        successStatus: 200,
-        decode: (v) => adeStatus(v, id),
-      }),
+      api.getApiV1AppleOrganizationsByIdAde(transport, { pathParams: params(id) }, (v) =>
+        adeStatus(v, id),
+      ),
     configure: (id: string, operation: string, body: AdeConfiguration) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/apple/organizations/{id}/ade/configuration',
-        pathParams: params(id),
-        headers: { 'Idempotency-Key': uuid(operation) },
-        body,
-        successStatus: 200,
-        decode: (v) => {
-          const raw = closed(v, ['operationId', 'state', 'revision'])
+      api.putApiV1AppleOrganizationsByIdAdeConfiguration(
+        transport,
+        { pathParams: params(id), headers: { 'Idempotency-Key': uuid(operation) }, body },
+        (v) => {
+          const raw = v
           if (
             uuid(raw['operationId']) !== operation ||
             raw['state'] !== 'succeeded' ||
@@ -360,49 +344,35 @@ export function createAppleClient(transport: HttpTransport) {
             revision: count(raw['revision']),
           }
         },
-      }),
+      ),
     publicKey: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade/public-key',
-        pathParams: params(id),
-        responseType: 'arraybuffer',
-        successStatus: 200,
-        decode: (v) => attachment(v, 'application/x-pem-file', 'RSS-ADE-public.pem', 65_536),
-      }),
+      api.getApiV1AppleOrganizationsByIdAdePublicKey(transport, { pathParams: params(id) }, (v) =>
+        attachment(v, 'application/x-pem-file', 'RSS-ADE-public.pem', 65_536),
+      ),
     command: (id: string, operation: string, body: AdeCommand) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/apple/organizations/{id}/ade/operations',
-        pathParams: params(id),
-        headers: { 'Idempotency-Key': uuid(operation) },
-        body,
-        successStatus: 200,
-        decode: (v) => {
-          const raw = closed(v, ['operationId', 'state'])
+      api.postApiV1AppleOrganizationsByIdAdeOperations(
+        transport,
+        { pathParams: params(id), headers: { 'Idempotency-Key': uuid(operation) }, body },
+        (v) => {
+          const raw = v
           if (uuid(raw['operationId']) !== operation) throw new Error('Wrong operation receipt')
           return {
             operationId: operation,
             state: enumeration(raw['state'], ['pending', 'succeeded'] as const),
           }
         },
-      }),
+      ),
     operation: (id: string, operation: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade/operations/{operation}',
-        pathParams: { ...params(id), operation: uuid(operation) },
-        successStatus: 200,
-        decode: (v) => adeOperation(v, operation),
-      }),
+      api.getApiV1AppleOrganizationsByIdAdeOperationsByOperation(
+        transport,
+        { pathParams: { ...params(id), operation: uuid(operation) } },
+        (v) => adeOperation(v, operation),
+      ),
     profiles: (id: string, query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade/profiles',
-        pathParams: params(id),
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode: (v) =>
+      api.getApiV1AppleOrganizationsByIdAdeProfiles(
+        transport,
+        { pathParams: params(id), query: queryParameters({ limit: 100, ...query }) },
+        (v) =>
           windowPage(v, (item) => {
             const p = closed(item, ['id', 'revision', 'configuration', 'remoteUuid'])
             return {
@@ -412,16 +382,13 @@ export function createAppleClient(transport: HttpTransport) {
               remoteUuid: nullable(p['remoteUuid'], uuid),
             }
           }),
-      }),
+      ),
     devices: (id: string, query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade/devices',
-        pathParams: params(id),
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode: (v) => {
-          const p = closed(v, ['items', 'nextCursor'])
+      api.getApiV1AppleOrganizationsByIdAdeDevices(
+        transport,
+        { pathParams: params(id), query: queryParameters({ limit: 100, ...query }) },
+        (v) => {
+          const p = v
           return {
             items: unique(
               array(p['items'], (value) => {
@@ -446,7 +413,7 @@ export function createAppleClient(transport: HttpTransport) {
             nextCursor: nextCursor(p['nextCursor']),
           }
         },
-      }),
+      ),
     bridge: '/api/v1/apple/account-enrollment/authenticate',
   }
 }

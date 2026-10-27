@@ -30,9 +30,8 @@ it('rejects mock data in production and never calls a fallback', async () => {
       return options.decode({ modules: [{ id: 'devices', source: 'mock', available: true }] })
     },
   } as import('@rss/api/mdm').HttpTransport
-  await expect(createWorkspaceClient(transport, false).read()).rejects.toThrow()
+  await expect(createWorkspaceClient(transport).read()).rejects.toThrow()
   expect(calls).toBe(1)
-  expect((await createWorkspaceClient(transport, true).read()).modules[0]?.source).toBe('mock')
 })
 
 it('validates the static host identity and closed module data', () => {

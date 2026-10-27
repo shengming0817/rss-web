@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -80,33 +81,20 @@ export function termsContext(value: unknown) {
 export function createEntraClient(transport: HttpTransport, publicTransport: HttpTransport) {
   return {
     policy: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/windows/entra-policy',
-        successStatus: 200,
-        decode: (v) => {
-          const raw = closed(v, ['revision', 'policy'])
-          return { revision: count(raw['revision']), policy: entraPolicy(raw['policy']) }
-        },
+      api.getApiV1WindowsEntraPolicy(transport, {}, (v) => {
+        const raw = v
+        return { revision: count(raw['revision']), policy: entraPolicy(raw['policy']) }
       }),
     save: (expectedRevision: number, operationId: string, policy: ReturnType<typeof entraPolicy>) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/windows/entra-policy',
-        body: { expectedRevision, operationId: uuid(operationId), policy: entraPolicy(policy) },
-        successStatus: 200,
-        decode: (v) => {
-          const revision = count(closed(v, ['revision'])['revision'])
+      api.putApiV1WindowsEntraPolicy(
+        transport,
+        { body: { expectedRevision, operationId: uuid(operationId), policy: entraPolicy(policy) } },
+        (v) => {
+          const revision = count(v['revision'])
           if (revision !== expectedRevision + 1) throw new Error('Wrong revision')
           return revision
         },
-      }),
-    context: () =>
-      publicTransport.request({
-        method: 'GET',
-        path: '/api/v1/windows/entra/terms/context',
-        successStatus: 200,
-        decode: termsContext,
-      }),
+      ),
+    context: () => api.getApiV1WindowsEntraTermsContext(publicTransport, {}, termsContext),
   }
 }

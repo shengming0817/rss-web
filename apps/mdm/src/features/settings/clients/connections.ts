@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 /** Current Agent wire DTOs. Browser reads public trust; the backend alone signs it. */
 import type { HttpTransport } from '@rss/api/mdm'
 import {
@@ -224,29 +225,24 @@ export function connectionDevices(value: unknown, revision: number) {
 export function createConnectionsClient(transport: HttpTransport, tenant: string, service: string) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connections',
-        successStatus: 200,
-        decode: (v) => connectionState(v, tenant, service),
-      }),
+      api.getApiV1AgentConnections(transport, {}, (v) => connectionState(v, tenant, service)),
     save: (
       operationId: string,
       expectedRevision: number,
       preferredOrigin: string,
       origins: string[],
     ) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/agent-connections',
-        body: {
-          operationId: uuid(operationId),
-          expectedRevision: count(expectedRevision),
-          preferredOrigin: origin(preferredOrigin),
-          origins: origins.map(origin),
+      api.putApiV1AgentConnections(
+        transport,
+        {
+          body: {
+            operationId: uuid(operationId),
+            expectedRevision: count(expectedRevision),
+            preferredOrigin: origin(preferredOrigin),
+            origins: origins.map(origin),
+          },
         },
-        successStatus: 200,
-        decode: (v) => {
+        (v) => {
           const d = draft(v, tenant, service)
           if (
             d.configuration.revision !== expectedRevision + 1 ||
@@ -256,59 +252,43 @@ export function createConnectionsClient(transport: HttpTransport, tenant: string
             throw new Error('Wrong saved connection receipt')
           return d
         },
-      }),
+      ),
     publish: (operationId: string, expectedRevision: number) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-connections/publish',
-        body: { operationId: uuid(operationId), expectedRevision: positive(expectedRevision) },
-        successStatus: 200,
-        decode: (v) => {
+      api.postApiV1AgentConnectionsPublish(
+        transport,
+        { body: { operationId: uuid(operationId), expectedRevision: positive(expectedRevision) } },
+        (v) => {
           const c = signedConnections(v, tenant, service)
           if (c.configuration.revision !== expectedRevision)
             throw new Error('Wrong published connection receipt')
           return c
         },
-      }),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connection-operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: (v) => connectionReceipt(v, tenant, service),
-      }),
+      api.getApiV1AgentConnectionOperationsById(transport, { pathParams: { id: uuid(id) } }, (v) =>
+        connectionReceipt(v, tenant, service),
+      ),
     devices: (revision: number, after?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connections/devices',
-        query: { revision: positive(revision), ...(after ? { after: uuid(after) } : {}) },
-        successStatus: 200,
-        decode: (v) => connectionDevices(v, revision),
-      }),
+      api.getApiV1AgentConnectionsDevices(
+        transport,
+        { query: { revision: positive(revision), ...(after ? { after: uuid(after) } : {}) } },
+        (v) => connectionDevices(v, revision),
+      ),
     observation: (device: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connections/devices/{device}/observation',
-        pathParams: { device: identifier(device) },
-        successStatus: 200,
-        decode: connectionObservation,
-      }),
+      api.getApiV1AgentConnectionsDevicesByDeviceObservation(
+        transport,
+        { pathParams: { device: identifier(device) } },
+        connectionObservation,
+      ),
     download: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connections/configuration',
-        responseType: 'arraybuffer',
-        successStatus: 200,
-        decode: (v) => {
-          const file = attachment(v, 'application/json', connectionsFilename, 65_536)
-          signedConnections(
-            JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
-            tenant,
-            service,
-          )
-          return file
-        },
+      api.getApiV1AgentConnectionsConfiguration(transport, {}, (v) => {
+        const file = attachment(v, 'application/json', connectionsFilename, 65_536)
+        signedConnections(
+          JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
+          tenant,
+          service,
+        )
+        return file
       }),
   }
 }

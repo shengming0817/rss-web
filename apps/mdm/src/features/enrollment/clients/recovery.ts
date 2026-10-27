@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 /** Administrator-only continuation of existing registration/signing attempts. No device-key owner. */
 import type { HttpTransport } from '@rss/api/mdm'
 import { array, closed, enumeration, count, nullable, uuid } from '../../../services/decode'
@@ -63,34 +64,29 @@ export function issuanceCandidate(value: unknown, issuance: string) {
 export function createRecoveryClient(transport: HttpTransport) {
   return {
     operation: (issuance: string, operation: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-issuances/{issuance}/recovery-operations/{operation}',
-        pathParams: { issuance: uuid(issuance), operation: uuid(operation) },
-        successStatus: 200,
-        decode: (v) => nullable(v, (v) => issuanceCandidate(v, issuance)),
-      }),
+      api.getApiV1AgentIssuancesByIdRecoveryOperationsByOperation(
+        transport,
+        { pathParams: { id: uuid(issuance), operation: uuid(operation) } },
+        (v) => nullable(v, (v) => issuanceCandidate(v, issuance)),
+      ),
     registration: (registration: string, input: RecoveryGrant) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-registrations/{registration}/recovery',
-        pathParams: { registration: uuid(registration) },
-        body: recoveryGrant(input),
-        successStatus: 200,
-        decode: grantReceipt,
-      }),
+      api.postApiV1AgentRegistrationsByIdRecovery(
+        transport,
+        { pathParams: { id: uuid(registration) }, body: recoveryGrant(input) },
+        grantReceipt,
+      ),
     issuance: (issuance: string, operationId: string, certificateChain: string[]) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-issuances/{issuance}/recover',
-        pathParams: { issuance: uuid(issuance) },
-        body: {
-          wireVersion: 1,
-          operationId: uuid(operationId),
-          certificateChain: publicChain(certificateChain),
+      api.postApiV1AgentIssuancesByIdRecover(
+        transport,
+        {
+          pathParams: { id: uuid(issuance) },
+          body: {
+            wireVersion: 1,
+            operationId: uuid(operationId),
+            certificateChain: publicChain(certificateChain),
+          },
         },
-        successStatus: 200,
-        decode: (v) => issuanceCandidate(v, issuance),
-      }),
+        (v) => issuanceCandidate(v, issuance),
+      ),
   }
 }

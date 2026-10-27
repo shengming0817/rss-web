@@ -24,6 +24,11 @@ import {
   type Material,
 } from '../clients/credentials'
 import type { EndpointDetail } from '../../devices/clients/endpoint-model'
+type CredentialDraft = Omit<CredentialInput, 'action'> & {
+  action:
+    | Exclude<CredentialInput['action'], { kind: 'rotate_filevault' }>
+    | Omit<Extract<CredentialInput['action'], { kind: 'rotate_filevault' }>, 'unlockPassword'>
+}
 const props = defineProps<{ endpoint: EndpointDetail }>(),
   runtime = useMdm(),
   { t } = useI18n()
@@ -50,7 +55,7 @@ const nativePending = computed(
 const needsPassword = computed(
   () =>
     action.value === 'rotate_filevault' ||
-    (pending.value?.input as { kind: string; input?: CredentialInput } | undefined)?.input?.action
+    (pending.value?.input as { kind: string; input?: CredentialDraft } | undefined)?.input?.action
       .kind === 'rotate_filevault',
 )
 let disclosureEpoch = 0
@@ -131,7 +136,7 @@ async function revoke(entry: Material, replay = false) {
   )
   if (ok) await load()
 }
-function input(): CredentialInput {
+function input(): CredentialDraft {
   const registration = (currentEndpoint.value ?? props.endpoint).channels.find(
     (c) => c.channel === 'mdm' && c.status === 'active',
   )
@@ -170,7 +175,7 @@ async function execute(replay = false) {
   clear()
   try {
     const original = replay
-      ? (pending.value!.input as { kind: 'native'; input: CredentialInput }).input
+      ? (pending.value!.input as { kind: 'native'; input: CredentialDraft }).input
       : input()
     await submit(
       { kind: 'native' as const, input: original },
@@ -197,7 +202,7 @@ async function execute(replay = false) {
 function restore() {
   const original = pending.value?.input as
     | { kind: 'revoke'; entry: Material }
-    | { kind: 'native'; input: CredentialInput }
+    | { kind: 'native'; input: CredentialDraft }
     | undefined
   if (original?.kind === 'revoke') void revoke(original.entry, true)
   else void execute(true)

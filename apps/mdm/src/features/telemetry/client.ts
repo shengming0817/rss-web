@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -36,7 +37,7 @@ export interface AggregateQuery {
   query: HistoryQuery
   definitionVersion: number
   registration: string
-  source: string
+  source: (typeof sourceIds)[number]
   epoch: string
   dimensions: Record<string, string>
   resolutionMicros: number
@@ -67,13 +68,11 @@ export function seriesKey(row: Observation) {
 export function createTelemetryClient(transport: HttpTransport, tenant: string) {
   return {
     configurations: (device: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/telemetry-configurations',
-        pathParams: { device },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['device', 'registration', 'evaluatedAtMicros', 'configurations'])
+      api.getApiV1DevicesByDeviceTelemetryConfigurations(
+        transport,
+        { pathParams: { device } },
+        (value) => {
+          const v = value
           if (v['device'] !== device) throw new Error('Wrong configuration device')
           return {
             device,
@@ -110,87 +109,67 @@ export function createTelemetryClient(transport: HttpTransport, tenant: string) 
             }),
           }
         },
-      }),
+      ),
     resources: (device: string, field: string, after: string | null = null) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/telemetry/resources',
-        body: { device, field, after, limit: 64 },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['resources', 'nextAfter', 'retired'])
+      api.postApiV1TelemetryResources(
+        transport,
+        { body: { device, field, after, limit: 64 } },
+        (value) => {
+          const v = value
           return {
             resources: array(v['resources'], telemetryId),
             nextAfter: opaque(v['nextAfter']),
-            retired: boolean(v['retired']),
+            retired: v['retired'],
           }
         },
-      }),
+      ),
     history: (query: HistoryQuery) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/telemetry/history',
-        body: query,
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['rows', 'unavailable', 'next', 'retired', 'mode'])
-          if (v['mode'] !== query.mode) throw new Error('Wrong history mode')
-          const rows = array(v['rows'], (x) => observation(x, tenant, query.mode))
-          for (const row of rows) {
-            const s = row.sample
-            if (
-              s.series.subject !== query.device ||
-              s.series.resource !== query.resource ||
-              s.series.definition.key !== query.field ||
-              s.observedAt < query.startMicros ||
-              s.observedAt >= query.endMicros
-            )
-              throw new Error('Wrong telemetry selection')
-          }
-          const next = opaque(v['next'])
-          if (query.mode === 'latest' && next !== null) throw new Error('Latest cannot continue')
-          return {
-            rows,
-            unavailable: unavailable(v['unavailable']),
-            next,
-            retired: boolean(v['retired']),
-          }
-        },
+      api.postApiV1TelemetryHistory(transport, { body: query }, (value) => {
+        const v = value
+        if (v['mode'] !== query.mode) throw new Error('Wrong history mode')
+        const rows = array(v['rows'], (x) => observation(x, tenant, query.mode))
+        for (const row of rows) {
+          const s = row.sample
+          if (
+            s.series.subject !== query.device ||
+            s.series.resource !== query.resource ||
+            s.series.definition.key !== query.field ||
+            s.observedAt < query.startMicros ||
+            s.observedAt >= query.endMicros
+          )
+            throw new Error('Wrong telemetry selection')
+        }
+        const next = opaque(v['next'])
+        if (query.mode === 'latest' && next !== null) throw new Error('Latest cannot continue')
+        return {
+          rows,
+          unavailable: unavailable(v['unavailable']),
+          next,
+          retired: v['retired'],
+        }
       }),
     aggregate: (request: AggregateQuery) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/telemetry/aggregate',
-        body: request,
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, [
-            'buckets',
-            'unavailable',
-            'resolutionMicros',
-            'refreshedThrough',
-            'next',
-          ])
-          const buckets = array(v['buckets'], bucket)
-          if (
-            v['resolutionMicros'] !== request.resolutionMicros ||
-            buckets.some(
-              (b, i) =>
-                b.window.end <= request.query.startMicros ||
-                b.window.start >= request.query.endMicros ||
-                b.window.end - b.window.start > request.resolutionMicros ||
-                (i > 0 && buckets[i - 1]!.window.end > b.window.start),
-            )
+      api.postApiV1TelemetryAggregate(transport, { body: request }, (value) => {
+        const v = value
+        const buckets = array(v['buckets'], bucket)
+        if (
+          v['resolutionMicros'] !== request.resolutionMicros ||
+          buckets.some(
+            (b, i) =>
+              b.window.end <= request.query.startMicros ||
+              b.window.start >= request.query.endMicros ||
+              b.window.end - b.window.start > request.resolutionMicros ||
+              (i > 0 && buckets[i - 1]!.window.end > b.window.start),
           )
-            throw new Error('Wrong aggregate window')
-          return {
-            buckets,
-            unavailable: unavailable(v['unavailable']),
-            resolutionMicros: positive(v['resolutionMicros']),
-            refreshedThrough: nullable(v['refreshedThrough'], count),
-            next: opaque(v['next']),
-          }
-        },
+        )
+          throw new Error('Wrong aggregate window')
+        return {
+          buckets,
+          unavailable: unavailable(v['unavailable']),
+          resolutionMicros: positive(v['resolutionMicros']),
+          refreshedThrough: nullable(v['refreshedThrough'], count),
+          next: opaque(v['next']),
+        }
       }),
     health: (
       device: string,
@@ -199,25 +178,21 @@ export function createTelemetryClient(transport: HttpTransport, tenant: string) 
       receivedUntil: number,
       maxBatches = 64,
     ) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/telemetry/health',
-        body: { device, field, receivedFrom, receivedUntil, maxBatches },
-        successStatus: 200,
-        decode: health,
-      }),
+      api.postApiV1TelemetryHealth(
+        transport,
+        { body: { device, field, receivedFrom, receivedUntil, maxBatches } },
+        health,
+      ),
     gaps: (
       device: string,
       receivedFrom: number,
       receivedUntil: number,
       after: ReturnType<typeof gapCursor> = null,
     ) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/telemetry/gaps/query',
-        body: { device, receivedFrom, receivedUntil, limit: 64, after },
-        successStatus: 200,
-        decode: (value) => gaps(value, device),
-      }),
+      api.postApiV1TelemetryGapsQuery(
+        transport,
+        { body: { device, receivedFrom, receivedUntil, limit: 64, after } },
+        (value) => gaps(value, device),
+      ),
   }
 }

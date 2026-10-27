@@ -11,7 +11,7 @@ import type { ResourceRead, ResourceChange, Variant, UploadTarget } from '../cli
 import type {
   ValueMapping,
   Declaration,
-} from '../../../contracts/collection/generated/ResourceWrite'
+} from '@rss/api/mdm-types'
 import { wireValue } from '../../../contracts/collection/check'
 import { agentBytes, nativeBytes } from '../../../contracts/collection/canonical'
 import CollectionMappings from './CollectionMappings.vue'

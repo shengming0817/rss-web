@@ -8,16 +8,21 @@ export function createDeviceAccessTransport(): HttpTransport {
   const instance = axios.create({ baseURL: '' })
   return {
     async request(options: NoContentRequest | RequestOptions<unknown>) {
-      const paths =
-        /^\/api\/v1\/(?:mdm-host\/config\.json$|device-views(?:\/|$)|devices(?:\/|$)|device-access\/(?:enterprise\/configuration|broker)(?:\/|$)|audit-events$|policies(?:\/|$))/.test(
-          options.path,
-        )
       if (
-        !paths ||
-        'responseType' in options ||
-        Object.keys(options.headers ?? {}).some(
-          (k) =>
-            !['x-identity-request', 'x-csrf-token', 'idempotency-key'].includes(k.toLowerCase()),
+        !options.contract &&
+        !(options.method === 'GET' && options.path === '/api/v1/mdm-host/config.json')
+      )
+        throw clientError()
+      if (
+        options.contract &&
+        (options.method !== options.contract.method || options.path !== options.contract.path)
+      )
+        throw clientError()
+      if (
+        Object.entries(options.headers ?? {}).some(
+          ([k, v]) =>
+            !['x-identity-request', 'x-csrf-token', 'idempotency-key'].includes(k.toLowerCase()) &&
+            !(k.toLowerCase() === 'content-type' && v === options.contract?.contentType),
         )
       )
         throw clientError()

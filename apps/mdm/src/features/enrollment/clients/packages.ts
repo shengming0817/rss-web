@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -80,28 +81,18 @@ export function installer(value: unknown, tenant: string) {
 export function createPackagesClient(transport: HttpTransport, tenant: string) {
   return {
     list: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent/enroll/packages',
-        successStatus: 200,
-        decode: (v) =>
-          unique(
-            array(v, (item) => installer(item, tenant)),
-            (p) => p.releaseId,
-          ),
-      }),
+      api.getApiV1AgentEnrollPackages(transport, {}, (v) =>
+        unique(
+          array(v, (item) => installer(item, tenant)),
+          (p) => p.releaseId,
+        ),
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent/enroll/packages/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: (v) => {
-          const result = installer(v, tenant)
-          if (result.releaseId !== id) throw new Error('Wrong release')
-          return result
-        },
+      api.getApiV1AgentEnrollPackagesById(transport, { pathParams: { id: uuid(id) } }, (v) => {
+        const result = installer(v, tenant)
+        if (result.releaseId !== id) throw new Error('Wrong release')
+        return result
       }),
-    content: (id: string) => `/api/v1/agent/enroll/packages/${uuid(id)}/content`,
+    content: (id: string) => api.getApiV1AgentEnrollPackagesByIdContent.url({ id: uuid(id) }),
   }
 }

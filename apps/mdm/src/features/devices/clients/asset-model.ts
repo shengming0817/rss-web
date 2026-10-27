@@ -1,5 +1,5 @@
 import { checked } from '../../../contracts/collection/check'
-import { validateFieldView } from '../../../contracts/collection/generated/validators'
+import { validateFieldView } from '@rss/api/mdm-validators'
 import { parseFilter } from '../../../services/query-filter'
 import {
   array,
@@ -234,7 +234,7 @@ export function fieldDefinition(value: unknown) {
     kind: kind === 'enum' ? ('string' as const) : kind === 'record' ? ('object' as const) : kind,
   }
 }
-export type { ValueType } from '../../../contracts/collection/generated/FieldWrite'
+export type { ValueType } from '@rss/api/mdm-types'
 /** Write only the canonical definition; server-computed presentation never enters a mutation. */
 export function fieldInput(field: FieldDefinition): Omit<FieldDefinition, 'kind' | 'operations'> {
   return {

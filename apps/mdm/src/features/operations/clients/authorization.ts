@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   nextCursor,
@@ -297,76 +298,52 @@ export function createAuthorizationClient(
   tenant: string,
   realm: AuthorizationRealm = 'tenant',
 ) {
-  const prefix =
-    realm === 'platform' ? '/api/v1/tenant-administration/authorization' : '/api/v1/authorization'
   const decodeRule = (value: unknown) => ruleForRealm(value, tenant, realm)
   function tenantOnly() {
     if (realm === 'platform') throw new Error('Directory is not available in the management realm')
   }
-  function list<T>(path: string, decode: (v: unknown) => T, query: DirectoryQuery = {}) {
-    return transport.request({
-      method: 'GET',
-      path,
-      query: queryParameters({ limit: 100, ...query, fields: ['id', 'revision', 'value'] }),
-      successStatus: 200,
-      decode: (value) => windowPage(value, (v) => revision(v, decode)),
-    })
-  }
-  function detail<T>(kind: string, id: string, decode: (v: unknown) => T) {
-    return transport.request({
-      method: 'GET',
-      path: `${prefix}/${kind}/{id}`,
-      pathParams: { id: uuid(id) },
-      successStatus: 200,
-      decode(value) {
-        const row = revision(value, decode)
-        if (row.id !== id) throw new Error('Wrong authorization object')
-        return row
-      },
-    })
-  }
-  function write<T>(kind: string, id: string, body: Change<T>) {
-    closed(body, ['operationId', 'expectedRevision', 'value'])
-    uuid(id)
-    uuid(body.operationId)
-    count(body.expectedRevision)
-    return transport.request({
-      method: 'PUT',
-      path: `${prefix}/${kind}/{id}`,
-      pathParams: { id },
-      body,
-      successStatus: 200,
-      decode(value) {
-        const v = closed(value, ['id', 'revision', 'deleted']),
-          result = {
-            id: uuid(v['id']),
-            revision: count(v['revision']),
-            deleted: boolean(v['deleted']),
-          }
-        if (
-          result.id !== id ||
-          result.revision !== body.expectedRevision + 1 ||
-          result.deleted !== (body.value === null)
-        )
-          throw new Error('Wrong authorization receipt')
-        return result
-      },
-    })
-  }
+  const rows =
+    <T>(decode: (v: unknown) => T) =>
+    (value: unknown) =>
+      windowPage(value, (v) => revision(v, decode))
+  const detail =
+    <T>(id: string, decode: (v: unknown) => T) =>
+    (value: unknown) => {
+      const row = revision(value, decode)
+      if (row.id !== id) throw new Error('Wrong authorization object')
+      return row
+    }
+  const write =
+    <T>(id: string, body: Change<T>) =>
+    (value: unknown) => {
+      const v = closed(value, ['id', 'revision', 'deleted'])
+      const result = {
+        id: uuid(v['id']),
+        revision: count(v['revision']),
+        deleted: boolean(v['deleted']),
+      }
+      if (
+        result.id !== id ||
+        result.revision !== body.expectedRevision + 1 ||
+        result.deleted !== (body.value === null)
+      )
+        throw new Error('Wrong authorization receipt')
+      return result
+    }
   function memberPage(id: string, query: DirectoryQuery = {}) {
     tenantOnly()
-    return transport.request({
-      method: 'GET',
-      path: `${prefix}/user-groups/{id}/members`,
-      pathParams: { id: uuid(id) },
-      query: queryParameters({
-        limit: 100,
-        ...query,
-        fields: ['principalId', 'tenantId', 'instanceId'],
-      }),
-      successStatus: 200,
-      decode(value) {
-        const v = closed(value, ['id', 'revision', 'items', 'nextCursor'])
+    return api.getApiV1AuthorizationUserGroupsByIdMembers(
+      transport,
+      {
+        pathParams: { id: uuid(id) },
+        query: queryParameters({
+          limit: 100,
+          ...query,
+          fields: ['principalId', 'tenantId', 'instanceId'],
+        }),
+      },
+      (value) => {
+        const v = value
         if (uuid(v['id']) !== id || !count(v['revision'])) throw new Error('Wrong member page')
         return {
           id,
@@ -378,87 +355,104 @@ export function createAuthorizationClient(
           nextCursor: nextCursor(v['nextCursor']),
         }
       },
-    })
+    )
   }
   return {
     effective: () =>
-      transport.request({
-        method: 'GET',
-        path: `${prefix}`,
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['instanceId', 'tenantId', 'principalId', 'grants'])
-          if (uuid(v['tenantId']) !== tenant) throw new Error('Wrong tenant')
-          return {
-            instanceId: uuid(v['instanceId']),
-            tenantId: tenant,
-            principalId: uuid(v['principalId']),
-            grants: array(v['grants'], (value) => {
-              const g = closed(value, [
-                'ruleId',
-                'ruleRevision',
-                'subject',
-                'operation',
-                'scope',
-                'observation',
-              ])
-              return {
-                ...grantForRealm({ operation: g['operation'], scope: g['scope'] }, realm),
-                ruleId: uuid(g['ruleId']),
-                ruleRevision: count(g['ruleRevision']),
-                subject: (() => {
-                  const s = subject(g['subject'], tenant)
-                  if (realm === 'platform' && s.kind !== 'user')
-                    throw new Error('Wrong management subject')
-                  return s
-                })(),
-                observation: nullable(g['observation'], (value) => {
-                  const o = closed(value, [
-                    'snapshotId',
-                    'observedAt',
-                    'expiresAt',
-                    'sourceRevision',
-                  ])
-                  return {
-                    snapshotId: uuid(o['snapshotId']),
-                    observedAt: count(o['observedAt']),
-                    expiresAt: count(o['expiresAt']),
-                    sourceRevision: nullable(o['sourceRevision'], string),
-                  }
-                }),
-              }
-            }),
-          }
-        },
+      (realm === 'platform'
+        ? api.getApiV1TenantAdministrationAuthorization
+        : api.getApiV1Authorization)(transport, {}, (value) => {
+        const v = value
+        if (uuid(v['tenantId']) !== tenant) throw new Error('Wrong tenant')
+        return {
+          instanceId: uuid(v['instanceId']),
+          tenantId: tenant,
+          principalId: uuid(v['principalId']),
+          grants: array(v['grants'], (value) => {
+            const g = closed(value, [
+              'ruleId',
+              'ruleRevision',
+              'subject',
+              'operation',
+              'scope',
+              'observation',
+            ])
+            return {
+              ...grantForRealm({ operation: g['operation'], scope: g['scope'] }, realm),
+              ruleId: uuid(g['ruleId']),
+              ruleRevision: count(g['ruleRevision']),
+              subject: (() => {
+                const s = subject(g['subject'], tenant)
+                if (realm === 'platform' && s.kind !== 'user')
+                  throw new Error('Wrong management subject')
+                return s
+              })(),
+              observation: nullable(g['observation'], (value) => {
+                const o = closed(value, ['snapshotId', 'observedAt', 'expiresAt', 'sourceRevision'])
+                return {
+                  snapshotId: uuid(o['snapshotId']),
+                  observedAt: count(o['observedAt']),
+                  expiresAt: count(o['expiresAt']),
+                  sourceRevision: nullable(o['sourceRevision'], string),
+                }
+              }),
+            }
+          }),
+        }
       }),
-    rule: (id: string) => detail('rules', id, decodeRule),
+    rule: (id: string) =>
+      (realm === 'platform'
+        ? api.getApiV1TenantAdministrationAuthorizationRulesById
+        : api.getApiV1AuthorizationRulesById)(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        detail(id, decodeRule),
+      ),
     group: (id: string) => {
       tenantOnly()
-      return detail('user-groups', id, (v) => groupDefinition(v, tenant))
+      return api.getApiV1AuthorizationUserGroupsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        detail(id, (v) => groupDefinition(v, tenant)),
+      )
     },
-    rules: (query: DirectoryQuery = {}) => list(`${prefix}/rules`, decodeRule, query),
+    rules: (query: DirectoryQuery = {}) =>
+      (realm === 'platform'
+        ? api.getApiV1TenantAdministrationAuthorizationRules
+        : api.getApiV1AuthorizationRules)(
+        transport,
+        { query: queryParameters({ limit: 100, ...query, fields: ['id', 'revision', 'value'] }) },
+        rows(decodeRule),
+      ),
     groups: (query: DirectoryQuery = {}) => {
       tenantOnly()
-      return list(`${prefix}/user-groups`, summary, query)
+      return api.getApiV1AuthorizationUserGroups(
+        transport,
+        { query: queryParameters({ limit: 100, ...query, fields: ['id', 'revision', 'value'] }) },
+        rows(summary),
+      )
     },
     departments: () => {
       tenantOnly()
-      return transport.request({
-        method: 'GET',
-        path: `${prefix}/departments`,
-        successStatus: 200,
-        decode: departments,
-      })
+      return api.getApiV1AuthorizationDepartments(transport, {}, departments)
     },
     members: memberPage,
     changeRule: (id: string, body: Change<Rule>) => {
       if (body.value !== null) decodeRule(body.value)
-      return write('rules', id, body)
+      return (
+        realm === 'platform'
+          ? api.putApiV1TenantAdministrationAuthorizationRulesById
+          : api.putApiV1AuthorizationRulesById
+      )(transport, { pathParams: { id }, body }, write(id, body))
     },
     changeGroup: (id: string, body: Change<UserGroup>) => {
       tenantOnly()
       if (body.value !== null) groupDefinition(body.value, tenant)
-      return write('user-groups', id, body)
+      return api.putApiV1AuthorizationUserGroupsById(
+        transport,
+        { pathParams: { id }, body },
+        write(id, body),
+      )
     },
   }
 }

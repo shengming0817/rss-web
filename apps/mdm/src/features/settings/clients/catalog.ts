@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -135,21 +136,9 @@ export function createSettingsCatalog(
 ) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path:
-          realm === 'platform'
-            ? '/api/v1/tenant-administration/settings/catalog'
-            : '/api/v1/settings/catalog',
-        successStatus: 200,
-        decode: (v) => decodeCatalog(v, realm),
-      }),
-    readiness: () =>
-      publicTransport.request({
-        method: 'GET',
-        path: '/readyz',
-        successStatus: [200, 503],
-        decode: decodeReadiness,
-      }),
+      (realm === 'platform'
+        ? api.getApiV1TenantAdministrationSettingsCatalog
+        : api.getApiV1SettingsCatalog)(transport, {}, (v) => decodeCatalog(v, realm)),
+    readiness: () => api.getReadyz(publicTransport, {}, decodeReadiness),
   }
 }

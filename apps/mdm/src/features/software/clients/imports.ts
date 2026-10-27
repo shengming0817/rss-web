@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
@@ -112,13 +113,11 @@ export type ImportRequest = ReturnType<typeof importRequest>
 export function createImportsClient(transport: HttpTransport) {
   return {
     import: (body: Operation<ImportRequest>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/software/imports',
-        body: { ...body, input: importRequest(body.input) },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['resource', 'version', 'resourceDigest', 'storageRevision'])
+      api.postApiV1SoftwareImports(
+        transport,
+        { body: { ...body, input: importRequest(body.input) } },
+        (value) => {
+          const v = value
           if (v['resource'] !== body.input.resource || v['version'] !== body.input.resourceVersion)
             throw new Error('Wrong import result')
           return {
@@ -128,6 +127,6 @@ export function createImportsClient(transport: HttpTransport) {
             storageRevision: count(v['storageRevision']),
           }
         },
-      }),
+      ),
   }
 }
