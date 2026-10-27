@@ -176,7 +176,7 @@ it('opens a software policy from the workspace through the supported software pa
       },
     })
     vi.spyOn(app.mdm.policies.policies, 'list').mockResolvedValue({
-      items: [policy],
+      items: [{ ...policy, customEvent: null, alias: null, toolName: 'workspace-software' }],
       nextCursor: null,
     })
     const read = vi.spyOn(app.mdm.policies.policies, 'read').mockResolvedValue(policy)
@@ -186,7 +186,8 @@ it('opens a software policy from the workspace through the supported software pa
     const link = new DOMWrapper(document.body).get('.console-deployment-list a')
     await link.trigger('click')
     await flushPromises()
-    expect(app.router.currentRoute.value.name).toBe('software-deployments')
+    await vi.waitFor(() => expect(app.router.currentRoute.value.name).toBe('software-deployments'))
+    await flushPromises()
     expect(app.router.currentRoute.value.query['id']).toBe(id)
     expect(read).toHaveBeenCalledWith(id)
     expect(document.querySelector('main h1')?.textContent).toBe(
