@@ -653,13 +653,10 @@ try {
     '/api/v1/saved-queries?' + new URLSearchParams({ filter: `id==${savedQueryId}`, limit: '1' }),
   )
   assert.equal(savedPage.asset.items[0].definition.query.filter, assetQuery.filter)
-  await page.goto(path('devices/search'))
+  await page.goto(path('devices'))
   await loaded()
-  await page
-    .locator('details')
-    .filter({ has: page.locator('summary', { hasText: '个人保存查询' }) })
-    .locator('summary')
-    .click()
+  await page.getByRole('button', { name: '高级资产查询', exact: true }).click()
+  await page.getByRole('button', { name: '个人保存查询', exact: true }).click()
   await page.getByRole('button', { name: /Query contract saved/ }).click()
   await loaded()
   await page
