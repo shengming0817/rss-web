@@ -204,9 +204,11 @@ onMounted(async () => {
       t('operations.identityProviders')
     }}</RouterLink>
     ·
-    <RouterLink :to="{ name: 'device-groups', params: { tenant: runtime.tenant } }">{{
-      t('devices.groups')
-    }}</RouterLink>
+    <RouterLink
+      v-if="runtime.realm === 'tenant'"
+      :to="{ name: 'device-groups', params: { tenant: runtime.tenant } }"
+      >{{ t('devices.groups') }}</RouterLink
+    >
     <UiTabs
       v-model="section"
       :label="t('operations.organization')"

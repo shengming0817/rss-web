@@ -16,8 +16,8 @@ import { createOnboardingDemo } from '../demo/enrollment'
 import { createImportsDemo } from '../demo/software/imports'
 import { createPolicyClients } from '../demo/features/policies/client'
 import { operation } from './services/useOperation'
-import { navigation } from './components/navigation'
-async function start() {
+import { navigation, navigationTarget, platformNavigation } from './components/navigation'
+async function start(platform = false) {
   const devices = createDeviceDemo(),
     automation = createAutomationDemo(devices)
   devices.bindAuthorization(automation.authorization.can)
@@ -63,7 +63,7 @@ async function start() {
   } as HttpTransport
   transportOwner.value = transport
   document.body.innerHTML = '<div id="app"></div>'
-  window.history.replaceState(null, '', '/')
+  window.history.replaceState(null, '', platform ? '/platform' : '/')
   const runtime = createDemo(
     transport,
     { canonicalOrigin: window.location.origin, oidcEnabled: false },
@@ -71,7 +71,7 @@ async function start() {
       canonicalOrigin: window.location.origin,
       serviceId: '44444444-4444-4444-8444-444444444444',
       tenant: TENANT,
-      managementTenant: '99999999-9999-4999-8999-999999999999',
+      managementTenant: platform ? TENANT : '99999999-9999-4999-8999-999999999999',
     },
   )
   runtime.mount()
@@ -109,22 +109,46 @@ it('navigates each product section through the real application router and its l
   const app = await start()
   try {
     for (const section of navigation) {
-      await app.router.push({ name: section.items[0]!.name, params: { tenant: TENANT } })
+      await app.router.push(navigationTarget(section.items[0]!, TENANT))
       await flushPromises()
       for (const item of section.items) {
-        const target = app.router.resolve({ name: item.name, params: { tenant: TENANT } }).fullPath
-        const link = [...document.querySelectorAll<HTMLAnchorElement>('.console-sidebar a')].find(
-          (a) => a.getAttribute('href') === target,
+        const target = app.router.resolve(navigationTarget(item, TENANT)).fullPath
+        const link = [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find(
+          (a) =>
+            a.closest('nav')?.getAttribute('aria-label') ===
+              app.i18n.global.t('console.navigation') && a.getAttribute('href') === target,
         )
         expect(link, item.name).toBeDefined()
         await new DOMWrapper(link!).trigger('click')
         await flushPromises()
-        await vi.waitFor(() => expect(app.router.currentRoute.value.name).toBe(item.name))
+        await vi.waitFor(() => {
+          expect(app.router.currentRoute.value.name).toBe(item.name)
+          expect(app.router.currentRoute.value.fullPath).toBe(target)
+        })
         expect(document.querySelector('main h1')?.textContent?.trim(), item.name).toBeTruthy()
       }
     }
     expect(app.calls.some((c) => c.path === '/api/v1/operations')).toBe(true)
     expect(app.calls.some((c) => c.path === '/api/v1/resources')).toBe(true)
+  } finally {
+    app.cleanup()
+  }
+}, 20000)
+it('renders platform navigation without resolving tenant-only device links', async () => {
+  const app = await start(true)
+  const errors: unknown[] = []
+  app.app.config.errorHandler = (error) => errors.push(error)
+  try {
+    for (const section of platformNavigation) {
+      for (const item of section.items) {
+        await app.router.push(navigationTarget(item, TENANT))
+        await flushPromises()
+        expect(app.router.currentRoute.value.name).toBe(item.name)
+        expect(document.querySelector('main h1')?.textContent?.trim(), item.name).toBeTruthy()
+        expect(errors).toEqual([])
+      }
+    }
+    expect(app.router.hasRoute('device-groups')).toBe(false)
   } finally {
     app.cleanup()
   }
