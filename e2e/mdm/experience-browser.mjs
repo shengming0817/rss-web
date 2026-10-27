@@ -1,3 +1,4 @@
+import { chooseGroupOption, publishedGroup } from './vuetify-groups.mjs'
 // Real production UI/HTTP acceptance; native containers are synthetic, not installable releases.
 // ref: rss-mdm crates/content-service/tests/fixtures/installers.rs (same minimal PE/XAR formats).
 import assert from 'node:assert/strict'
@@ -85,9 +86,12 @@ export async function acceptExperience({
   await page.goto(path('groups'))
   await page.getByRole('button', { name: '创建', exact: true }).click()
   dialog = page.getByRole('dialog')
-  await dialog.getByTestId('group-name').fill('Browser nested group')
-  await dialog.getByTestId('group-kind').selectOption('dynamic')
-  await dialog.locator('.group-criteria > .console-toolbar select').first().selectOption('group')
+  await dialog.getByTestId('group-name').locator('input').fill('Browser nested group')
+  await chooseGroupOption(
+    page,
+    dialog.locator('.group-criteria > .v-select').getByRole('combobox'),
+    '群组成员条件',
+  )
   await dialog.locator('.group-picker > button').click()
   await page.getByRole('button', { name: 'Browser endpoint group', exact: true }).click()
   const created = page.waitForResponse(
@@ -97,10 +101,9 @@ export async function acceptExperience({
   )
   await dialog.getByRole('button', { name: '保存并查看成员', exact: true }).click()
   const response = await created
-  assert.equal(response.status(), 200)
-  const nested = await response.json()
-  await settled(`/api/v1/groups/${nested.group.id}/tasks/${nested.task}`)
-  const members = await api(`/api/v1/groups/${nested.group.id}/results/${nested.task}/members`)
+  assert.equal(response.status(), 202)
+  const nested = await publishedGroup(api, settled, await response.json())
+  const members = await api(`/api/v1/groups/${nested.group.id}/results/${nested.memberSet}/members`)
   assert.deepEqual(members.page.items, [{ kind: 'endpoint', id: fixture.agent }])
   const references = await api(`/api/v1/groups/${group}/references`)
   assert.equal(references.deletionBlocked, true)
@@ -109,9 +112,10 @@ export async function acceptExperience({
   await page.locator('.group-dependencies').waitFor()
   coverage.push('real-nested-group-save-members-and-authoritative-references')
   // A never-edited static group's null memberSet is a real empty set, not a missing result.
+  await page.getByRole('tab', { name: '设备静态组', exact: true }).click()
   await page.getByRole('button', { name: '创建', exact: true }).click()
   dialog = page.getByRole('dialog')
-  await dialog.getByTestId('group-name').fill('Browser initial empty group')
+  await dialog.getByTestId('group-name').locator('input').fill('Browser initial empty group')
   const emptyCreated = page.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -121,11 +125,15 @@ export async function acceptExperience({
   const empty = await (await emptyCreated).json()
   assert.equal((await api(`/api/v1/groups/${empty.group.id}`)).memberSet, null)
   await dialog.waitFor({ state: 'hidden' })
+  await page.getByRole('tab', { name: '设备动态组', exact: true }).click()
   await page.getByRole('button', { name: '创建', exact: true }).click()
   dialog = page.getByRole('dialog')
-  await dialog.getByTestId('group-name').fill('Browser nested empty source')
-  await dialog.getByTestId('group-kind').selectOption('dynamic')
-  await dialog.locator('.group-criteria > .console-toolbar select').first().selectOption('group')
+  await dialog.getByTestId('group-name').locator('input').fill('Browser nested empty source')
+  await chooseGroupOption(
+    page,
+    dialog.locator('.group-criteria > .v-select').getByRole('combobox'),
+    '群组成员条件',
+  )
   await dialog.locator('.group-picker > button').click()
   await page.getByRole('button', { name: 'Browser initial empty group', exact: true }).click()
   const emptyNestedCreated = page.waitForResponse(
@@ -134,10 +142,11 @@ export async function acceptExperience({
       /\/api\/v1\/groups\/[^/]+$/.test(new URL(r.url()).pathname),
   )
   await dialog.getByRole('button', { name: '保存并查看成员', exact: true }).click()
-  const emptyNested = await (await emptyNestedCreated).json()
-  await settled(`/api/v1/groups/${emptyNested.group.id}/tasks/${emptyNested.task}`)
+  const emptyNestedResponse = await emptyNestedCreated
+  assert.equal(emptyNestedResponse.status(), 202)
+  const emptyNested = await publishedGroup(api, settled, await emptyNestedResponse.json())
   const emptyMembers = await api(
-    `/api/v1/groups/${emptyNested.group.id}/results/${emptyNested.task}/members`,
+    `/api/v1/groups/${emptyNested.group.id}/results/${emptyNested.memberSet}/members`,
   )
   assert.equal(emptyMembers.sources[0].coordinates.memberSet, null)
   assert.deepEqual(emptyMembers.page.items, [])
@@ -148,7 +157,7 @@ export async function acceptExperience({
   const emptyPage = page.waitForResponse(
     (r) =>
       new URL(r.url()).pathname ===
-      `/api/v1/groups/${emptyNested.group.id}/results/${emptyNested.task}/members`,
+      `/api/v1/groups/${emptyNested.group.id}/results/${emptyNested.memberSet}/members`,
   )
   await page.getByRole('button', { name: '载入', exact: true }).click()
   assert.equal((await emptyPage).status(), 200)

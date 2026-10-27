@@ -1,3 +1,4 @@
+import { chooseGroupOption } from './vuetify-groups.mjs'
 // Production Vue + real MDM/Identity HTTPS/PG. Only a committed response is deliberately lost.
 import { acceptExperience } from './experience-browser.mjs'
 import { Buffer } from 'node:buffer'
@@ -652,13 +653,10 @@ try {
     '/api/v1/saved-queries?' + new URLSearchParams({ filter: `id==${savedQueryId}`, limit: '1' }),
   )
   assert.equal(savedPage.asset.items[0].definition.query.filter, assetQuery.filter)
-  await page.goto(path('devices/search'))
+  await page.goto(path('devices'))
   await loaded()
-  await page
-    .locator('details')
-    .filter({ has: page.locator('summary', { hasText: '个人保存查询' }) })
-    .locator('summary')
-    .click()
+  await page.getByRole('button', { name: '高级资产查询', exact: true }).click()
+  await page.getByRole('button', { name: '个人保存查询', exact: true }).click()
   await page.getByRole('button', { name: /Query contract saved/ }).click()
   await loaded()
   await page
@@ -702,7 +700,7 @@ try {
   await settled(`/api/v1/groups/${group}/tasks/${membership.task}`)
   const groupResult = await api(`/api/v1/groups/${group}/results/${membership.task}/members`)
   assert.deepEqual(groupResult.page.items, [{ kind: 'endpoint', id: fixture.agent }])
-  await page.goto(path('groups'))
+  await page.goto(path('groups?category=device-static'))
   await loaded()
   await page.getByRole('button', { name: /Browser endpoint group/ }).click()
   await loaded()
@@ -881,18 +879,27 @@ try {
   await loaded()
   await page.getByRole('button', { name: '创建', exact: true }).click()
   const editor = page.getByRole('dialog')
-  await editor.getByTestId('group-name').fill('Browser associated group')
-  await editor.getByTestId('group-kind').selectOption('dynamic')
-  await editor.getByTestId('group-context').selectOption('associated_device')
-  await editor
-    .locator('.group-criteria > .console-toolbar select')
-    .first()
-    .selectOption('predicate')
-  await editor
-    .locator('.condition-editor')
-    .getByRole('combobox', { name: '类型', exact: true })
-    .selectOption('predicate')
-  await editor.getByRole('combobox', { name: '字段', exact: true }).selectOption('device.model')
+  await editor.getByTestId('group-name').locator('input').fill('Browser associated group')
+  await chooseGroupOption(
+    page,
+    editor.getByTestId('group-context').getByRole('combobox'),
+    '统一设备视图',
+  )
+  await chooseGroupOption(
+    page,
+    editor.locator('.group-criteria > .v-select').getByRole('combobox'),
+    '字段条件',
+  )
+  await chooseGroupOption(
+    page,
+    editor.locator('.condition-editor').getByRole('combobox', { name: '类型', exact: true }),
+    '字段条件',
+  )
+  await chooseGroupOption(
+    page,
+    editor.getByRole('combobox', { name: '字段', exact: true }),
+    'device.model (string)',
+  )
   await editor.locator('.condition-editor input').last().fill('browser-associated-model')
   const groupCreated = page.waitForResponse(
     (r) =>

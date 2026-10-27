@@ -38,6 +38,7 @@ function selected(item: NavigationItem) {
       />
       <template v-for="section in sections" :key="section.id">
         <v-list-item
+          :value="'section-' + section.id"
           :to="navigationTarget(section.items[0]!, runtime.tenant)"
           :title="t(section.label)"
           :active="group === section.id"

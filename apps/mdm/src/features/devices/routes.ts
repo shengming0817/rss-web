@@ -62,12 +62,6 @@ export const deviceFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: `${base}/search`,
-      name: 'device-search',
-      component: () => import('./views/SearchView.vue'),
-      meta: { protected: true },
-    },
-    {
       path: `${base}/enroll`,
       name: 'device-enroll',
       component: () => import('./views/EnrollmentView.vue'),

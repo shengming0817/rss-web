@@ -7,9 +7,23 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import MdmPage from '../../../ui/MdmPage.vue'
+import InventoryQuery from '../components/InventoryQuery.vue'
+import { groupMessages } from '../group-i18n'
+import {
+  VBtn,
+  VTextField,
+  VSelect,
+  VCheckbox,
+  VAlert,
+  VTable,
+  VChip,
+  VExpansionPanels,
+  VExpansionPanel,
+  VExpansionPanelText,
+} from 'vuetify/components'
 import { endpointStatuses } from '../clients/endpoint-model'
 import PersonDisplay from '../components/PersonDisplay.vue'
-const { t } = useI18n(),
+const { t } = useI18n({ useScope: 'local', messages: groupMessages }),
   runtime = useMdm(),
   route = useRoute(),
   router = useRouter(),
@@ -19,6 +33,7 @@ const statistics = ref<Awaited<ReturnType<typeof runtime.devices.views.statistic
 let statisticsBinding = ''
 const page = ref<Awaited<ReturnType<typeof runtime.devices.views.list>>>(),
   search = ref(''),
+  rsql = ref(''),
   platform = ref(''),
   assetState = ref(''),
   limit = ref('20'),
@@ -65,6 +80,7 @@ async function applyFilters() {
   }
   await queryFirstPage({
     search: search.value.trim() || undefined,
+    filter: rsql.value.trim() || undefined,
     platform: platform.value || undefined,
     assetState: assetState.value || undefined,
     limit: limit.value,
@@ -85,6 +101,7 @@ async function queryFirstPage(query: LocationQueryRaw, replace = false) {
 async function load(cursor?: string) {
   page.value = undefined
   const filter = allOf(
+    rsql.value.trim() || undefined,
     search.value.trim() ? comparison('search', '=icontains=', search.value.trim()) : undefined,
     ...(['platform', 'assetState', 'status', 'channel', 'source'] as const).map((key) => {
       const value = { platform, assetState, status, channel, source }[key].value
@@ -121,6 +138,7 @@ async function load(cursor?: string) {
   }
 }
 function loadRoute() {
+  rsql.value = typeof route.query['filter'] === 'string' ? route.query['filter'] : ''
   search.value = typeof route.query['search'] === 'string' ? route.query['search'] : ''
   platform.value = typeof route.query['platform'] === 'string' ? route.query['platform'] : ''
   assetState.value = typeof route.query['assetState'] === 'string' ? route.query['assetState'] : ''
@@ -209,13 +227,10 @@ const sourceOptions = computed(() => [
   >
     <template #actions>
       <v-btn
-        variant="outlined"
-        :to="{ name: 'device-search', params: { tenant: runtime.tenant } }"
-        >{{ t('devices.search') }}</v-btn
+        color="primary"
+        :to="{ name: 'self-enrollments', params: { tenant: runtime.tenant } }"
+        >{{ t('devices.enroll') }}</v-btn
       >
-      <v-btn color="primary" :to="{ name: 'device-enroll', params: { tenant: runtime.tenant } }">{{
-        t('devices.enroll')
-      }}</v-btn>
     </template>
     <form class="console-toolbar device-filters" @submit.prevent="applyFilters">
       <v-text-field
@@ -240,6 +255,15 @@ const sourceOptions = computed(() => [
       <details class="device-filter-details">
         <summary>{{ t('devices.workspace.moreFilters') }}</summary>
         <div class="device-filter-grid">
+          <v-text-field
+            v-model="rsql"
+            data-testid="directory-rsql"
+            :label="t('groupModule.rsql')"
+            :hint="t('groupModule.rsqlHint')"
+            persistent-hint
+            :disabled="busy"
+            maxlength="8192"
+          />
           <v-select
             v-model="assetState"
             data-testid="directory-asset-state"
@@ -288,6 +312,11 @@ const sourceOptions = computed(() => [
         </div>
       </details>
     </form>
+    <v-expansion-panels
+      ><v-expansion-panel :title="t('groupModule.advanced')"
+        ><v-expansion-panel-text eager
+          ><InventoryQuery /></v-expansion-panel-text></v-expansion-panel
+    ></v-expansion-panels>
     <p v-if="failure === 'cursorInvalidated'" class="device-notice">
       {{ t('devices.restartDirectory')
       }}<v-btn :disabled="busy" variant="outlined" @click="queryFirstPage(route.query, true)">{{
