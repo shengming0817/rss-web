@@ -2,12 +2,12 @@
 import { comparison } from '../services/directory-query'
 import { ref, watch } from 'vue'
 import { isRssApiError } from '@rss/api/mdm'
-import { UiButton, UiBadge, UiMessage } from '@rss/core/components'
+import { VBtn, VChip, VAlert, VCard } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../context'
 import { useOperation } from '../services/useOperation'
 import { deviceBinding } from '../features/devices/useDeviceBinding'
-import PageFrame from '../components/PageFrame.vue'
+import MdmPage from '../ui/MdmPage.vue'
 import { features } from '../features'
 import { moduleIds, type Workspace, type ModuleId } from '../services/workspace'
 const { t } = useI18n(),
@@ -88,18 +88,18 @@ watch(
 )
 </script>
 <template>
-  <PageFrame
+  <MdmPage
     :title="t('console.overview')"
     :description="t('mdm.intro')"
     :busy="busy"
     :failure="failure"
   >
     <template #actions
-      ><UiButton :busy="busy" @click="load">{{ t('mdm.reload') }}</UiButton></template
+      ><VBtn :loading="busy" @click="load">{{ t('mdm.reload') }}</VBtn></template
     >
     <p v-if="readAt" class="console-reading-time">{{ t('console.readAt') }} · {{ readAt }}</p>
     <div class="console-stat-grid">
-      <article
+      <VCard
         v-for="key in ['deviceViewCount', 'endpointCount'] as const"
         :key="key"
         class="console-stat"
@@ -118,9 +118,9 @@ watch(
         <RouterLink :to="{ name: 'devices', params: { tenant: runtime.tenant } }"
           >{{ t('console.openSource') }} ↗</RouterLink
         >
-      </article>
-      <article class="console-stat">
-        <h2>{{ t('software.deployments') }}</h2>
+      </VCard>
+      <VCard class="console-stat">
+        <h2>{{ t('console.softwarePolicies') }}</h2>
         <strong class="console-stat-word">{{
           deployments?.status === 'ready'
             ? t(
@@ -134,11 +134,11 @@ watch(
         <RouterLink :to="{ name: 'software-deployments', params: { tenant: runtime.tenant } }"
           >{{ t('console.openSource') }} ↗</RouterLink
         >
-      </article>
+      </VCard>
     </div>
     <section class="console-panel">
       <div class="console-page-header">
-        <h2>{{ t('software.deployments') }}</h2>
+        <h2>{{ t('console.softwarePolicies') }}</h2>
         <RouterLink :to="{ name: 'software-deployments', params: { tenant: runtime.tenant } }">{{
           t('console.browse')
         }}</RouterLink>
@@ -174,9 +174,9 @@ watch(
                     : '—'
                 }}</small
               ></RouterLink
-            ><UiBadge>{{
+            ><VChip>{{
               t(policy.state === 'enabled' ? 'software.enabled' : 'software.paused')
-            }}</UiBadge
+            }}</VChip
             ><RouterLink
               :to="{
                 name: 'software-deployments',
@@ -191,13 +191,14 @@ watch(
     </section>
     <section>
       <h2 class="console-section-title">{{ t('console.modules') }}</h2>
-      <UiMessage
+      <VAlert
         v-if="navigation && navigation.status !== 'ready'"
-        tone="warning"
+        type="warning"
+        variant="tonal"
         :title="t(navigation.status === 'denied' ? 'mdm.queryDenied' : 'mdm.unavailable')"
       />
       <div class="console-area-grid">
-        <article v-for="id in moduleIds" :key="id" class="console-area">
+        <VCard v-for="id in moduleIds" :key="id" class="console-area">
           <h3>{{ t(`mdm.${id}`) }}</h3>
           <small
             >{{ t('mdm.source') }} ·
@@ -209,9 +210,9 @@ watch(
             >{{ t('mdm.open') }} ↗</RouterLink
           >
           <p v-else>{{ t('mdm.planned') }}</p>
-        </article>
+        </VCard>
       </div>
     </section>
     <p class="console-reading-time">{{ t('mdm.boundary') }}</p>
-  </PageFrame>
+  </MdmPage>
 </template>

@@ -38,33 +38,33 @@ export const deviceFeature: MdmFeature = {
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/agent-configurations',
+      path: '/tenants/:tenant/settings/agent-configurations',
       name: 'agent-configurations',
       component: () => import('../enrollment/views/ConfigurationsView.vue'),
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/my-enrollments',
+      path: '/enroll',
       name: 'self-enrollments',
       component: () => import('./views/SelfEnrollmentView.vue'),
       meta: { protected: true },
     },
     {
-      path: '/tenants/:tenant/registration-quotas',
+      path: '/tenants/:tenant/settings/registration-quotas',
       name: 'registration-quotas',
       component: () => import('./views/QuotaView.vue'),
+      meta: { protected: true },
+    },
+    {
+      path: '/tenants/:tenant/groups',
+      name: 'device-groups',
+      component: () => import('./views/GroupsView.vue'),
       meta: { protected: true },
     },
     {
       path: `${base}/search`,
       name: 'device-search',
       component: () => import('./views/SearchView.vue'),
-      meta: { protected: true },
-    },
-    {
-      path: `${base}/groups`,
-      name: 'device-groups',
-      component: () => import('./views/GroupsView.vue'),
       meta: { protected: true },
     },
     {

@@ -72,7 +72,7 @@ export function createDeviceDemo() {
   }
   const handle: DomainHandler = (request, scenario) => {
     if (
-      !/^\/api\/(?:v1\/(?:asset-fields|asset-field-layout|device-queries|devices|device-views|device-associations|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|registration-channels))(?:\/|$)/.test(
+      !/^\/api\/(?:v1\/(?:asset-fields|asset-retention-policies|asset-field-layout|device-queries|devices|device-views|device-associations|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|registration-channels))(?:\/|$)/.test(
         request.path,
       )
     )

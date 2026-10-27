@@ -26,7 +26,7 @@ import { createSecurityClients } from './features/security/client'
 import { createOperationsClients } from './features/operations/client'
 import { createOnboardingClients } from './features/enrollment/client'
 import App from './App.vue'
-import { createDeviceVuetify } from './ui/vuetify'
+import { createMdmVuetify } from './ui/vuetify'
 import { createRegistrationChannelsClient } from './services/registrationChannels'
 import { createRegistrationChannels } from './services/registrationChannelState'
 import { settingsFeature } from './features/settings/routes'
@@ -103,8 +103,9 @@ export function createMdm(
               name: 'workspace',
               redirect: { name: 'settings-overview', params: { tenant } },
             },
-            ...[...(operationsFeature.routes ?? [])].filter(
-              (route) => route.name === 'operations-authorization',
+            operationsFeature.entry,
+            ...[...(operationsFeature.routes ?? [])].filter((route) =>
+              ['operations-authorization', 'providers', 'sessions'].includes(String(route.name)),
             ),
           ]
         : []),
@@ -114,6 +115,7 @@ export function createMdm(
       ),
     ],
     login,
+    operationsFeature.identityPresentation,
   )
   const settings = createSettingsClients(
     business,
@@ -171,7 +173,7 @@ export function createMdm(
     mdm,
     transport: business,
     mount() {
-      app.use(createPinia()).use(i18n).use(router).use(createDeviceVuetify()).mount('#app')
+      app.use(createPinia()).use(i18n).use(router).use(createMdmVuetify()).mount('#app')
     },
   }
 }

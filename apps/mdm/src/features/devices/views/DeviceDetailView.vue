@@ -16,7 +16,7 @@ import DeviceActivity from '../../telemetry/components/DeviceActivity.vue'
 import DevicePerformance from '../../telemetry/components/DevicePerformance.vue'
 import DeviceCollections from '../../telemetry/components/DeviceCollections.vue'
 import '../../telemetry/telemetry.css'
-import DevicePage from '../components/DevicePage.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import DeviceSummary from '../components/DeviceSummary.vue'
 import ChannelCard from '../components/ChannelCard.vue'
 import PersonDisplay from '../components/PersonDisplay.vue'
@@ -248,7 +248,7 @@ watch(target, () => {
 })
 </script>
 <template>
-  <DevicePage
+  <MdmPage
     :title="displayName"
     :busy="busy || manualOperation.busy.value"
     :failure="failure ?? manualOperation.failure.value"
@@ -469,5 +469,5 @@ watch(target, () => {
         ></v-card
       >
     </v-dialog>
-  </DevicePage>
+  </MdmPage>
 </template>
