@@ -1,10 +1,23 @@
 <script setup lang="ts">
+import {
+  VAlert,
+  VBtn,
+  VChip,
+  VDataTable,
+  VExpansionPanel,
+  VExpansionPanelText,
+  VExpansionPanelTitle,
+  VExpansionPanels,
+  VForm,
+  VSelect,
+  VTextField,
+} from 'vuetify/components'
+import OperationDialog from '../components/OperationDialog.vue'
 import { computed, onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useIdentity } from '@rss/auth'
 import { isRssApiError } from '@rss/api/mdm'
-import { UiButton, UiTable, UiDialog, UiMessage, UiBadge } from '@rss/core/components'
 import { useMdm } from '../../../context'
 import { uuid, closed } from '../../../services/decode'
 import { useSettingsAction, useSettingsFacts } from '../../settings/useSettingsAction'
@@ -15,7 +28,7 @@ import {
   type Subject,
   type Revision,
 } from '../clients/authorization'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 import GrantFacts from '../components/GrantFacts.vue'
 import PermissionChoices from '../components/PermissionChoices.vue'
 import PrincipalChoice from '../components/PrincipalChoice.vue'
@@ -484,29 +497,33 @@ watch(
 onMounted(initialize)
 </script>
 <template>
-  <PageFrame
+  <MdmPage
     :title="t(platform ? 'operations.ruleUi.platformTitle' : 'operations.authorization')"
     :busy="busy"
     :failure="failure"
   >
     <template #actions
-      ><UiButton :disabled="busy || !bound" @click="initialize">{{ t('devices.reload') }}</UiButton
-      ><UiButton variant="primary" :disabled="locked || !canWrite" @click="create">{{
+      ><VBtn :disabled="busy || !bound" @click="initialize">{{ t('devices.reload') }}</VBtn
+      ><VBtn color="primary" :disabled="locked || !canWrite" @click="create">{{
         t('operations.ruleUi.new')
-      }}</UiButton></template
+      }}</VBtn></template
     >
-    <UiMessage v-if="platform" tone="info" :title="t('operations.ruleUi.realmTitle')"
+    <VAlert v-if="platform" type="info" :title="t('operations.ruleUi.realmTitle')"
       ><p>{{ t('operations.ruleUi.realmHint') }}</p>
       <p>
         {{ t('operations.ruleUi.tenantLabel') }} · <code>{{ runtime.tenant }}</code>
       </p>
-      <a href="/login">{{ t('operations.ruleUi.businessExit') }}</a></UiMessage
+      <a href="/login">{{ t('operations.ruleUi.businessExit') }}</a></VAlert
     >
     <p v-else>{{ t('operations.authorityWarning') }}</p>
-    <details v-if="platform" class="console-panel">
-      <summary>{{ t('operations.ruleUi.initialProtection') }}</summary>
-      <p>{{ t('operations.ruleUi.initialUnknown') }}</p>
-    </details>
+    <VExpansionPanels v-if="platform" class="console-panel"
+      ><VExpansionPanel>
+        <VExpansionPanelTitle>{{ t('operations.ruleUi.initialProtection') }}</VExpansionPanelTitle
+        ><VExpansionPanelText>
+          <p>{{ t('operations.ruleUi.initialUnknown') }}</p>
+        </VExpansionPanelText></VExpansionPanel
+      ></VExpansionPanels
+    >
     <p v-if="effective && !canWrite">{{ t('operations.ruleUi.readonly') }}</p>
     <section v-if="bound && pending" class="console-panel" aria-live="polite">
       <p>
@@ -522,68 +539,77 @@ onMounted(initialize)
           )
         }}
       </p>
-      <details>
-        <summary>{{ t('operations.ruleUi.technical') }}</summary>
-        <p>
-          {{ t('operations.ruleUi.originalOperation') }} · <code>{{ pending.id }}</code>
-        </p>
-        <p>
-          {{ t('operations.ruleUi.originalTarget') }} · <code>{{ intentTarget }}</code>
-        </p>
-      </details>
-      <UiButton
+      <VExpansionPanels
+        ><VExpansionPanel>
+          <VExpansionPanelTitle>{{ t('operations.ruleUi.technical') }}</VExpansionPanelTitle
+          ><VExpansionPanelText>
+            <p>
+              {{ t('operations.ruleUi.originalOperation') }} · <code>{{ pending.id }}</code>
+            </p>
+            <p>
+              {{ t('operations.ruleUi.originalTarget') }} · <code>{{ intentTarget }}</code>
+            </p>
+          </VExpansionPanelText></VExpansionPanel
+        ></VExpansionPanels
+      >
+      <VBtn
         v-if="pending.state === 'unknown' || pending.state === 'conflict'"
         :disabled="busy"
         @click="restoreOriginal"
-        >{{ t('operations.ruleUi.resume') }}</UiButton
+        >{{ t('operations.ruleUi.resume') }}</VBtn
       >
     </section>
-    <UiTable
-      :label="t('operations.ruleUi.table')"
-      :rows="bound ? (page?.items ?? []) : []"
-      :columns="[
-        { key: 'subject', label: t('operations.ruleUi.subject') },
-        { key: 'grants', label: t('operations.ruleUi.permissionsLabel') },
-        { key: 'revision', label: t('operations.ruleUi.revision') },
-        { key: 'state', label: t('operations.ruleUi.status') },
+    <VDataTable
+      disable-sort
+      hide-default-footer
+      :items-per-page="-1"
+      :aria-label="t('operations.ruleUi.table')"
+      :items="bound ? (page?.items ?? []) : []"
+      :headers="[
+        { key: 'subject', title: t('operations.ruleUi.subject') },
+        { key: 'grants', title: t('operations.ruleUi.permissionsLabel') },
+        { key: 'revision', title: t('operations.ruleUi.revision') },
+        { key: 'state', title: t('operations.ruleUi.status') },
       ]"
-      :row-key="(r) => r.id"
-      :busy="busy"
-      :busy-label="t('devices.loading')"
-      :empty-label="t('operations.ruleUi.empty')"
+      :item-value="(r) => r.id"
+      :loading="busy"
+      :loading-text="t('devices.loading')"
+      :no-data-text="t('operations.ruleUi.empty')"
     >
-      <template #cell-subject="{ row }"
-        ><UiButton :disabled="busy || locked" variant="ghost" @click="select(row)">{{
+      <template #[`item.subject`]="{ item: row }"
+        ><VBtn :disabled="busy || locked" variant="text" @click="select(row)">{{
           row.value ? principalLabel(row.value.subject) : row.id
-        }}</UiButton
+        }}</VBtn
         ><small v-if="row.value" class="ui-help">{{ row.value.subject.kind }}</small></template
       >
-      <template #cell-grants="{ row }"
+      <template #[`item.grants`]="{ item: row }"
         ><GrantFacts v-if="row.value" :grants="row.value.grants" /><span v-else>—</span></template
       >
-      <template #cell-revision="{ row }">r{{ row.revision }}</template>
-      <template #cell-state="{ row }"
-        ><UiBadge :tone="row.value ? 'neutral' : 'warning'">{{
+      <template #[`item.revision`]="{ item: row }">r{{ row.revision }}</template>
+      <template #[`item.state`]="{ item: row }"
+        ><VChip :color="row.value ? 'secondary' : 'warning'">{{
           t(row.value ? 'operations.ruleUi.active' : 'operations.ruleUi.deleted')
-        }}</UiBadge></template
+        }}</VChip></template
       >
-    </UiTable>
+    </VDataTable>
     <div class="settings-actions">
       <span>{{ t('operations.ruleUi.page') }} {{ pageIndex + 1 }}</span
-      ><UiButton :disabled="busy || pageIndex === 0" @click="previous">{{
+      ><VBtn :disabled="busy || pageIndex === 0" @click="previous">{{
         t('operations.ruleUi.previous')
-      }}</UiButton
-      ><UiButton :disabled="busy || !page?.nextCursor" @click="next">{{
+      }}</VBtn
+      ><VBtn :disabled="busy || !page?.nextCursor" @click="next">{{
         t('operations.ruleUi.next')
-      }}</UiButton>
+      }}</VBtn>
     </div>
-    <details v-if="bound && effective" class="console-panel">
-      <summary>{{ t('operations.ruleUi.effectiveTitle') }}</summary>
-      <p>{{ t('operations.ruleUi.effectiveHint') }}</p>
-      <GrantFacts :grants="effective.grants" />
-    </details>
-  </PageFrame>
-  <UiDialog
+    <VExpansionPanels v-if="bound && effective" class="console-panel"
+      ><VExpansionPanel>
+        <VExpansionPanelTitle>{{ t('operations.ruleUi.effectiveTitle') }}</VExpansionPanelTitle
+        ><VExpansionPanelText>
+          <p>{{ t('operations.ruleUi.effectiveHint') }}</p>
+          <GrantFacts :grants="effective.grants" /> </VExpansionPanelText></VExpansionPanel
+    ></VExpansionPanels>
+  </MdmPage>
+  <OperationDialog
     :open="bound && editorOpen"
     placement="right"
     :dismissible="!busy"
@@ -598,10 +624,11 @@ onMounted(initialize)
       }}
     </p>
     <p v-if="selectedDeleted">{{ t('operations.ruleUi.deleted') }}</p>
-    <form
+    <VForm
       v-if="!preview && !selectedDeleted"
+      :disabled="locked || !canWrite || !effective"
       class="settings-form"
-      @submit.prevent="review('save')"
+      @submit.prevent="($event.target as HTMLFormElement).reportValidity() &amp;&amp; (review('save'))"
     >
       <fieldset :disabled="locked || !canWrite || !effective">
         <PrincipalChoice
@@ -618,49 +645,50 @@ onMounted(initialize)
           @more="loadAccounts(true)"
         />
         <template v-else
-          ><label
-            >{{ t('operations.subject')
-            }}<select v-model="kind">
-              <option
-                v-for="value in ['user', 'user_group', 'department', 'idp_group']"
-                :key="value"
-              >
-                {{ value }}
-              </option>
-            </select></label
-          ><label
-            >{{ t('operations.subjectId')
-            }}<input
-              v-model="subjectId"
-              data-testid="subject-id"
-              :maxlength="kind === 'user' || kind === 'user_group' ? 36 : 256"
-              required
-          /></label>
+          ><VSelect
+            v-model="kind"
+            :items="[
+              ...['user', 'user_group', 'department', 'idp_group'].map((value) => ({
+                title: value,
+                value: value,
+              })),
+            ]"
+            :label="t('operations.subject')"
+          /><VTextField
+            v-model="subjectId"
+            data-testid="subject-id"
+            :maxlength="kind === 'user' || kind === 'user_group' ? 36 : 256"
+            required
+            :label="t('operations.subjectId')"
+          />
           <template v-if="kind === 'department' || kind === 'idp_group'"
-            ><label
-              >{{ t('operations.provider')
-              }}<input v-model="provider" maxlength="36" required /></label
-            ><label
-              >{{ t('operations.issuer')
-              }}<input v-model="issuer" maxlength="2048" required /></label
-            ><label
-              >{{ t('operations.sourceVersion')
-              }}<input
-                v-model.number="configurationVersion"
-                type="number"
-                min="1"
-                required /></label></template
-          ><label v-if="kind === 'department'"
-            >{{ t('operations.matching')
-            }}<select v-model="matching">
-              <option>exact</option>
-              <option>subtree</option>
-            </select></label
-          >
+            ><VTextField
+              v-model="provider"
+              maxlength="36"
+              required
+              :label="t('operations.provider')" /><VTextField
+              v-model="issuer"
+              maxlength="2048"
+              required
+              :label="t('operations.issuer')" /><VTextField
+              v-model.number="configurationVersion"
+              type="number"
+              min="1"
+              required
+              :label="t('operations.sourceVersion')" /></template
+          ><VSelect
+            v-if="kind === 'department'"
+            v-model="matching"
+            :items="[
+              { title: 'exact', value: 'exact' },
+              { title: 'subtree', value: 'subtree' },
+            ]"
+            :label="t('operations.matching')"
+          />
         </template>
         <PermissionChoices v-model="grants" :realm="runtime.realm" />
       </fieldset>
-    </form>
+    </VForm>
     <section v-if="preview" class="console-panel">
       <h2>{{ t('operations.ruleUi.changeReview') }}</h2>
       <p v-if="preview === 'delete'">{{ t('operations.ruleUi.reviewDelete') }}</p>
@@ -698,9 +726,9 @@ onMounted(initialize)
         }}
       </p>
       <p>{{ t('operations.ruleUi.noOperationGet') }}</p>
-      <UiButton :disabled="busy || !canRead" @click="compare">{{
+      <VBtn :disabled="busy || !canRead" @click="compare">{{
         t('operations.ruleUi.readCurrent')
-      }}</UiButton>
+      }}</VBtn>
       <section v-if="baseline" class="console-panel">
         <h2>{{ t('operations.ruleUi.baseSnapshot') }}</h2>
         <p>{{ t('operations.ruleUi.subject') }} · {{ principalLabel(baseline.subject) }}</p>
@@ -720,52 +748,56 @@ onMounted(initialize)
         >
         <p v-else>{{ t('operations.ruleUi.missingCurrent') }}</p>
       </section>
-      <UiButton
+      <VBtn
         v-if="pending.state === 'unknown'"
         data-testid="replay-write"
         :disabled="busy || !canWrite || !pending.queried"
         @click="save(true)"
-        >{{ t('operations.ruleUi.replay') }}</UiButton
+        >{{ t('operations.ruleUi.replay') }}</VBtn
       >
-      <UiButton
+      <VBtn
         v-if="pending.state === 'conflict' && remote?.value && compared"
         :disabled="busy || !canWrite"
         @click="adopt"
-        >{{ t('operations.ruleUi.keepDraft') }}</UiButton
-      ><UiButton
+        >{{ t('operations.ruleUi.keepDraft') }}</VBtn
+      ><VBtn
         v-if="pending.state === 'conflict' && remote !== undefined && !remote?.value && compared"
         :disabled="busy || !canWrite"
         @click="freshAfterDelete"
-        >{{ t('operations.ruleUi.freshAfterDelete') }}</UiButton
+        >{{ t('operations.ruleUi.freshAfterDelete') }}</VBtn
       >
     </template>
-    <details>
-      <summary>{{ t('operations.ruleUi.technical') }}</summary>
-      <p>
-        {{ t('operations.ruleUi.originalTarget') }} · <code>{{ id }}</code>
-      </p>
-      <p>{{ t('operations.ruleUi.revision') }} · {{ revision }}</p>
-    </details>
+    <VExpansionPanels
+      ><VExpansionPanel>
+        <VExpansionPanelTitle>{{ t('operations.ruleUi.technical') }}</VExpansionPanelTitle
+        ><VExpansionPanelText>
+          <p>
+            {{ t('operations.ruleUi.originalTarget') }} · <code>{{ id }}</code>
+          </p>
+          <p>{{ t('operations.ruleUi.revision') }} · {{ revision }}</p>
+        </VExpansionPanelText></VExpansionPanel
+      ></VExpansionPanels
+    >
     <template #footer
-      ><UiButton v-if="preview" :disabled="locked || !canWrite" @click="preview = undefined">{{
+      ><VBtn v-if="preview" :disabled="locked || !canWrite" @click="preview = undefined">{{
         t('operations.ruleUi.editDraft')
-      }}</UiButton
-      ><UiButton
+      }}</VBtn
+      ><VBtn
         v-if="!preview && !selectedDeleted"
         data-testid="review-rule"
         :disabled="locked || !canWrite"
         @click="review('save')"
-        >{{ t('operations.ruleUi.review') }}</UiButton
-      ><UiButton
+        >{{ t('operations.ruleUi.review') }}</VBtn
+      ><VBtn
         v-if="revision > 0 && !preview && !selectedDeleted"
-        variant="danger"
+        color="error"
         :disabled="locked || !canWrite"
         @click="review('delete')"
-        >{{ t('operations.ruleUi.confirmDelete') }}</UiButton
-      ><UiButton
+        >{{ t('operations.ruleUi.confirmDelete') }}</VBtn
+      ><VBtn
         v-if="preview"
         data-testid="save-rule"
-        :variant="preview === 'delete' ? 'danger' : 'primary'"
+        :color="preview === 'delete' ? 'error' : 'primary'"
         :disabled="locked || !canWrite"
         @click="save()"
         >{{
@@ -774,8 +806,8 @@ onMounted(initialize)
               ? 'operations.ruleUi.confirmDelete'
               : 'operations.ruleUi.confirmSave',
           )
-        }}</UiButton
+        }}</VBtn
       ></template
     >
-  </UiDialog>
+  </OperationDialog>
 </template>

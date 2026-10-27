@@ -1,6 +1,22 @@
 <script setup lang="ts">
 import { deviceBinding } from '../../devices/useDeviceBinding'
-import { UiButton } from '@rss/core/components'
+import {
+  VAlert,
+  VBtn,
+  VCard,
+  VCardText,
+  VCheckbox,
+  VCol,
+  VExpansionPanel,
+  VExpansionPanels,
+  VList,
+  VListItem,
+  VRow,
+  VSelect,
+  VTable,
+  VTextarea,
+  VTextField,
+} from 'vuetify/components'
 import { onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -15,7 +31,7 @@ import {
   type ComplianceTask,
 } from '../clients/compliance-model'
 import ConditionEditor from '../../devices/components/ConditionEditor.vue'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const editorOpen = ref(false)
 function beginCreate() {
   if (busy.value || uncertain.value) return
@@ -55,6 +71,7 @@ function load(after?: string) {
 function apply(v: ComplianceRule) {
   editable.value = true
   current.value = v
+  editorOpen.value = true
   id.value = v.id
   name.value = v.definition.presentation.name
   enabled.value = v.definition.enabled
@@ -71,6 +88,7 @@ function clearTask() {
 }
 function create() {
   if (busy.value || uncertain.value) return
+  editorOpen.value = false
   current.value = undefined
   id.value = crypto.randomUUID()
   name.value = ''
@@ -216,196 +234,254 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <PageFrame :title="t('security.rules')" :busy="busy" :failure="failure">
-    <p>{{ t('security.ruleHint') }}</p>
-    <UiButton
-      :disabled="!!(busy || uncertain)"
-      data-testid="new-rule"
-      type="submit"
-      @click="beginCreate"
+  <MdmPage
+    :title="t('security.rules')"
+    :description="t('security.ruleHint')"
+    :busy="busy"
+    :failure="failure"
+  >
+    <template #actions
+      ><v-btn :disabled="busy || uncertain" data-testid="new-rule" @click="beginCreate">{{
+        t('devices.create')
+      }}</v-btn
+      ><v-btn variant="tonal" :disabled="busy" @click="load()">{{
+        t('devices.reload')
+      }}</v-btn></template
     >
-      {{ t('devices.create') }}
-    </UiButton>
-    <UiButton :disabled="!!busy" type="submit" @click="load()">{{ t('devices.reload') }}</UiButton>
-    <p v-if="list && !list.items.length">{{ t('security.empty') }}</p>
-    <ul class="console-object-list">
-      <li v-for="rule in list?.items" :key="rule.id">
-        <UiButton :disabled="!!(busy || uncertain)" type="submit" @click="open(rule.id)">
-          {{ rule.definition.presentation.name }}
-        </UiButton>
-        · {{ rule.revision }} · {{ t(`security.severity.${rule.definition.severity}`) }} ·
-        {{ t(rule.definition.enabled ? 'security.enabled' : 'security.disabled') }}
-      </li>
-    </ul>
-    <UiButton
-      v-if="list?.nextCursor"
-      :disabled="!!busy"
-      type="submit"
-      @click="load(list.nextCursor)"
+    <v-card class="mb-4"
+      ><v-table :aria-label="t('security.rules')"
+        ><thead>
+          <tr>
+            <th>{{ t('devices.name') }}</th>
+            <th>{{ t('devices.revision') }}</th>
+            <th>{{ t('security.severityLabel') }}</th>
+            <th>{{ t('settings.state') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="rule in list?.items" :key="rule.id">
+            <td>
+              <v-btn variant="text" :disabled="busy || uncertain" @click="open(rule.id)">{{
+                rule.definition.presentation.name
+              }}</v-btn>
+            </td>
+            <td>{{ rule.revision }}</td>
+            <td>{{ t(`security.severity.${rule.definition.severity}`) }}</td>
+            <td>{{ t(rule.definition.enabled ? 'security.enabled' : 'security.disabled') }}</td>
+          </tr>
+          <tr v-if="list && !list.items.length">
+            <td colspan="4">{{ t('security.empty') }}</td>
+          </tr>
+        </tbody></v-table
+      ><v-btn
+        v-if="list?.nextCursor"
+        variant="text"
+        :disabled="busy"
+        @click="load(list.nextCursor)"
+        >{{ t('devices.next') }}</v-btn
+      ></v-card
     >
-      {{ t('devices.next') }}
-    </UiButton>
-    <details class="console-panel console-task" :open="uncertain || undefined">
-      <summary>{{ t('console.advanced') }}</summary>
-      <form data-testid="open-rule" @submit.prevent="open()">
-        <label
-          >{{ t('security.ruleId')
-          }}<input
-            v-model="id"
-            class="ui-input"
-            required
-            :readonly="busy || uncertain || !!current" /></label
-        ><UiButton :disabled="!!(busy || uncertain)" type="submit">{{
-          t('devices.open')
-        }}</UiButton>
-      </form>
-    </details>
-    <p v-if="current">{{ t('devices.revision') }} {{ current.revision }}</p>
-    <details
-      class="console-panel console-task"
-      :open="editorOpen || uncertain || undefined"
-      @toggle="editorOpen = ($event.target as HTMLDetailsElement).open"
+    <v-expansion-panels class="mb-4"
+      ><v-expansion-panel :title="t('console.advanced')" eager
+        ><template #text
+          ><form data-testid="open-rule" @submit.prevent="open()">
+            <v-text-field
+              v-model="id"
+              :label="t('security.ruleId')"
+              required
+              :readonly="busy || uncertain || !!current"
+            /><v-btn :disabled="busy || uncertain" type="submit">{{ t('devices.open') }}</v-btn>
+          </form></template
+        ></v-expansion-panel
+      ></v-expansion-panels
     >
-      <summary>{{ t('console.edit') }}</summary>
-      <form data-testid="edit-rule" @submit.prevent="save">
-        <fieldset :disabled="busy || uncertain || !editable">
-          <label
-            >{{ t('devices.name')
-            }}<input
+    <v-card v-if="editorOpen || current || uncertain" :title="t('console.edit')" class="mb-4"
+      ><v-card-text
+        ><p v-if="current" class="mb-3">{{ t('devices.revision') }} {{ current.revision }}</p>
+        <form data-testid="edit-rule" @submit.prevent="save">
+          <fieldset :disabled="busy || uncertain || !editable" class="security-fieldset">
+            <v-text-field
               v-model="name"
-              class="ui-input"
+              :label="t('devices.name')"
               data-testid="rule-name"
               maxlength="128"
               required
-          /></label>
-          <label><input v-model="enabled" type="checkbox" />{{ t('security.enabled') }}</label>
-          <label
-            >{{ t('security.severityLabel')
-            }}<select v-model="severity" class="ui-input">
-              <option v-for="value in severities" :key="value" :value="value">
-                {{ t(`security.severity.${value}`) }}
-              </option>
-            </select></label
-          >
-          <label
-            >{{ t('security.platform')
-            }}<select v-model="platform" class="ui-input">
-              <option v-for="value in platforms" :key="value" :value="value">
-                {{ t(`security.platforms.${value}`) }}
-              </option>
-            </select></label
-          >
-          <label
-            >{{ t('security.target')
-            }}<select v-model="target" class="ui-input">
-              <option value="all">{{ t('devices.all') }}</option>
-              <option value="groups">{{ t('devices.groups') }}</option>
-            </select></label
-          >
-          <template v-if="target === 'groups'">
-            <label
-              >{{ t('security.groupIds')
-              }}<textarea v-model="groupIds" class="ui-input" required rows="3" />
-            </label>
-            <UiButton type="button" @click="groupPage()">{{ t('security.chooseGroups') }}</UiButton>
-            <ul>
-              <li v-for="group in groups?.items" :key="group.id">
-                <UiButton type="button" @click="addGroup(group.id)">{{
-                  group.presentation.name
-                }}</UiButton>
-                ·
-                {{ group.id }}
-              </li>
-            </ul>
-            <UiButton v-if="groups?.nextCursor" type="button" @click="groupPage(groups.nextCursor)">
-              {{ t('devices.next') }}
-            </UiButton>
-          </template>
-          <ConditionEditor v-model="criteria" :fields="fields" />
-          <p v-if="!criteria">{{ t('security.criteriaRequired') }}</p>
-          <UiButton :disabled="!!!criteria" data-testid="save-rule" type="submit">{{
-            t('devices.save')
-          }}</UiButton>
-        </fieldset>
-      </form>
-    </details>
-    <UiButton v-if="uncertain && pending" :disabled="!!busy" type="submit" @click="pending()">
-      {{ t('policies.replay') }}
-    </UiButton>
-    <UiButton
-      v-if="current?.definition.enabled"
-      :disabled="!!(busy || uncertain)"
-      type="submit"
-      @click="recompute"
+              :disabled="busy || uncertain || !editable"
+            />
+            <v-checkbox
+              v-model="enabled"
+              :label="t('security.enabled')"
+              :disabled="busy || uncertain || !editable"
+            />
+            <v-row
+              ><v-col cols="12" md="4"
+                ><v-select
+                  v-model="severity"
+                  :label="t('security.severityLabel')"
+                  :items="
+                    severities.map((value) => ({ value, title: t(`security.severity.${value}`) }))
+                  "
+                  :disabled="busy || uncertain || !editable" /></v-col
+              ><v-col cols="12" md="4"
+                ><v-select
+                  v-model="platform"
+                  :label="t('security.platform')"
+                  :items="
+                    platforms.map((value) => ({ value, title: t(`security.platforms.${value}`) }))
+                  "
+                  :disabled="busy || uncertain || !editable" /></v-col
+              ><v-col cols="12" md="4"
+                ><v-select
+                  v-model="target"
+                  :label="t('security.target')"
+                  :items="[
+                    { value: 'all', title: t('devices.all') },
+                    { value: 'groups', title: t('devices.groups') },
+                  ]"
+                  :disabled="busy || uncertain || !editable" /></v-col
+            ></v-row>
+            <template v-if="target === 'groups'"
+              ><v-textarea
+                v-model="groupIds"
+                :label="t('security.groupIds')"
+                required
+                rows="3"
+                :disabled="busy || uncertain || !editable"
+              /><v-btn
+                variant="tonal"
+                :disabled="busy || uncertain || !editable"
+                @click="groupPage()"
+                >{{ t('security.chooseGroups') }}</v-btn
+              ><v-list
+                ><v-list-item
+                  v-for="group in groups?.items"
+                  :key="group.id"
+                  :title="group.presentation.name"
+                  :subtitle="group.id"
+                  ><template #append
+                    ><v-btn
+                      variant="text"
+                      :disabled="busy || uncertain || !editable"
+                      @click="addGroup(group.id)"
+                      >{{ t('devices.open') }}</v-btn
+                    ></template
+                  ></v-list-item
+                ></v-list
+              ><v-btn
+                v-if="groups?.nextCursor"
+                variant="text"
+                @click="groupPage(groups.nextCursor)"
+                >{{ t('devices.next') }}</v-btn
+              ></template
+            >
+            <ConditionEditor v-model="criteria" :fields="fields" /><v-alert
+              v-if="!criteria"
+              type="info"
+              variant="tonal"
+              class="my-3"
+              >{{ t('security.criteriaRequired') }}</v-alert
+            ><v-btn
+              :disabled="!criteria || busy || uncertain || !editable"
+              data-testid="save-rule"
+              type="submit"
+              >{{ t('devices.save') }}</v-btn
+            >
+          </fieldset>
+        </form></v-card-text
+      ></v-card
     >
-      {{ t('security.recompute') }}
-    </UiButton>
-    <section v-if="current" class="console-panel">
-      <h2>{{ t('security.immutableVersion') }}</h2>
-      <section class="console-panel">
-        <h2>{{ t('security.immutableVersion') }}</h2>
-        <form @submit.prevent="loadVersion">
-          <label
-            >{{ t('devices.revision')
-            }}<input
+    <v-alert v-if="uncertain" type="warning" variant="tonal" class="mb-4"
+      >{{ t('devices.unknownWrite')
+      }}<v-btn v-if="pending" :disabled="busy" @click="pending()">{{
+        t('policies.replay')
+      }}</v-btn></v-alert
+    >
+    <v-btn
+      v-if="current?.definition.enabled"
+      :disabled="busy || uncertain"
+      class="mb-4"
+      @click="recompute"
+      >{{ t('security.recompute') }}</v-btn
+    >
+    <v-expansion-panels v-if="current" class="mb-4"
+      ><v-expansion-panel :title="t('security.immutableVersion')"
+        ><template #text
+          ><form @submit.prevent="loadVersion">
+            <v-text-field
               v-model.number="version"
-              class="ui-input"
               type="number"
               min="1"
               :max="current.revision"
-              required /></label
-          ><UiButton :disabled="!!busy" type="submit">{{ t('devices.open') }}</UiButton>
-        </form>
-      </section>
-      <div v-if="historical" data-testid="rule-version">
-        <p>
-          {{ historical.definition.presentation.name }} · {{ historical.revision }} ·
-          {{ t(`security.severity.${historical.definition.severity}`) }} ·
-          {{ t(`security.platforms.${historical.definition.platform}`) }} ·
-          {{ t(historical.definition.enabled ? 'security.enabled' : 'security.disabled') }}
-        </p>
-        <p>
-          {{
-            historical.definition.target.kind === 'all'
-              ? t('devices.all')
-              : historical.definition.target.ids.join(', ')
-          }}
-        </p>
-        <fieldset disabled>
-          <ConditionEditor :model-value="historical.definition.criteria" :fields="fields" />
-        </fieldset>
-      </div>
-    </section>
-    <section v-if="id" class="console-panel">
-      <h2>{{ t('security.evaluationTask') }}</h2>
-      <section class="console-panel">
-        <h2>{{ t('security.evaluationTask') }}</h2>
-        <form @submit.prevent="refreshTask">
-          <label
-            >{{ t('security.taskId')
-            }}<input
-              v-model="taskId"
-              class="ui-input"
+              :label="t('devices.revision')"
               required
-              :readonly="busy"
-              @input="task = undefined" /></label
-          ><UiButton :disabled="!!busy" type="submit">{{ t('policies.refresh') }}</UiButton>
+              :disabled="busy"
+            /><v-btn :disabled="busy" type="submit">{{ t('devices.open') }}</v-btn>
+          </form>
+          <div v-if="historical" data-testid="rule-version" class="mt-4">
+            <p>
+              {{ historical.definition.presentation.name }} · {{ historical.revision }} ·
+              {{ t(`security.severity.${historical.definition.severity}`) }} ·
+              {{ t(`security.platforms.${historical.definition.platform}`) }} ·
+              {{ t(historical.definition.enabled ? 'security.enabled' : 'security.disabled') }}
+            </p>
+            <p>
+              {{
+                historical.definition.target.kind === 'all'
+                  ? t('devices.all')
+                  : historical.definition.target.ids.join(', ')
+              }}
+            </p>
+            <fieldset disabled class="security-fieldset">
+              <ConditionEditor :model-value="historical.definition.criteria" :fields="fields" />
+            </fieldset></div></template></v-expansion-panel
+    ></v-expansion-panels>
+    <v-card v-if="id" :title="t('security.evaluationTask')"
+      ><v-card-text
+        ><form @submit.prevent="refreshTask">
+          <v-text-field
+            v-model="taskId"
+            :label="t('security.taskId')"
+            required
+            :readonly="busy"
+            @update:model-value="task = undefined"
+          /><v-btn :disabled="busy" type="submit">{{ t('policies.refresh') }}</v-btn>
         </form>
-      </section>
-      <dl v-if="task" data-testid="evaluation-task">
-        <dt>{{ t('security.phase') }}</dt>
-        <dd>{{ t(`security.state.${task.phase}`) }}</dd>
-        <dt>{{ t('security.ruleRevision') }}</dt>
-        <dd>{{ task.ruleVersion }}</dd>
-        <dt>{{ t('security.watermark') }}</dt>
-        <dd>{{ task.factWatermark }}</dd>
-        <dt>{{ t('security.processed') }}</dt>
-        <dd>{{ task.processed }}</dd>
-        <dt>{{ t('security.failure') }}</dt>
-        <dd>{{ task.failure ?? '—' }}</dd>
-        <dt>{{ t('security.diagnostic') }}</dt>
-        <dd>{{ task.diagnostic ? t('security.groupInputPending') : '—' }}</dd>
-      </dl>
-    </section>
-  </PageFrame>
+        <v-table v-if="task" data-testid="evaluation-task" class="mt-4"
+          ><tbody>
+            <tr>
+              <th>{{ t('security.phase') }}</th>
+              <td>{{ t(`security.state.${task.phase}`) }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.ruleRevision') }}</th>
+              <td>{{ task.ruleVersion }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.watermark') }}</th>
+              <td>{{ task.factWatermark }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.processed') }}</th>
+              <td>{{ task.processed }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.failure') }}</th>
+              <td>{{ task.failure ?? '—' }}</td>
+            </tr>
+            <tr>
+              <th>{{ t('security.diagnostic') }}</th>
+              <td>{{ task.diagnostic ? t('security.groupInputPending') : '—' }}</td>
+            </tr>
+          </tbody></v-table
+        ></v-card-text
+      ></v-card
+    >
+  </MdmPage>
 </template>
+<style scoped>
+.security-fieldset {
+  border: 0;
+  min-width: 0;
+  padding: 0;
+}
+</style>

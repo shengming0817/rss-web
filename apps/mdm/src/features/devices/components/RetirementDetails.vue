@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiButton } from '@rss/core/components'
+import { VBtn, VTextarea, VCheckbox } from 'vuetify/components'
 import { useMdm } from '../../../context'
 import { useOriginalOperation } from '../../../services/useOriginalOperation'
 import type { retirement } from '../clients/lifecycle'
@@ -41,7 +41,7 @@ async function force(replay = false) {
     <h3>{{ t('gap.retire') }} · {{ id }}</h3>
     <p>{{ t('gap.retirementHint') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <UiButton :disabled="busy" @click="load">{{ t('gap.load') }}</UiButton>
+    <v-btn :disabled="busy" @click="load">{{ t('gap.load') }}</v-btn>
     <article v-for="channel in value?.channels" :key="channel.registration">
       <h4>{{ channel.device }} · {{ channel.channel }}</h4>
       <p>
@@ -60,19 +60,18 @@ async function force(replay = false) {
         >{{ operation }}</RouterLink
       >
     </article>
-    <label
-      >{{ t('gap.reason') }}<textarea v-model="reason" :disabled="locked" maxlength="2048" /></label
-    ><label><input v-model="confirmation" type="checkbox" />{{ t('gap.confirmation') }}</label>
-    <UiButton :disabled="locked || !confirmation || !reason.trim()" @click="force()">{{
+    <v-textarea v-model="reason" :label="t('gap.reason')" :disabled="locked" maxlength="2048" />
+    <v-checkbox v-model="confirmation" :label="t('gap.confirmation')" :disabled="busy" />
+    <v-btn :disabled="locked || !confirmation || !reason.trim()" @click="force()">{{
       t('gap.force')
-    }}</UiButton>
+    }}</v-btn>
     <template v-if="pending"
       ><p role="alert">{{ t('gap.unknown') }} {{ pending.id }}</p>
-      <UiButton
+      <v-btn
         v-if="pending.state === 'unknown'"
         :disabled="busy || !confirmation"
         @click="force(true)"
-        >{{ t('gap.replayOriginal') }}</UiButton
+        >{{ t('gap.replayOriginal') }}</v-btn
       ></template
     >
   </section>

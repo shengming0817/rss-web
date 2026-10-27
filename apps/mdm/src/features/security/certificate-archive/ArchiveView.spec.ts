@@ -1,10 +1,16 @@
-import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
+import { flushPromises, mount, DOMWrapper, type VueWrapper } from '@vue/test-utils'
+import { VSelect } from 'vuetify/components'
 import { expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { mdmKey } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import ArchiveView from './ArchiveView.vue'
+async function selectValue(wrapper: VueWrapper, id: string, value: unknown) {
+  const select = wrapper.findAllComponents(VSelect).find((item) => item.props('id') === id)!
+  select.vm.$emit('update:modelValue', value)
+  await flushPromises()
+}
 const tenant = '11111111-1111-4111-8111-111111111111'
 async function setup(overrides: object = {}) {
   const client = {
@@ -149,7 +155,7 @@ it('keeps local file errors recoverable and sends each file format and password'
       value: async () => new TextEncoder().encode(file.name).buffer,
     })
   await select([cert, key])
-  await wrapper.get('#archive-file-format-1').setValue('private_key')
+  await selectValue(wrapper, 'archive-file-format-1', 'private_key')
   await wrapper.get('#archive-file-password-1').setValue('file password')
   await submit()
   expect(importFile).toHaveBeenCalledTimes(1)
@@ -228,9 +234,14 @@ it.each(['import', 'generate'] as const)(
     }
     await click('加载更多')
     await click(secondId)
-    await wrapper.get('#archive-mode').setValue(mode)
+    await selectValue(wrapper, 'archive-mode', mode)
     await click('刷新')
-    expect((wrapper.get('#archive-target').element as HTMLSelectElement).value).toBe(secondId)
+    expect(
+      wrapper
+        .findAllComponents(VSelect)
+        .find((item) => item.props('id') === 'archive-target')!
+        .props('modelValue'),
+    ).toBe(secondId)
     const submit = async () => {
       if (mode === 'import') {
         const file = new File([], 'certificate.pem')
@@ -401,23 +412,23 @@ it('edits certificate metadata, explicit issuance inputs, recommendation, export
   }
   try {
     await click(tenant)
-    await wrapper.get('#archive-comparison').setValue(1)
+    await selectValue(wrapper, 'archive-comparison', 1)
     expect(wrapper.text()).toContain('Previous certificate')
-    await wrapper.get('#archive-filter').setValue('all')
+    await selectValue(wrapper, 'archive-filter', 'all')
     await wrapper.get('#archive-name').setValue('HTTPS service')
     await wrapper.get('#archive-category').setValue('custom')
     await wrapper.get('#archive-labels').setValue('edge, service')
     await wrapper.get('#archive-usages').setValue('HTTPS\nInternal')
     await wrapper.get('#archive-owner').setValue('Platform')
     await wrapper.get('#archive-notes').setValue('Explicitly issued')
-    await wrapper.get('#archive-mode').setValue('generate')
-    await wrapper.get('#archive-profile').setValue('https')
-    await wrapper.get('#archive-algorithm').setValue('p256')
+    await selectValue(wrapper, 'archive-mode', 'generate')
+    await selectValue(wrapper, 'archive-profile', 'https')
+    await selectValue(wrapper, 'archive-algorithm', 'p256')
     await wrapper.get('#archive-common-name').setValue('mdm.example.test')
     await wrapper.get('#archive-organization').setValue('Example')
     await wrapper.get('#archive-sans').setValue('mdm.example.test, endpoint.example.test')
     await wrapper.get('#archive-days').setValue(90)
-    await wrapper.get('#archive-issuer').setValue(`${tenant}:2`)
+    await selectValue(wrapper, 'archive-issuer', `${tenant}:2`)
     await new DOMWrapper(wrapper.get('#archive-name').element.closest('form')!).trigger('submit')
     await flushPromises()
     expect(generate.mock.calls[0]?.[1]).toMatchObject({
@@ -437,8 +448,8 @@ it('edits certificate metadata, explicit issuance inputs, recommendation, export
         notes: 'Explicitly issued',
       },
     })
-    await wrapper.get('#archive-target').setValue('')
-    await wrapper.get('#archive-profile').setValue('scep_template')
+    await selectValue(wrapper, 'archive-target', '')
+    await selectValue(wrapper, 'archive-profile', 'scep_template')
     await wrapper.get('#archive-scep').setValue('https://scep.example.test/')
     await new DOMWrapper(wrapper.get('#archive-name').element.closest('form')!).trigger('submit')
     await flushPromises()
@@ -449,7 +460,7 @@ it('edits certificate metadata, explicit issuance inputs, recommendation, export
       issuer: null,
     })
     await click(tenant)
-    await wrapper.get('#archive-mode').setValue('metadata')
+    await selectValue(wrapper, 'archive-mode', 'metadata')
     await new DOMWrapper(wrapper.get('#archive-name').element.closest('form')!).trigger('submit')
     await flushPromises()
     expect(saveMetadata).toHaveBeenCalledWith(
@@ -523,7 +534,7 @@ it('preserves unedited metadata keys and the loaded revision when saving', async
     .trigger('click')
   await flushPromises()
   await wrapper.get('#archive-name').setValue('Edited')
-  await wrapper.get('#archive-mode').setValue('metadata')
+  await selectValue(wrapper, 'archive-mode', 'metadata')
   wrapper
     .get('#archive-name')
     .element.closest('form')!
@@ -589,4 +600,35 @@ it('discards a delayed version history without restoring its old edit baseline a
   expect(f.wrapper.find('#archive-comparison').exists()).toBe(false)
   expect(f.wrapper.text()).not.toContain(entry.latest.metadata.name)
   f.wrapper.unmount()
+})
+
+it('ends the initial loading notice after a failed read and recovers on an explicit refresh', async () => {
+  const list = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('read unavailable'))
+    .mockResolvedValue({
+      tenantId: tenant,
+      items: [],
+      nextCursor: null,
+      asOf: 100,
+      reminderDays: 30,
+      alerts: { expired: 0, expiring: 0, notYetValid: 0 },
+    })
+  const { wrapper } = await setup({ list })
+  const initialFailure = wrapper.get('[role="alert"]').text(),
+    emptyLabel = mdmI18n().global.t('security.archive.empty')
+  expect(wrapper.text()).not.toContain('正在读取')
+  expect(wrapper.text()).not.toContain(emptyLabel)
+  expect(wrapper.find('tbody').exists()).toBe(false)
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '刷新')!
+    .trigger('click')
+  await flushPromises()
+  expect(list).toHaveBeenCalledTimes(2)
+  expect(wrapper.text()).not.toContain('正在读取')
+  expect(wrapper.text()).not.toContain(initialFailure)
+  expect(wrapper.text()).toContain(emptyLabel)
+  expect(wrapper.find('#archive-password').exists()).toBe(true)
+  wrapper.unmount()
 })

@@ -1,31 +1,23 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UiTabs } from '@rss/core/components'
-import { useMdm } from '../../../context'
-import PageFrame from '../../../components/PageFrame.vue'
+import { VTab, VTabs, VWindow, VWindowItem } from 'vuetify/components'
+import MdmPage from '../../../ui/MdmPage.vue'
 import TrustPurpose from './TrustPurpose.vue'
-const runtime = useMdm(),
-  { t } = useI18n(),
+const { t } = useI18n(),
   purpose = ref('agent')
 const purposes = ['agent', 'windows', 'apple'] as const
 </script>
 <template>
-  <PageFrame :title="t('security.pki.title')"
-    ><template #actions
-      ><RouterLink :to="{ name: 'security-recovery', params: { tenant: runtime.tenant } }">{{
-        t('security.pki.recover')
-      }}</RouterLink></template
+  <MdmPage :title="t('security.pki.title')" :description="t('security.pki.hint')">
+    <v-tabs v-model="purpose" :aria-label="t('security.pki.purpose')"
+      ><v-tab v-for="value in purposes" :key="value" :value="value">{{
+        t(`security.pki.${value}`)
+      }}</v-tab></v-tabs
     >
-    <p>{{ t('security.pki.hint') }}</p>
-    <UiTabs
-      v-model="purpose"
-      :label="t('security.pki.purpose')"
-      :items="purposes.map((value) => ({ value, label: t(`security.pki.${value}`) }))"
-    >
-      <template v-for="value in purposes" :key="value" #[value]
-        ><TrustPurpose :purpose="value"
-      /></template>
-    </UiTabs>
-  </PageFrame>
+    <v-window v-model="purpose" class="mt-4"
+      ><v-window-item v-for="value in purposes" :key="value" :value="value"
+        ><TrustPurpose :purpose="value" /></v-window-item
+    ></v-window>
+  </MdmPage>
 </template>

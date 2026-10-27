@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
-import { computed, ref, useId } from 'vue'
+import { VSelect, VAutocomplete, VBtn } from 'vuetify/components'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Criteria, FieldDefinition, Scalar } from '../clients/asset-model'
 import { editableField } from '../clients/asset-model'
@@ -11,9 +11,7 @@ const props = defineProps<{
   depth?: number
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: Criteria | null] }>()
-const { t } = useI18n(),
-  fieldQuery = ref(''),
-  fieldList = useId()
+const { t } = useI18n()
 const field = computed(() =>
   props.fields.find(
     (f) => props.modelValue?.kind === 'predicate' && f.key === props.modelValue.field,
@@ -39,8 +37,7 @@ function predicate(key: string, op?: FieldDefinition['operations'][number]) {
         : { ...base, value: initial(f.kind) },
   )
 }
-function kind(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
+function kind(value: string) {
   if (value === 'all') emit('update:modelValue', null)
   else if (value === 'and' || value === 'or')
     emit('update:modelValue', { kind: value, children: [] })
@@ -64,93 +61,70 @@ function operand(index: number, value?: Scalar) {
 <template>
   <fieldset class="condition-editor">
     <legend>{{ t('devices.condition') }}</legend>
-    <select
-      class="ui-input"
-      :aria-label="t('devices.kind')"
-      :value="modelValue?.kind ?? 'all'"
-      @change="kind"
-    >
-      <option v-if="!depth" value="all">{{ t('devices.all') }}</option>
-      <option value="predicate">{{ t('devices.predicate') }}</option>
-      <option v-if="(depth ?? 0) < 8" value="and">{{ t('devices.and') }}</option>
-      <option v-if="(depth ?? 0) < 8" value="or">{{ t('devices.or') }}</option>
-    </select>
+    <v-select
+      :model-value="modelValue?.kind ?? 'all'"
+      :label="t('devices.kind')"
+      :items="[
+        ...(!depth ? [{ value: 'all', title: t('devices.all') }] : []),
+        { value: 'predicate', title: t('devices.predicate') },
+        ...((depth ?? 0) < 8
+          ? ['and', 'or'].map((value) => ({ value, title: t('devices.' + value) }))
+          : []),
+      ]"
+      @update:model-value="kind"
+    />
     <template v-if="modelValue?.kind === 'predicate'">
-      <label :for="fieldList" class="ui-sr-only">{{ t('devices.searchFields') }}</label
-      ><input
-        :id="fieldList"
-        v-model="fieldQuery"
-        class="ui-input"
-        type="search"
-        :placeholder="t('devices.searchFields')"
-      />
-      <select
-        class="ui-input"
-        :aria-label="t('devices.field')"
-        :value="modelValue.field"
-        @change="predicate(($event.target as HTMLSelectElement).value)"
-      >
-        <option
-          v-for="f in fields
+      <v-autocomplete
+        :model-value="modelValue.field"
+        :label="t('devices.field')"
+        :items="
+          fields
             .filter(editableField)
-            .filter((f) => f.key.toLowerCase().includes(fieldQuery.toLowerCase()))"
-          :key="f.key"
-          :value="f.key"
-        >
-          {{ f.key }} ({{ f.kind }})
-        </option>
-      </select>
-      <select
-        class="ui-input"
-        :aria-label="t('devices.operator')"
-        :value="modelValue.op"
-        @change="
-          predicate(
-            modelValue.field,
-            ($event.target as HTMLSelectElement).value as FieldDefinition['operations'][number],
-          )
+            .map((f) => ({ value: f.key, title: f.key + ' (' + f.kind + ')' }))
         "
-      >
-        <option v-for="op in field?.operations" :key="op" :value="op">
-          {{ t(`devices.op.${op}`) }}
-        </option>
-      </select>
+        @update:model-value="predicate"
+      />
+      <v-select
+        :model-value="modelValue.op"
+        :label="t('devices.operator')"
+        :items="
+          field?.operations.map((value) => ({ value, title: t('devices.op.' + value) })) ?? []
+        "
+        @update:model-value="predicate(modelValue.field, $event)"
+      />
       <ScalarEditor
         v-if="modelValue.value"
         :model-value="modelValue.value"
         @update:model-value="emit('update:modelValue', { ...modelValue, value: $event })"
       />
       <div v-for="(value, index) in modelValue.values" :key="index" class="console-inline-actions">
-        <ScalarEditor :model-value="value" @update:model-value="operand(index, $event)" /><UiButton
+        <ScalarEditor :model-value="value" @update:model-value="operand(index, $event)" /><v-btn
           type="button"
           @click="operand(index)"
+          >{{ t('devices.remove') }}</v-btn
         >
-          {{ t('devices.remove') }}
-        </UiButton>
       </div>
-      <UiButton
+      <v-btn
         v-if="modelValue.values && field && editableField(field)"
         type="button"
         @click="operand(modelValue.values.length, initial(field.kind))"
+        >{{ t('devices.add') }}</v-btn
       >
-        {{ t('devices.add') }}
-      </UiButton>
     </template>
-    <template v-else-if="modelValue">
-      <div v-for="(item, index) in modelValue.children" :key="index">
+    <template v-else-if="modelValue"
+      ><div v-for="(item, index) in modelValue.children" :key="index">
         <CriteriaEditor
           :model-value="item"
           :fields="fields"
           :depth="(depth ?? 0) + 1"
           @update:model-value="child(index, $event)"
-        /><UiButton type="button" @click="child(index, null)">{{ t('devices.remove') }}</UiButton>
+        /><v-btn type="button" @click="child(index, null)">{{ t('devices.remove') }}</v-btn>
       </div>
-      <UiButton
+      <v-btn
         type="button"
         @click="child(modelValue.children.length, { kind: 'and', children: [] })"
-      >
-        {{ t('devices.add') }}
-      </UiButton>
-    </template>
+        >{{ t('devices.add') }}</v-btn
+      ></template
+    >
   </fieldset>
 </template>
