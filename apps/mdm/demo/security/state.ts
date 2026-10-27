@@ -3,6 +3,7 @@ import type { createOperationsDemo } from '../operations/state'
 import type { createScopeDemo } from '../policies/scopes'
 import type { DemoEvent, DomainHandler, Scenario } from '../scenario'
 import { createComplianceDemo } from './compliance'
+import { createCertificateArchiveDemo } from './certificate-archive'
 import { createSecurityRequests } from './requests'
 import { createGovernanceDemo } from './governance'
 import { createRisksDemo } from './risks'
@@ -17,6 +18,7 @@ export function createSecurityDemo(
   let time = Math.floor(Date.now() / 1000)
   const now = () => (time = Math.max(time, Math.floor(Date.now() / 1000)))
   const compliance = createComplianceDemo(devices, operations, now)
+  const certificateArchive = createCertificateArchiveDemo(now)
   const requests = createSecurityRequests(
     now,
     (target): boolean =>
@@ -34,7 +36,15 @@ export function createSecurityDemo(
   const support = createSupportDemo(now, devices, requests, operations)
   const actions = createSecurityActions(now, devices, requests, risks, support, operations)
   const handle: DomainHandler = (request, scenario) => {
-    for (const owner of [compliance, governance, requests, risks, actions, support]) {
+    for (const owner of [
+      compliance,
+      certificateArchive,
+      governance,
+      requests,
+      risks,
+      actions,
+      support,
+    ]) {
       const reply = owner.handle(request, scenario)
       if (reply) return reply
     }
@@ -62,7 +72,16 @@ export function createSecurityDemo(
       return !['remote_consent', 'remote_revoke'].includes(event.kind) || accepted
     },
     reset() {
-      for (const owner of [compliance, governance, requests, risks, actions, support]) owner.reset()
+      for (const owner of [
+        compliance,
+        certificateArchive,
+        governance,
+        requests,
+        risks,
+        actions,
+        support,
+      ])
+        owner.reset()
       time = Math.floor(Date.now() / 1000)
     },
   }
