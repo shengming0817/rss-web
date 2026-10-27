@@ -152,7 +152,7 @@ it.each(['device-dynamic', 'device-static'])(
         .trigger('click')
       await flushPromises()
       expect(read).toHaveBeenCalledWith(group.id)
-      for (const label of ['编辑', '重算', '删除']) {
+      for (const label of ['编辑', '重算并发布成员', '删除']) {
         const button = wrapper.findAll('button').find((b) => b.text() === label)
         expect(button, label).toBeDefined()
         expect(button!.attributes()).toHaveProperty('disabled')
