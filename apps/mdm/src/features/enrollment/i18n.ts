@@ -37,6 +37,8 @@ export const onboardingZh = {
   selfRecovery: '无法继续？恢复原注册',
   selfProgressNote:
     '此处显示本次注册在设备端的实际进展。完成系统操作后重新验证；注册中断时可在下方恢复原注册。',
+  targetUnavailable:
+    '设备详情关联暂未接通，无法确认原注册对应的设备。请在仍打开的注册引导中查看原请求进展并恢复。',
   deviceAuthorization:
     '为当前组织中的此设备创建或更新短时原生注册授权。管理员注册不占个人额度。安全保存注册密码，提交后页面会清除；原注册的进展、继续与取消仍由服务器校验。',
   profileEnrollment: '配置描述文件注册',
@@ -248,6 +250,8 @@ export const onboardingEn: typeof onboardingZh = {
   selfRecovery: 'Cannot continue? Recover this enrollment',
   selfProgressNote:
     'This page shows actual device enrollment progress. Verify after completing the system steps. If enrollment is interrupted, recover the original enrollment below.',
+  targetUnavailable:
+    'The device-detail association is not connected, so this enrollment cannot be verified against a device. View and recover the original request in the enrollment guide while it remains open.',
   deviceAuthorization:
     'Create or refresh short-lived native enrollment authorization for this device in the current organization. Administrator enrollment uses no personal quota. Save the enrollment password securely; it is cleared on submission. The server continues to verify progress, resume and cancellation against the original enrollment.',
   profileEnrollment: 'Profile-based enrollment',

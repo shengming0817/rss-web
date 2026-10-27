@@ -23,6 +23,8 @@ import { createAutomationDemo } from '../../../../demo/policies/state'
 import { ADMIN } from '../../../../demo/operations/authorization'
 import { createOperationsClients } from '../../../../demo/features/operations/client'
 import { mdmKey } from '../../../context'
+import { enrollmentTargetKey } from '../../enrollment/target'
+import { createDemoEnrollmentTargetResolver } from '../../../../demo/features/enrollment/target'
 import { mdmI18n } from '../../../i18n'
 import { policyFeature } from '../../policies/routes'
 import { securityFeature } from '../../security/routes'
@@ -113,6 +115,7 @@ async function setup(
   name = 'devices',
   params: Record<string, string> = {},
   query: Record<string, string> = {},
+  targetEvidence = true,
 ) {
   const domain = createDeviceDemo(),
     automation = createAutomationDemo(domain),
@@ -213,6 +216,9 @@ async function setup(
     global: {
       plugins: [router, i18n],
       provide: {
+        ...(targetEvidence
+          ? { [enrollmentTargetKey as symbol]: createDemoEnrollmentTargetResolver(transport) }
+          : {}),
         [mdmKey as symbol]: {
           devices,
           onboarding: createOnboardingClients(transport, transport, TENANT, 'demo-instance'),
@@ -2651,4 +2657,27 @@ it('applies raw directory RSQL with basic filters and uses the same filter for c
       'filter'
     ],
   ).toBe(filter)
+})
+
+it('leaves formal self device progress disconnected without target evidence and never trusts query coordinates', async () => {
+  const fixture = await setup('self-enrollments', {}, {}, false)
+  const enroll = vi.spyOn(fixture.devices.registration, 'enroll')
+  await preparePersonal(fixture.wrapper, fixture.click)
+  await fixture.click('复制口令并继续')
+  const receipt = await enroll.mock.results[0]!.value
+  const status = vi.spyOn(fixture.devices.enrollment, 'status')
+  const views = vi.spyOn(fixture.devices.views, 'detail')
+  await fixture.router.push({
+    name: 'device-management',
+    params: { tenant: TENANT, device: receipt.deviceId },
+    query: { mode: 'self-enrollment', enrollment: receipt.enrollmentId },
+  })
+  await flushPromises()
+  const progress = fixture.wrapper.get('[data-self-enrollment-progress]')
+  expect(progress.text()).toContain('设备详情关联暂未接通')
+  expect(status).not.toHaveBeenCalled()
+  expect(views).not.toHaveBeenCalled()
+  expect(
+    progress.findAll('button').some((button) => ['取消', '更新口令并继续'].includes(button.text())),
+  ).toBe(false)
 })

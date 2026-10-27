@@ -1,7 +1,7 @@
 import { directoryPage } from './directory'
 import { demoConnections } from './connections'
 /** Explicit synthetic onboarding control plane; never imported by production. */
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { TENANT, type DomainHandler } from './scenario'
 import { createReceipts, error, ok } from './http'
 import { INSTANCE } from './operations/authorization'
@@ -19,6 +19,30 @@ export function createOnboardingDemo(
   can: (actor: string, permission: Permission) => boolean,
   registrationAllowed: (channel: RegistrationChannel) => boolean,
 ) {
+  // Deliberate download fixtures: these bytes are explanatory text, never executable installers.
+  const packages = (['windows', 'macos'] as const).flatMap((platform, platformIndex) =>
+    (['x86_64', 'aarch64'] as const).map((architecture, architectureIndex) => {
+      const index = platformIndex * 2 + architectureIndex,
+        releaseId = `77777777-7777-4777-8777-77777777777${index}`,
+        filename = `MOCK-NOT-AN-INSTALLER-${platform}-${architecture}.${platform === 'windows' ? 'exe' : 'pkg'}`,
+        bytes = new TextEncoder().encode(
+          `RSS MDM EXPLICIT MOCK DOWNLOAD\nTarget: ${platform}/${architecture}\nNOT AN INSTALLER. Synthetic text fixture only. Do not run or install.\nNo agent, signature, enrollment credential or device-management capability is included.\n`,
+        )
+      return {
+        bytes,
+        metadata: {
+          releaseId,
+          tenantId: TENANT,
+          target: { platform, architecture },
+          version: 'MOCK-NOT-INSTALLABLE',
+          format: platform === 'windows' ? 'windows_exe' : 'macos_pkg',
+          filename,
+          length: bytes.byteLength,
+          installerSha256: Array.from(createHash('sha256').update(bytes).digest()),
+        },
+      }
+    }),
+  )
   const receipts = createReceipts(),
     configurations = new Map<
       string,
@@ -129,7 +153,28 @@ export function createOnboardingDemo(
   }
   const handle: DomainHandler = (request) => {
     const { path, method, body, actor } = request
-    if (method === 'GET' && path === '/api/v1/agent/enroll/packages') return ok([])
+    if (method === 'GET' && path === '/api/v1/agent/enroll/packages')
+      return ok(packages.map((item) => item.metadata))
+    const packagePath = /^\/api\/v1\/agent\/enroll\/packages\/([^/]+)(\/content)?$/.exec(path)
+    if (packagePath) {
+      if (!['GET', 'HEAD'].includes(method)) return error('malformed_request', 400)
+      const item = packages.find((candidate) => candidate.metadata.releaseId === packagePath[1])
+      if (!item) return error('not_found', 404)
+      if (!packagePath[2]) return ok(item.metadata)
+      const bytes = new Uint8Array(item.bytes.byteLength)
+      bytes.set(item.bytes)
+      return {
+        status: 200,
+        body: method === 'HEAD' ? undefined : bytes.buffer,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Disposition': `attachment; filename="${item.metadata.filename}"`,
+          'Content-Length': String(item.metadata.length),
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      }
+    }
     if (path === '/api/v1/windows/entra/terms/context' && method === 'GET')
       return ok({
         termsText: 'MOCK · 合成条款 / synthetic terms',

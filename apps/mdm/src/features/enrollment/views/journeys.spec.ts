@@ -11,6 +11,8 @@ import { createDeviceClients } from '../../devices/client'
 import SelfEnrollmentView from '../../devices/views/SelfEnrollmentView.vue'
 import { createDeviceDemo } from '../../../../demo/devices/state'
 import { generateEnrollmentPassword, decodeEnrollment } from '../../devices/clients/enrollment'
+import { enrollmentTargetKey } from '../target'
+import { createDemoEnrollmentTargetResolver } from '../../../../demo/features/enrollment/target'
 import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { createOnboardingClients } from '../client'
@@ -34,7 +36,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
-async function setup(view: unknown, allow = true) {
+async function setup(view: unknown, allow = true, targetEvidence = false) {
   const devices = createDeviceDemo()
   const domain = createOnboardingDemo(() => allow, devices.registrationAllowed),
     calls: string[] = [],
@@ -139,7 +141,15 @@ async function setup(view: unknown, allow = true) {
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke }))
   const wrapper = mount(RouterView, {
     attachTo: document.body,
-    global: { plugins: [router, mdmI18n()], provide: { [mdmKey as symbol]: runtime } },
+    global: {
+      plugins: [router, mdmI18n()],
+      provide: {
+        [mdmKey as symbol]: runtime,
+        ...(targetEvidence
+          ? { [enrollmentTargetKey as symbol]: createDemoEnrollmentTargetResolver(transport) }
+          : {}),
+      },
+    },
   })
   wrapper.vm.$.appContext.app.onUnmount(() => runtime.registrationChannels.dispose())
   wrappers.push(wrapper)
@@ -153,9 +163,18 @@ async function setup(view: unknown, allow = true) {
   return { wrapper, runtime, domain, router, state, calls, lost, click, create, revoke }
 }
 it('keeps downloads anonymous and never requests or creates enrollment authority', async () => {
-  const { wrapper, calls } = await setup(DownloadsView, false)
+  const { wrapper, calls, runtime, click } = await setup(DownloadsView, false)
   expect(wrapper.text()).toContain('无需登录')
+  expect(wrapper.findAll('a[download]')).toHaveLength(4)
+  expect(
+    wrapper
+      .findAll('a[download]')
+      .every((link) => link.attributes('download')?.startsWith('MOCK-NOT-AN-INSTALLER')),
+  ).toBe(true)
+  vi.spyOn(runtime.onboarding.packages, 'list').mockResolvedValue([])
+  await click('重新读取')
   expect(wrapper.text()).toContain('没有已发布')
+  expect(wrapper.findAll('a[download]')).toHaveLength(0)
   expect(wrapper.findAll('select')).toHaveLength(0)
   expect(
     wrapper
@@ -542,7 +561,6 @@ it('authorizes macOS profile delivery, clears the submitted secret and withdraws
     decodeEnrollment(
       {
         enrollmentId: id,
-        deviceId: 'my-mac',
         status: 'pending',
         expiresAt: Math.floor(Date.now() / 1000) + 300,
         registrationId: null,
@@ -719,4 +737,26 @@ it('withdraws a late automatic profile response after navigation and clears its 
   await flushPromises()
   expect(create).not.toHaveBeenCalled()
   expect(bytes.every((byte) => byte === 0)).toBe(true)
+})
+
+it('keeps formal-status progress and cancellation in the guide without inventing a device binding', async () => {
+  const fixture = await setup(SelfEnrollmentView, true, false)
+  const enroll = vi.spyOn(fixture.runtime.devices.registration, 'enroll')
+  await prepareGuide(fixture)
+  await fixture.click('复制口令并继续')
+  const receipt = await enroll.mock.results[0]!.value
+  expect(fixture.wrapper.text()).toContain('设备详情关联暂未接通')
+  expect(fixture.wrapper.find('a[href*=management]').exists()).toBe(false)
+  expect(fixture.wrapper.findComponent(NativeFacts).exists()).toBe(true)
+  expect(await fixture.runtime.devices.enrollment.status(receipt.enrollmentId)).not.toHaveProperty(
+    'deviceId',
+  )
+  const cancel = vi.spyOn(fixture.runtime.devices.enrollment, 'cancel')
+  await fixture.click('无法继续？恢复原注册')
+  await fixture.click('取消')
+  expect(cancel.mock.calls[0]?.[0]).toBe(receipt.enrollmentId)
+  expect(fixture.wrapper.text()).toContain('已取消')
+  expect(
+    fixture.calls.some((call) => call.includes('mdm-candidate/devices/self-enrollments')),
+  ).toBe(false)
 })
