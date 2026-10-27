@@ -39,7 +39,12 @@ const runtime = useMdm(),
   { run, busy, failure } = useSettingsAction(() => 'catalog')
 const catalog = ref<SettingsCatalog>(),
   search = ref(''),
-  material = ref('')
+  material = ref(''),
+  materialActivator = ref<HTMLElement>()
+function openMaterial(target: string, event: MouseEvent) {
+  materialActivator.value = event.currentTarget as HTMLElement
+  material.value = target
+}
 const materials = [
   'apns',
   'profile',
@@ -223,7 +228,7 @@ useSettingsFacts(() => (catalog.value = undefined))
           <td>
             <VBtn
               v-if="materials.includes(entries[item.id].target)"
-              @click="material = entries[item.id].target"
+              @click="openMaterial(entries[item.id].target, $event)"
               >{{ t('settings.open') }}</VBtn
             >
             <VBtn
@@ -258,6 +263,8 @@ useSettingsFacts(() => (catalog.value = undefined))
       >
     </div>
     <VDialog
+      :activator="materialActivator"
+      :open-on-click="false"
       :model-value="!!material"
       max-width="1100"
       :aria-label="t('settings.title')"

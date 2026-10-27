@@ -505,6 +505,19 @@ it('prepares task trust with an explicit version and reads a null device observa
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(f.settings.operations.records.get('task')?.state).toBe('received')
+  const activation = f.wrapper.findAll('form')[1]!
+  expect(button(f.wrapper, '启用新版本').attributes('disabled')).toBeDefined()
+  const writesBeforeSelection = f.calls.filter((call) => call.method === 'POST').length
+  await activation.trigger('submit')
+  await flushPromises()
+  expect(f.calls.filter((call) => call.method === 'POST')).toHaveLength(writesBeforeSelection)
+  await f.wrapper.getComponent(VSelect).setValue('key')
+  expect(button(f.wrapper, '启用新版本').attributes('disabled')).toBeUndefined()
+  await activation.trigger('submit')
+  await flushPromises()
+  expect(f.calls.filter((call) => call.method === 'POST').at(-1)?.body).toMatchObject({
+    keyId: 'key',
+  })
   const forms = f.wrapper.findAll('form')
   await forms
     .at(-1)!
@@ -1428,7 +1441,14 @@ it('confirms an ordinary withdrawal without treating its click event as a replay
   })
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
-  await button(f.wrapper, '撤回发布包').trigger('click')
+  const opener = button(f.wrapper, '撤回发布包')
+  ;(opener.element as HTMLButtonElement).focus()
+  await opener.trigger('click')
+  await flushPromises()
+  dialogButton('取消').focus()
+  dialogButton('取消').click()
+  await vi.waitFor(() => expect(document.activeElement).toBe(opener.element))
+  await opener.trigger('click')
   await flushPromises()
   dialogButton('确认撤回').click()
   await flushPromises()
@@ -2189,4 +2209,43 @@ it('keeps enrollment, trust, sources, identity and diagnostics reachable from th
     name: 'operations-organization',
     params: { tenant },
   })
+})
+
+it('returns focus to the configuration button after closing a material dialog', async () => {
+  const f = await fixture(SettingsView, {}, 'tenant', 'settings-overview')
+  f.setHandler((o) => {
+    if (o.path.endsWith('/settings/catalog'))
+      return {
+        items: [
+          {
+            id: 'storage',
+            scope: 'tenant',
+            owner: 'software',
+            custody: 'storage_provider',
+            lifecycle: 'provider_credential',
+            status: 'unconfigured',
+            revision: null,
+            desiredRevision: null,
+            appliedRevision: null,
+            configuredCount: null,
+            reason: null,
+            actions: [],
+          },
+        ],
+        domains: [],
+      }
+    throw decodeMdmError(503, { code: 'service_unavailable' })
+  })
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  const opener = f.wrapper.get('[data-setting=storage]').findAll('button').at(-1)!
+  ;(opener.element as HTMLButtonElement).focus()
+  await opener.trigger('click')
+  await flushPromises()
+  const close = body()
+    .findAll('[role=dialog] button')
+    .find((button) => button.text() === '取消')!
+  ;(close.element as HTMLButtonElement).focus()
+  await close.trigger('click')
+  await vi.waitFor(() => expect(document.activeElement).toBe(opener.element))
 })

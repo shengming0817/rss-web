@@ -57,6 +57,8 @@ async function lookup() {
 }
 async function change(action: TaskChange['action'], replay = false) {
   if (!canWrite.value) return
+  if (action !== 'prepare' && !replay && !trust.value?.keys.some((key) => key.id === keyId.value))
+    return
   const expectedRevision = replay ? pending.value!.expectedRevision : revision.value
   const input: TaskChange =
     action === 'prepare'
@@ -140,7 +142,7 @@ useSettingsFacts(() => {
         ]"
       />
       <div class="settings-actions">
-        <VBtn type="submit" :disabled="busy || !canWrite || !trust || locked">{{
+        <VBtn type="submit" :disabled="busy || !canWrite || !trust || locked || !keyId">{{
           t('settings.activate')
         }}</VBtn
         ><VBtn

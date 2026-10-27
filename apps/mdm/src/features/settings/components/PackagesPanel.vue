@@ -27,7 +27,12 @@ const {
 const packages = ref<Awaited<ReturnType<typeof client.list>>['items']>([]),
   next = ref<string | null>(null),
   withdrawTarget = ref<string>(),
+  withdrawActivator = ref<HTMLElement>(),
   uploadTarget = ref<(typeof targets)[number]>()
+function openWithdrawal(release: string, event: MouseEvent) {
+  withdrawActivator.value = event.currentTarget as HTMLElement
+  withdrawTarget.value = release
+}
 const targets = [
   { platform: 'windows', architecture: 'x86_64', label: 'Windows x64' },
   { platform: 'windows', architecture: 'aarch64', label: 'Windows ARM64' },
@@ -155,7 +160,7 @@ useSettingsFacts(() => {
       </div>
       <VBtn
         :disabled="locked || !canWrite || p.state !== 'published'"
-        @click="withdrawTarget = p.releaseId"
+        @click="openWithdrawal(p.releaseId, $event)"
         >{{ t('settings.withdrawPackage') }}</VBtn
       >
     </article></VCard
@@ -168,6 +173,8 @@ useSettingsFacts(() => {
     @published="load"
     @close="uploadTarget = undefined"
   /><VDialog
+    :activator="withdrawActivator"
+    :open-on-click="false"
     :model-value="!!withdrawTarget"
     role="alertdialog"
     :aria-label="t('settings.withdrawPackage')"
