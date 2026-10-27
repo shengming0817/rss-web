@@ -104,6 +104,12 @@ useSettingsFacts(() => (catalog.value = undefined))
         t('telemetry.metricsSettings')
       }}</RouterLink>
     </article>
+    <article v-if="section === 'integrations'" class="console-panel">
+      <RouterLink
+        :to="{ name: 'security-certificate-archive', params: { tenant: runtime.tenant } }"
+        >{{ t('security.certificate-archive') }}</RouterLink
+      >
+    </article>
     <div v-if="section === 'overview'" class="settings-overview-grid">
       <article class="console-panel">
         <h2>{{ t('settings.currentTenant') }}</h2>

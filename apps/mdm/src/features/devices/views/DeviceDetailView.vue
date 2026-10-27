@@ -29,6 +29,7 @@ import ManualPanel from '../components/ManualPanel.vue'
 import AssociationPanel from '../components/AssociationPanel.vue'
 import DeviceControlPanel from '../components/DeviceControlPanel.vue'
 import CredentialsPanel from '../../security/components/CredentialsPanel.vue'
+import DeviceRecoveryPanel from '../../security/pki/DeviceRecoveryPanel.vue'
 import ManagementQueries from '../components/ManagementQueries.vue'
 import RegistrationPanel from '../components/RegistrationPanel.vue'
 const runtime = useMdm(),
@@ -394,6 +395,7 @@ watch(target, () => {
           </div>
           <div>
             <CredentialsPanel :key="selected.id" :endpoint="selected" />
+            <DeviceRecoveryPanel :key="selected.id" :endpoint="selected" />
             <RegistrationPanel :key="selected.id" :endpoint="selected" @changed="load" />
           </div>
         </div>

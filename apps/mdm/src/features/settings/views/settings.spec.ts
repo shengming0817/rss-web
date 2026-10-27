@@ -1968,6 +1968,11 @@ it('keeps issuance recovery unknown after null query and retries only the origin
   await flushPromises()
   await button(f.wrapper, '核验并继续原恢复').trigger('click')
   await flushPromises()
+  await f.remount()
+  expect(f.wrapper.get('#agent-issuance').element).toHaveProperty('value', principal)
+  expect(f.wrapper.get('#agent-recovery-operation').element).toHaveProperty('value', id)
+  expect(f.wrapper.get('#agent-recovery-chain').element).toHaveProperty('value', '')
+  expect(f.wrapper.get('#agent-recovery-chain').attributes('disabled')).toBeUndefined()
   await f.wrapper
     .findAll('button')
     .find((b) => b.text() === '查询原操作')!
@@ -1979,6 +1984,11 @@ it('keeps issuance recovery unknown after null query and retries only the origin
     id,
   })
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+  await f.wrapper.get('#agent-recovery-chain').setValue('["Yg=="]')
+  await button(f.wrapper, '按原输入显式重试').trigger('click')
+  await flushPromises()
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+  await f.wrapper.get('#agent-recovery-chain').setValue('["YQ=="]')
   lose = false
   await button(f.wrapper, '按原输入显式重试').trigger('click')
   await flushPromises()
@@ -2039,13 +2049,14 @@ it('clears a previously queried issuance candidate when the same session loses C
   }))
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()
-  expect(f.wrapper.find('dl').exists()).toBe(true)
+  expect(f.wrapper.text()).toContain(principal)
+  expect(f.wrapper.find('table').exists()).toBe(true)
   f.setHandler(() => {
     throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
   })
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()
-  expect(f.wrapper.find('dl').exists()).toBe(false)
+  expect(f.wrapper.find('table').exists()).toBe(false)
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
 })
 

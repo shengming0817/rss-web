@@ -1065,9 +1065,12 @@ it('compares current Apple registration and material facts before unlocking a re
     .fn()
     .mockRejectedValueOnce(decodeMdmError(503, { code: 'unavailable' }))
     .mockResolvedValue(current)
-  const list = vi.fn(async () => [
-    material({ ...entry, binding: { ...entry.binding, registration: c, generation: 3 } }, 'mac'),
-  ])
+  const list = vi.fn(async () => ({
+    items: [
+      material({ ...entry, binding: { ...entry.binding, registration: c, generation: 3 } }, 'mac'),
+    ],
+    nextCursor: null,
+  }))
   const create = vi
     .fn()
     .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
@@ -1085,16 +1088,16 @@ it('compares current Apple registration and material facts before unlocking a re
   await confirm(w)
   await w.find('form').trigger('submit')
   await flushPromises()
-  expect(w.find('fieldset').attributes('disabled')).toBeDefined()
+  expect(field(w, '预期修订').attributes('disabled')).toBeDefined()
   await button(w, '冲突：重新读取并比较后编辑').trigger('click')
   await flushPromises()
-  expect(w.find('fieldset').attributes('disabled')).toBeDefined()
+  expect(field(w, '预期修订').attributes('disabled')).toBeDefined()
   await button(w, '冲突：重新读取并比较后编辑').trigger('click')
   await flushPromises()
   expect(detail).toHaveBeenLastCalledWith('mac')
   expect(list).toHaveBeenCalledWith('mac')
   expect(w.text()).toContain(c)
-  expect(w.find('fieldset').attributes('disabled')).toBeUndefined()
+  expect(field(w, '预期修订').attributes('disabled')).toBeUndefined()
   await field(w, '预期修订').setValue(3)
   await confirm(w)
   await w.find('form').trigger('submit')

@@ -35,7 +35,7 @@ export async function exercisePki({
   assert.equal(fixture.pki.candidateTrust.service_id, trusted.service_id)
   const candidateFile = join(temp, 'public-trust.json')
   writeFileSync(candidateFile, JSON.stringify(candidate), { mode: 0o600 })
-  await go(page, at('security/device-trust'))
+  await go(page, at('settings/device-trust'))
   await page.getByRole('button', { name: '准备轮换', exact: true }).click()
   await page.locator('#pki-trust-file').setInputFiles(candidateFile)
   await page.getByRole('button', { name: '核对并继续', exact: true }).click()
@@ -109,11 +109,17 @@ export async function exercisePki({
   assert.equal((await published).status(), 204)
   coverage.push('pki-real-signed-crl-publication-204-without-device-delivery-claim')
   await page.keyboard.press('Escape')
-  await go(page, at('security/recovery'))
+  await go(page, at(`devices/${fixture.collector.runtime.deviceId}/management`))
   const input = JSON.parse(readFileSync(fixture.pki.recoveryInputFile, 'utf8'))
-  await page.locator('#agent-registration').fill(fixture.collector.runtime.registrationId)
+  assert.equal(
+    await page.locator('#agent-registration').inputValue(),
+    fixture.collector.runtime.registrationId,
+  )
   await page.locator('#agent-recovery-operation').fill(input.operationId)
-  await page.locator('#agent-recovery-platform').selectOption(input.platform)
+  assert.equal(
+    await page.getByRole('combobox', { name: '平台', exact: true }).inputValue(),
+    input.platform === 'windows' ? 'Windows' : 'macOS',
+  )
   await page.locator('#agent-recovery-secret').fill(input.secret)
   await page.locator('#agent-recovery-csr').fill(input.csr)
   await page.getByRole('button', { name: '核对并继续', exact: true }).click()
@@ -160,7 +166,7 @@ export async function exercisePki({
   await page.getByRole('alert').filter({ hasText: '提交结果未知' }).waitFor()
   assert.equal(
     await page
-      .locator('form.settings-form')
+      .locator('form')
       .filter({ has: page.locator('#agent-issuance') })
       .locator('button[type=submit]')
       .isDisabled(),
