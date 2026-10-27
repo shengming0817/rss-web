@@ -143,7 +143,7 @@ it('provides the same session owner to auth, MDM and protected routes', async ()
   await vi.waitFor(() =>
     expect(
       document.querySelector(
-        `.console-command-results a[href="/tenants/${tenant}/policies/assignments"]`,
+        `[role="dialog"] a[href="${runtime.router.resolve({ name: 'policy-policies', params: { tenant } }).href}"]`,
       )?.textContent,
     ).toContain(runtime.i18n.global.t('security.risks')),
   )

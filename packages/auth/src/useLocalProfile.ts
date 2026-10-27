@@ -130,12 +130,12 @@ export function useLocalProfile(principalId: () => string) {
     if (own === generation && !pending.value) await load()
   }
   watch(
-    () => [
-      principalId(),
-      session.state.value.status,
-      session.state.value.tenant,
-      session.state.value.identity?.principalId,
-      session.state.value.session?.id,
+    [
+      principalId,
+      () => session.state.value.status,
+      () => session.state.value.tenant,
+      () => session.state.value.identity?.principalId,
+      () => session.state.value.session?.id,
     ],
     () => {
       clear()

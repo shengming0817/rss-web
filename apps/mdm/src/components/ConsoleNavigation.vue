@@ -43,7 +43,10 @@ function selected(item: NavigationItem) {
           :active="group === section.id"
           @click="emit('navigate')"
         />
-        <div v-if="group === section.id && !collapsed" class="mdm-navigation-children">
+        <div
+          v-if="group === section.id && !collapsed && section.items.length > 1"
+          class="mdm-navigation-children"
+        >
           <v-list-item
             v-for="item in section.id === 'groups' ? section.items : section.items.slice(1)"
             :key="item.name + JSON.stringify(item.query)"
