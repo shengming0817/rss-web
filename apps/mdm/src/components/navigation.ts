@@ -106,6 +106,8 @@ export function navigationTarget(item: NavigationItem, tenant: string): RouteLoc
     : { name: item.name, params: { tenant }, ...(item.query ? { query: item.query } : {}) }
 }
 export const detailParents: Record<string, string> = {
+  'software-standards': 'software-assets',
+  'software-mappings': 'software-assets',
   'device-detail': 'devices',
   'device-management': 'devices',
   'device-history': 'devices',

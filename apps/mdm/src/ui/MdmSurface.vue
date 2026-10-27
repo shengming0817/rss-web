@@ -8,7 +8,11 @@ const { locale } = useI18n()
 const { theme } = useTheme()
 const overlays = ref<HTMLElement>()
 const defaults = computed(() => ({
-  VDialog: { attach: overlays.value ?? true },
+  // Dialog resets Vuetify defaults to its own root; carry menu attachment into that root.
+  VDialog: {
+    attach: overlays.value ?? true,
+    VMenu: { attach: overlays.value ?? true },
+  },
   VMenu: { attach: overlays.value ?? true },
 }))
 </script>

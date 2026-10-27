@@ -8,6 +8,8 @@ import { createDeviceDemo } from './devices/state'
 import { createAutomationDemo } from './policies/state'
 import { seedScriptPolicies } from './policies/seed'
 import { createImportsDemo } from './software/imports'
+import { createSoftwareAssetsDemo } from './software-assets/state'
+import { createDemoGroups } from './features/groups/state'
 export function demoPlugin(): Plugin {
   return {
     name: 'mdm-http-demo',
@@ -28,6 +30,8 @@ export function demoPlugin(): Plugin {
       const software = automation.lifecycle
       const publication = automation.publication
       const imports = createImportsDemo(automation.resources, software)
+      const softwareAssets = createSoftwareAssetsDemo()
+      const demoGroups = createDemoGroups()
       const scenario = createScenario(
         [
           (request) => automation.authorization.guard(request),
@@ -35,6 +39,8 @@ export function demoPlugin(): Plugin {
           onboarding.handle,
           publication.handle,
           imports.handle,
+          softwareAssets.handle,
+          demoGroups.handle,
           automation.handle,
           devices.handle,
         ],
@@ -44,6 +50,8 @@ export function demoPlugin(): Plugin {
           devices.reset()
           automation.reset()
           imports.reset()
+          softwareAssets.reset()
+          demoGroups.reset()
           seedScriptPolicies(automation)
           seedTelemetry(automation)
         },

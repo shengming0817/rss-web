@@ -57,11 +57,11 @@ fixture 由隔离宿主准备，包含 `origin`（https://localhost:端口）、
 
 注册与管理员 PKI／Agent 恢复旅程可使用 `MDM_ENROLLMENT_BACKEND=/absolute/rss-mdm pnpm test:mdm:enrollment-browser` 自动搭建并清理隔离 HTTPS 环境；已有宿主入口为 `MDM_ENROLLMENT_BROWSER_FIXTURE=/absolute/private-fixture.json pnpm test:mdm:enrollment-browser`；fixture、原生／PKI前提和逐项覆盖边界见 [MDM 接入说明](docs/architecture/20260926-2544-mdm-web.md#原生注册组织接入与-agent-安装交付2633)。
 
-指标与历史入口为设置 → 数据采集，采集方案在资源库中管理。设备详情使用 `/history/activity`、`/history/performance`、`/history/collection` 路由；管理页为 `/management`。遥测真实 HTTPS Chromium 验证：`MDM_DEVICE_BACKEND=/absolute/rss-mdm pnpm test:mdm:telemetry-browser`。浏览器发布精确方案版本，经真实 Agent mTLS 接收合成观测；这不替代 Windows/macOS 真机验收。
+指标与历史入口归入策略，采集方案在资源库中管理。设备详情使用 `/history/activity`、`/history/performance`、`/history/collection` 路由；管理页为 `/management`。遥测真实 HTTPS Chromium 验证：`MDM_DEVICE_BACKEND=/absolute/rss-mdm pnpm test:mdm:telemetry-browser`。浏览器发布精确方案版本，经真实 Agent mTLS 接收合成观测；这不替代 Windows/macOS 真机验收。
 
 设备视图与关联的真实 HTTPS Chromium 验证：`MDM_DEVICE_BACKEND=/absolute/rss-mdm pnpm test:mdm:device-browser`。入口构建当前 UI，使用后端隔离开发环境与构建租约，退出清理 PG、产品进程与 TLS 网关；详见 [设备关联接入与验收](docs/architecture/20260926-2544-mdm-web.md#正式设备视图与关联2713)。
 
-软件直接发布与设备分批部署消费当前正式 HTTP V1 合同。来源、目标与发布记录来自正式目录；Direct 无需发布目标，Native 选择确切版本的发布目标。部署默认全量，分批配置为可选。接口、更新与恢复行为见 [软件来源与发布](docs/architecture/20260926-2544-mdm-web.md#软件来源resource导入与发布)。
+企业软件目录展示可用资源，来源、目标与发布记录继续消费当前正式 HTTP V1 合同；设备分配与分批配置统一在策略编辑器维护。Direct 无需发布目标，Native 选择确切版本的发布目标。独立部署、引导策略与更新页面已退出。接口、更新与恢复行为见 [软件来源与发布](docs/architecture/20260926-2544-mdm-web.md#软件来源resource导入与发布)。
 
 正式软件发布、版本更新与分批部署的 HTTPS Chromium 验证：
 

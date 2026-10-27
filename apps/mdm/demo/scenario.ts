@@ -413,23 +413,25 @@ export function createScenario(
       /^\/api\/(?:v1\/(?:audit-events|runtime\/diagnostics|authorization|tenant-administration\/authorization|apple\/organizations|windows\/entra-policy|agent-configurations|agent-configuration-operations|agent-enrollment-settings)(?:\/|$)|v1\/mdm-candidate\/(?:authorization|audit|operations|integrations)(?:\/|$))/.test(
         path,
       )
-    const module = operationsPath
-      ? 'operations'
-      : securityPath
-        ? 'security'
-        : softwarePath
-          ? 'software'
-          : policyPath
-            ? 'policies'
-            : /^\/api\/(?:v1\/(?:asset-fields|asset-retention-policies|asset-field-layout|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas))(?:\/|$)/.test(
-                  path,
-                )
-              ? 'devices'
-              : path.startsWith('/api/v1/device-views') ||
-                  path.startsWith('/api/v1/device-associations') ||
-                  path.startsWith('/api/v1/groups')
+    const module = path.startsWith('/api/v1/mdm-candidate/groups')
+      ? 'devices'
+      : operationsPath
+        ? 'operations'
+        : securityPath
+          ? 'security'
+          : softwarePath
+            ? 'software'
+            : policyPath
+              ? 'policies'
+              : /^\/api\/(?:v1\/(?:asset-fields|asset-retention-policies|asset-field-layout|device-queries|devices|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas))(?:\/|$)/.test(
+                    path,
+                  )
                 ? 'devices'
-                : path.split('/')[4]
+                : path.startsWith('/api/v1/device-views') ||
+                    path.startsWith('/api/v1/device-associations') ||
+                    path.startsWith('/api/v1/groups')
+                  ? 'devices'
+                  : path.split('/')[4]
     if (module && sources[module] === 'real')
       return { status: 503, body: { code: 'service_unavailable' } }
     const failure = fault()
