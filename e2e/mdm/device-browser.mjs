@@ -700,7 +700,7 @@ try {
   await settled(`/api/v1/groups/${group}/tasks/${membership.task}`)
   const groupResult = await api(`/api/v1/groups/${group}/results/${membership.task}/members`)
   assert.deepEqual(groupResult.page.items, [{ kind: 'endpoint', id: fixture.agent }])
-  await page.goto(path('groups'))
+  await page.goto(path('groups?category=device-static'))
   await loaded()
   await page.getByRole('button', { name: /Browser endpoint group/ }).click()
   await loaded()

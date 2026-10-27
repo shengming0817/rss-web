@@ -2546,6 +2546,17 @@ it('keeps device group categories separate and exposes formal static user group 
     },
   })
   expect(h.button('设备动态组').attributes('disabled')).toBeDefined()
+  const lockedPath = h.router.currentRoute.value.fullPath
+  for (const query of [
+    { category: 'device-dynamic' },
+    { category: 'user-dynamic' },
+    { category: 'user-static', id: 'another-group' },
+  ]) {
+    await h.router.push({ name: 'groups-hub', params: { tenant: TENANT }, query })
+    expect(h.router.currentRoute.value.fullPath).toBe(lockedPath)
+  }
+  await h.router.push({ name: 'devices', params: { tenant: TENANT } })
+  expect(h.router.currentRoute.value.fullPath).toBe(lockedPath)
   h.scenario.set('normal')
   await h.click('重放同一操作')
   const writes = h.requests.filter(
@@ -2558,6 +2569,45 @@ it('keeps device group categories separate and exposes formal static user group 
       (item) => item.value?.name === 'Self service operators',
     ),
   ).toBe(true)
+  await h.router.push({ name: 'devices', params: { tenant: TENANT } })
+  expect(h.router.currentRoute.value.name).toBe('devices')
+})
+
+it('retains an unknown saved query across directory filtering and panel collapse until exact replay', async () => {
+  const h = await setup('devices')
+  await h.click('高级资产查询')
+  await h.click('个人保存查询')
+  const inventory = h.wrapper.findComponent(InventoryQuery)
+  const form = inventory.findAll('form').at(-1)!
+  await form.get('input').setValue('Recoverable directory query')
+  h.scenario.set('unknown')
+  await form.trigger('submit')
+  await flushPromises()
+  const writes = () =>
+    h.requests.filter((r) => r.method === 'PUT' && r.path === '/api/v1/saved-queries/{id}')
+  expect(writes()).toHaveLength(1)
+  const original = writes()[0]!
+  expect(h.button('重放同一操作').exists()).toBe(true)
+  h.scenario.set('normal')
+  await setSelect(h.wrapper, h.wrapper.get('[data-testid=directory-platform]'), 'windows')
+  await h.wrapper.get('form.device-filters').trigger('submit')
+  await flushPromises()
+  expect(h.router.currentRoute.value.query['platform']).toBe('windows')
+  await form.trigger('submit')
+  await flushPromises()
+  expect(writes()).toHaveLength(1)
+  expect(h.button('重放同一操作').exists()).toBe(true)
+  await h.click('高级资产查询')
+  expect(h.wrapper.findComponent(InventoryQuery).vm).toBe(inventory.vm)
+  await h.click('高级资产查询')
+  await h.router.push({ name: 'groups-hub', params: { tenant: TENANT } })
+  expect(h.router.currentRoute.value.name).toBe('devices')
+  await h.click('重放同一操作')
+  expect(writes()).toHaveLength(2)
+  expect(writes()[1]!.body).toEqual(original.body)
+  expect(writes()[1]!.pathParams).toEqual(original.pathParams)
+  await h.router.push({ name: 'groups-hub', params: { tenant: TENANT } })
+  expect(h.router.currentRoute.value.name).toBe('groups-hub')
 })
 
 it('applies raw directory RSQL with basic filters and uses the same filter for counts and results', async () => {

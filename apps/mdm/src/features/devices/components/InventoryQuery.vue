@@ -13,6 +13,7 @@ import {
   VExpansionPanelText,
 } from 'vuetify/components'
 import { computed, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import type { FieldDefinition, QueryInput, SavedQuery } from '../clients/assets'
@@ -23,8 +24,14 @@ import { type InventoryCondition } from '../clients/asset-model'
 import AssetValue from '../components/AssetValue.vue'
 const { t } = useI18n({ useScope: 'local', messages: groupMessages }),
   runtime = useMdm(),
+  route = useRoute(),
   client = runtime.devices.assets,
-  { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
+  { run, runWrite, busy, failure, uncertain } = useOperation(
+    [],
+    () => deviceBinding(runtime),
+    () => route.path,
+  )
+onBeforeRouteLeave(() => !busy.value && !uncertain.value)
 const fields = ref<FieldDefinition[]>([]),
   criteria = ref<InventoryCondition | null>(null),
   select = ref<string[]>([]),

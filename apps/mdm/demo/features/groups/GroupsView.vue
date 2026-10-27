@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, toRaw, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   VAlert,
@@ -40,6 +40,8 @@ const { run, runWrite, busy, failure, uncertain } = useOperation([], binding)
 const formal = ref(false),
   formalLocked = ref(false)
 const blocked = computed(() => busy.value || uncertain.value || formalLocked.value)
+onBeforeRouteUpdate((to, from) => to.fullPath === from.fullPath || !blocked.value)
+onBeforeRouteLeave(() => !blocked.value)
 const category = computed<Category>({
   get: () => categories.find((v) => route.query['category'] === v) ?? 'device-dynamic',
   set: (value) => {
