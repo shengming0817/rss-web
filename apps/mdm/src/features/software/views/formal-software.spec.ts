@@ -135,9 +135,13 @@ it('does not unlock an unknown source write from an unrelated read or replay it 
   await button(wrapper, '核对状态').trigger('click')
   await flushPromises()
   expect(button(wrapper, '停用').attributes('disabled')).toBeDefined()
+  const sourceCard = () =>
+    wrapper.findAll('.v-card').find((card) => card.find('.v-card-title').exists())
+  expect(sourceCard()?.get('.v-card-title').text()).toBe('enterprise / 1')
+  expect(sourceCard()?.text()).toContain(life.operation)
   session.value = { ...session.value, identity: { principalId: crypto.randomUUID() } }
   await flushPromises()
-  expect(wrapper.find('h2').exists()).toBe(false)
+  expect(sourceCard()).toBeUndefined()
   expect(changeSource).toHaveBeenCalledTimes(1)
   wrapper.unmount()
 })
@@ -164,7 +168,7 @@ it('publishes the exact resource and target then recovers without client attempt
   picker.vm.$emit('update:version', '1')
   await button(wrapper, '读取实际目标').trigger('click')
   await flushPromises()
-  await wrapper.get('#publication-target').setValue('internal')
+  await field(wrapper, '发布目标 ID').setValue('internal')
   await wrapper.get('[data-testid=publication-create]').trigger('submit')
   await flushPromises()
   expect(publish.mock.calls[0]?.[0]).toMatchObject({

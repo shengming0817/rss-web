@@ -141,3 +141,36 @@ it('keeps original-write recovery reachable after a lost response and removes st
   await vi.waitFor(() => expect(wrapper.text()).toContain('没有读取权限'))
   expect(wrapper.text()).not.toContain('Committed original')
 }, 15_000)
+
+it.each(['unknown', 'conflict'] as const)(
+  'exposes original-write recovery after a %s mapping write from asset evidence',
+  async (failure) => {
+    const { wrapper, scenario } = await fixture()
+    click('设备与证据')
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain('user:501'),
+    )
+    click('新建映射', document.querySelector('[role="dialog"]')!)
+    await nextTick()
+    scenario.set(failure)
+    click('保存')
+    const recovery = failure === 'unknown' ? '核实原操作' : '重新读取并编辑'
+    await vi.waitFor(() => expect(wrapper.text()).toContain(recovery))
+    expect(
+      wrapper.findAllComponents({ name: 'VDialog' }).some((dialog) => dialog.props('modelValue')),
+    ).toBe(false)
+    scenario.set('normal')
+    click(recovery)
+    await vi.waitFor(() =>
+      expect(wrapper.text()).toContain(failure === 'unknown' ? '原操作已核实' : 'Acme Editor'),
+    )
+    await vi.waitFor(() =>
+      expect(
+        [...document.querySelectorAll('button')].find(
+          (button) => button.textContent?.trim() === '查询安装资产',
+        )?.disabled,
+      ).toBe(false),
+    )
+  },
+  15_000,
+)
