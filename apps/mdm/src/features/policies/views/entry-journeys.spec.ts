@@ -202,12 +202,13 @@ async function setup(
   await router.push(path)
   const wrapper = mount(component, {
     props,
+    attachTo: document.body,
     global: { plugins: [router, mdmI18n()], provide: { [mdmKey as symbol]: runtime } },
   })
   await flushPromises()
   return { wrapper, runtime, router }
 }
-function button(wrapper: VueWrapper | DOMWrapper<Element>, text: string) {
+function button(wrapper: Pick<VueWrapper, 'findAll'>, text: string) {
   const target = wrapper.findAll('button').find((b) => b.text() === text)
   if (!target) throw new Error(`Missing button ${text}`)
   return target

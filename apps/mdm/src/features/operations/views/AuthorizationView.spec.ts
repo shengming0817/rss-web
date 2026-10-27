@@ -196,6 +196,7 @@ async function click(label: string, scope = body()) {
     .findAll('button')
     .find((b) => b.text() === label || b.attributes('aria-label') === label)
   expect(b, label).toBeDefined()
+  await vi.waitFor(() => expect(b!.element.matches(':disabled'), label).toBe(false))
   await b!.trigger('click')
   await flushPromises()
 }
@@ -361,7 +362,7 @@ it('restores the complete basis of an unknown deletion larger than 4096 bytes an
   expect(body().text()).toContain('本次将撤销')
   expect(body().text()).toContain('device-0')
   await click('回读当前规则以核对')
-  expect(body().text()).toContain('服务端当前记录为已删除')
+  await vi.waitFor(() => expect(body().text()).toContain('服务端当前记录为已删除'))
   expect(writes(f)).toHaveLength(1)
   expect(f.operations.records.get('authorization:tenant')?.queried).toBe(true)
 })
