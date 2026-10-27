@@ -1,3 +1,4 @@
+import { selectControl } from './features/policies/vuetify-test-controls'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
@@ -191,7 +192,7 @@ it('opens a software policy from the workspace through the supported software pa
     expect(app.router.currentRoute.value.query['id']).toBe(id)
     expect(read).toHaveBeenCalledWith(id)
     expect(document.querySelector('main h1')?.textContent).toBe(
-      app.i18n.global.t('software.deployments'),
+      app.i18n.global.t('policies.software'),
     )
     expect(document.querySelector('main')?.textContent).toContain('workspace-software')
     expect(document.querySelector('main')?.textContent).not.toContain(
@@ -299,21 +300,12 @@ it('creates a formal Scope, changes the result channel explicitly, and deletes o
       .findAll('[role=tab]')
       .find((tab) => tab.text() === '判定说明')!
       .trigger('click')
-    const channel = scopeDialog().get('.scope-results input[role=combobox]')
-    async function chooseChannel(label: string) {
-      await channel.trigger('keydown', { key: 'ArrowDown' })
-      await flushPromises()
-      await new DOMWrapper(document.body)
-        .findAll('[role=option]')
-        .find((option) => option.isVisible() && option.text() === label)!
-        .trigger('click')
-      await flushPromises()
-    }
-    await chooseChannel('Agent')
+    const channel = selectControl(scopeDialog().get('.scope-results'))
+    await channel.setValue('agent')
     await press(app, 'policies.open', true)
     expect(main().text()).toContain('device-01')
     const reads = app.calls.filter((c) => c.path.includes('/results/')).length
-    await chooseChannel('MDM')
+    await channel.setValue('mdm')
     expect(app.calls.filter((c) => c.path.includes('/results/'))).toHaveLength(reads)
     await press(app, 'policies.open', true)
     expect(app.calls.filter((c) => c.path.includes('/results/'))).toHaveLength(reads + 1)

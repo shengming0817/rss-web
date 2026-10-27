@@ -568,6 +568,8 @@ onMounted(async () => {
   if (id.value && !current.value) await open()
   else if (!id.value) {
     resetDraft()
+    if (typeof route.query['device'] === 'string' || typeof route.query['group'] === 'string')
+      editing.value = true
     const kind = route.query['kind']
     if (
       ['execution', 'native_collection', 'agent_collection', 'configuration'].includes(
