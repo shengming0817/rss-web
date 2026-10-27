@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import PolicyDialog from '../components/PolicyDialog.vue'
 import PolicyTabs from '../components/PolicyTabs.vue'
@@ -799,8 +800,8 @@ watch(
         >
       </section>
       <PolicyFieldset v-show="creating" class="console-panel" :disabled="busy || uncertain">
-        <details class="task-technical">
-          <summary>{{ t('policies.ux.technical') }}</summary>
+        <MdmDisclosure class="task-technical">
+          <template #title>{{ t('policies.ux.technical') }}</template>
           <label for="resource-id">{{ t('policies.id') }}</label
           ><VTextField
             id="resource-id"
@@ -811,7 +812,7 @@ watch(
             density="comfortable"
             hide-details="auto"
           /><VBtn type="button" @click="open()">{{ t('policies.open') }}</VBtn>
-        </details>
+        </MdmDisclosure>
         <p v-if="route.query['author'] === 'enterprise'">{{ t('software.ux.enterpriseHint') }}</p>
         <label for="resource-kind">{{ t('policies.kind') }}</label
         ><VSelect
@@ -969,12 +970,12 @@ watch(
             :locked="busy || uncertain || !!generatedFiles.length"
             @prepare="collectionPrepared"
           />
-          <details
+          <MdmDisclosure
             v-if="kind !== 'native_collection' && kind !== 'agent_collection'"
             class="console-panel console-task"
             :open="uncertain || undefined"
           >
-            <summary>{{ t('policies.version') }}</summary>
+            <template #title>{{ t('policies.version') }}</template>
             <form @submit.prevent="addVersion">
               <PolicyFieldset :disabled="busy || uncertain">
                 <label for="resource-version">{{ t('policies.version') }}</label
@@ -1066,7 +1067,7 @@ watch(
                 </VBtn>
               </PolicyFieldset>
             </form>
-          </details>
+          </MdmDisclosure>
           <section class="console-panel">
             <h2>{{ t('policies.upload') }}</h2>
             <p>{{ t('software.uploadSessionHint') }}</p>

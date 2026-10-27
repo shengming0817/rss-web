@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VTextField, VBtn } from 'vuetify/components'
 
 import { computed, ref, watch } from 'vue'
@@ -184,10 +185,10 @@ watch(
         }"
         >{{ t('operations.audit') }}</RouterLink
       >
-      <details>
-        <summary>{{ t('policies.ux.technical') }}</summary>
+      <MdmDisclosure>
+        <template #title>{{ t('policies.ux.technical') }}</template>
         <p>{{ detail.id }} · {{ detail.operationId }}</p>
-      </details>
+      </MdmDisclosure>
     </section>
     <p v-if="members && !members.items.length">{{ t('policies.empty') }}</p>
     <article

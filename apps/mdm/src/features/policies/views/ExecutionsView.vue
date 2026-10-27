@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyDialog from '../components/PolicyDialog.vue'
 
 import { VBtn, VTextField, VSelect, VDataTable, VChip } from 'vuetify/components'
@@ -417,8 +418,8 @@ watch(
             :reauthorization="row.reauthorization"
         /></template>
         <template #[`item.evidence`]="{ item }">
-          <details class="operation-evidence">
-            <summary>{{ t('devices.evidence') }}</summary>
+          <MdmDisclosure class="operation-evidence">
+            <template #title>{{ t('devices.evidence') }}</template>
             <OperationStages
               v-if="item.evidence"
               :kind="item.kind"
@@ -456,7 +457,7 @@ watch(
                 :device="item.device"
             /></template>
             <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
-          </details>
+          </MdmDisclosure>
         </template>
       </VDataTable>
       <VBtn v-if="records.nextCursor" :disabled="busy" @click="load(records.nextCursor)">{{

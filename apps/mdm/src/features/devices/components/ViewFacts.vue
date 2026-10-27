@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { computed, ref, watch } from 'vue'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
@@ -269,8 +270,8 @@ function summary(row: (typeof rows.value)[number]) {
       <section v-if="category === 'quality'" class="device-section">
         <h2>{{ t('devices.collectionQuality') }}</h2>
         <p>{{ t('devices.trustedAssetsNote') }}</p>
-        <details v-for="source in view.inventorySources" :key="source.endpoint">
-          <summary>{{ source.endpoint }}</summary>
+        <MdmDisclosure v-for="source in view.inventorySources" :key="source.endpoint">
+          <template #title>{{ source.endpoint }}</template>
           <ul>
             <li v-for="quality in source.quality" :key="quality.runId">
               {{ quality.source }} / {{ quality.registration }} /
@@ -289,7 +290,7 @@ function summary(row: (typeof rows.value)[number]) {
               </ul>
             </li>
           </ul>
-        </details>
+        </MdmDisclosure>
         <CollectionQuality
           v-if="collection"
           :id="collection.id"

@@ -6,7 +6,7 @@ import {
   createPublicationClient,
   decodePublication,
 } from '../../src/features/software/clients/publication'
-import type { HttpTransport } from '@rss/api/mdm'
+import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
 it('publishes one exact version, exposes strict directory projections and retains detailed export documents across recovery', async () => {
   const { resources } = softwareResource('Example.App', true),
     lifecycle = createLifecycleDemo(resources),
@@ -61,19 +61,20 @@ it('publishes one exact version, exposes strict directory projections and retain
     'normal',
   )!
   expect(lookup.body).toMatchObject({ items: [{ id: pending.id }] })
-  const transport: HttpTransport = {
-    request: async (options) => {
-      const path = options.path.replace(/\{([^}]+)\}/g, (_, key: string) =>
-        encodeURIComponent(String(options.pathParams?.[key])),
-      )
-      const query = new URLSearchParams()
-      for (const [key, value] of Object.entries(options.query ?? {}))
-        if (value !== undefined) query.set(key, String(value))
-      const reply = demo.handle(request(path, undefined, undefined, query), 'normal')!
-      expect(reply.status).toBe(options.successStatus)
-      return options.decode(reply.body)
-    },
+  function transportRequest(options: NoContentRequest): Promise<void>
+  function transportRequest<T>(options: RequestOptions<T>): Promise<T>
+  async function transportRequest<T>(options: RequestOptions<T> | NoContentRequest) {
+    const path = options.path.replace(/\{([^}]+)\}/g, (_match: string, key: string) =>
+      encodeURIComponent(String(options.pathParams?.[key])),
+    )
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries(options.query ?? {}))
+      if (value !== undefined) query.set(key, String(value))
+    const reply = demo.handle(request(path, undefined, undefined, query), 'normal')!
+    expect(reply.status).toBe(options.successStatus)
+    return options.decode?.(reply.body)
   }
+  const transport: HttpTransport = { request: transportRequest }
   const client = createPublicationClient(transport)
   const directory = await client.list({ filter: "outcome=='published';withdrawn=='false'" })
   expect(directory.items).toHaveLength(1)

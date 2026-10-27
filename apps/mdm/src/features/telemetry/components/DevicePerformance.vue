@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VAlert, VSelect, VTextField, VTable, VBtn } from 'vuetify/components'
 import { controlEvent } from '../../policies/control-event'
 
@@ -520,10 +521,10 @@ watch(
                   </td>
                   <td>
                     {{ basis?.source }} / v{{ basis?.sample.series.definition.version }}
-                    <details>
-                      <summary>{{ t('devices.evidence') }}</summary>
+                    <MdmDisclosure>
+                      <template #title>{{ t('devices.evidence') }}</template>
                       <pre>{{ step ? buckets[i] : selectedRows[i] }}</pre>
-                    </details>
+                    </MdmDisclosure>
                   </td>
                 </tr>
               </tbody>

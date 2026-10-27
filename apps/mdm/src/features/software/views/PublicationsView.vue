@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VBtn, VCheckbox, VDataTable, VSelect } from 'vuetify/components'
 import { comparison } from '../../../services/directory-query'
 import { onMounted, ref, watch } from 'vue'
@@ -265,10 +266,10 @@ onMounted(() => load())
         t('software.withdraw')
       }}</VBtn>
       <p>{{ t('software.withdrawHint') }}</p>
-      <details v-if="current.document">
-        <summary>{{ t('software.document') }}</summary>
+      <MdmDisclosure v-if="current.document">
+        <template #title>{{ t('software.document') }}</template>
         <pre>{{ JSON.stringify(current.document, null, 2) }}</pre>
-      </details>
+      </MdmDisclosure>
     </section>
     <section v-if="uncertain && pending" class="console-panel" data-testid="publication-unknown">
       <p>{{ t('software.publicationUnknown') }}</p>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -400,8 +401,8 @@ watch(target, () => {
           :device-name="selectedName"
         />
         <p v-if="!selected">{{ t('devices.select') }}</p>
-        <details class="device-section" data-device-channels>
-          <summary>{{ t('devices.channels') }}</summary>
+        <MdmDisclosure class="device-section" data-device-channels>
+          <template #title>{{ t('devices.channels') }}</template>
           <ChannelCard
             v-for="endpoint in view.endpoints"
             :key="endpoint.id"
@@ -409,7 +410,7 @@ watch(target, () => {
             :detail="endpoints.find((e) => e.id === endpoint.id)"
             :view="view"
           />
-        </details>
+        </MdmDisclosure>
         <div v-if="selected" class="device-panel-grid">
           <div>
             <ManagementQueries :key="selected.id" :device="selected.id" />

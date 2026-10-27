@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../../policies/components/PolicyFieldset.vue'
 import PolicyDialog from '../../policies/components/PolicyDialog.vue'
 
@@ -884,8 +885,8 @@ watch(
           ><VBtn v-if="scopeOptions?.nextCursor" @click="scopes(scopeOptions.nextCursor)">{{
             t('devices.next')
           }}</VBtn>
-          <details>
-            <summary>{{ t('telemetry.budget') }}</summary>
+          <MdmDisclosure>
+            <template #title>{{ t('telemetry.budget') }}</template>
             <label
               v-for="name in [
                 'points',
@@ -931,7 +932,7 @@ watch(
                 density="comfortable"
                 hide-details="auto"
             /></label>
-          </details>
+          </MdmDisclosure>
         </PolicyFieldset>
         <section v-if="step === 2">
           <h3>{{ t('telemetry.reviewProfile') }}</h3>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VAlert, VSelect, VBtn } from 'vuetify/components'
 
 import { ref, watch } from 'vue'
@@ -124,18 +125,18 @@ watch([field, hours], () => void load(), { flush: 'post' })
             {{ t('telemetry.valid') }} {{ batch.qualityCounts[0] }} · {{ t('telemetry.missing') }}
             {{ batch.qualityCounts[1] }} · {{ t('telemetry.failed') }} {{ batch.qualityCounts[2] }}
           </p>
-          <details>
-            <summary>{{ t('devices.evidence') }}</summary>
+          <MdmDisclosure>
+            <template #title>{{ t('devices.evidence') }}</template>
             <pre>{{ batch }}</pre>
-          </details>
+          </MdmDisclosure>
         </article>
         <p v-if="health?.batchesTruncated" role="status">{{ t('telemetry.truncated') }}</p>
         <p v-if="health && !health.batches.length">{{ t('telemetry.empty') }}</p>
-        <details v-if="health?.retention.length">
-          <summary>{{ t('telemetry.retentionProgress') }}</summary>
+        <MdmDisclosure v-if="health?.retention.length">
+          <template #title>{{ t('telemetry.retentionProgress') }}</template>
           <pre>{{ health.retention }}</pre>
           <p v-if="health.retentionTruncated">{{ t('telemetry.truncated') }}</p>
-        </details>
+        </MdmDisclosure>
       </section>
       <section class="console-panel">
         <h3>{{ t('telemetry.lossReports') }}</h3>
@@ -146,10 +147,10 @@ watch([field, hours], () => void load(), { flush: 'post' })
             {{ t('telemetry.loss.' + gap.reason) }} · {{ gap.count }} · {{ utc(gap.first) }} —
             {{ utc(gap.last) }}
           </p>
-          <details>
-            <summary>{{ t('devices.evidence') }}</summary>
+          <MdmDisclosure>
+            <template #title>{{ t('devices.evidence') }}</template>
             <pre>{{ report }}</pre>
-          </details>
+          </MdmDisclosure>
         </article>
         <p v-if="gaps && !gaps.reports.length">{{ t('telemetry.empty') }}</p>
         <v-btn v-if="gaps?.next" :disabled="busy" @click="more">{{ t('devices.next') }}</v-btn>

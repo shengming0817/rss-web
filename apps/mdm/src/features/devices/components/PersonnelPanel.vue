@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VDialog, VCard, VCardActions, VBtn } from 'vuetify/components'
 import { useDialogFocus } from '../../../ui/dialog-focus'
 import { computed, ref, watch } from 'vue'
@@ -104,10 +105,10 @@ const restoreDialogFocus = useDialogFocus(editing)
 <template>
   <section class="console-panel" :data-personnel-device="endpoint.id" :aria-busy="busy">
     <h2>{{ t('devices.personnel') }}</h2>
-    <details>
-      <summary>{{ t('devices.originalEndpoint') }}</summary>
+    <MdmDisclosure>
+      <template #title>{{ t('devices.originalEndpoint') }}</template>
       {{ endpoint.id }}
-    </details>
+    </MdmDisclosure>
     <p>{{ t('devices.personnelNote') }}</p>
     <dl>
       <dt>{{ t('devices.registrationUser') }}</dt>
@@ -140,11 +141,11 @@ const restoreDialogFocus = useDialogFocus(editing)
       @click="read"
       >{{ t('devices.editOwner') }}</v-btn
     >
-    <details v-if="owner?.user || endpoint.currentUser?.user">
-      <summary>{{ t('devices.evidence') }}</summary>
+    <MdmDisclosure v-if="owner?.user || endpoint.currentUser?.user">
+      <template #title>{{ t('devices.evidence') }}</template>
       <p>{{ owner?.user?.principalId }}</p>
       <p>{{ endpoint.currentUser?.user?.principalId }}</p>
-    </details>
+    </MdmDisclosure>
     <v-dialog
       :model-value="editing"
       :aria-label="t('devices.editOwner')"

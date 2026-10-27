@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { useI18n } from 'vue-i18n'
 import type { PolicyRun } from '../clients/runs'
 defineProps<{ run: PolicyRun }>()
@@ -63,10 +64,10 @@ const utc = (at: number) =>
       </p>
       <article v-for="(item, index) in run.result.items" :key="index">
         <p>{{ item.subject.kind }} · {{ item.outcome }}</p>
-        <details>
-          <summary>{{ t('devices.evidence') }}</summary>
+        <MdmDisclosure>
+          <template #title>{{ t('devices.evidence') }}</template>
           <pre>{{ JSON.stringify(item.subject, null, 2) }}</pre>
-        </details>
+        </MdmDisclosure>
       </article>
     </section>
     <section v-if="run.result?.kind === 'credential_recovery'">
@@ -89,15 +90,15 @@ const utc = (at: number) =>
           <dd>{{ step.rebootRequired ? t('software.yes') : t('software.no') }}</dd>
         </dl>
         <pre>{{ JSON.stringify({ before: step.before, after: step.after }, null, 2) }}</pre>
-        <details v-if="'stdout' in step.diagnostics">
-          <summary>{{ t('software.diagnostics') }}</summary>
+        <MdmDisclosure v-if="'stdout' in step.diagnostics">
+          <template #title>{{ t('software.diagnostics') }}</template>
           <p>
             {{ utc(step.diagnostics.executedAt) }} · {{ step.diagnostics.durationMs }} ms ·
             {{ step.diagnostics.failure ?? '—' }}
           </p>
           <pre>{{ step.diagnostics.stdout }}</pre>
           <pre>{{ step.diagnostics.stderr }}</pre>
-        </details>
+        </MdmDisclosure>
       </article>
     </section>
     <section v-if="run.result?.kind === 'collection'">
@@ -114,19 +115,19 @@ const utc = (at: number) =>
           {{ id }} · {{ query.status }} · {{ query.rowCount }} · {{ query.enumerationComplete }}
         </li>
       </ul>
-      <details v-if="'native' in run.result">
-        <summary>{{ t('software.readEvidence') }}</summary>
+      <MdmDisclosure v-if="'native' in run.result">
+        <template #title>{{ t('software.readEvidence') }}</template>
         <pre>{{ JSON.stringify(run.result.native, null, 2) }}</pre>
-      </details>
+      </MdmDisclosure>
     </section>
-    <details v-if="run.result?.kind === 'script' && 'stdout' in run.result.diagnostics">
-      <summary>{{ t('software.diagnostics') }}</summary>
+    <MdmDisclosure v-if="run.result?.kind === 'script' && 'stdout' in run.result.diagnostics">
+      <template #title>{{ t('software.diagnostics') }}</template>
       <p>
         {{ utc(run.result.diagnostics.executedAt) }} · {{ run.result.diagnostics.durationMs }} ms ·
         {{ run.result.diagnostics.failure ?? '—' }}
       </p>
       <pre>{{ run.result.diagnostics.stdout }}</pre>
       <pre>{{ run.result.diagnostics.stderr }}</pre>
-    </details>
+    </MdmDisclosure>
   </section>
 </template>

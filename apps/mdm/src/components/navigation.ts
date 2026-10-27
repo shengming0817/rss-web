@@ -51,11 +51,6 @@ export const navigation: Navigation = [
     label: 'software.catalog',
     items: [
       { name: 'software-catalog', label: 'software.catalog' },
-      {
-        name: 'software-assets',
-        label: 'console.softwareAssets',
-        path: '/tenants/:tenant/software/assets',
-      },
       { name: 'software-publications', label: 'software.publications' },
       { name: 'software-imports', label: 'software.imports' },
     ],
