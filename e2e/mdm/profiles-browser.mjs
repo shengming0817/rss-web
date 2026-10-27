@@ -75,7 +75,7 @@ async function login(p, name, secret) {
   return s.value.identity.principalId
 }
 async function localEditor(p, principal) {
-  await p.goto(`${origin}/tenants/${f.tenant}/accounts`)
+  await p.goto(`${origin}/tenants/${f.tenant}/operations`)
   const row = p.locator('tbody tr').filter({ hasText: principal })
   await row.getByRole('button', { name: '本地资料', exact: true }).click()
   await p.locator('#local-display').waitFor()
@@ -102,7 +102,10 @@ async function newField(p, key, source, pointer, sensitive = false) {
   await p.getByRole('button', { name: '新建字段', exact: true }).click()
   await p.locator('#attribute-key').fill(key)
   await p.locator('#attribute-name').fill(key)
-  await p.locator('#attribute-source').selectOption(source)
+  await p.locator('#attribute-source').click()
+  await p
+    .getByRole('option', { name: source === 'identity_local' ? '本地资料' : source, exact: true })
+    .click()
   await p.locator('#attribute-pointer').fill(pointer)
   await p.getByRole('dialog').getByLabel('必填（完整性）', { exact: true }).check()
   if (sensitive) await p.getByRole('dialog').getByLabel('敏感字段', { exact: true }).check()
@@ -299,7 +302,7 @@ try {
   assert.equal(missing.value.fields.find((v) => v.fieldId === localField.fieldId).value, null)
   checks.push('local-delete-does-not-block-login')
   phase = 'provider-editor'
-  await admin.goto(`${origin}/tenants/${f.tenant}/providers`)
+  await admin.goto(`${origin}/tenants/${f.tenant}/settings/providers`)
   await admin.getByRole('button', { name: '新增身份提供方', exact: true }).click()
   await admin.locator('#issuer').fill(f.issuer)
   await admin.locator('#client-id').fill('identity-test')
@@ -402,7 +405,8 @@ try {
     .getByRole('button', { name: '编辑字段', exact: true })
     .click()
   await admin.getByRole('dialog').getByLabel('敏感字段', { exact: true }).check()
-  await admin.locator('#attribute-visibility').selectOption('both')
+  await admin.locator('#attribute-visibility').click()
+  await admin.getByRole('option', { name: '本人及资料管理员', exact: true }).click()
   await admin.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click()
   await admin.locator('#attribute-name:enabled').waitFor()
   await admin.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()

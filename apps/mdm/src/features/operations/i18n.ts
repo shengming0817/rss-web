@@ -1,5 +1,7 @@
 import { authorizationZh, authorizationEn } from './components/authorization-messages'
 export const operationsZh = {
+  userManagement: '用户管理',
+  usersHint: '管理当前租户的用户账户、成员资格与本地资料；资源访问权限在授权管理中配置。',
   ruleUi: authorizationZh,
   auditUi: {
     filters: '按服务端精确条件筛选',
@@ -323,6 +325,9 @@ export const operationsZh = {
   },
 }
 export const operationsEn: typeof operationsZh = {
+  userManagement: 'User management',
+  usersHint:
+    'Manage user accounts, membership and local profiles in the current tenant. Configure resource access in Authorization.',
   ruleUi: authorizationEn,
   auditUi: {
     filters: 'Exact server filters',

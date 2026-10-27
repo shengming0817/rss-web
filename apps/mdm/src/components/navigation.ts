@@ -118,6 +118,32 @@ export const detailParents: Record<string, string> = {
   'device-view-history': 'devices',
   'device-view-detail': 'devices',
   'policy-execution': 'policy-executions',
+  'security-device-trust': 'settings-integrations',
+  'security-certificate-archive': 'settings-integrations',
+  'registration-quotas': 'settings-enrollment',
+  'agent-configurations': 'settings-enrollment',
+  'software-sources': 'settings-software',
+  providers: 'settings-access',
+  'operations-appleAccount': 'settings-enrollment',
+  'operations-appleAde': 'settings-enrollment',
+  'operations-windowsEntra': 'settings-enrollment',
+  'operations-audit': 'settings-operations',
+  'operations-diagnostics': 'settings-operations',
+  'settings-user-attributes': 'settings-access',
+}
+export const pageLabels: Record<string, string> = {
+  'security-device-trust': 'security.pki.title',
+  'security-certificate-archive': 'security.certificate-archive',
+  'registration-quotas': 'registration.quotas',
+  'agent-configurations': 'onboarding.configurations',
+  'software-sources': 'software.sources',
+  providers: 'identity.providers',
+  'operations-appleAccount': 'onboarding.appleAccount',
+  'operations-appleAde': 'onboarding.appleAde',
+  'operations-windowsEntra': 'onboarding.windowsEntra',
+  'operations-audit': 'operations.audit',
+  'operations-diagnostics': 'operations.diagnostics',
+  'settings-user-attributes': 'profiles.title',
 }
 export type Navigation = readonly { id: string; label: string; items: readonly NavigationItem[] }[]
 export const navigationKey: InjectionKey<Navigation> = Symbol('mdm-navigation')
