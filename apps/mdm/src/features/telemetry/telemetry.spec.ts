@@ -740,7 +740,7 @@ it.each(['resources', 'history', 'discovery', 'aggregate'] as const)(
       } else await h.click('重新读取')
       history.mockRejectedValueOnce(denied)
     }
-    const locators = (): VueWrapper[] =>
+    const locators = (): VueWrapper<{ $props: { items: unknown[] } }>[] =>
       h.wrapper.get('.telemetry-series').findAllComponents({ name: 'VSelect' })
     expect(locators()).toHaveLength(2)
     for (const locator of locators()) expect(locator.props('items').length).toBeGreaterThan(0)
