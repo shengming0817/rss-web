@@ -333,10 +333,9 @@ useSettingsFacts(() => {
             <MaterialPanel :material="material" />
           </section>
           <nav class="console-inline-actions">
-            <VBtn
-              :to="{ name: 'device-enroll', params: { tenant: runtime.tenant } }"
-              variant="text"
-              >{{ t('settings.manualEnrollment') }}</VBtn
+            <VBtn :to="{ name: 'devices', params: { tenant: runtime.tenant } }" variant="text">{{
+              t('settings.manualEnrollment')
+            }}</VBtn
             ><VBtn
               v-if="currentStep === 'agent'"
               :to="{ name: 'agent-configurations', params: { tenant: runtime.tenant } }"

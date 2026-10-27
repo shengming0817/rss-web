@@ -128,6 +128,19 @@ useSettingsFacts(() => (catalog.value = undefined))
         >{{ t('settings.tenants') }}</VTab
       >
     </VTabs>
+    <VCard
+      v-if="section === 'overview' && runtime.realm === 'tenant'"
+      class="my-4"
+      variant="outlined"
+    >
+      <VCardTitle tag="h2">{{ t('telemetry.dataCollection') }}</VCardTitle>
+      <VCardText>
+        <p>{{ t('telemetry.metricsHint') }}</p>
+        <VBtn :to="{ name: 'policy-metrics', params: { tenant: runtime.tenant } }" variant="text">{{
+          t('telemetry.metricsSettings')
+        }}</VBtn>
+      </VCardText>
+    </VCard>
     <div v-if="section === 'overview'" class="settings-overview-grid">
       <VCard class="console-panel" tag="article" variant="outlined"
         ><h2>{{ t('settings.currentTenant') }}</h2>

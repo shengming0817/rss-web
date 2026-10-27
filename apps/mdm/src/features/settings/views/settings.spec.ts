@@ -224,7 +224,8 @@ async function fixture(
         ...settingsSections.map((section) => 'settings-' + section),
         'settings-guide',
         'settings-tenants',
-        'device-enroll',
+        'devices',
+        'policy-metrics',
         'operations-authorization',
         'operations-organization',
         'device-management',
@@ -1660,7 +1661,21 @@ it('keeps display edits on the existing observation gate and resets it for mappi
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(written!.useExistingObservation).toBe(true)
-  await f.wrapper.get('#attribute-type').setValue('integer')
+  async function selectOption(selector: string, title: string) {
+    await new DOMWrapper(f.wrapper.get(selector).element.closest('.v-field')!).trigger('mousedown')
+    await flushPromises()
+    const option = body()
+      .findAll('[role=option]')
+      .find((item) => item.text().trim() === title)
+    expect(option, title).toBeDefined()
+    await option!.trigger('click')
+    await flushPromises()
+  }
+  function checkbox(title: string) {
+    const label = f.wrapper.findAll('label').find((item) => item.text().includes(title))!
+    return f.wrapper.get(`#${label.attributes('for')}`)
+  }
+  await selectOption('#attribute-type', '安全整数')
   await f.wrapper.get('#attribute-min').setValue('0')
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
@@ -1670,16 +1685,12 @@ it('keeps display edits on the existing observation gate and resets it for mappi
     minimum: 0,
     maxLength: null,
   })
-  const sensitive = f.wrapper
-    .findAll('label')
-    .find((l) => l.text() === '敏感字段')!
-    .get('input')
-  await sensitive.setValue(true)
-  expect((f.wrapper.get('#attribute-visibility').element as HTMLSelectElement).value).toBe(
-    'profiles_read',
+  await checkbox('敏感字段').setValue(true)
+  expect((f.wrapper.get('#attribute-visibility').element as HTMLInputElement).value).toBe(
+    '资料管理员',
   )
-  await f.wrapper.get('#attribute-visibility').setValue('both')
-  await f.wrapper.get('#attribute-type').setValue('object')
+  await selectOption('#attribute-visibility', '本人及资料管理员')
+  await selectOption('#attribute-type', '对象')
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(written!).toMatchObject({
@@ -1688,11 +1699,7 @@ it('keeps display edits on the existing observation gate and resets it for mappi
     sensitive: true,
     visibility: 'both',
   })
-  await f.wrapper
-    .findAll('label')
-    .find((l) => l.text().includes('确认删除此字段'))!
-    .get('input')
-    .setValue(true)
+  await checkbox('确认删除此字段').setValue(true)
   await button(f.wrapper, '删除字段').trigger('click')
   await flushPromises()
   expect(written!).toBe(null)
@@ -2001,6 +2008,11 @@ it('keeps issuance recovery unknown after null query and retries only the origin
   await flushPromises()
   await button(f.wrapper, '核验并继续原恢复').trigger('click')
   await flushPromises()
+  await f.remount()
+  expect(f.wrapper.get('#agent-issuance').element).toHaveProperty('value', principal)
+  expect(f.wrapper.get('#agent-recovery-operation').element).toHaveProperty('value', id)
+  expect(f.wrapper.get('#agent-recovery-chain').element).toHaveProperty('value', '')
+  expect(f.wrapper.get('#agent-recovery-chain').attributes('disabled')).toBeUndefined()
   await f.wrapper
     .findAll('button')
     .find((b) => b.text() === '查询原操作')!
@@ -2012,6 +2024,11 @@ it('keeps issuance recovery unknown after null query and retries only the origin
     id,
   })
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+  await f.wrapper.get('#agent-recovery-chain').setValue('["Yg=="]')
+  await button(f.wrapper, '按原输入显式重试').trigger('click')
+  await flushPromises()
+  expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
+  await f.wrapper.get('#agent-recovery-chain').setValue('["YQ=="]')
   lose = false
   await button(f.wrapper, '按原输入显式重试').trigger('click')
   await flushPromises()
@@ -2072,13 +2089,14 @@ it('clears a previously queried issuance candidate when the same session loses C
   }))
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()
-  expect(f.wrapper.find('dl').exists()).toBe(true)
+  expect(f.wrapper.text()).toContain(principal)
+  expect(f.wrapper.find('table').exists()).toBe(true)
   f.setHandler(() => {
     throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
   })
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()
-  expect(f.wrapper.find('dl').exists()).toBe(false)
+  expect(f.wrapper.find('table').exists()).toBe(false)
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(0)
 })
 
@@ -2152,7 +2170,9 @@ it('keeps enrollment, trust, sources, identity and diagnostics reachable from th
       f.router.resolve(destination).href,
     )
   }
-  expect(f.wrapper.find('a[href*=metrics]').exists()).toBe(false)
+  expect(f.wrapper.get('a[href*=policy-metrics]').attributes('href')).toBe(
+    f.router.resolve({ name: 'policy-metrics', params: { tenant } }).href,
+  )
   expect(f.calls.some((call) => call.path === '/api/v1/settings/catalog')).toBe(true)
   expect(settingsDestination('accounts', tenant)).toEqual({
     name: 'operations-organization',

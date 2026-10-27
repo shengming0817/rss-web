@@ -468,11 +468,11 @@ async function initialize() {
 }
 useSettingsFacts(clearFacts)
 watch(
-  () => [
-    runtime.session.state.value.status,
-    runtime.session.state.value.tenant,
-    runtime.session.state.value.identity?.principalId,
-    runtime.session.state.value.session?.id,
+  [
+    () => runtime.session.state.value.status,
+    () => runtime.session.state.value.tenant,
+    () => runtime.session.state.value.identity?.principalId,
+    () => runtime.session.state.value.session?.id,
   ],
   () => {
     if (bound.value) void initialize()

@@ -196,6 +196,7 @@ async function click(label: string, scope = body()) {
     .findAll('button')
     .find((b) => b.text() === label || b.attributes('aria-label') === label)
   expect(b, label).toBeDefined()
+  await vi.waitFor(() => expect(b!.element.matches(':disabled'), label).toBe(false))
   await b!.trigger('click')
   await flushPromises()
 }
@@ -240,6 +241,21 @@ it('selects an existing management account, reviews eight admitted permissions, 
     body: { expectedRevision: 0, value: definition() },
   })
   expect(f.calls.some((o) => o.path.includes('/operations/'))).toBe(false)
+})
+it('preserves a rule draft for unchanged identity facts and clears it when the session owner changes', async () => {
+  const f = await fixture()
+  await newRule()
+  f.state.value = { ...f.state.value, session: { ...f.state.value.session } }
+  await flushPromises()
+  expect((body().get('#authorization-principal-id').element as HTMLInputElement).value).toBe(target)
+  expect((body().get('input[aria-label="查看租户"]').element as HTMLInputElement).checked).toBe(
+    true,
+  )
+  expect(writes(f)).toHaveLength(0)
+  f.state.value = { ...f.state.value, session: { id: ruleId } }
+  await flushPromises()
+  expect(body().find('#authorization-principal-id').exists()).toBe(false)
+  expect(writes(f)).toHaveLength(0)
 })
 it('keeps authorization maintenance usable when account listing returns 403', async () => {
   const f = await fixture()
@@ -361,7 +377,7 @@ it('restores the complete basis of an unknown deletion larger than 4096 bytes an
   expect(body().text()).toContain('本次将撤销')
   expect(body().text()).toContain('device-0')
   await click('回读当前规则以核对')
-  expect(body().text()).toContain('服务端当前记录为已删除')
+  await vi.waitFor(() => expect(body().text()).toContain('服务端当前记录为已删除'))
   expect(writes(f)).toHaveLength(1)
   expect(f.operations.records.get('authorization:tenant')?.queried).toBe(true)
 })

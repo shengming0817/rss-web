@@ -78,6 +78,11 @@ watch(
     clear()
     locator.value = props.kind === 'registration' ? (props.registration ?? '') : ''
     platform.value = props.platform ?? 'windows'
+    if (props.kind === 'issuance' && pending.value) {
+      const input = JSON.parse(pending.value.publicInput) as { issuance: string }
+      locator.value = input.issuance
+      originalOperation.value = pending.value.id
+    }
   },
   { immediate: true, flush: 'sync' },
 )
@@ -222,7 +227,10 @@ watch(failure, (value) => {
         t('security.recovery.conflictHandoff')
       }}</v-alert>
       <form @submit.prevent="recover()">
-        <fieldset :disabled="busy || !canWrite || locked" class="security-fieldset">
+        <fieldset
+          :disabled="busy || !canWrite || (locked && pending?.state !== 'unknown')"
+          class="security-fieldset"
+        >
           <v-text-field
             :id="'agent-' + kind"
             v-model="locator"
@@ -289,7 +297,7 @@ watch(failure, (value) => {
             required
             maxlength="180000"
             spellcheck="false"
-            :disabled="busy || !canWrite || locked"
+            :disabled="busy || !canWrite || (locked && pending?.state !== 'unknown')"
             @update:model-value="reviewed = false"
           />
           <v-alert v-if="reviewed" type="warning" variant="tonal" class="mb-4"

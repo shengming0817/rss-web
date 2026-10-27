@@ -131,7 +131,12 @@ watch(
             : '—'
         }}</strong>
         <p>{{ t('console.deploymentEvidence') }}</p>
-        <RouterLink :to="{ name: 'policy-policies', params: { tenant: runtime.tenant } }"
+        <RouterLink
+          :to="{
+            name: 'policy-policies',
+            params: { tenant: runtime.tenant },
+            query: { action: 'software' },
+          }"
           >{{ t('console.openSource') }} ↗</RouterLink
         >
       </VCard>
@@ -139,9 +144,14 @@ watch(
     <section class="console-panel">
       <div class="console-page-header">
         <h2>{{ t('console.softwarePolicies') }}</h2>
-        <RouterLink :to="{ name: 'policy-policies', params: { tenant: runtime.tenant } }">{{
-          t('console.browse')
-        }}</RouterLink>
+        <RouterLink
+          :to="{
+            name: 'policy-policies',
+            params: { tenant: runtime.tenant },
+            query: { action: 'software' },
+          }"
+          >{{ t('console.browse') }}</RouterLink
+        >
       </div>
       <p v-if="deployments?.status !== 'ready'">
         {{ deployments ? t(`devices.${deployments.status}`) : t('console.reading') }}

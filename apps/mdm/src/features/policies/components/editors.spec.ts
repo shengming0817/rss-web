@@ -5,6 +5,8 @@ import { expect, it } from 'vitest'
 import { mdmI18n } from '../../../i18n'
 import NativeScheduleEditor from '../../software/components/NativeScheduleEditor.vue'
 import SelfServiceEditor from './SelfServiceEditor.vue'
+import ScriptDefinitionEditor from './ScriptDefinitionEditor.vue'
+import type { ScriptSpec } from '../clients/resources'
 import { defaultSchedule, initialSelfService, nativeSchedule, selfService } from '../clients/model'
 it('edits a native schedule with explicit UTC bounds, weekly window and missed-trigger policy', async () => {
   const model = reactive(defaultSchedule()),
@@ -14,23 +16,23 @@ it('edits a native schedule with explicit UTC bounds, weekly window and missed-t
       global: { plugins: [mdmI18n()] },
     })
   await w.get('[id$="-not-before"]').setValue('2026-01-01T00:00:00')
-  await w.get('[data-field=until-enabled]').setValue(true)
+  await w.get('[data-field=until-enabled] input').setValue(true)
   await w.get('[id$="-until"]').setValue('2026-12-01T00:00:00')
-  await w.get('[id$="-trigger"]').setValue('once')
+  await selectControl(w, '[id$="-trigger"]').setValue('once')
   await w.get('[id$="-at"]').setValue('2026-04-01T12:00:00')
-  await w.get('[id$="-trigger"]').setValue('interval')
+  await selectControl(w, '[id$="-trigger"]').setValue('interval')
   await w.get('[id$="-anchor"]').setValue('2026-01-01T00:00:00')
   await w.get('[id$="-seconds"]').setValue(7200)
-  await w.get('[id$="-trigger"]').setValue('check_in')
+  await selectControl(w, '[id$="-trigger"]').setValue('check_in')
   await w.get('[id$="-minimum"]').setValue(120)
-  await w.get('[id$="-trigger"]').setValue('registration')
+  await selectControl(w, '[id$="-trigger"]').setValue('registration')
   expect(model.trigger).toEqual({ kind: 'registration' })
-  await w.get('[id$="-trigger"]').setValue('weekly')
+  await selectControl(w, '[id$="-trigger"]').setValue('weekly')
   await w.get('[id$="-zone"]').setValue('Asia/Shanghai')
   await w.get('[id$="-weekday"]').setValue(2)
   await w.get('[id$="-minute"]').setValue(90)
   await w.get('[id$="-jitter"]').setValue(15)
-  await w.get('[data-field=misfire]').setValue('skip')
+  await selectControl(w, '[data-field=misfire]').setValue('skip')
   await w.get('[id$="-lateness"]').setValue(90)
   await w.findAll('input[type=checkbox]')[1]!.setValue(true)
   await w.get('[id$="-window-zone"]').setValue('Asia/Shanghai')
@@ -43,9 +45,9 @@ it('edits a native schedule with explicit UTC bounds, weekly window and missed-t
     jitterSeconds: 15,
     window: { startMinute: 1380, endMinute: 60, weekdays: [1, 2, 3, 4, 5, 7] },
   })
-  await w.get('[data-field=until-enabled]').setValue(false)
+  await w.get('[data-field=until-enabled] input').setValue(false)
   expect(model.until).toBeNull()
-  await w.get('[data-field=misfire]').setValue('coalesce_one')
+  await selectControl(w, '[data-field=misfire]').setValue('coalesce_one')
   expect(model.misfire).toEqual({ kind: 'coalesce_one' })
   w.unmount()
 })
@@ -85,4 +87,35 @@ it('edits explicit self-service access, descriptions and human/AI confirmation p
   await w.get('[data-field=published] input').setValue(false)
   expect(model.published).toBe(false)
   w.unmount()
+})
+
+it('validates native JSON fields through the script editor component root before a version is saved', async () => {
+  const model: ScriptSpec = {
+    profile: 'power_shell7',
+    sql: null,
+    runAs: 'system',
+    encoding: 'utf8',
+    parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    bindings: {},
+    output: { type: 'object', properties: {}, additionalProperties: false },
+    purpose: { kind: 'action' },
+    timeoutSeconds: 60,
+    outputBytes: 16384,
+    maxRows: 1,
+  }
+  const w = mount(ScriptDefinitionEditor, {
+    attachTo: document.body,
+    props: { modelValue: model },
+    global: { plugins: [mdmI18n()] },
+  })
+  try {
+    expect(w.vm.valid()).toBe(true)
+    const parameters = w.get('textarea[id$="-parameters"]')
+    await parameters.setValue('{')
+    expect(w.vm.valid()).toBe(false)
+    await parameters.setValue(JSON.stringify(model.parameters))
+    expect(w.vm.valid()).toBe(true)
+  } finally {
+    w.unmount()
+  }
 })

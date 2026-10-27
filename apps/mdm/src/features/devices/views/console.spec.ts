@@ -2535,9 +2535,10 @@ it('reads and cancels personal progress without calling inventory clients and re
   await flushPromises()
   const progress = wrapper.get('[data-self-enrollment-progress]')
   expect(progress.find('input[autocomplete=off]').exists()).toBe(false)
+  await vi.waitFor(() => expect(progress.text()).toContain('技术详情与手工设置'))
   await progress
     .findAll('button')
-    .find((button) => button.text() === '技术详情与手工设置')!
+    .find((button) => button.text().includes('技术详情与手工设置'))!
     .trigger('click')
   await flushPromises()
   expect(progress.text()).toContain(receipt.deviceId)
@@ -2625,6 +2626,17 @@ it('keeps device group categories separate and exposes formal static user group 
     },
   })
   expect(h.button('设备动态组').attributes('disabled')).toBeDefined()
+  const lockedPath = h.router.currentRoute.value.fullPath
+  for (const query of [
+    { category: 'device-dynamic' },
+    { category: 'user-dynamic' },
+    { category: 'user-static', id: 'another-group' },
+  ]) {
+    await h.router.push({ name: 'groups-hub', params: { tenant: TENANT }, query })
+    expect(h.router.currentRoute.value.fullPath).toBe(lockedPath)
+  }
+  await h.router.push({ name: 'devices', params: { tenant: TENANT } })
+  expect(h.router.currentRoute.value.fullPath).toBe(lockedPath)
   h.scenario.set('normal')
   await h.click('重放同一操作')
   const writes = h.requests.filter(
@@ -2637,6 +2649,95 @@ it('keeps device group categories separate and exposes formal static user group 
       (item) => item.value?.name === 'Self service operators',
     ),
   ).toBe(true)
+  await h.router.push({ name: 'devices', params: { tenant: TENANT } })
+  expect(h.router.currentRoute.value.name).toBe('devices')
+})
+
+it('compares a static user-group conflict without discarding its draft and confirms deletion explicitly', async () => {
+  const h = await setup('groups-hub', {}, { category: 'user-static' })
+  const id = crypto.randomUUID()
+  const value = { name: 'Conflict user group', enabled: true, members: [] }
+  await h.operations.authorization.changeGroup(id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 0,
+    value,
+  })
+  await h.click('重新读取')
+  await h.click(value.name)
+  const form = new DOMWrapper(document.body).get('[role=dialog] form')
+  const name = form.get('[data-testid=group-name] input')
+  await name.setValue('Unsubmitted group draft')
+  await h.operations.authorization.changeGroup(id, {
+    operationId: crypto.randomUUID(),
+    expectedRevision: 1,
+    value: { ...value, name: 'Concurrent group edit' },
+  })
+  await form.trigger('submit')
+  await flushPromises()
+  const writes = () =>
+    h.requests.filter(
+      (r) => r.method === 'PUT' && r.path === '/api/v1/authorization/user-groups/{id}',
+    )
+  const conflict = writes().at(-1)!.body as { operationId: string }
+  await h.click('读取服务器版本并比较')
+  expect(new DOMWrapper(document.body).text()).toContain('Concurrent group edit')
+  expect((name.element as HTMLInputElement).value).toBe('Unsubmitted group draft')
+  await h.click('保留草稿，采用当前 revision')
+  await form.trigger('submit')
+  await flushPromises()
+  expect(writes().at(-1)!.body).toMatchObject({
+    expectedRevision: 2,
+    value: { ...value, name: 'Unsubmitted group draft' },
+  })
+  expect((writes().at(-1)!.body as { operationId: string }).operationId).not.toBe(
+    conflict.operationId,
+  )
+  const beforeDelete = writes().length
+  await h.click('删除')
+  expect(writes()).toHaveLength(beforeDelete)
+  await h.click('取消')
+  expect(writes()).toHaveLength(beforeDelete)
+  await h.click('删除')
+  await h.click('确认')
+  expect(writes().at(-1)!.body).toMatchObject({ expectedRevision: 3, value: null })
+  expect((await h.operations.authorization.group(id)).value).toBeNull()
+})
+
+it('retains an unknown saved query across directory filtering and panel collapse until exact replay', async () => {
+  const h = await setup('devices')
+  await h.click('高级资产查询')
+  await h.click('个人保存查询')
+  const inventory = h.wrapper.findComponent(InventoryQuery)
+  const form = inventory.findAll('form').at(-1)!
+  await form.get('input').setValue('Recoverable directory query')
+  h.scenario.set('unknown')
+  await form.trigger('submit')
+  await flushPromises()
+  const writes = () =>
+    h.requests.filter((r) => r.method === 'PUT' && r.path === '/api/v1/saved-queries/{id}')
+  expect(writes()).toHaveLength(1)
+  const original = writes()[0]!
+  expect(h.button('明确重放原操作').exists()).toBe(true)
+  h.scenario.set('normal')
+  await setSelect(h.wrapper, h.wrapper.get('[data-testid=directory-platform]'), 'windows')
+  await h.wrapper.get('form.device-filters').trigger('submit')
+  await flushPromises()
+  await vi.waitFor(() => expect(h.router.currentRoute.value.query['platform']).toBe('windows'))
+  await form.trigger('submit')
+  await flushPromises()
+  expect(writes()).toHaveLength(1)
+  expect(h.button('明确重放原操作').exists()).toBe(true)
+  await h.click('高级资产查询')
+  await h.click('高级资产查询')
+  expect(h.button('明确重放原操作').exists()).toBe(true)
+  await h.router.push({ name: 'groups-hub', params: { tenant: TENANT } })
+  expect(h.router.currentRoute.value.name).toBe('devices')
+  await h.click('明确重放原操作')
+  expect(writes()).toHaveLength(2)
+  expect(writes()[1]!.body).toEqual(original.body)
+  expect(writes()[1]!.pathParams).toEqual(original.pathParams)
+  await h.router.push({ name: 'groups-hub', params: { tenant: TENANT } })
+  expect(h.router.currentRoute.value.name).toBe('groups-hub')
 })
 
 it('applies raw directory RSQL with basic filters and uses the same filter for counts and results', async () => {
@@ -2680,4 +2781,17 @@ it('leaves formal self device progress disconnected without target evidence and 
   expect(
     progress.findAll('button').some((button) => ['取消', '更新口令并继续'].includes(button.text())),
   ).toBe(false)
+})
+
+it('embeds original certificate recovery on the selected device management page', async () => {
+  const f = await setup('device-management', { device: 'device-01' })
+  const endpoint = await f.devices.directory.detail('device-01')
+  const agent = endpoint.channels.find((channel) => channel.channel === 'agent')!
+  expect(f.wrapper.get('#agent-registration').element).toHaveProperty('value', agent.registrationId)
+  expect(f.wrapper.get('#agent-registration').attributes('readonly')).toBeDefined()
+  await f.click('Agent 原签发恢复')
+  expect(f.wrapper.find('#agent-issuance').exists()).toBe(true)
+  await f.click('Windows 原 CA 响应关联')
+  expect(f.wrapper.find('#pki-attempt').exists()).toBe(true)
+  expect(f.requests.filter((r) => r.method === 'POST')).toHaveLength(0)
 })
