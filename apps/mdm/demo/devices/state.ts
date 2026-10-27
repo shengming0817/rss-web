@@ -71,7 +71,13 @@ export function createDeviceDemo() {
     }
   }
   const handle: DomainHandler = (request, scenario) => {
+    const mockEnrollmentTarget =
+      request.method === 'GET' &&
+      /^\/api\/v1\/mdm-candidate\/devices\/self-enrollments\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/target$/i.test(
+        request.path,
+      )
     if (
+      !mockEnrollmentTarget &&
       !/^\/api\/(?:v1\/(?:asset-fields|asset-retention-policies|asset-field-layout|device-queries|devices|device-views|device-associations|saved-queries|groups)|v1\/(?:enrollments|devices|self-enrollments|registration-quotas|registration-channels))(?:\/|$)/.test(
         request.path,
       )

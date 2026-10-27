@@ -1,294 +1,478 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import {
+  VAlert,
+  VBtn,
+  VBtnToggle,
+  VCard,
+  VCardText,
+  VCheckbox,
+  VExpansionPanel,
+  VExpansionPanels,
+  VForm,
+  VList,
+  VListItem,
+  VStepper,
+  VTextField,
+} from 'vuetify/components'
+import { computed, inject, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import NativeFacts from '../../enrollment/components/NativeFacts.vue'
+import SelfEnrollmentProgress from '../../enrollment/components/SelfEnrollmentProgress.vue'
+import { enrollmentTargetKey } from '../../enrollment/target'
+import { useAttachment } from '../../enrollment/useAttachment'
 import { generateEnrollmentPassword } from '../clients/enrollment'
-import PageFrame from '../../../components/PageFrame.vue'
+import MdmPage from '../../../ui/MdmPage.vue'
 const { t } = useI18n(),
-  route = useRoute(),
   runtime = useMdm(),
-  client = runtime.devices.registration
-const { run, runWrite, busy, uncertain, failure } = useOperation(
-  [],
-  () => runtime.session.state.value.session?.id,
-)
-const usage = ref<Awaited<ReturnType<typeof client.me>>>(),
+  client = runtime.devices.registration,
+  resolveTarget = inject(enrollmentTargetKey, undefined)
+const binding = () => [
+  runtime.session.state.value.tenant ?? undefined,
+  runtime.session.state.value.identity?.principalId,
+  runtime.session.state.value.session?.id,
+]
+const write = useOperation([], binding),
+  read = useOperation([], binding),
+  targetRead = useOperation([], binding),
+  profileRead = useOperation([], binding)
+const delivery = useAttachment(),
+  { url: profileUrl, filename: profileFilename } = delivery
+const copying = ref(false)
+const step = ref(1),
   channel = ref<'windows_mdm' | 'macos_mdm'>('windows_mdm')
+const usage = ref<Awaited<ReturnType<typeof client.me>>>()
 const channelState = runtime.registrationChannels
-const quotaAvailable = computed(() => {
-  const value = usage.value?.channels.find((c) => c.channel === channel.value)
-  return !!value && value.used < value.limit
-})
+const quota = computed(() => usage.value?.channels.find((c) => c.channel === channel.value))
+const quotaAvailable = computed(() => !!quota.value && quota.value.used < quota.value.limit)
 const canCreate = computed(() => channelState.allowed(channel.value) && quotaAvailable.value)
-const profile = ref<'Full' | 'Device'>('Device')
+const busy = computed(
+  () =>
+    copying.value ||
+    write.busy.value ||
+    read.busy.value ||
+    targetRead.busy.value ||
+    profileRead.busy.value,
+)
 const password = ref(''),
-  handedOff = ref(false),
-  enrollmentId = ref(''),
-  deviceId = ref('')
+  manualCopy = ref(false),
+  recoveryPassword = ref(''),
+  recoverySaved = ref(false)
+const enrollmentId = ref(''),
+  deviceId = ref(''),
+  targetVerified = ref(false)
 const native = ref<Awaited<ReturnType<typeof runtime.devices.enrollment.status>>>()
-type Command = {
-  kind: 'create' | 'resume' | 'cancel'
-  operation: string
-  channel: 'windows_mdm' | 'macos_mdm'
-  profile: 'Full' | 'Device'
-  id: string
-}
+type Command = { operation: string; channel: 'windows_mdm' | 'macos_mdm' }
 const pending = ref<Command>()
-let nativeTargetVersion = 0
-function refresh(rejection?: string) {
-  void channelState.refresh()
-  const knownNative = native.value,
-    version = nativeTargetVersion
-  void run(
-    async () => ({
-      usage: await client.me(),
-      native: enrollmentId.value
-        ? await runtime.devices.enrollment.status(enrollmentId.value)
-        : undefined,
-    }),
-    (v) => {
-      usage.value = v.usage
-      if (rejection) failure.value = rejection
-      if (v.native && version === nativeTargetVersion)
-        native.value = { ...knownNative, ...v.native }
-    },
-  )
-}
+let generation = 0
 function clearSecret() {
   password.value = ''
-  handedOff.value = false
+  recoveryPassword.value = ''
+  recoverySaved.value = false
+  manualCopy.value = false
 }
-function generate() {
+function prepare() {
+  if (busy.value || write.uncertain.value || enrollmentId.value || !canCreate.value) return
+  clearSecret()
   password.value = generateEnrollmentPassword()
-  handedOff.value = false
+  step.value = 2
 }
-function submit(kind: Command['kind'], replay = false) {
-  if (busy.value || (!replay && uncertain.value)) return
-  if (
-    !replay &&
-    ((kind === 'create' && !canCreate.value) ||
-      (kind === 'resume' && !channelState.canContinue(native.value)))
+async function refresh(rejection?: string) {
+  void channelState.refresh()
+  const id = enrollmentId.value,
+    device = deviceId.value
+  targetVerified.value = false
+  const ok = await read.run(
+    async () => ({
+      usage: await client.me(),
+      native: id ? await runtime.devices.enrollment.status(id) : undefined,
+    }),
+    (value) => {
+      usage.value = value.usage
+      if (rejection) write.failure.value = rejection
+      if (id === enrollmentId.value && value.native) {
+        native.value = value.native
+      }
+    },
   )
-    return
+  if (ok && id && resolveTarget && id === enrollmentId.value)
+    await targetRead.run(
+      () => resolveTarget(id),
+      (target) => {
+        if (target.enrollmentId !== id || target.deviceId !== device)
+          targetRead.failure.value = 'invalidResponse'
+        else targetVerified.value = true
+      },
+    )
+}
+async function submit(secret: string, replay = false) {
+  if (busy.value || (!replay && (write.uncertain.value || !canCreate.value)) || !secret) return
   const command = replay
     ? pending.value
-    : {
-        kind,
-        operation: crypto.randomUUID(),
-        channel: channel.value,
-        profile: profile.value,
-        id: native.value?.enrollmentId ?? '',
-      }
-  if (
-    !command ||
-    (command.kind !== 'create' && !command.id) ||
-    ((command.kind === 'create' || command.kind === 'resume') &&
-      (!handedOff.value || !password.value))
-  )
-    return
-  const secret = password.value
+    : { operation: crypto.randomUUID(), channel: channel.value }
+  if (!command) return
+  const own = generation
   clearSecret()
+  delivery.clear()
   pending.value = command
-  void runWrite(
-    async () => {
-      if (command.kind === 'cancel')
-        return { native: await runtime.devices.enrollment.cancel(command.id, command.operation) }
-      if (command.kind === 'resume')
-        return {
-          native: await runtime.devices.enrollment.resume(command.id, command.operation, secret),
-        }
-      return {
-        native: await client.enroll(
+  try {
+    const ok = await write.runWrite(
+      () =>
+        client.enroll(
           command.operation,
           secret,
           command.channel === 'windows_mdm' ? 'mdm.windows' : 'mdm.apple',
-          command.profile,
+          'Full',
         ),
-      }
-    },
-    (v) => {
-      if (v.native) {
-        enrollmentId.value = v.native.enrollmentId
-        if ('deviceId' in v.native && typeof v.native.deviceId === 'string')
-          deviceId.value = v.native.deviceId
+      (receipt) => {
+        enrollmentId.value = receipt.enrollmentId
+        deviceId.value = receipt.deviceId
         native.value = undefined
-      }
-      pending.value = undefined
-    },
-  ).then((ok) => {
-    if (ok) refresh()
-    else if (failure.value === 'enrollmentPaused' || failure.value === 'registrationLimit') {
-      void channelState.refresh()
-      refresh(failure.value)
+        pending.value = undefined
+        step.value = 3
+      },
+    )
+    if (own !== generation) return
+    if (!ok) {
+      if (!write.uncertain.value && pending.value?.operation === command.operation)
+        pending.value = undefined
+      if (write.failure.value === 'enrollmentPaused' || write.failure.value === 'registrationLimit')
+        await refresh(write.failure.value)
+      return
     }
-  })
+    await refresh()
+    if (
+      own !== generation ||
+      document.visibilityState === 'hidden' ||
+      command.channel !== 'macos_mdm' ||
+      native.value?.enrollmentId !== enrollmentId.value ||
+      native.value.instructions.platform !== 'macos'
+    )
+      return
+    const stamp = delivery.stamp()
+    let file: Awaited<ReturnType<typeof runtime.onboarding.native.profile>> | undefined
+    try {
+      // Profile delivery is a separate authenticated read. A failure cannot change the confirmed create receipt into an unknown write.
+      await profileRead.run(
+        async () => {
+          file = await runtime.onboarding.native.profile(enrollmentId.value, secret)
+          return file
+        },
+        (value) => delivery.deliver(value, 'RSS-MDM.mobileconfig', stamp),
+      )
+    } finally {
+      if (file) new Uint8Array(file.bytes).fill(0)
+    }
+  } finally {
+    secret = ''
+  }
 }
-function status() {
-  const id = enrollmentId.value,
-    version = nativeTargetVersion
-  if (!id) return
-  void run(
-    () => runtime.devices.enrollment.status(id),
-    (v) => {
-      if (version === nativeTargetVersion && id === enrollmentId.value)
-        native.value = { ...native.value, ...v }
-    },
-  )
+function invalidateProfile() {
+  delivery.clear()
+  native.value = undefined
 }
+function back() {
+  clearSecret()
+  step.value = 1
+}
+async function copyAndContinue() {
+  if (!password.value || busy.value || write.uncertain.value) return
+  let secret = password.value
+  const own = generation,
+    selected = channel.value
+  copying.value = true
+  try {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(secret)
+    } catch {
+      if (own === generation && selected === channel.value && secret === password.value)
+        manualCopy.value = true
+      return
+    } finally {
+      copying.value = false
+    }
+    if (own !== generation || selected !== channel.value || secret !== password.value) return
+    await submit(secret)
+  } finally {
+    secret = ''
+  }
+}
+function replay() {
+  if (recoverySaved.value) void submit(recoveryPassword.value, true)
+}
+watch(channel, () => {
+  clearSecret()
+  step.value = 1
+})
 watch(
-  enrollmentId,
+  () => JSON.stringify(binding()),
   () => {
-    nativeTargetVersion++
-    deviceId.value = ''
-    native.value = undefined
+    generation++
     clearSecret()
-  },
-  { flush: 'sync' },
-)
-watch(
-  [() => route.fullPath, () => runtime.session.state.value.session?.id],
-  () => {
-    clearSecret()
+    delivery.clear()
     native.value = undefined
     pending.value = undefined
     enrollmentId.value = ''
+    deviceId.value = ''
+    targetVerified.value = false
     usage.value = undefined
+    step.value = 1
+    void refresh()
   },
   { flush: 'sync' },
 )
-onBeforeUnmount(clearSecret)
-refresh()
+watch(
+  () => native.value?.status,
+  (status) => {
+    if (status && ['cancelled', 'expired'].includes(status)) delivery.clear()
+  },
+)
+function hide() {
+  if (document.visibilityState === 'hidden') {
+    generation++
+    clearSecret()
+  }
+}
+window.addEventListener('pagehide', clearSecret)
+document.addEventListener('visibilitychange', hide)
+onBeforeUnmount(() => {
+  generation++
+  clearSecret()
+  window.removeEventListener('pagehide', clearSecret)
+  document.removeEventListener('visibilitychange', hide)
+})
+void refresh()
 </script>
 <template>
-  <PageFrame :title="t('registration.self')" :busy="busy" :failure="failure">
-    <RegistrationStatus :channel="channel" />
-    <p v-if="usage && !quotaAvailable" role="status">{{ t('registration.quotaBlocked') }}</p>
-    <p>{{ t('registration.note') }}</p>
-    <UiButton type="button" :disabled="!!busy" @click="refresh()">
-      {{ t('registration.refresh') }}
-    </UiButton>
-    <div v-if="usage" class="ui-table-scroll">
-      <table class="ui-table">
-        <thead>
-          <tr>
-            <th>{{ t('devices.source') }}</th>
-            <th>{{ t('registration.limit') }}</th>
-            <th>{{ t('registration.active') }}</th>
-            <th>{{ t('registration.reserved') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in usage.channels" :key="c.channel">
-            <th>{{ t(`registration.${c.channel}`) }}</th>
-            <td>{{ c.limit }}</td>
-            <td>{{ c.active }}</td>
-            <td>{{ c.reserved }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <p>{{ t('registration.handoff') }}</p>
-    <section class="console-panel">
-      <h2>{{ t('console.prepareEnrollment') }}</h2>
-      <form @submit.prevent="submit('create')">
-        <fieldset :disabled="busy">
-          <label
-            >{{ t('devices.source')
-            }}<select v-model="channel" class="ui-input" :disabled="uncertain">
-              <option
-                v-for="c in usage?.channels.filter((c) => c.channel !== 'agent')"
-                :key="c.channel"
-                :value="c.channel"
-                :disabled="!channelState.allowed(c.channel) || c.used >= c.limit"
-              >
-                {{ t(`registration.${c.channel}`) }}
-              </option>
-            </select></label
+  <MdmPage
+    :title="t('registration.self')"
+    :description="t('onboarding.enrollmentJourney')"
+    :busy="busy"
+    :failure="write.failure.value ?? read.failure.value"
+  >
+    <template #actions
+      ><v-btn variant="text" :to="{ name: 'agent-downloads' }">{{
+        t('onboarding.downloads')
+      }}</v-btn></template
+    >
+    <v-alert
+      v-if="usage && !quotaAvailable && !enrollmentId"
+      type="warning"
+      variant="tonal"
+      class="mb-4"
+      >{{ t('registration.quotaBlocked')
+      }}<v-btn variant="text" :disabled="busy" @click="refresh()">{{
+        t('registration.refresh')
+      }}</v-btn></v-alert
+    >
+    <v-alert
+      v-else-if="!channelState.loading.value && !channelState.allowed(channel) && !enrollmentId"
+      type="warning"
+      variant="tonal"
+      class="mb-4"
+      >{{ t('onboarding.channelUnavailable')
+      }}<v-btn variant="text" :disabled="busy" @click="refresh()">{{
+        t('registration.refresh')
+      }}</v-btn></v-alert
+    >
+    <v-stepper
+      v-model="step"
+      class="enrollment-guide"
+      :items="[
+        {
+          title: t('onboarding.chooseSystem'),
+          value: 1,
+          props: { color: 'primary', complete: step > 1 },
+        },
+        {
+          title: t('onboarding.prepareSystem'),
+          value: 2,
+          props: {
+            color: 'primary',
+            complete: step > 2 && (channel === 'windows_mdm' || !!profileUrl),
+          },
+        },
+        { title: t('onboarding.finishSystem'), value: 3, props: { color: 'primary' } },
+      ]"
+      hide-actions
+      :editable="false"
+      alt-labels
+    >
+      <template #[`item.1`]>
+        <h2 class="text-h5 mb-3">{{ t('onboarding.chooseSystem') }}</h2>
+        <p class="mb-5">{{ t('onboarding.enterpriseChoice') }}</p>
+        <v-btn-toggle
+          v-model="channel"
+          mandatory
+          divided
+          color="primary"
+          :disabled="busy || write.uncertain.value"
+          :aria-label="t('devices.platform')"
+          class="mb-5"
+        >
+          <v-btn value="windows_mdm" size="large">Windows</v-btn
+          ><v-btn value="macos_mdm" size="large">macOS</v-btn>
+        </v-btn-toggle>
+        <p class="mb-5">
+          {{ t(channel === 'windows_mdm' ? 'onboarding.windowsChoice' : 'onboarding.macChoice') }}
+        </p>
+        <v-btn color="primary" :disabled="busy || !canCreate" @click="prepare">{{
+          t('onboarding.continuePreparation')
+        }}</v-btn>
+      </template>
+      <template #[`item.2`]>
+        <h2 class="text-h5 mb-3">
+          {{ t(channel === 'windows_mdm' ? 'onboarding.prepareWindows' : 'onboarding.prepareMac') }}
+        </h2>
+        <template v-if="!write.uncertain.value">
+          <p class="mb-4">
+            {{
+              t(
+                channel === 'windows_mdm'
+                  ? 'onboarding.windowsPasswordGuide'
+                  : 'onboarding.macPasswordGuide',
+              )
+            }}
+          </p>
+          <v-card v-if="password" variant="tonal" class="mb-4"
+            ><v-card-text
+              ><p class="text-caption mb-2">{{ t('devices.password') }}</p>
+              <code data-enrollment-secret class="text-break">{{ password }}</code></v-card-text
+            ></v-card
           >
-          <label v-if="channel === 'windows_mdm'"
-            >{{ t('registration.profile')
-            }}<select v-model="profile" class="ui-input" :disabled="uncertain">
-              <option value="Device">Device</option>
-              <option value="Full">Full</option>
-            </select></label
+          <v-alert v-if="manualCopy" type="info" variant="tonal" class="mb-4">{{
+            t('onboarding.manualCopy')
+          }}</v-alert>
+          <v-btn
+            v-if="password && !manualCopy"
+            color="primary"
+            :disabled="busy || !canCreate"
+            @click="copyAndContinue"
+            >{{ t('onboarding.copyAndContinue') }}</v-btn
           >
-          <UiButton type="button" :disabled="!!uncertain" @click="generate()">
-            {{ t('devices.generate') }}
-          </UiButton>
-          <label
-            >{{ t('devices.password')
-            }}<input
-              v-model="password"
-              class="ui-input"
-              required
+          <v-btn
+            v-else-if="password"
+            color="primary"
+            :disabled="busy || !canCreate"
+            @click="submit(password)"
+            >{{ t('onboarding.savedAndContinue') }}</v-btn
+          >
+          <v-btn v-else :disabled="busy || !canCreate" color="primary" @click="prepare">{{
+            t('onboarding.prepareAgain')
+          }}</v-btn>
+          <v-btn variant="text" :disabled="busy" @click="back">{{
+            t('onboarding.changeSystem')
+          }}</v-btn>
+        </template>
+        <template v-else>
+          <v-alert type="warning" variant="tonal" class="mb-4">{{
+            t('onboarding.unknownEnrollment')
+          }}</v-alert>
+          <v-form :novalidate="false" @submit.prevent="replay">
+            <v-text-field
+              v-model="recoveryPassword"
+              type="password"
+              :label="t('onboarding.originalEnrollmentPassword')"
               pattern="[A-Za-z0-9_\-]{43}"
               autocomplete="off"
-              spellcheck="false"
-          /></label>
-          <label
-            ><input v-model="handedOff" type="checkbox" required />{{ t('devices.handoff') }}</label
-          >
-          <UiButton :disabled="!!(uncertain || !handedOff || !canCreate)" type="submit">
-            {{ t('devices.submitEnrollment') }}
-          </UiButton>
-          <UiButton
-            v-if="uncertain && pending"
-            type="button"
-            :disabled="!!(['create', 'resume'].includes(pending.kind) && (!password || !handedOff))"
-            @click="submit(pending!.kind, true)"
-          >
-            {{ t('devices.replay') }}
-          </UiButton>
-        </fieldset>
-      </form>
-    </section>
-    <RouterLink :to="{ name: 'agent-downloads' }">{{ t('onboarding.downloads') }}</RouterLink>
-    <dl v-if="native">
-      <dt>{{ t('devices.enrollmentId') }}</dt>
-      <dd>{{ native.enrollmentId }}</dd>
-      <dt>{{ t('devices.deviceId') }}</dt>
-      <dd>{{ deviceId || '—' }}</dd>
-      <dt>{{ t('devices.status') }}</dt>
-      <dd>{{ t(`devices.${native.status}`) }}</dd>
-      <dt>{{ t('devices.expires') }}</dt>
-      <dd>{{ native.expiresAt }}</dd>
-    </dl>
-    <NativeFacts v-if="native" :value="native" />
-    <section class="console-panel">
-      <h2>{{ t('console.enrollmentProgress') }}</h2>
-      <form @submit.prevent="status()">
-        <label
-          >{{ t('devices.enrollmentId')
-          }}<input
-            v-model="enrollmentId"
-            class="ui-input"
-            required
-            :disabled="busy || uncertain" /></label
-        ><UiButton :disabled="!!busy" type="submit">{{ t('devices.recover') }}</UiButton>
-      </form>
-    </section>
-    <UiButton
-      v-if="native && ['pending', 'bound'].includes(native.status)"
-      type="button"
-      :disabled="
-        !!(busy || uncertain || !password || !handedOff || !channelState.canContinue(native))
-      "
-      @click="submit('resume')"
+              required
+              :disabled="busy"
+            />
+            <v-checkbox
+              v-model="recoverySaved"
+              :label="t('devices.handoff')"
+              :disabled="busy"
+              required
+            />
+            <v-btn
+              type="submit"
+              color="primary"
+              :disabled="busy || !recoveryPassword || !recoverySaved"
+              >{{ t('devices.replay') }}</v-btn
+            >
+          </v-form>
+        </template>
+      </template>
+      <template #[`item.3`]>
+        <NativeFacts
+          v-if="native"
+          :value="native"
+          :device-id="deviceId"
+          :profile-url="profileUrl"
+          :profile-filename="profileFilename"
+          :profile-busy="profileRead.busy.value"
+          :profile-failure="profileRead.failure.value"
+          refreshable
+          @refresh="refresh()"
+        />
+        <v-alert v-else type="info" variant="tonal"
+          >{{ t('onboarding.confirmedReadPending')
+          }}<v-btn variant="text" :disabled="busy" @click="refresh()">{{
+            t('devices.reload')
+          }}</v-btn></v-alert
+        >
+        <v-btn
+          v-if="deviceId && targetVerified"
+          class="mt-4"
+          variant="text"
+          :to="{
+            name: 'device-management',
+            params: { tenant: runtime.tenant, device: deviceId },
+            query: { mode: 'self-enrollment', enrollment: enrollmentId },
+          }"
+          >{{ t('onboarding.continueInDevice') }}</v-btn
+        >
+        <v-alert
+          v-if="deviceId && (!resolveTarget || targetRead.failure.value)"
+          type="info"
+          variant="tonal"
+          class="mt-4"
+          >{{ t('onboarding.targetUnavailable') }}</v-alert
+        >
+        <v-expansion-panels v-if="enrollmentId" class="mt-4">
+          <v-expansion-panel :title="t('onboarding.selfRecovery')">
+            <template #text>
+              <SelfEnrollmentProgress
+                :enrollment-id="enrollmentId"
+                :show-instructions="false"
+                @updated="native = $event"
+                @invalidated="invalidateProfile"
+              />
+            </template>
+          </v-expansion-panel>
+        </v-expansion-panels>
+      </template>
+    </v-stepper>
+    <v-expansion-panels class="mt-5" variant="accordion"
+      ><v-expansion-panel :title="t('onboarding.quotaDetails')"
+        ><template #text>
+          <RegistrationStatus :channel="channel" />
+          <p class="my-3">{{ t('registration.note') }}</p>
+          <v-list v-if="usage" density="compact"
+            ><v-list-item
+              v-for="item in usage.channels"
+              :key="item.channel"
+              :title="t(`registration.${item.channel}`)"
+              :subtitle="`${t('registration.used')}: ${item.used} / ${item.limit} · ${t('registration.reserved')}: ${item.reserved}`"
+          /></v-list>
+          <v-btn variant="text" :disabled="busy" @click="refresh()">{{
+            t('registration.refresh')
+          }}</v-btn>
+        </template></v-expansion-panel
+      ></v-expansion-panels
     >
-      {{ t('devices.resume') }}
-    </UiButton>
-    <UiButton
-      v-if="native?.status === 'pending'"
-      type="button"
-      :disabled="!!(busy || uncertain)"
-      @click="submit('cancel')"
-    >
-      {{ t('devices.cancel') }}
-    </UiButton>
-  </PageFrame>
+  </MdmPage>
 </template>
+
+<style scoped>
+.enrollment-guide
+  :deep(
+    .v-stepper-item:not(.v-stepper-item--selected):not(.v-stepper-item--complete)
+      .v-stepper-item__avatar
+  ) {
+  color: rgb(var(--v-theme-on-surface));
+}
+</style>

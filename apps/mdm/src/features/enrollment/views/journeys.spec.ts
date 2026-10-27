@@ -1,4 +1,4 @@
-import { defineComponent, shallowRef } from 'vue'
+import { defineComponent, h, shallowRef } from 'vue'
 import { afterEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
@@ -7,30 +7,39 @@ import { decodeMdmError } from '@rss/api/mdm'
 import { networkErrorForTest } from '@rss/api/testing'
 import { createRegistrationChannelsClient } from '../../../services/registrationChannels'
 import { createRegistrationChannels } from '../../../services/registrationChannelState'
+import { createDeviceClients } from '../../devices/client'
+import SelfEnrollmentView from '../../devices/views/SelfEnrollmentView.vue'
 import { createDeviceDemo } from '../../../../demo/devices/state'
-import { generateEnrollmentPassword } from '../../devices/clients/enrollment'
+import { generateEnrollmentPassword, decodeEnrollment } from '../../devices/clients/enrollment'
+import { enrollmentTargetKey } from '../target'
+import { createDemoEnrollmentTargetResolver } from '../../../../demo/features/enrollment/target'
 import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { createOnboardingClients } from '../client'
 import { createOnboardingDemo } from '../../../../demo/enrollment'
 import { ADMIN, INSTANCE } from '../../../../demo/operations/authorization'
 import { TENANT } from '../../../../demo/scenario'
-import { operationsFeature } from '../../operations/routes'
-import { deviceFeature } from '../../devices/routes'
 import ConfigurationsView from './ConfigurationsView.vue'
+import NativeFacts from '../components/NativeFacts.vue'
+import SelfEnrollmentProgress from '../components/SelfEnrollmentProgress.vue'
+import NativeEnrollmentPanel from '../components/NativeEnrollmentPanel.vue'
+import type { EndpointDetail } from '../../devices/clients/endpoint-model'
 import TermsView from './TermsView.vue'
 import DownloadsView from './DownloadsView.vue'
 import AppleAccountView from './AppleAccountView.vue'
 import AppleAdeView from './AppleAdeView.vue'
 import WindowsEntraView from './WindowsEntraView.vue'
 const wrappers: VueWrapper[] = []
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount())
+  if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard)
+  else Reflect.deleteProperty(navigator, 'clipboard')
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
-async function setup(view: unknown, allow = true) {
+async function setup(view: unknown, allow = true, targetEvidence = false) {
   const devices = createDeviceDemo()
   const domain = createOnboardingDemo(() => allow, devices.registrationAllowed),
     calls: string[] = [],
@@ -85,6 +94,7 @@ async function setup(view: unknown, allow = true) {
     },
   } as HttpTransport
   const runtime = {
+    devices: createDeviceClients(transport, TENANT),
     onboarding: createOnboardingClients(transport, transport, TENANT, INSTANCE),
     session: { state },
     tenant: TENANT,
@@ -119,11 +129,12 @@ async function setup(view: unknown, allow = true) {
     history: createMemoryHistory(),
     routes: [
       { path: '/journey', component: view as never },
+      {
+        path: '/tenants/:tenant/devices/:device/management',
+        name: 'device-management',
+        component: defineComponent({ template: '<p>device</p>' }),
+      },
       { path: '/other', component: defineComponent({ template: '<p>other</p>' }) },
-      deviceFeature.entry,
-      ...(deviceFeature.routes ?? []),
-      operationsFeature.entry,
-      ...(operationsFeature.routes ?? []),
       { path: '/downloads/agent', name: 'agent-downloads', component: DownloadsView },
     ],
   })
@@ -133,7 +144,15 @@ async function setup(view: unknown, allow = true) {
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke }))
   const wrapper = mount(RouterView, {
     attachTo: document.body,
-    global: { plugins: [router, mdmI18n()], provide: { [mdmKey as symbol]: runtime } },
+    global: {
+      plugins: [router, mdmI18n()],
+      provide: {
+        [mdmKey as symbol]: runtime,
+        ...(targetEvidence
+          ? { [enrollmentTargetKey as symbol]: createDemoEnrollmentTargetResolver(transport) }
+          : {}),
+      },
+    },
   })
   wrapper.vm.$.appContext.app.onUnmount(() => runtime.registrationChannels.dispose())
   wrappers.push(wrapper)
@@ -147,13 +166,25 @@ async function setup(view: unknown, allow = true) {
   return { wrapper, runtime, domain, router, state, calls, lost, click, create, revoke }
 }
 it('keeps downloads anonymous and never requests or creates enrollment authority', async () => {
-  const { wrapper, calls } = await setup(DownloadsView, false)
+  const { wrapper, calls, runtime, click } = await setup(DownloadsView, false)
   expect(wrapper.text()).toContain('无需登录')
+  expect(wrapper.findAll('a[download]')).toHaveLength(4)
+  expect(
+    wrapper
+      .findAll('a[download]')
+      .every((link) => link.attributes('download')?.startsWith('MOCK-NOT-AN-INSTALLER')),
+  ).toBe(true)
+  vi.spyOn(runtime.onboarding.packages, 'list').mockResolvedValue([])
+  await click('重新读取')
   expect(wrapper.text()).toContain('没有已发布')
-  expect(wrapper.findAll('select')).toHaveLength(2)
+  expect(wrapper.findAll('a[download]')).toHaveLength(0)
+  expect(wrapper.findAll('select')).toHaveLength(0)
+  expect(
+    wrapper
+      .findAll('[data-download-target]')
+      .map((target) => target.attributes('data-download-target')),
+  ).toEqual(['windows/x86_64', 'windows/aarch64', 'macos/x86_64', 'macos/aarch64'])
   expect(calls).toEqual(['GET /api/v1/agent/enroll/packages'])
-  await wrapper.findAll('select')[0]!.setValue('macos')
-  expect(calls).toHaveLength(1)
 })
 it('downloads all current published formats without requesting enrollment authority', async () => {
   const { wrapper, runtime, calls } = await setup(DownloadsView, false)
@@ -179,9 +210,6 @@ it('downloads all current published formats without requesting enrollment author
     'agent.exe',
     'agent.msi',
     'agent.msix',
-  ])
-  await wrapper.findAll('select')[0]!.setValue('macos')
-  expect(wrapper.findAll('a[download]').map((link) => link.attributes('download'))).toEqual([
     'agent.pkg',
   ])
   expect(calls).toEqual(['GET /api/v1/agent/enroll/packages'])
@@ -295,12 +323,19 @@ it('reads MAA organizations and saves distinct account bindings without copying 
   await mapping.trigger('submit')
   await flushPromises()
   expect(wrapper.text()).toContain('managed@example.test')
+  vi.spyOn(runtime.onboarding.apple, 'organizations').mockRejectedValueOnce(
+    decodeMdmError(503, { code: 'unavailable' }),
+  )
+  const accounts = vi.spyOn(runtime.onboarding.apple, 'accounts')
+  await click('重新读取')
+  expect(wrapper.text()).toContain('服务暂不可用')
+  expect(accounts).not.toHaveBeenCalled()
 })
 it('shows ADE states independently and reads configuration operations', async () => {
   const { wrapper, click, runtime } = await setup(AppleAdeView),
     id = crypto.randomUUID()
-  const fields = wrapper.findAll('input')
-  await fields[0]!.setValue(id)
+  await wrapper.get('[data-testid=organization-id] input').setValue(id)
+  await flushPromises()
   const configuration = wrapper.find('form')
   await configuration.findAll('input')[0]!.setValue(crypto.randomUUID())
   await configuration.findAll('input')[1]!.setValue('ORG')
@@ -425,7 +460,8 @@ it('discards a rejected revocation before reading and revoking a different confi
 it('preserves explicit ADE profile choices and records sync and assignment as independent external operations', async () => {
   const { wrapper, runtime, domain, click } = await setup(AppleAdeView),
     id = crypto.randomUUID()
-  await wrapper.findAll('input')[0]!.setValue(id)
+  await wrapper.get('[data-testid=organization-id] input').setValue(id)
+  await flushPromises()
   const config = wrapper.find('form')
   await config.findAll('input')[0]!.setValue(crypto.randomUUID())
   await config.findAll('input')[1]!.setValue('ORG-EXAMPLE')
@@ -527,4 +563,422 @@ it('does not revoke the previous configuration after a directory selection fails
   expect(wrapper.findAll('button').some((button) => button.text() === '确认撤销配置')).toBe(false)
   expect(revoke).not.toHaveBeenCalled()
   new Uint8Array(replacement.file.bytes).fill(0)
+})
+
+it('authorizes macOS profile delivery, clears the submitted secret and withdraws the file after cancellation', async () => {
+  const id = crypto.randomUUID()
+  const current = shallowRef(
+    decodeEnrollment(
+      {
+        enrollmentId: id,
+        status: 'pending',
+        expiresAt: Math.floor(Date.now() / 1000) + 300,
+        registrationId: null,
+        source: 'mdm.apple',
+        instructions: {
+          platform: 'macos',
+          profileUrl: `/api/v1/enrollments/${id}/profile`,
+          enrollmentMethod: 'profile_based_device_enrollment',
+        },
+        progress: {
+          profilePrepared: 'unknown',
+          certificateIssued: false,
+          firstAuthenticatedCheckIn: false,
+          systemConfirmation: 'unknown',
+          managementReady: false,
+          diagnostic: 'awaiting_certificate',
+        },
+      },
+      id,
+    ),
+  )
+  const host = defineComponent({ setup: () => () => h(NativeFacts, { value: current.value }) })
+  const { wrapper, runtime, revoke } = await setup(host)
+  await runtime.registrationChannels.refresh()
+  const bytes = new Uint8Array([1, 2, 3])
+  const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockResolvedValue({
+    bytes: bytes.buffer,
+    contentType: 'application/x-apple-aspen-config',
+    contentDisposition: 'attachment',
+  })
+  await wrapper.get('button').trigger('click')
+  await flushPromises()
+  const password = wrapper.get('input[type=password]')
+  await password.setValue('A'.repeat(43))
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(profile).toHaveBeenCalledWith(id, 'A'.repeat(43))
+  expect((password.element as HTMLInputElement).value).toBe('')
+  expect(bytes.every((byte) => byte === 0)).toBe(true)
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+  expect(wrapper.text()).toContain('等待证书')
+  current.value = { ...current.value, status: 'cancelled' }
+  await flushPromises()
+  expect(wrapper.find('a[download]').exists()).toBe(false)
+  expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
+})
+
+async function prepareGuide(
+  fixture: Awaited<ReturnType<typeof setup>>,
+  platform: 'Windows' | 'macOS' = 'Windows',
+) {
+  const copy = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copy } })
+  if (platform === 'macOS') await fixture.click('macOS')
+  await fixture.click('继续准备注册')
+  const secret = fixture.wrapper.get('[data-enrollment-secret]').text()
+  expect(secret).toHaveLength(43)
+  expect(fixture.wrapper.find('input[autocomplete=off]').exists()).toBe(false)
+  return { secret, copy }
+}
+it('automatically delivers a macOS profile after its confirmed receipt without retaining or reentering the password', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click, revoke, state } = fixture
+  const { secret, copy } = await prepareGuide(fixture, 'macOS')
+  const bytes = new Uint8Array([1, 2, 3])
+  const profile = vi
+    .spyOn(runtime.onboarding.native, 'profile')
+    .mockImplementation(async (_id, password) => {
+      expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+      expect(password).toBe(secret)
+      return {
+        bytes: bytes.buffer,
+        contentType: 'application/x-apple-aspen-config',
+        contentDisposition: 'attachment',
+      }
+    })
+  const enroll = vi.spyOn(runtime.devices.registration, 'enroll')
+  await click('复制口令并继续')
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(copy).toHaveBeenCalledWith(secret)
+  expect(profile).toHaveBeenCalledWith((await enroll.mock.results[0]!.value).enrollmentId, secret)
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+  expect(wrapper.find('input[type=password]').exists()).toBe(false)
+  expect(bytes.every((byte) => byte === 0)).toBe(true)
+  state.value = { ...state.value, session: { id: crypto.randomUUID() } }
+  await flushPromises()
+  expect(wrapper.find('a[download]').exists()).toBe(false)
+  expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
+})
+it('keeps a confirmed macOS enrollment confirmed when profile delivery fails and retries only the profile explicitly', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click } = fixture
+  const { secret } = await prepareGuide(fixture, 'macOS')
+  const enroll = vi.spyOn(runtime.devices.registration, 'enroll')
+  const profile = vi
+    .spyOn(runtime.onboarding.native, 'profile')
+    .mockRejectedValueOnce(networkErrorForTest())
+  await click('复制口令并继续')
+  expect(wrapper.text()).toContain('注册授权已确认，但描述文件交付未完成')
+  expect(wrapper.text()).not.toContain('原注册请求的结果未知')
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+  profile.mockResolvedValue({
+    bytes: new Uint8Array([1, 2]).buffer,
+    contentType: 'application/x-apple-aspen-config',
+    contentDisposition: 'attachment',
+  })
+  await wrapper.get('input[type=password]').setValue(secret)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(profile.mock.calls[1]).toEqual(profile.mock.calls[0])
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+  expect(wrapper.find('input[type=password]').exists()).toBe(false)
+})
+it('uses the saved original password for an explicit unknown create replay and never requests a profile before a confirmed receipt', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click, lost } = fixture
+  const { secret } = await prepareGuide(fixture, 'macOS')
+  const enroll = vi.spyOn(runtime.devices.registration, 'enroll')
+  const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockResolvedValue({
+    bytes: new Uint8Array([1]).buffer,
+    contentType: 'application/x-apple-aspen-config',
+    contentDisposition: 'attachment',
+  })
+  lost.path = '/api/v1/self-enrollments'
+  await click('复制口令并继续')
+  expect(wrapper.text()).toContain('原注册请求的结果未知')
+  expect(profile).not.toHaveBeenCalled()
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+  await wrapper.get('input[type=password]').setValue(secret)
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(enroll.mock.calls[1]).toEqual(enroll.mock.calls[0])
+  expect(profile).toHaveBeenCalledTimes(1)
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+})
+it('requires an explicit saved-password action when clipboard delivery is unavailable', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click } = fixture
+  const { secret, copy } = await prepareGuide(fixture)
+  const enroll = vi.spyOn(runtime.devices.registration, 'enroll')
+  copy.mockRejectedValueOnce(new Error('Unavailable'))
+  await click('复制口令并继续')
+  expect(enroll).not.toHaveBeenCalled()
+  expect(wrapper.get('[data-enrollment-secret]').text()).toBe(secret)
+  await click('已安全保存口令，继续')
+  expect(enroll).toHaveBeenCalledTimes(1)
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+})
+it('withdraws a late automatic profile response after navigation and clears its bytes', async () => {
+  const fixture = await setup(SelfEnrollmentView),
+    { wrapper, runtime, click, router, create } = fixture
+  await prepareGuide(fixture, 'macOS')
+  const bytes = new Uint8Array([1, 2, 3])
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockImplementation(async () => {
+    await gate
+    return {
+      bytes: bytes.buffer,
+      contentType: 'application/x-apple-aspen-config',
+      contentDisposition: 'attachment',
+    }
+  })
+  await click('复制口令并继续')
+  expect(profile).toHaveBeenCalledTimes(1)
+  expect(wrapper.find('[data-enrollment-secret]').exists()).toBe(false)
+  await router.push('/other')
+  release()
+  await flushPromises()
+  expect(create).not.toHaveBeenCalled()
+  expect(bytes.every((byte) => byte === 0)).toBe(true)
+})
+
+it('keeps formal-status progress and cancellation in the guide without inventing a device binding', async () => {
+  const fixture = await setup(SelfEnrollmentView, true, false)
+  const enroll = vi.spyOn(fixture.runtime.devices.registration, 'enroll')
+  await prepareGuide(fixture)
+  await fixture.click('复制口令并继续')
+  const receipt = await enroll.mock.results[0]!.value
+  expect(fixture.wrapper.text()).toContain('设备详情关联暂未接通')
+  expect(fixture.wrapper.find('a[href*=management]').exists()).toBe(false)
+  expect(fixture.wrapper.findComponent(NativeFacts).exists()).toBe(true)
+  expect(await fixture.runtime.devices.enrollment.status(receipt.enrollmentId)).not.toHaveProperty(
+    'deviceId',
+  )
+  const cancel = vi.spyOn(fixture.runtime.devices.enrollment, 'cancel')
+  await fixture.click('无法继续？恢复原注册')
+  await fixture.click('取消')
+  expect(cancel.mock.calls[0]?.[0]).toBe(receipt.enrollmentId)
+  expect(fixture.wrapper.text()).toContain('已取消')
+  expect(
+    fixture.calls.some((call) => call.includes('mdm-candidate/devices/self-enrollments')),
+  ).toBe(false)
+})
+
+it('keeps unknown resume inputs usable after a failed status refresh and explicitly replays the original request', async () => {
+  const id = shallowRef('')
+  const fixture = await setup(
+    defineComponent({
+      setup: () => () => (id.value ? h(SelfEnrollmentProgress, { enrollmentId: id.value }) : null),
+    }),
+  )
+  const { wrapper, runtime, click } = fixture
+  const receipt = await runtime.devices.registration.enroll(
+    crypto.randomUUID(),
+    'A'.repeat(43),
+    'mdm.windows',
+    'Full',
+  )
+  id.value = receipt.enrollmentId
+  await flushPromises()
+  await wrapper
+    .findAll('.v-expansion-panel-title')
+    .find((button) => button.text().includes('无法继续？恢复原注册'))!
+    .trigger('click')
+  await flushPromises()
+  await click('生成一次性交付口令')
+  const secret = wrapper.get<HTMLInputElement>('input[autocomplete=off]').element.value
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  const resume = vi
+    .spyOn(runtime.devices.enrollment, 'resume')
+    .mockRejectedValueOnce(networkErrorForTest())
+  await click('更新口令并继续')
+  expect(resume).toHaveBeenCalledTimes(1)
+  vi.spyOn(runtime.devices.enrollment, 'status').mockRejectedValueOnce(
+    decodeMdmError(503, { code: 'unavailable' }),
+  )
+  await click('重新读取')
+  expect(wrapper.text()).toContain('服务暂不可用')
+  expect(wrapper.find('input[autocomplete=off]').exists()).toBe(true)
+  await wrapper.get('input[autocomplete=off]').setValue(secret)
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  await click('明确重放原操作')
+  expect(resume).toHaveBeenCalledTimes(2)
+  expect(resume.mock.calls[1]).toEqual(resume.mock.calls[0])
+  expect(wrapper.text()).not.toContain('提交结果未知')
+})
+
+it('revokes an automatically delivered macOS profile when its password is rotated and offers a new profile read', async () => {
+  const fixture = await setup(SelfEnrollmentView)
+  const { wrapper, runtime, click, revoke, create } = fixture
+  await prepareGuide(fixture, 'macOS')
+  const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockImplementation(async () => ({
+    bytes: new Uint8Array([1, 2, 3]).buffer,
+    contentType: 'application/x-apple-aspen-config',
+    contentDisposition: 'attachment',
+  }))
+  await click('复制口令并继续')
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+  await wrapper
+    .findAll('.v-expansion-panel-title')
+    .find((button) => button.text().includes('无法继续？恢复原注册'))!
+    .trigger('click')
+  await flushPromises()
+  const progress = wrapper.findComponent(SelfEnrollmentProgress)
+  await progress.get('.v-expansion-panel-title').trigger('click')
+  await flushPromises()
+  await click('生成一次性交付口令')
+  const secret = progress.get<HTMLInputElement>('input[autocomplete=off]').element.value
+  await progress.get('input[type=checkbox]').setValue(true)
+  await click('更新口令并继续')
+  expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(false)
+  expect(profile).toHaveBeenCalledTimes(1)
+  await click('使用已保存口令重新获取描述文件')
+  const input = wrapper.get('input[type=password]')
+  await input.setValue(secret)
+  await new (await import('@vue/test-utils')).DOMWrapper(input.element.closest('form')!).trigger(
+    'submit',
+  )
+  await flushPromises()
+  expect(profile.mock.calls[1]?.[1]).toBe(secret)
+  expect(create).toHaveBeenCalledTimes(2)
+  expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
+})
+
+it.each(['resume', 'cancel'] as const)(
+  'withdraws an administrator profile before an unknown %s and preserves exact replay',
+  async (kind) => {
+    const endpoint = shallowRef<EndpointDetail>()
+    const fixture = await setup(
+      defineComponent({
+        setup: () => () =>
+          endpoint.value ? h(NativeEnrollmentPanel, { endpoint: endpoint.value }) : null,
+      }),
+    )
+    const { wrapper, runtime, click, revoke, create } = fixture
+    const receipt = await runtime.devices.enrollment.create(crypto.randomUUID(), {
+      deviceId: 'device-02',
+      source: 'mdm.apple',
+      password: 'A'.repeat(43),
+    })
+    endpoint.value = await runtime.devices.directory.detail('device-02')
+    await flushPromises()
+    const panel = wrapper.findComponent(NativeEnrollmentPanel)
+    await panel.findAll('form')[0]!.get('input').setValue(receipt.enrollmentId)
+    await panel.findAll('form')[0]!.trigger('submit')
+    await flushPromises()
+    let releaseProfile!: () => void
+    const profileGate =
+      kind === 'cancel'
+        ? new Promise<void>((resolve) => {
+            releaseProfile = resolve
+          })
+        : Promise.resolve()
+    const bytes = new Uint8Array([1])
+    const profile = vi.spyOn(runtime.onboarding.native, 'profile').mockImplementation(async () => {
+      await profileGate
+      return {
+        bytes: bytes.buffer,
+        contentType: 'application/x-apple-aspen-config',
+        contentDisposition: 'attachment',
+      }
+    })
+    await click('使用已保存口令重新获取描述文件')
+    const password = panel.get('input[type=password]')
+    await password.setValue('A'.repeat(43))
+    await new (await import('@vue/test-utils')).DOMWrapper(
+      password.element.closest('form')!,
+    ).trigger('submit')
+    await flushPromises()
+    expect(panel.find('a[download]').exists()).toBe(kind === 'resume')
+    const resume = runtime.devices.enrollment.resume.bind(runtime.devices.enrollment)
+    const cancel = runtime.devices.enrollment.cancel.bind(runtime.devices.enrollment)
+    const request =
+      kind === 'resume'
+        ? vi.spyOn(runtime.devices.enrollment, 'resume').mockImplementationOnce(async (...args) => {
+            await resume(...args)
+            throw networkErrorForTest()
+          })
+        : vi.spyOn(runtime.devices.enrollment, 'cancel').mockImplementationOnce(async (...args) => {
+            await cancel(...args)
+            throw networkErrorForTest()
+          })
+    let secret = ''
+    if (kind === 'resume') {
+      await click('生成一次性交付口令')
+      secret = panel.get<HTMLInputElement>('input[autocomplete=off]').element.value
+      await panel.findAll('form')[1]!.get('input[type=checkbox]').setValue(true)
+    }
+    await click(kind === 'resume' ? '更新口令并继续' : '取消')
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(panel.findComponent(NativeFacts).exists()).toBe(false)
+    expect(panel.find('a[download]').exists()).toBe(false)
+    if (kind === 'resume') expect(revoke).toHaveBeenCalledWith('blob:synthetic-delivery')
+    else {
+      releaseProfile()
+      await flushPromises()
+      expect(create).not.toHaveBeenCalled()
+      expect(bytes.every((byte) => byte === 0)).toBe(true)
+    }
+    if (kind === 'resume') {
+      await panel.get('input[autocomplete=off]').setValue(secret)
+      await panel.findAll('form')[1]!.get('input[type=checkbox]').setValue(true)
+    }
+    await click('明确重放原操作')
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(request.mock.calls[1]).toEqual(request.mock.calls[0])
+    expect(profile).toHaveBeenCalledTimes(1)
+    expect(panel.find('a[download]').exists()).toBe(false)
+  },
+)
+
+it('keeps a new-session enrollment command when the previous session request completes late', async () => {
+  const fixture = await setup(SelfEnrollmentView)
+  const { wrapper, runtime, state, click } = fixture
+  const enroll = runtime.devices.registration.enroll.bind(runtime.devices.registration)
+  let releaseA!: () => void, rejectB!: (error: Error) => void
+  const gateA = new Promise<void>((resolve) => {
+    releaseA = resolve
+  })
+  const request = vi
+    .spyOn(runtime.devices.registration, 'enroll')
+    .mockImplementationOnce(async (...args) => {
+      const receipt = await enroll(...args)
+      await gateA
+      return receipt
+    })
+    .mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectB = reject
+        }),
+    )
+  await prepareGuide(fixture)
+  await click('复制口令并继续')
+  expect(request).toHaveBeenCalledTimes(1)
+  state.value = { ...state.value, session: { id: crypto.randomUUID() } }
+  await flushPromises()
+  const { secret } = await prepareGuide(fixture)
+  await click('复制口令并继续')
+  expect(request).toHaveBeenCalledTimes(2)
+  const originalB = [...request.mock.calls[1]!]
+  releaseA()
+  await flushPromises()
+  rejectB(networkErrorForTest())
+  await flushPromises()
+  expect(wrapper.text()).toContain('原注册请求的结果未知')
+  await wrapper.get('input[type=password]').setValue(secret)
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(request).toHaveBeenCalledTimes(3)
+  expect(request.mock.calls[2]).toEqual(originalB)
+  expect(wrapper.text()).not.toContain('原注册请求的结果未知')
 })

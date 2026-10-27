@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { VAutocomplete, VBtn, VAlert } from 'vuetify/components'
+import { VAlert, VAutocomplete, VBtn } from 'vuetify/components'
 import { ref, computed, watch } from 'vue'
 import { useIdentity } from '@rss/auth'
 import { useI18n } from 'vue-i18n'
@@ -50,21 +50,23 @@ watch(
     :items="options"
     item-title="label"
     item-value="value"
-    :item-props="(item) => ({ disabled: item.disabled })"
+    :item-props="(item) => ({ disabled: !!item.disabled })"
     :no-data-text="t('devices.empty')"
-    :disabled="disabled || busy"
-    @update:model-value="emit('update:modelValue', $event ?? '')"
+    :disabled="!!disabled || busy"
+    @update:model-value="emit('update:modelValue', typeof $event === 'string' ? $event : '')"
   />
-  <p>{{ t('devices.loadedPeopleOnly') }}</p>
-  <v-alert v-if="failure" type="error" variant="tonal">{{ t('devices.' + failure) }}</v-alert>
+  <p class="ui-help">{{ t('devices.loadedPeopleOnly') }}</p>
+  <v-alert v-if="failure" type="error" variant="tonal" role="alert">{{
+    t('devices.' + failure)
+  }}</v-alert>
   <div class="console-toolbar">
-    <v-btn type="button" :disabled="disabled || busy" @click="emit('update:modelValue', '')">{{
+    <v-btn type="button" :disabled="!!disabled || busy" @click="emit('update:modelValue', '')">{{
       t('registration.empty')
     }}</v-btn
-    ><v-btn type="button" :disabled="disabled || busy" @click="load()">{{
+    ><v-btn type="button" :disabled="!!disabled || busy" @click="load()">{{
       t('devices.reload')
     }}</v-btn
-    ><v-btn v-if="cursor" type="button" :disabled="disabled || busy" @click="load(true)">{{
+    ><v-btn v-if="cursor" type="button" :disabled="!!disabled || busy" @click="load(true)">{{
       t('registration.more')
     }}</v-btn>
   </div>
