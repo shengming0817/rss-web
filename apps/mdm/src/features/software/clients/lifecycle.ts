@@ -136,7 +136,13 @@ export function createLifecycleClient(transport: HttpTransport) {
           const page = projectedPage(value, sourceFields, query.fields)
           if (!query.fields)
             page.items.forEach((item) => {
-              if ('source' in item && 'snapshot' in item && item.source && item.snapshot) {
+              if (
+                'source' in item &&
+                'snapshot' in item &&
+                'lifecycle' in item &&
+                item.source &&
+                item.snapshot
+              ) {
                 const source = item.source as SourceDefinition
                 sourceRead(
                   { source: item.source, snapshot: item.snapshot, lifecycle: item.lifecycle },
