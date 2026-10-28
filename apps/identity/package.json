@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite build --watch",
-    "build": "vue-tsc --noEmit && vite build",
-    "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json"
+    "dev": "node ../../scripts/ensure-contracts.mjs && vite build --watch",
+    "build": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vite build",
+    "typecheck": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
     "vue": "catalog:",

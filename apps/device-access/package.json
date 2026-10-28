@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite build --configLoader runner --watch",
-    "demo": "vite --configLoader runner --mode demo --host 127.0.0.1 --port 4328 --strictPort",
-    "build": "vue-tsc --noEmit && vite build --configLoader runner",
-    "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "dev": "node ../../scripts/ensure-contracts.mjs && vite build --configLoader runner --watch",
+    "demo": "node ../../scripts/ensure-contracts.mjs && vite --configLoader runner --mode demo --host 127.0.0.1 --port 4328 --strictPort",
+    "build": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vite build --configLoader runner",
+    "typecheck": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
+    "test": "node ../../scripts/ensure-contracts.mjs && vitest run",
+    "test:coverage": "node ../../scripts/ensure-contracts.mjs && vitest run --coverage"
   },
   "dependencies": {
     "vue": "catalog:",

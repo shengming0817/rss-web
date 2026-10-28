@@ -62,3 +62,12 @@
 !build/
 !build/*.mjs
 !build/*.mts
+
+# Local contract generation during install and product builds
+!contracts/
+!contracts/mdm/
+!contracts/mdm/*.json
+!.prettierrc
+!scripts/contract-source.mjs
+!scripts/generate-contracts.mjs
+!scripts/ensure-contracts.mjs

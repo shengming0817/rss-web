@@ -25,16 +25,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Restore fixed producer Git objects
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/rss-web/rss-mdm.git
-          key: mdm-contract-${{ hashFiles('contracts/mdm/source.json') }}
-          restore-keys: mdm-contract-
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
       - name: Complete Web checks (collect all failures)
-        env:
-          RSS_MDM_GIT_TOKEN: ${{ secrets.RSS_MDM_GIT_TOKEN }}
         run: make ci
