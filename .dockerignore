@@ -71,3 +71,6 @@
 !scripts/contract-source.mjs
 !scripts/generate-contracts.mjs
 !scripts/ensure-contracts.mjs
+
+# Rebuild generated API code inside the image from the local contract input.
+packages/api/src/generated/

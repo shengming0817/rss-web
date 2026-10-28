@@ -367,12 +367,10 @@ it('uses current reauthorization eligibility and replays a lost response with th
 
 it('shows invalid query drafts without dispatching either execution rows or statistics', async () => {
   const directory = vi.fn().mockResolvedValue({ items: [], nextCursor: 'YQ' })
-  const statistics = vi
-    .fn()
-    .mockResolvedValue({
-      statistics: { total: 0, commands: 0, actionRuns: 0, unknown: 0 },
-      asOf: 1,
-    })
+  const statistics = vi.fn().mockResolvedValue({
+    statistics: { total: 0, commands: 0, actionRuns: 0, unknown: 0 },
+    asOf: 1,
+  })
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: ExecutionsView }],
