@@ -82,10 +82,6 @@ export function createApi(owner: IdentitySession) {
         returnTarget: 'resume',
         password,
       }),
-    stepUp: (id: string) =>
-      call('POST', `oidc/${uuid(id)}/step-up`, (v) => redirect(v, 'authorizationUrl'), {
-        returnTarget: 'resume',
-      }),
     loginOptions: (tenant: string) =>
       call(
         'GET',

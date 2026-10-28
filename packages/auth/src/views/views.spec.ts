@@ -1040,3 +1040,30 @@ it('dismisses logout confirmation with Escape before focus has entered the overl
   wrapper.unmount()
   f.session.clear()
 })
+
+it('keeps session authentication facts read-only even with an eligible OIDC provider', async () => {
+  const f = fixture()
+  await f.login()
+  f.replies.push({ sessions: [sessionValue().session], nextCursor: null })
+  const { wrapper } = await view(SessionsView, f, 'sessions', {}, [], 'en-US')
+  f.replies.push({
+    ...securityValue(),
+    authentication: { source: 'oidc', authTime: 1760000001, acr: 'mfa', amr: ['mfa', 'pwd'] },
+    eligibleStepUpProviders: [{ providerId: OTHER, label: 'Example directory' }],
+  })
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === 'Reload authentication facts')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain(
+    'When a sensitive operation requires verification, authenticate from that operation.',
+  )
+  expect(
+    wrapper.findAll('button').some((button) => button.text().includes('Example directory')),
+  ).toBe(false)
+  expect(f.session.state.value.security?.authentication.acr).toBe('mfa')
+  expect(f.request.mock.lastCall?.[0].method).toBe('GET')
+  wrapper.unmount()
+  f.session.clear()
+})

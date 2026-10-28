@@ -31,7 +31,7 @@ describe('deployment and authoritative host context', () => {
     await f.login()
     await f.session.loadSecurity()
     await expect(f.api.loginOptions(TENANT)).rejects.toThrow()
-    await expect(f.api.stepUp(OTHER)).rejects.toThrow()
+    await expect(f.api.link(OTHER, null)).rejects.toThrow()
     await expect(f.api.providers()).rejects.toThrow()
     expect(f.request.mock.calls.map(([r]) => r.path)).toEqual([
       '/api/v1/identity/tenants/{tenant}/login',

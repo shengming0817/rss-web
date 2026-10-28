@@ -2,7 +2,7 @@ import { object, number, text, uuid } from './decode'
 const KEY = 'rss.identity.pending-flow'
 const LIFETIME = 300_000
 export interface Pending {
-  kind: 'sso' | 'step-up' | 'link'
+  kind: 'sso' | 'link'
   tenant: string
   created: number
 }
@@ -18,7 +18,7 @@ export function createFlows(
       const raw = storage.getItem(KEY)
       if (raw === null) return null
       const v = object(JSON.parse(raw) as unknown, ['kind', 'tenant', 'created'])
-      if (!['sso', 'step-up', 'link'].includes(text(v['kind']))) throw new Error('Invalid flow')
+      if (!['sso', 'link'].includes(text(v['kind']))) throw new Error('Invalid flow')
       const created = number(v['created'])
       if (now() < created || now() - created >= LIFETIME) throw new Error('Expired flow')
       return {

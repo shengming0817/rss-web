@@ -8,7 +8,7 @@ Identity 应用独立装配 `@rss/auth` 的唯一会话实例；MDM 复用该共
 
 唯一动态宿主接口为 `GET /api/v1/identity-host/tenants/{tenant}/context`，返回 `{tenantId,principalId,sessionId,navigation:{manageAccounts,manageProviders}}`。会话控制器对三个身份坐标严格匹配；登录、刷新、重认证、失效及主体变化清空旧提示。manageAccounts 与 manageProviders 独立控制各自入口；OIDC 关闭时不显示 IdP 入口。导航 context 的网络、超时及合法 503 暂不可用只清空提示，不清除已接受的会话或 CSRF，认证操作正常完成。界面隐藏依赖提示的管理入口、显示简短提示并允许手动重读；不后台调度或自动重试。已打开的管理页区分导航未知与明确无入口；导航恢复后若列表尚未读取，显示尚未加载及手动加载按钮，不把初始空数组呈现为读取结果。401 清除会话，协议错误和身份不匹配保持失败规则；generation 拒绝旧会话的迟到响应。导航只控制展示，真实请求由组件事务内宿主策略授权。403 不靠隐藏按钮替代，也不重放写入。
 
-登录、刷新、重认证、退出、全部撤销、账户管理、IdP 配置/关联和 step-up 复用既有页面与唯一会话控制器。本人改密的 `403 / reauthentication_failed` 表示当前密码错误：清除两份密码草稿、保留会话并等待显式重新提交；未知结果仍清除本地会话且不重放。密码保持表单局部，CSRF 只在控制器闭包，HttpOnly cookie 不被应用读取。OIDC 资格仅显示服务端 eligibleStepUpProviders；缺失 authTime 显示未知，不从浏览器推断 MFA。resume 使用五分钟 tenant/kind locator 后重读会话，浏览器不交换 code。
+登录、刷新、重认证、退出、全部撤销、账户管理、IdP 配置/关联复用既有页面与唯一会话控制器。本人改密的 `403 / reauthentication_failed` 表示当前密码错误：清除两份密码草稿、保留会话并等待显式重新提交；未知结果仍清除本地会话且不重放。密码保持表单局部，CSRF 只在控制器闭包，HttpOnly cookie 不被应用读取。会话安全页只显示服务端认证事实；缺失 authTime 显示未知，不从浏览器推断 MFA。增强认证必须由实际敏感操作绑定用途发起，会话页不提供通用提升认证强度入口。resume 使用五分钟 tenant/kind locator 后重读会话，浏览器不交换 code。
 
 密码操作的 `429 / rate_limited` 必须携带正整数秒数 `Retry-After`，缺失或畸形按协议错误处理。界面按响应时间加该秒数显示本地语言的最早重试时间，清除密码草稿并等待用户明确重新提交；不自动重放。合法 429 保留同租户已接受会话、CSRF 与原到期时间；匿名登录保持匿名，不跨租户恢复旧会话。账户失败窗口从首次失败起固定十分钟，五次失败后等待窗口结束；被拒绝请求不延长窗口。来源预算独立，正确密码也可能受该预算限制，以服务端 Retry-After 为准。自动化使用产品授权范围内的 APIKey 或复用已建立会话，避免循环密码登录；APIKey 的资源权限由消费产品控制。
 
