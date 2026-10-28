@@ -657,7 +657,7 @@ it('requires reading the conflicting version and a separate explicit edit decisi
     if (o.method === 'POST') throw decodeMdmError(409, { code: 'operation_conflict' })
     return {
       revision: 2,
-      desiredRevision: null,
+      activeRevision: null,
       versionCount: 0,
       current: null,
       latest: null,
