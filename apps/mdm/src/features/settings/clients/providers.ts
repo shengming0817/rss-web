@@ -18,7 +18,6 @@ export function storageReceipt(value: unknown) {
     'profile',
     'state',
     'failureReason',
-    'selected',
     'revoked',
     'qualifiedAt',
     'expiresAt',
@@ -29,7 +28,6 @@ export function storageReceipt(value: unknown) {
     profile: string(v['profile']),
     state: enumeration(v['state'], ['pending', 'qualified', 'rejected'] as const),
     failureReason: nullable(v['failureReason'], string),
-    selected: boolean(v['selected']),
     revoked: boolean(v['revoked']),
     qualifiedAt: nullable(v['qualifiedAt'], count),
     expiresAt: nullable(v['expiresAt'], count),
@@ -89,11 +87,11 @@ export function wnsOperation(value: unknown) {
 }
 function providerState<T extends { revision: number }>(
   value: unknown,
-  selection: 'desiredRevision' | 'selectedRevision',
+  selection: 'activeRevision' | 'desiredRevision' | 'selectedRevision',
   decode: (v: unknown) => T,
 ) {
   const keys = ['revision', selection, 'versionCount', 'current', 'latest']
-  if (selection === 'desiredRevision') keys.push('applied')
+  if (selection !== 'selectedRevision') keys.push('applied')
   const v = closed(value, keys)
   return {
     revision: count(v['revision']),
@@ -101,7 +99,7 @@ function providerState<T extends { revision: number }>(
     versionCount: count(v['versionCount']),
     current: nullable(v['current'], decode),
     latest: nullable(v['latest'], decode),
-    applied: selection === 'desiredRevision' ? nullable(v['applied'], decode) : null,
+    applied: selection !== 'selectedRevision' ? nullable(v['applied'], decode) : null,
   }
 }
 export type StorageInput = {
@@ -138,7 +136,7 @@ export function createStorageClient(transport: HttpTransport) {
         method: 'GET',
         path: '/api/v1/storage/connections',
         successStatus: 200,
-        decode: (v) => providerState(v, 'desiredRevision', storageReceipt),
+        decode: (v) => providerState(v, 'activeRevision', storageReceipt),
       }),
     history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
       transport.request({

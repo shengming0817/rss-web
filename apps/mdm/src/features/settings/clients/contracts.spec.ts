@@ -28,7 +28,6 @@ const storage = {
   profile: 'approved',
   state: 'rejected',
   failureReason: 'authorization',
-  selected: false,
   revoked: false,
   qualifiedAt: null,
   expiresAt: null,
@@ -313,7 +312,7 @@ it('preserves provider-specific states, qualification times and WNS tagged opera
       'storage',
       {
         revision: 1,
-        desiredRevision: null,
+        activeRevision: null,
         versionCount: 1,
         current: null,
         latest: storage,
@@ -618,4 +617,26 @@ it('decodes current runtime components and rejects retired component shapes', ()
   expect(() =>
     runtimeSnapshot({ ...value, components: [{ ...value.components[0], name: 'unknown' }] }),
   ).toThrow()
+})
+
+it('storage distinguishes a qualified candidate from active and observed connections, rejecting the old DTO', async () => {
+  const current = { ...storage, state: 'qualified', failureReason: null, qualifiedAt: 1 }
+  const latest = { ...current, operationId: b, revision: 2 }
+  const directory = {
+    revision: 2,
+    activeRevision: 1,
+    versionCount: 2,
+    current,
+    latest,
+    applied: null,
+  }
+  const state = await createStorageClient(transport(directory).client).read()
+  expect(state.activeRevision).toBe(1)
+  expect(state.latest?.revision).toBe(2)
+  expect(state.applied).toBeNull()
+  expect(() => storageReceipt({ ...current, selected: true })).toThrow()
+  const { activeRevision, ...rest } = directory
+  await expect(
+    createStorageClient(transport({ ...rest, desiredRevision: activeRevision }).client).read(),
+  ).rejects.toThrow()
 })
