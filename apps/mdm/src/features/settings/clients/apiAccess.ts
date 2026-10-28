@@ -1,4 +1,4 @@
-import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
+import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -72,30 +72,32 @@ export function networkPolicy(value: unknown) {
   const v = closed(value, ['revision', 'networks'])
   return { revision: count(v['revision']), networks: array(v['networks'], identifier) }
 }
+function keyFields(tenant: string) {
+  return {
+    id: uuid,
+    revision: count,
+    authorityRevision: count,
+    credentialRevision: count,
+    metadata: keyMetadata,
+    createdBy: (v: unknown) => user(v, tenant),
+    createdAt: count,
+    revoked: boolean,
+    name: identifier,
+    enabled: boolean,
+    expiresAt: (v: unknown) => nullable(v, count),
+  }
+}
 export function createApiAccess(transport: HttpTransport, tenant: string) {
   return {
-    keys: (query: Omit<DirectoryQuery, 'fields'> = {}) =>
+    keys: <F extends keyof ReturnType<typeof keyFields> = keyof ReturnType<typeof keyFields>>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/api-keys',
-        query: queryParameters({
-          limit: 100,
-          ...query,
-          fields: [
-            'id',
-            'revision',
-            'authorityRevision',
-            'credentialRevision',
-            'metadata',
-            'createdBy',
-            'createdAt',
-            'revoked',
-          ],
-        }),
+        query: queryParameters({ limit: 50, ...query }),
         successStatus: 200,
-        decode(value) {
-          return windowPage(value, (x) => keyRecord(x, tenant))
-        },
+        decode: (value) => projectedPage(value, keyFields(tenant), query.fields, ['id']),
       }),
     key: (id: string) =>
       transport.request({

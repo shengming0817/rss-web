@@ -1,4 +1,11 @@
 /** MOCK_SOURCE: HTTP candidate projections are available only from the explicit demo entry. */
+import { queryParameters } from '@rss/api/mdm-query'
+import {
+  bindingDirectory,
+  materialDirectory,
+  applicationDirectory,
+  computerDirectory,
+} from '@rss/device-access/client'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { DeviceAccessClient, SecurityClient, Challenge } from '@rss/device-access/client'
 import { viewDecoders as d } from '@rss/device-access/model'
@@ -12,7 +19,7 @@ export function createDemoClients(transport: HttpTransport): {
     decode: (v: unknown) => T,
     signal?: AbortSignal,
     cursor?: string | null,
-    query: Record<string, string> = {},
+    query: Record<string, string | number> = {},
   ) {
     return transport.request({
       method: 'GET',
@@ -57,8 +64,16 @@ export function createDemoClients(transport: HttpTransport): {
         security: ready,
         audit: ready,
       },
-      computers: (cursor, signal) =>
-        read('/computers', (v) => d.page(v, d.computerView), signal, cursor),
+      computers: (query, signal) =>
+        read(
+          '/computers',
+          (v) => computerDirectory(v, query),
+          signal,
+          null,
+          queryParameters(query),
+        ),
+      viewComputers: (reference, signal) =>
+        read(devicePath(reference.id), (v) => [d.computerView(v)], signal),
       computer: (device, signal) =>
         read(
           devicePath(device),
@@ -69,13 +84,16 @@ export function createDemoClients(transport: HttpTransport): {
           },
           signal,
         ),
-      bindings: (device, cursor, signal) =>
+      bindings: (device, query, signal) =>
         read(
           devicePath(device) + '/bindings',
-          (v) => d.page(v, (x) => d.bindingView(x, device)),
+          (v) => bindingDirectory(v, device, query),
           signal,
-          cursor,
+          null,
+          queryParameters(query),
         ),
+      binding: (device, id, signal) =>
+        read(devicePath(device) + '/bindings/' + id, (v) => d.bindingView(v, device), signal),
       changeBinding: (device, id, input, signal) =>
         write(
           devicePath(device) + '/bindings/' + id,
@@ -106,12 +124,21 @@ export function createDemoClients(transport: HttpTransport): {
           signal,
           cursor,
         ),
-      materials: (device, cursor, signal) =>
+      materials: (device, query, signal) =>
         read(
           devicePath(device) + '/materials',
-          (v) => d.page(v, (x) => d.materialView(x, device)),
+          (v) => materialDirectory(v, device, query),
           signal,
-          cursor,
+          null,
+          queryParameters(query),
+        ),
+      material: (device, id, version, signal) =>
+        read(
+          devicePath(device) + '/materials/' + id,
+          (v) => d.materialView(v, device),
+          signal,
+          null,
+          { version },
         ),
       reveal: (device, material, operationId, signal) =>
         write(
@@ -137,11 +164,20 @@ export function createDemoClients(transport: HttpTransport): {
         ),
       configurations: (cursor, signal) =>
         read('/configurations', (v) => d.page(v, d.configurationView), signal, cursor),
+      readConfiguration: (id, signal) => read('/configurations/' + id, d.configurationView, signal),
       configuration: (input, signal) =>
         write('/configurations', input, d.configurationView, signal),
       scopes: (signal) => read('/scopes', (v) => d.list(v, d.person), signal),
-      applications: (cursor, signal) =>
-        read('/applications', (v) => d.page(v, d.applicationView), signal, cursor),
+      applications: (query, signal) =>
+        read(
+          '/applications',
+          (v) => applicationDirectory(v, query),
+          signal,
+          null,
+          queryParameters(query),
+        ),
+      readApplication: (id, signal) =>
+        read('/applications/' + encodeURIComponent(id), d.applicationView, signal),
       application: (input, signal) => write('/applications', input, d.applicationView, signal),
       audit: (device, cursor, signal) =>
         read(

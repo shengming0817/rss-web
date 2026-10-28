@@ -1,6 +1,21 @@
 import { checked } from '../../../contracts/collection/check'
-import { validateFieldView } from '../../../contracts/collection/generated/validators'
-import { parseFilter } from '../../../services/query-filter'
+import {
+  validateFieldView,
+  validateFieldViewItemKey,
+  validateFieldViewKey,
+  validateFieldViewManual,
+  validateFieldViewNullable,
+  validateFieldViewOperations,
+  validateFieldViewPlatforms,
+  validateFieldViewSearchable,
+  validateFieldViewSensitivity,
+  validateFieldViewSources,
+  validateFieldViewTimeSeries,
+  validateFieldViewUnit,
+  validateFieldViewValueType,
+  validateFieldViewVersion,
+} from '../../../contracts/collection/generated/validators'
+import { parseFilter } from '@rss/api/mdm-filter'
 import {
   array,
   boolean,
@@ -226,6 +241,21 @@ export function inventory(value: unknown) {
 }
 export type Inventory = ReturnType<typeof inventory>
 export type ResolvedField = ReturnType<typeof resolvedField>
+export const assetFieldCodecs = {
+  itemKey: (value: unknown) => checked(validateFieldViewItemKey, value),
+  key: (value: unknown) => checked(validateFieldViewKey, value),
+  manual: (value: unknown) => checked(validateFieldViewManual, value),
+  nullable: (value: unknown) => checked(validateFieldViewNullable, value),
+  operations: (value: unknown) => checked(validateFieldViewOperations, value),
+  platforms: (value: unknown) => checked(validateFieldViewPlatforms, value),
+  searchable: (value: unknown) => checked(validateFieldViewSearchable, value),
+  sensitivity: (value: unknown) => checked(validateFieldViewSensitivity, value),
+  sources: (value: unknown) => checked(validateFieldViewSources, value),
+  timeSeries: (value: unknown) => checked(validateFieldViewTimeSeries, value),
+  unit: (value: unknown) => checked(validateFieldViewUnit, value),
+  valueType: (value: unknown) => checked(validateFieldViewValueType, value),
+  version: (value: unknown) => checked(validateFieldViewVersion, value),
+}
 export function fieldDefinition(value: unknown) {
   const definition = checked(validateFieldView, value)
   const kind = definition.valueType.kind

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { formatFilter, parseFilter } from './query-filter'
+import { formatFilter, parseFilter } from './mdm-filter'
 
 it('preserves backend precedence and both quoted and bare escaped operands', () => {
   const source = 'name==a\\,b;(revision=ge=2,active==false)'

@@ -1,8 +1,4 @@
-import {
-  queryParameters,
-  projectedPage,
-  type DirectoryQuery,
-} from '../../../services/directory-query'
+import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import { attachment } from '../../enrollment/clients/binary'
 import { jsonValue, jsonObject } from '../../../services/json'
 import { createUploadsClient } from './uploads'

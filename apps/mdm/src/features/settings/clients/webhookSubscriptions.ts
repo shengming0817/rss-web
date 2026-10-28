@@ -1,4 +1,4 @@
-import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
+import { queryParameters, windowPage, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -110,6 +110,28 @@ export type WebhookIntent =
     }
   | { kind: 'test'; id: string; deviceId: string }
   | { kind: 'replay' | 'redrive'; id: string; expectedVersion: number }
+const subscriptionFields = {
+  id: (value: unknown) => uuid(value),
+  revision: (value: unknown) => count(value),
+  targetVersion: (value: unknown) => count(value),
+  enabled: (value: unknown) => boolean(value),
+  deleted: (value: unknown) => boolean(value),
+  settings: (value: unknown) => webhookSettings(value),
+}
+const deliveryFields = {
+  id: (value: unknown) => uuid(value),
+  eventId: (value: unknown) => uuid(value),
+  subscriptionId: (value: unknown) => uuid(value),
+  targetVersion: (value: unknown) => count(value),
+  sourceDelivery: (value: unknown) => nullable(value, uuid),
+  recoveryVersion: (value: unknown) => count(value),
+  redriveWindowOpen: (value: unknown) => boolean(value),
+  attempts: (value: unknown) => count(value),
+  status: (value: unknown) => identifier(value),
+  transportObservation: (value: unknown) => nullable(value, identifier),
+  failureStage: (value: unknown) => nullable(value, identifier),
+  failureReason: (value: unknown) => nullable(value, identifier),
+}
 export function createWebhookSubscriptions(transport: HttpTransport) {
   function page(value: unknown) {
     return windowPage(value, delivery)
@@ -126,14 +148,16 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
           return array(v['items'], (x) => enumeration(x, eventTypes))
         },
       }),
-    list: (query: DirectoryQuery = {}) =>
+    list: <F extends keyof typeof subscriptionFields = keyof typeof subscriptionFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/webhooks/subscriptions',
         query: queryParameters({ limit: 32, ...query }),
         successStatus: 200,
         decode(value) {
-          return windowPage(value, subscription)
+          return projectedPage(value, subscriptionFields, query.fields, ['id'])
         },
       }),
     read: (id: string) =>
@@ -148,13 +172,15 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
           return s
         },
       }),
-    deliveries: (query: DirectoryQuery = {}) =>
+    deliveries: <F extends keyof typeof deliveryFields = keyof typeof deliveryFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/webhooks/deliveries',
         query: queryParameters({ limit: 32, ...query }),
         successStatus: 200,
-        decode: page,
+        decode: (value) => projectedPage(value, deliveryFields, query.fields, ['id']),
       }),
     delivery: (id: string) =>
       transport.request({

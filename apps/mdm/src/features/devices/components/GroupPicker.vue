@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import {
   VMenu,
   VBtn,
@@ -9,13 +13,30 @@ import {
   VListItem,
   VAlert,
 } from 'vuetify/components'
-import { comparison as queryComparison, allOf } from '../../../services/directory-query'
+import { comparison as queryComparison, allOf } from '@rss/api/mdm-query'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import type { GroupRead } from '../clients/groups'
+const groupQuery = useDirectoryQuery(
+  [
+    'id',
+    'kind',
+    'systemSelector',
+    'assetContext',
+    'calculationRevision',
+    'presentation',
+    'revision',
+    'memberVersion',
+    'memberCount',
+    'ruleVersion',
+    'deleted',
+  ],
+  1000,
+)
+
 const props = defineProps<{
   modelValue: string
   assetContext: 'endpoint' | 'associated_device'
@@ -43,25 +64,41 @@ function select(value: string) {
   emit('update:modelValue', value)
   open.value = false
 }
-async function load(more = false) {
+const projectedGroups = ref<object[]>([])
+async function readGroup(id: string) {
+  if (props.disabled || busy.value) return
+  await run(
+    () => runtime.devices.groups.read(id),
+    (value) => {
+      rows.value = [value.group]
+      select(value.group.id)
+    },
+  )
+}
+async function load(after?: string) {
   await run(
     () =>
-      runtime.devices.groups.list({
-        filter: allOf(
-          search.value ? queryComparison('name', '=icontains=', search.value) : undefined,
-          props.assetContext
-            ? queryComparison('assetContext', '==', props.assetContext)
-            : undefined,
-        ),
-        referenceableFor: props.referenceableFor,
-        cursor: more ? (next.value ?? undefined) : undefined,
-      }),
+      groupQuery.read(
+        after,
+        (query) =>
+          runtime.devices.groups.list({ ...query, referenceableFor: props.referenceableFor }),
+        {
+          filter: allOf(
+            search.value ? queryComparison('name', '=icontains=', search.value) : undefined,
+            props.assetContext
+              ? queryComparison('assetContext', '==', props.assetContext)
+              : undefined,
+          ),
+        },
+      ),
     (value) => {
-      rows.value = more ? [...rows.value, ...value.items] : value.items
+      projectedGroups.value = value.items
+      rows.value = groupQuery.complete.value ? value.items : []
       next.value = value.nextCursor
     },
   )
 }
+groupQuery.bind(() => JSON.stringify([props.assetContext, props.referenceableFor]))
 watch(
   () => JSON.stringify([...deviceBinding(runtime), props.assetContext, props.referenceableFor]),
   () => {
@@ -72,8 +109,29 @@ watch(
   },
   { immediate: true, flush: 'sync' },
 )
+groupQuery.onClear(() => {
+  rows.value = []
+  projectedGroups.value = []
+})
 </script>
 <template>
+  <DirectoryControls
+    :query="groupQuery"
+    :busy="busy"
+    hint="id / revision / kind / assetContext / deleted / name / memberCount / calculationRevision / memberVersion"
+    @load="load"
+  />
+  <DirectoryResults
+    :disabled="busy"
+    v-if="!groupQuery.complete.value"
+    :items="projectedGroups"
+    @open="
+      (row) => {
+        readGroup(String(row.id))
+      }
+    "
+  />
+
   <div class="group-picker">
     <v-menu v-model="open" :close-on-content-click="false" max-width="560">
       <template #activator="{ props: activator }"
@@ -104,9 +162,7 @@ watch(
               @click="select(group.id)"
           /></v-list>
           <p v-if="!rows.length && !busy">{{ t('devices.empty') }}</p>
-          <v-btn v-if="next" :disabled="disabled || busy" @click="load(true)">{{
-            t('devices.next')
-          }}</v-btn>
+
           <v-alert v-if="failure" type="error" variant="tonal">{{
             t('devices.' + failure)
           }}</v-alert>

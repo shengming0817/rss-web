@@ -1,8 +1,8 @@
 /** Explicit synthetic directory behavior; never imported by production. */
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { parseFilter, type Filter } from '../src/services/query-filter'
-import { pageCursor } from '../src/services/directory-query'
+import { parseFilter, type Filter } from '@rss/api/mdm-filter'
+import { pageCursor } from '@rss/api/mdm-query'
 import type { DemoRequest } from './scenario'
 
 type Row = Record<string, unknown>

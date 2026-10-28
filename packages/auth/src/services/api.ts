@@ -1,3 +1,10 @@
+import {
+  accountPage,
+  accountQuery,
+  type AccountQuery,
+  type AccountField,
+  accountBaseFields,
+} from './account-query'
 import { localProfile, profileReceipt, type LocalProfile } from './profile'
 import { isRssApiError } from '@rss/api/identity'
 import type { IdentitySession } from './session'
@@ -47,6 +54,11 @@ export function createApi(owner: IdentitySession) {
       })
     })
   }
+  function sessionQuery(cursor: string | undefined, limit: number) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+      throw new Error('Invalid session page size')
+    return { ...(cursor === undefined ? {} : { cursor: uuid(cursor) }), limit: String(limit) }
+  }
   function profileCall<T>(
     method: 'GET' | 'PUT',
     principal: string,
@@ -95,7 +107,7 @@ export function createApi(owner: IdentitySession) {
         200,
         tenant,
       ),
-    sessions: (cursor?: string) =>
+    sessions: (cursor?: string, limit = 50) =>
       call(
         'GET',
         'sessions',
@@ -109,24 +121,21 @@ export function createApi(owner: IdentitySession) {
         undefined,
         200,
         undefined,
-        cursor === undefined ? undefined : { cursor: uuid(cursor) },
+        sessionQuery(cursor, limit),
       ),
-    accounts: (cursor?: string) =>
+    accounts: <F extends AccountField = (typeof accountBaseFields)[number]>(
+      query: Omit<AccountQuery, 'fields'> & { fields?: readonly F[] | undefined } = {},
+    ) =>
       call(
         'GET',
         'accounts',
-        (v) => {
-          const r = object(v, ['accounts', 'nextCursor'])
-          return {
-            accounts: list(r['accounts'], account),
-            next: r['nextCursor'] === null ? null : uuid(r['nextCursor']),
-          }
-        },
+        (value) => accountPage(value, query.fields),
         undefined,
         200,
         undefined,
-        cursor === undefined ? undefined : { cursor: uuid(cursor) },
+        accountQuery(query),
       ),
+    account: (principal: string) => call('GET', `accounts/${uuid(principal)}`, account),
     localProfile: (principal: string) => profileCall('GET', principal, localProfile),
     saveLocalProfile: (
       principal: string,

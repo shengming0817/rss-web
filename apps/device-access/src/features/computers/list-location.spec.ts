@@ -1,13 +1,16 @@
 import { it, expect } from 'vitest'
 import { readListLocation, listLocation } from './list-location'
-it('preserves page, filter and search through detail and back links', () => {
-  const query = { q: 'Office', platform: 'windows', cursor: 'page-2' }
-  const state = readListLocation(query)
-  expect(listLocation(state.search, state.platform, state.cursor)).toEqual(query)
-  expect(readListLocation({ q: ['bad'], platform: 'other', cursor: 'x'.repeat(4097) })).toEqual({
-    search: '',
-    platform: 'all',
-    cursor: null,
-  })
-  expect(listLocation('', 'all', null)).toEqual({})
+it('round trips an accepted query and page history through detail navigation', () => {
+  const query = {
+    filter: "platform=='windows'",
+    sort: ['-key'],
+    fields: ['key', 'reference'],
+    limit: 1,
+    cursor: 'YWJj',
+  }
+  const location = listLocation(query, [undefined])
+  expect(readListLocation(location)).toEqual({ query, trail: [undefined] })
+  expect(readListLocation({ q: 'Office', platform: 'windows' }).error).toBeTruthy()
+  expect(readListLocation({ cursor: 'x'.repeat(4097) }).error).toBeTruthy()
+  expect(readListLocation({ fields: ['key'] }).error).toBeTruthy()
 })

@@ -1,22 +1,46 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VTextField, VBtn } from 'vuetify/components'
 
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import DeviceContext from '../../devices/components/DeviceContext.vue'
 import MdmPage from '../../../ui/MdmPage.vue'
 import CopyDeepLink from '../../../components/CopyDeepLink.vue'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
-import { comparison } from '../../../services/directory-query'
+import { comparison } from '@rss/api/mdm-query'
 import { identifier, uuid } from '../../../services/decode'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import { policyName } from '../clients/model'
-import type { EventBatch } from '../clients/events'
+import type { EventBatch, EventMember } from '../clients/events'
 import { auditTime } from '../../operations/format'
 import RetirementDetails from '../../devices/components/RetirementDetails.vue'
+const memberQuery = useDirectoryQuery(
+  ['id', 'policyId', 'versionId', 'state', 'revision', 'decision', 'operations'],
+  1000,
+)
+
+const batchQuery = useDirectoryQuery(
+  [
+    'id',
+    'operationId',
+    'event',
+    'createdAt',
+    'deadline',
+    'members',
+    'admission',
+    'request',
+    'processingFailure',
+  ],
+  1000,
+)
+
 const runtime = useMdm(),
   route = useRoute(),
   { t } = useI18n(),
@@ -26,23 +50,31 @@ const device = computed(() => String(route.params['device'])),
 const filter = ref(''),
   applied = ref(''),
   retirementId = ref<string>()
-const op = useOperation([], () => [
-  ...deviceBinding(runtime),
-  device.value,
-  batch.value ?? '',
-  applied.value,
-  filter.value,
-])
+const op = useOperation([], () => [...deviceBinding(runtime), device.value, batch.value ?? ''])
 const page = ref<Awaited<ReturnType<typeof client.list>>>(),
   detail = ref<EventBatch>(),
   members = ref<Awaited<ReturnType<typeof client.members>>>()
-watch(
-  filter,
-  () => {
-    page.value = undefined
-  },
-  { flush: 'sync' },
-)
+const router = useRouter(),
+  selectedMember = ref<EventMember>()
+function openBatch(id: string) {
+  void router.push({
+    name: 'policy-event-batch',
+    params: { tenant: runtime.tenant, device: device.value, batch: id },
+  })
+}
+function readMember(id: string) {
+  if (!batch.value) return
+  void op.run(
+    () =>
+      client.members(device.value, batch.value!, {
+        filter: comparison('id', '==', uuid(id)),
+        limit: 1,
+      }),
+    (page) => {
+      selectedMember.value = page.items[0]
+    },
+  )
+}
 function load(cursor?: string) {
   if (op.busy.value) return
   page.value = undefined
@@ -52,17 +84,20 @@ function load(cursor?: string) {
   try {
     identifier(device.value)
     if (batch.value) uuid(batch.value)
-    if (!cursor) applied.value = filter.value ? policyName(filter.value) : ''
+    if (filter.value) policyName(filter.value)
   } catch {
     op.failure.value = 'invalidRequest'
     return
   }
+  const selectedEvent = batchQuery.continues(cursor) ? applied.value : filter.value
   if (batch.value) {
     const target = batch.value
     void op.run(
       async () => ({
         batch: await client.read(device.value, target),
-        members: await client.members(device.value, target),
+        members: await memberQuery.read(undefined, (query) =>
+          client.members(device.value, target, query),
+        ),
       }),
       (v) => {
         detail.value = v.batch
@@ -72,23 +107,24 @@ function load(cursor?: string) {
   } else
     void op.run(
       () =>
-        client.list(device.value, {
-          filter: applied.value ? comparison('event', '==', applied.value) : undefined,
-          cursor,
+        batchQuery.read(cursor, (query) => client.list(device.value, query), {
+          filter: selectedEvent ? comparison('event', '==', selectedEvent) : undefined,
         }),
-      (v) => (page.value = v),
+      (v) => {
+        page.value = v
+        applied.value = selectedEvent
+      },
     )
 }
-function more() {
-  const cursor = members.value?.nextCursor,
-    target = batch.value
-  if (target && cursor) {
-    members.value = undefined
-    void op.run(
-      () => client.members(device.value, target, { cursor }),
-      (v) => (members.value = v),
-    )
-  }
+function loadMembers(after?: string) {
+  if (!batch.value) return
+  const target = batch.value
+  void op.run(
+    () => memberQuery.read(after, (query) => client.members(device.value, target, query)),
+    (page) => {
+      members.value = page
+    },
+  )
 }
 watch(
   () => JSON.stringify([route.fullPath, ...deviceBinding(runtime)]),
@@ -103,9 +139,52 @@ watch(
   },
   { immediate: true, flush: 'sync' },
 )
+batchQuery.onClear(() => {
+  page.value = undefined
+})
+memberQuery.onClear(() => {
+  members.value = undefined
+  selectedMember.value = undefined
+})
 </script>
 <template>
   <MdmPage :title="t('policies.entry.batches')" :busy="op.busy.value" :failure="op.failure.value">
+    <DirectoryControls
+      v-if="batch"
+      :query="memberQuery"
+      :busy="op.busy.value"
+      hint="id / policyId / versionId / state"
+      @load="loadMembers"
+    />
+    <DirectoryResults
+      :disabled="op.busy.value"
+      v-if="batch && !memberQuery.complete.value"
+      :items="members?.items ?? []"
+      @open="
+        (row) => {
+          readMember(String(row.id))
+        }
+      "
+    />
+
+    <DirectoryControls
+      v-if="!batch"
+      :query="batchQuery"
+      :busy="op.busy.value"
+      hint="id / operationId / event / createdAt"
+      @load="load"
+    />
+    <DirectoryResults
+      :disabled="op.busy.value"
+      v-if="!batch && !batchQuery.complete.value"
+      :items="page?.items ?? []"
+      @open="
+        (row) => {
+          openBatch(String(row.id))
+        }
+      "
+    />
+
     <DeviceContext :device="device" />
     <RouterLink
       :to="{
@@ -131,7 +210,7 @@ watch(
       ><p>{{ t('console.pageNotTotal') }}</p>
       <p v-if="!page.items.length">{{ t('policies.empty') }}</p>
       <ol>
-        <li v-for="row in page.items" :key="row.id">
+        <li v-for="row in batchQuery.complete.value ? page.items : []" :key="row.id">
           <RouterLink
             :to="{
               name: 'policy-event-batch',
@@ -142,10 +221,7 @@ watch(
           >
         </li>
       </ol>
-      <VBtn v-if="page.nextCursor" :disabled="op.busy.value" @click="load(page.nextCursor)">{{
-        t('devices.next')
-      }}</VBtn></template
-    >
+    </template>
     <section v-if="detail" class="console-panel" data-section="event-batch">
       <h2>{{ detail.event }}</h2>
       <p>
@@ -192,7 +268,11 @@ watch(
     </section>
     <p v-if="members && !members.items.length">{{ t('policies.empty') }}</p>
     <article
-      v-for="member in members?.items"
+      v-for="member in selectedMember
+        ? [selectedMember]
+        : memberQuery.complete.value
+          ? members?.items
+          : []"
       :key="member.id"
       class="console-panel"
       data-section="event-member"
@@ -236,9 +316,7 @@ watch(
         /></template>
       </div>
     </article>
-    <VBtn v-if="members?.nextCursor" :disabled="op.busy.value" @click="more">{{
-      t('devices.next')
-    }}</VBtn>
+
     <RetirementDetails v-if="retirementId" :id="retirementId" />
   </MdmPage>
 </template>

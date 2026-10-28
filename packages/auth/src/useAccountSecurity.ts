@@ -9,6 +9,16 @@ export function useAccountSecurity() {
   const { busy, error, errorMessage, run, checkpoint } = useOperation()
   const rows = ref<Session[]>([])
   const next = ref<string | null>(null)
+  const limit = ref(50),
+    appliedLimit = ref(50),
+    trail = ref<(string | undefined)[]>([])
+  let acceptedCursor: string | undefined
+  let navigating = false
+  const previous = computed(() => trail.value.at(-1))
+  function navigate(cursor?: string) {
+    navigating = true
+    return load(cursor)
+  }
   const current = ref('')
   const tab = ref('sessions'),
     confirmAll = ref(false)
@@ -44,6 +54,8 @@ export function useAccountSecurity() {
       generation++
       rows.value = []
       next.value = null
+      trail.value = []
+      acceptedCursor = undefined
       current.value = ''
       password.value = ''
       reauthPassword.value = ''
@@ -71,10 +83,21 @@ export function useAccountSecurity() {
   )
   async function load(cursor?: string) {
     const expected = generation
-    const value = await api.sessions(cursor)
+    const size = cursor !== undefined || navigating ? appliedLimit.value : limit.value
+    navigating = false
+    const value = await api.sessions(cursor, size)
     checkpoint()
     if (generation !== expected) throw new Error('Stale session page')
-    rows.value = cursor ? [...rows.value, ...value.sessions] : value.sessions
+    const position = trail.value.lastIndexOf(cursor)
+    trail.value =
+      cursor === undefined
+        ? []
+        : position >= 0
+          ? trail.value.slice(0, position)
+          : [...trail.value, acceptedCursor]
+    rows.value = value.sessions
+    acceptedCursor = cursor
+    appliedLimit.value = size
     next.value = value.next
   }
   async function checkSession() {
@@ -152,6 +175,10 @@ export function useAccountSecurity() {
   }
 
   return {
+    limit,
+    trail,
+    previous,
+    navigate,
     session,
     host,
     busy,

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VBtn, VDialog, VCard, VCardText, VCardActions, VSpacer } from 'vuetify/components'
 import { computed, ref, onMounted, watch } from 'vue'
@@ -8,6 +12,19 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import type { EndpointDetail } from '../clients/endpoint-model'
+const registrationQuery = useDirectoryQuery(
+  [
+    'registrationId',
+    'source',
+    'generation',
+    'status',
+    'userContextId',
+    'enrollmentId',
+    'agentGrantId',
+  ],
+  1000,
+)
+
 const props = defineProps<{ endpoint: EndpointDetail }>()
 const emit = defineEmits<{ changed: [] }>()
 const runtime = useMdm(),
@@ -38,10 +55,12 @@ watch(
 async function load(next?: string) {
   page.value = undefined
   await run(
-    () => runtime.devices.enrollment.registrations(props.endpoint.id, { cursor: next }),
+    () =>
+      registrationQuery.read(next, (query) =>
+        runtime.devices.enrollment.registrations(props.endpoint.id, query),
+      ),
     (v) => {
       page.value = v
-      if (original.value) compared.value = true
     },
   )
 }
@@ -58,14 +77,53 @@ async function revoke(replay = false) {
   }
 }
 onMounted(() => void load())
+registrationQuery.onClear(() => {
+  page.value = undefined
+})
+registrationQuery.bind(() => props.endpoint.id)
+async function compareRegistration() {
+  const registration = original.value?.registration
+  if (!registration) return
+  await run(
+    () =>
+      runtime.devices.enrollment.registrations(props.endpoint.id, {
+        filter: `registrationId==${registration}`,
+        limit: 1,
+      }),
+    (page) => {
+      compared.value = page.items.some((row) => row.registrationId === registration)
+    },
+  )
+}
 </script>
 <template>
+  <VBtn v-if="original" :disabled="busy" @click="compareRegistration"
+    >{{ t('devices.reload') }} · {{ original.registration }}</VBtn
+  >
+  <DirectoryControls
+    :query="registrationQuery"
+    :busy="busy"
+    hint="registrationId / source / generation / status"
+    @load="load"
+  />
+  <DirectoryResults
+    :disabled="busy || uncertain"
+    :required="['registrationId']"
+    v-if="!registrationQuery.complete.value"
+    :items="page?.items ?? []"
+    @open="
+      (row) => {
+        target = String(row.registrationId)
+      }
+    "
+  />
+
   <MdmDisclosure class="console-panel">
     <template #title>{{ t('devices.credentials') }}</template>
     <p>{{ t('devices.revokeNote') }}</p>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
     <ul>
-      <li v-for="r in page?.items" :key="r.registrationId">
+      <li v-for="r in registrationQuery.complete.value ? page?.items : []" :key="r.registrationId">
         {{ r.source }} · {{ r.status }} · {{ r.generation
         }}<v-btn
           :disabled="busy || uncertain || r.status !== 'active'"
@@ -74,10 +132,7 @@ onMounted(() => void load())
         >
       </li>
     </ul>
-    <v-btn :disabled="busy" @click="load()">{{ t('devices.reload') }}</v-btn
-    ><v-btn v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
-      t('devices.next')
-    }}</v-btn>
+    <v-btn :disabled="busy" @click="load()">{{ t('devices.reload') }}</v-btn>
     <v-dialog
       :model-value="!!target"
       :data-state="target ? 'open' : 'closed'"
@@ -92,8 +147,7 @@ onMounted(() => void load())
           ><p>{{ t('devices.revokeNote') }}</p>
           <code>{{ target }}</code>
           <p v-if="uncertain">{{ t('devices.unknownWrite') }}</p>
-          <v-btn v-if="uncertain" :disabled="busy" @click="load()">{{ t('devices.compare') }}</v-btn
-          ><v-btn v-if="uncertain && compared" :disabled="busy" @click="revoke(true)">{{
+          <v-btn v-if="uncertain && compared" :disabled="busy" @click="revoke(true)">{{
             t('devices.replay')
           }}</v-btn></v-card-text
         ><v-card-actions

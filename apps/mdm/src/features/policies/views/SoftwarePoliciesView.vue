@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import {
@@ -16,7 +20,7 @@ import PolicyUtcDateTimeInput from '../components/PolicyUtcDateTimeInput.vue'
 
 import type { PreviewInput } from '../../policies/clients/policies'
 
-import { comparison as queryComparison, allOf } from '../../../services/directory-query'
+import { comparison as queryComparison, allOf } from '@rss/api/mdm-query'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import PolicyIdentityEditor from '../../policies/components/PolicyIdentityEditor.vue'
 import PolicyEntry from '../../policies/components/PolicyEntry.vue'
@@ -46,6 +50,25 @@ import NativeScheduleEditor from '../../software/components/NativeScheduleEditor
 import { rolloutStageState } from '../../software/clients/rollout'
 import type { Publication } from '../../software/clients/publication'
 import PolicyRunFacts from '../../policies/components/PolicyRunFacts.vue'
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'toolName',
+    'alias',
+    'customEvent',
+    'revision',
+    'version',
+    'versionId',
+    'state',
+    'definition',
+    'action',
+    'scope',
+    'resource',
+    'category',
+  ],
+  1000,
+)
+
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -290,7 +313,10 @@ function cancelEdit() {
 }
 function list(after?: string) {
   void run(
-    () => client.list({ cursor: after, filter: queryComparison('action', '==', 'software') }),
+    () =>
+      directoryQuery.read(after, (query) => client.list(query), {
+        filter: queryComparison('action', '==', 'software'),
+      }),
     (v) => {
       page.value = v
     },
@@ -517,9 +543,29 @@ watch(
   },
   { immediate: true },
 )
+directoryQuery.onClear(() => {
+  page.value = undefined
+})
 </script>
 <template>
   <MdmPage :title="t('policies.software')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选和排序：id / revision / version / state / action / category / scope。"
+      @load="list"
+    />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      v-if="!directoryQuery.complete.value"
+      :items="page?.items ?? []"
+      @open="
+        (row) => {
+          read(String(row.id))
+        }
+      "
+    />
+
     <template #actions
       ><VBtn variant="flat" :disabled="busy || uncertain" @click="beginCreate">{{
         t('policies.create')
@@ -529,7 +575,7 @@ watch(
     <p class="console-page-description">{{ t('software.deploymentHint') }}</p>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
     <ul v-if="!editing" class="console-data-list">
-      <li v-for="p in page?.items" :key="p.id">
+      <li v-for="p in directoryQuery.complete.value ? page?.items : []" :key="p.id">
         <VBtn :disabled="!!(busy || uncertain)" type="submit" @click="read(p.id)">
           {{ p.definition.action.kind === 'software' ? p.definition.action.resource.id : p.id }} /
           {{ p.definition.action.kind === 'software' ? p.definition.action.resource.version : '—' }}
@@ -538,9 +584,7 @@ watch(
         </VBtn>
       </li>
     </ul>
-    <VBtn v-if="page?.nextCursor" :disabled="!!busy" type="submit" @click="list(page.nextCursor)">
-      {{ t('policies.next') }}
-    </VBtn>
+
     <section v-show="editing" class="console-panel console-wizard">
       <header class="console-page-header">
         <div>

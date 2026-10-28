@@ -14,7 +14,7 @@ import {
   projectedRow,
   queryParameters,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import { jsonValue } from '../../../services/json'
 import { policyName } from './model'
 export function operationReference(value: unknown) {
@@ -102,9 +102,9 @@ export function createEventsClient(transport: HttpTransport) {
         method: 'GET',
         path: '/api/v1/devices/{device}/policy-event-batches',
         pathParams: { device },
-        query: queryParameters({ limit: 20, ...query, fields: Object.keys(batchFields) }),
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
-        decode: (v) => projectedPage(v, batchFields, undefined, ['id']),
+        decode: (v) => projectedPage(v, batchFields, query.fields, ['id']),
       }),
     read: (device: string, batch: string) =>
       transport.request({
@@ -132,15 +132,17 @@ export function createEventsClient(transport: HttpTransport) {
         method: 'GET',
         path: '/api/v1/devices/{device}/policy-event-batches/{batch}/members',
         pathParams: { device, batch },
-        query: queryParameters({ limit: 20, ...query, fields: Object.keys(memberFields) }),
+        query: queryParameters({ limit: 20, ...query }),
         successStatus: 200,
         decode(value) {
-          const page = projectedPage(value, memberFields, undefined, ['id'])
+          const page = projectedPage(value, memberFields, query.fields, ['id'])
           for (const item of page.items)
             if (
-              item.state !== item.decision.state ||
-              JSON.stringify(item.operations.map((o) => o.reference)) !==
-                JSON.stringify(item.decision.operations)
+              ('state' in item && 'decision' in item && item.state !== item.decision.state) ||
+              ('operations' in item &&
+                'decision' in item &&
+                JSON.stringify(item.operations.map((o) => o.reference)) !==
+                  JSON.stringify(item.decision.operations))
             )
               throw new Error('Wrong member operations')
           return page

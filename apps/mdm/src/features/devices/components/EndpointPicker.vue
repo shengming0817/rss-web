@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { comparison } from '../../../services/directory-query'
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
+import { objectRef } from '../clients/objects'
+import { comparison } from '@rss/api/mdm-query'
 import { computed, ref, watch } from 'vue'
 import {
   VBtn,
@@ -15,6 +20,8 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import type { ViewEndpoint } from '../clients/endpoint-model'
+const viewQuery = useDirectoryQuery(['key', 'reference', 'association', 'endpoints'], 100)
+
 const model = defineModel<string[]>({ required: true })
 const runtime = useMdm(),
   { t } = useI18n(),
@@ -28,18 +35,25 @@ function label(e: ViewEndpoint) {
     ? e.displayName.state.value.value
     : t('devices.unnamedDevice')
 }
-async function load(more = false) {
+const projectedViews = ref<object[]>([])
+async function readView(row: Record<string, unknown>) {
+  if (!row['reference']) return
+  await run(
+    () => runtime.devices.views.detail(objectRef(row['reference'])),
+    (value) => {
+      endpoints.value = value.endpoints
+    },
+  )
+}
+async function load(after?: string) {
   await run(
     () =>
-      runtime.devices.views.list({
+      viewQuery.read(after, (query) => runtime.devices.views.list(query), {
         filter: search.value ? comparison('search', '=icontains=', search.value) : undefined,
-        cursor: more ? (next.value ?? undefined) : undefined,
-        limit: 20,
       }),
     (value) => {
-      endpoints.value = more
-        ? [...endpoints.value, ...value.items.flatMap((v) => v.endpoints)]
-        : value.items.flatMap((v) => v.endpoints)
+      projectedViews.value = value.items
+      endpoints.value = viewQuery.complete.value ? value.items.flatMap((v) => v.endpoints) : []
       next.value = value.nextCursor
     },
   )
@@ -59,8 +73,30 @@ watch(
   },
   { immediate: true, flush: 'sync' },
 )
+viewQuery.onClear(() => {
+  endpoints.value = []
+  projectedViews.value = []
+})
 </script>
 <template>
+  <DirectoryControls
+    :query="viewQuery"
+    :busy="busy"
+    hint="key / status / assetState / channel / source / platform / search；sort: key"
+    @load="load"
+  />
+  <DirectoryResults
+    :disabled="busy"
+    :required="['reference']"
+    v-if="!viewQuery.complete.value"
+    :items="projectedViews"
+    @open="
+      (row) => {
+        readView(row)
+      }
+    "
+  />
+
   <section class="endpoint-picker">
     <v-text-field
       v-model="search"
@@ -84,8 +120,5 @@ watch(
       >
     </div>
     <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
-    <v-btn v-if="next" type="button" :disabled="busy" @click="load(true)">{{
-      t('devices.next')
-    }}</v-btn>
   </section>
 </template>

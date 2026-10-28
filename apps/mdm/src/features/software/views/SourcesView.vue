@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import {
   VBtn,
   VCard,
@@ -19,6 +23,11 @@ import { operation, useOperation } from '../../../services/useOperation'
 import { sourceDefinition, type SourceChange } from '../clients/lifecycle'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import MdmPage from '../../../ui/MdmPage.vue'
+const directoryQuery = useDirectoryQuery(
+  ['id', 'revision', 'protocol', 'state', 'source', 'snapshot', 'lifecycle'],
+  100,
+)
+
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.software.lifecycle,
@@ -37,16 +46,23 @@ const page = ref<Awaited<ReturnType<typeof client.sources>>>()
 function list(after?: string) {
   page.value = undefined
   void run(
-    () => client.sources({ cursor: after }),
+    () => directoryQuery.read(after, (query) => client.sources(query), {}),
     (v) => {
       page.value = v
     },
   )
 }
+function openProjected(row: Record<string, unknown>) {
+  const source = (row['source'] ?? row) as { id?: string; revision?: string } | undefined
+  if (!source?.id || !source.revision) return
+  id.value = source.id
+  revision.value = source.revision
+  read()
+}
 function choose(value: NonNullable<typeof page.value>['items'][number]) {
   id.value = value.source.id
   revision.value = value.source.revision
-  current.value = value
+  read()
 }
 onMounted(() => list())
 
@@ -118,6 +134,9 @@ watch(
   },
   { flush: 'sync' },
 )
+directoryQuery.onClear(() => {
+  page.value = undefined
+})
 </script>
 <template>
   <MdmPage
@@ -126,13 +145,31 @@ watch(
     :busy="busy"
     :failure="failure"
   >
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选和排序：id / revision / protocol / state；完整来源、快照、生命周期仅作投影。"
+      @load="list"
+    />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      v-if="!directoryQuery.complete.value"
+      :items="page?.items ?? []"
+      @open="
+        (row) => {
+          openProjected(row)
+        }
+      "
+    />
+
     <template #actions
       ><VBtn :disabled="busy || uncertain" @click="list()">{{
         t('policies.reload')
       }}</VBtn></template
     >
     <VDataTable
-      v-if="page"
+      disable-sort
+      v-if="directoryQuery.complete.value && page"
       :items="page.items"
       :headers="[
         { key: 'source.id', title: t('software.source') },
@@ -155,9 +192,7 @@ watch(
         }}</VBtn></template
       >
     </VDataTable>
-    <VBtn v-if="page?.nextCursor" :disabled="busy || uncertain" @click="list(page.nextCursor)">{{
-      t('devices.next')
-    }}</VBtn>
+
     <VCard class="my-4" variant="outlined"
       ><VCardText>
         <form @submit.prevent="read">

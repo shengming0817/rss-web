@@ -3,11 +3,13 @@ import {
   windowParameters,
   windowPage,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { boolean, closed } from '../../../services/decode'
 import {
   page,
+  entry,
+  entryFields,
   vault,
   settings,
   receipt,
@@ -68,13 +70,27 @@ export function createCertificateArchiveClient(transport: HttpTransport, tenant:
       write('/vault/password', operation, { oldPassword, newPassword }, (v) =>
         receipt(v, operation),
       ),
-    list: (query: DirectoryQuery = {}) =>
+    list: <F extends keyof typeof entryFields = keyof typeof entryFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: base + '/entries',
         query: queryParameters({ limit: 50, ...query }),
         successStatus: 200,
-        decode: (v) => page(v, tenant),
+        decode: (v) => page(v, tenant, query.fields),
+      }),
+    read: (id: string) =>
+      transport.request({
+        method: 'GET',
+        path: base + '/entries/{entry}',
+        pathParams: { entry: id },
+        successStatus: 200,
+        decode: (value) => {
+          const row = entry(value)
+          if (row.id !== id) throw new Error('Wrong entry')
+          return row
+        },
       }),
     history: (entry: string, query: { limit?: number; cursor?: string } = {}) =>
       transport.request({

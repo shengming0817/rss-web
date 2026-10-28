@@ -36,3 +36,30 @@ import type { SoftwareDefinition } from './ResourceWrite'
 export declare function validateSoftwareDefinition(value: unknown): value is SoftwareDefinition
 import type { FieldDefinition } from './FieldWrite'
 export declare function validateFieldDefinition(value: unknown): value is FieldDefinition
+export declare function validateFieldViewItemKey(value: unknown): value is FieldView['itemKey']
+export declare function validateFieldViewKey(value: unknown): value is FieldView['key']
+export declare function validateFieldViewManual(value: unknown): value is FieldView['manual']
+export declare function validateFieldViewNullable(
+  value: unknown,
+): value is FieldView['nullable']
+export declare function validateFieldViewOperations(
+  value: unknown,
+): value is FieldView['operations']
+export declare function validateFieldViewPlatforms(
+  value: unknown,
+): value is FieldView['platforms']
+export declare function validateFieldViewSearchable(
+  value: unknown,
+): value is FieldView['searchable']
+export declare function validateFieldViewSensitivity(
+  value: unknown,
+): value is FieldView['sensitivity']
+export declare function validateFieldViewSources(value: unknown): value is FieldView['sources']
+export declare function validateFieldViewTimeSeries(
+  value: unknown,
+): value is FieldView['timeSeries']
+export declare function validateFieldViewUnit(value: unknown): value is FieldView['unit']
+export declare function validateFieldViewValueType(
+  value: unknown,
+): value is FieldView['valueType']
+export declare function validateFieldViewVersion(value: unknown): value is FieldView['version']

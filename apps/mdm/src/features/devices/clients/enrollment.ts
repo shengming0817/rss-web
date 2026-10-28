@@ -1,4 +1,9 @@
-import { windowParameters, windowPage, type WindowQuery } from '../../../services/directory-query'
+import {
+  queryParameters,
+  projectedPage,
+  projectedRow,
+  type DirectoryQuery,
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   closed,
@@ -9,7 +14,6 @@ import {
   enumeration,
   integer,
   nullable,
-  unique,
   uuid,
 } from '../../../services/decode'
 export const enrollmentSources = ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const
@@ -180,21 +184,17 @@ function receipt(value: unknown, operationId: string, id?: string) {
     throw new Error('Wrong enrollment receipt')
   return { operationId, ...result }
 }
+const registrationFields = {
+  registrationId: uuid,
+  enrollmentId: (v: unknown) => nullable(v, uuid),
+  agentGrantId: (v: unknown) => nullable(v, uuid),
+  userContextId: (v: unknown) => nullable(v, uuid),
+  source: (v: unknown) => enumeration(v, enrollmentSources),
+  generation: count,
+  status: (v: unknown) => enumeration(v, ['active', 'superseded', 'revoked'] as const),
+}
 export function registration(value: unknown) {
-  const v = closed(
-    value,
-    ['registrationId', 'enrollmentId', 'agentGrantId', 'source', 'generation', 'status'],
-    ['userContextId'],
-  )
-  return {
-    registrationId: uuid(v['registrationId']),
-    enrollmentId: nullable(v['enrollmentId'], uuid),
-    agentGrantId: nullable(v['agentGrantId'], uuid),
-    userContextId: v['userContextId'] === undefined ? null : nullable(v['userContextId'], uuid),
-    source: enumeration(v['source'], enrollmentSources),
-    generation: count(v['generation']),
-    status: enumeration(v['status'], ['active', 'superseded', 'revoked'] as const),
-  }
+  return projectedRow(value, registrationFields)
 }
 export function generateEnrollmentPassword(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
@@ -281,17 +281,18 @@ export function createEnrollmentClient(transport: HttpTransport) {
         successStatus: 200,
         decode: (v) => receipt(v, operation, id),
       }),
-    registrations: (device: string, page: WindowQuery = {}) =>
+    registrations: <F extends keyof typeof registrationFields = keyof typeof registrationFields>(
+      device: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/registrations',
         pathParams: { device },
-        query: windowParameters({ limit: 20, ...page }, 1000),
+        query: queryParameters({ limit: 50, ...query }),
         successStatus: 200,
-        decode: (value) => {
-          const page = windowPage(value, registration)
-          return { ...page, items: unique(page.items, (r) => r.registrationId) }
-        },
+        decode: (value) =>
+          projectedPage(value, registrationFields, query.fields, ['registrationId']),
       }),
     revoke: (device: string, registration: string, operation: string) =>
       transport.request({

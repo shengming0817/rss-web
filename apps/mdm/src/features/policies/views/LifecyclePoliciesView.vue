@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import { VSelect, VBtn, VTextField, VCheckbox } from 'vuetify/components'
 
 import type { PreviewInput } from '../clients/policies'
 
-import { comparison as queryComparison, allOf } from '../../../services/directory-query'
+import { comparison as queryComparison, allOf } from '@rss/api/mdm-query'
 import { ref, toRaw, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import PolicyIdentityEditor from '../components/PolicyIdentityEditor.vue'
@@ -25,6 +29,25 @@ import AssignmentFacts from '../components/AssignmentFacts.vue'
 import CatalogLocator from '../components/CatalogLocator.vue'
 import RetirementDetails from '../../devices/components/RetirementDetails.vue'
 import MdmPage from '../../../ui/MdmPage.vue'
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'toolName',
+    'alias',
+    'customEvent',
+    'revision',
+    'version',
+    'versionId',
+    'state',
+    'definition',
+    'action',
+    'scope',
+    'resource',
+    'category',
+  ],
+  1000,
+)
+
 const route = useRoute(),
   runtime = useMdm(),
   client = runtime.policies.policies,
@@ -117,8 +140,7 @@ async function load(cursor?: string) {
   rows.value = undefined
   await run(
     () =>
-      client.list({
-        cursor,
+      directoryQuery.read(cursor, (query) => client.list(query), {
         filter: allOf(
           queryComparison('action', '==', kind.value),
           state.value ? queryComparison('state', '==', state.value) : undefined,
@@ -306,9 +328,29 @@ watch(
     if (typeof value === 'string') void read(value)
   },
 )
+directoryQuery.onClear(() => {
+  rows.value = undefined
+})
 </script>
 <template>
   <MdmPage :title="t('gap.lifecycle')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选和排序：id / revision / version / state / action / category / scope。"
+      @load="load"
+    />
+    <DirectoryResults
+      :disabled="busy || locked"
+      v-if="!directoryQuery.complete.value"
+      :items="rows?.items ?? []"
+      @open="
+        (row) => {
+          read(String(row.id))
+        }
+      "
+    />
+
     <p>{{ t('gap.retirementHint') }}</p>
     <PolicyEntry v-if="current" :policy="current" />
     <PolicyFieldset :disabled="locked || current?.state === 'archived'">
@@ -348,11 +390,11 @@ watch(
     <VBtn :disabled="locked" @click="fresh">{{ t('gap.newDraft') }}</VBtn
     ><VBtn :disabled="busy" @click="load()">{{ t('gap.load') }}</VBtn>
     <ul>
-      <li v-for="p in rows?.items" :key="p.id">
+      <li v-for="p in directoryQuery.complete.value ? rows?.items : []" :key="p.id">
         <VBtn :disabled="locked" @click="read(p.id)">{{ p.id }} · {{ p.state }}</VBtn>
       </li>
     </ul>
-    <VBtn v-if="rows?.nextCursor" @click="load(rows.nextCursor)">{{ t('gap.next') }}</VBtn>
+
     <form @submit.prevent="save">
       <PolicyFieldset :disabled="locked || current?.state === 'archived'">
         <label

@@ -1,4 +1,5 @@
-import { nextCursor } from '../../../services/directory-query'
+import { projectedRow } from '@rss/api/mdm-query'
+import { nextCursor } from '@rss/api/mdm-query'
 import { jsonObject } from '../../../services/json'
 import {
   array,
@@ -159,6 +160,13 @@ export function version(value: unknown) {
   }
 }
 export type Version = ReturnType<typeof version>
+export const entryFields = {
+  id: uuid,
+  revision: positive,
+  retired: boolean,
+  recommendedVersion: (v: unknown) => nullable(v, positive),
+  latest: version,
+}
 export function entry(value: unknown) {
   const v = closed(value, ['id', 'revision', 'retired', 'recommendedVersion', 'latest']),
     result = {
@@ -227,11 +235,15 @@ function alerts(value: unknown) {
     notYetValid: count(v['notYetValid']),
   }
 }
-export function page(value: unknown, tenant: string) {
+export function page<F extends keyof typeof entryFields = keyof typeof entryFields>(
+  value: unknown,
+  tenant: string,
+  fields?: readonly F[],
+) {
   const v = closed(value, ['tenantId', 'items', 'nextCursor', 'asOf', 'reminderDays', 'alerts']),
     result = {
       tenantId: uuid(v['tenantId']),
-      items: unique(array(v['items'], entry), (v) => v.id),
+      items: array(v['items'], (item) => projectedRow(item, entryFields, fields)),
       nextCursor: nextCursor(v['nextCursor']),
       asOf: count(v['asOf']),
       reminderDays: count(v['reminderDays']),
@@ -241,7 +253,9 @@ export function page(value: unknown, tenant: string) {
     result.tenantId !== tenant ||
     result.items.length > 200 ||
     result.reminderDays > 3650 ||
-    result.items.some((e) => e.latest.createdAt > result.asOf)
+    result.items.some(
+      (e) => 'latest' in e && (e.latest as ReturnType<typeof version>).createdAt > result.asOf,
+    )
   )
     throw new Error('Wrong archive page')
   return result

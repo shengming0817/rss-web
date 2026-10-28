@@ -6,12 +6,13 @@ import {
   type WindowQuery,
   projectedPage,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
   count,
   array,
+  identifier,
   closed,
   nullable,
   uuid,
@@ -37,6 +38,23 @@ import {
 } from '../../devices/clients/objects'
 
 const policyFields = {
+  action: (v: unknown) =>
+    enumeration(v, [
+      'device_access',
+      'unmanage_device',
+      'credential',
+      'execution',
+      'native_collection',
+      'agent_collection',
+      'telemetry_profile',
+      'configuration',
+      'software',
+      'ensure_agent_installed',
+      'request_mdm_enrollment',
+    ] as const),
+  scope: uuid,
+  resource: (v: unknown) => nullable(v, identifier),
+  category: (v: unknown) => nullable(v, identifier),
   id: uuid,
   toolName,
   alias: (v: unknown) => nullable(v, policyName),
@@ -191,7 +209,6 @@ export function createPoliciesClient(transport: HttpTransport) {
         query: queryParameters({
           limit: 20,
           ...query,
-          fields: query.fields ?? Object.keys(policyFields),
         }),
         successStatus: 200,
         decode(value) {

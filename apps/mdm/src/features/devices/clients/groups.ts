@@ -1,8 +1,4 @@
-import {
-  queryParameters,
-  projectedPage,
-  type DirectoryQuery,
-} from '../../../services/directory-query'
+import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import { jsonObject } from '../../../services/json'
 import {
   conditionContext,

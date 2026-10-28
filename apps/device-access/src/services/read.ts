@@ -5,6 +5,7 @@ import { errorMessage } from './status'
 export function useRead<T>(
   load: (signal: AbortSignal) => Promise<T>,
   dependencies: WatchSource = () => null,
+  options: { accepted?: (value: T) => void; enabled?: () => boolean } = {},
 ) {
   const runtime = useDa(),
     data = shallowRef<T>(),
@@ -21,13 +22,17 @@ export function useRead<T>(
   }
   async function reload() {
     reset()
-    if (!identityKey(runtime.session)) return
+    if (!identityKey(runtime.session) || options.enabled?.() === false) return
     const current = epoch
     controller = new AbortController()
     busy.value = true
     try {
       const value = await load(controller.signal)
-      if (current === epoch) data.value = value
+      if (current === epoch) {
+        options.accepted?.(value)
+        data.value = value
+        return value
+      }
     } catch (e) {
       if (current === epoch) error.value = errorMessage(e)
     } finally {

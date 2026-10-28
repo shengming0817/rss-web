@@ -187,39 +187,46 @@ it('validates host config and gives closed, non-secret error messages', () => {
   expect(errorMessage(new DOMException('SECRET', 'NotAllowedError'))).toContain('取消')
 })
 
-it('keeps complete directory pages and fences stale pages on identity loss', async () => {
+it('keeps draft separate from accepted pages, commits only successful navigation and fences identity loss', async () => {
   const r = await runtime(),
     load = vi
       .fn()
-      .mockResolvedValueOnce({ items: [{ id: 'a' }], nextCursor: 'p2' })
-      .mockResolvedValueOnce({ items: [{ id: 'b' }], nextCursor: null })
-  const directory = use(r, () => useDirectory<{ id: string }>(load)).output
+      .mockResolvedValueOnce({ items: [{ id: 'a' }], summaries: [{ id: 'a' }], nextCursor: 'cDI' })
+      .mockResolvedValueOnce({ items: [{ id: 'b' }], summaries: [{ id: 'b' }], nextCursor: null })
+  const d = use(r, () => useDirectory<{ id: string }>(['id'], 100, load)).output
   await flushPromises()
-  expect(directory.complete.value).toBe(false)
-  await directory.loadMore()
-  expect(directory.items.value).toEqual([{ id: 'a' }, { id: 'b' }])
-  expect(directory.complete.value).toBe(true)
-  expect(load.mock.calls[1]?.[0]).toBe('p2')
+  d.draft.filter = "id=='draft'"
+  await d.following()
+  expect(load.mock.calls[1]?.[0]).toMatchObject({ cursor: 'cDI', limit: 50 })
+  expect(load.mock.calls[1]?.[0].filter).toBeUndefined()
+  expect(d.data.value?.items).toEqual([{ id: 'b' }])
+  expect(d.trail.value).toEqual([undefined])
+  load.mockRejectedValueOnce(new Error('offline'))
+  await d.previous()
+  expect(d.cursor.value).toBe('cDI')
+  expect(d.trail.value).toEqual([undefined])
+  expect(d.data.value).toBeUndefined()
+  load.mockResolvedValueOnce({ items: [], summaries: [], nextCursor: null })
+  await d.reload()
+  expect(d.cursor.value).toBeUndefined()
+  expect(d.trail.value).toEqual([])
+  expect(d.data.value?.items).toEqual([])
   r.session.clear()
-  expect(directory.items.value).toEqual([])
+  expect(d.data.value).toBeUndefined()
+  expect(d.next.value).toBeNull()
 })
-it('allows explicit failed-page retry and stops repeated cursor loops', async () => {
+it('rejects repeated cursors without advancing the accepted page', async () => {
   const r = await runtime(),
     load = vi
       .fn()
-      .mockResolvedValueOnce({ items: [{ id: 'a' }], nextCursor: 'p2' })
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce({ items: [{ id: 'b' }], nextCursor: 'p2' })
-  const d = use(r, () => useDirectory<{ id: string }>(load)).output
+      .mockResolvedValueOnce({ items: [{ id: 'a' }], summaries: null, nextCursor: 'cDI' })
+      .mockResolvedValueOnce({ items: [], summaries: null, nextCursor: 'cDI' })
+  const d = use(r, () => useDirectory(['id'], 100, load)).output
   await flushPromises()
-  await d.loadMore()
-  expect(d.items.value).toEqual([{ id: 'a' }])
+  await d.following()
   expect(d.error.value).toBeTruthy()
-  await d.loadMore()
-  expect(d.blocked.value).toBe(true)
-  expect(d.complete.value).toBe(false)
-  await d.loadMore()
-  expect(load).toHaveBeenCalledTimes(3)
+  expect(d.cursor.value).toBeUndefined()
+  expect(d.trail.value).toEqual([])
 })
 it('unlocks only confirmed synchronous operation completion for the next explicit edit', async () => {
   const r = await runtime(),
@@ -325,16 +332,7 @@ it('requires explicit acceptance of a freshly read revision without owning or re
   const r = await runtime(),
     initial = { id: 'a', revision: 1, name: 'Original' },
     draft = { name: 'My draft' }
-  const load = vi
-    .fn()
-    .mockResolvedValueOnce({
-      items: [{ id: 'other', revision: 3, name: 'Other' }],
-      nextCursor: 'next',
-    })
-    .mockResolvedValueOnce({
-      items: [{ id: 'a', revision: 2, name: 'Changed by another user' }],
-      nextCursor: null,
-    })
+  const load = vi.fn().mockResolvedValue({ id: 'a', revision: 2, name: 'Changed by another user' })
   const baseline = use(r, () => useRevisionReview(initial, load)).output
   expect(baseline.accept()).toBe(false)
   await baseline.refresh()
@@ -350,18 +348,18 @@ it('does not adopt absent, failed or stale revision reads', async () => {
     initial = { id: 'a', revision: 1 }
   const load = vi
     .fn()
-    .mockResolvedValueOnce({ items: [], nextCursor: null })
+    .mockResolvedValueOnce({ id: 'other', revision: 3 })
     .mockRejectedValueOnce(new Error('offline'))
-    .mockResolvedValue({ items: [], nextCursor: 'same' })
+    .mockResolvedValue({ id: 'other', revision: 4 })
   const baseline = use(r, () => useRevisionReview(initial, load)).output
-  await baseline.refresh()
-  expect(baseline.error.value).toContain('未找到')
   await baseline.refresh()
   expect(baseline.error.value).toBeTruthy()
   await baseline.refresh()
-  expect(baseline.error.value).toContain('尚未完整')
+  expect(baseline.error.value).toBeTruthy()
+  await baseline.refresh()
+  expect(baseline.error.value).toBeTruthy()
   expect(baseline.revision.value).toBe(1)
-  let finish!: (v: { items: { id: string; revision: number }[]; nextCursor: null }) => void
+  let finish!: (v: { id: string; revision: number }) => void
   const pending = use(r, () =>
     useRevisionReview(
       initial,
@@ -373,7 +371,7 @@ it('does not adopt absent, failed or stale revision reads', async () => {
   ).output
   const reading = pending.refresh()
   r.session.clear()
-  finish({ items: [{ id: 'a', revision: 4 }], nextCursor: null })
+  finish({ id: 'a', revision: 4 })
   await reading
   expect(pending.current.value).toBeUndefined()
   expect(pending.busy.value).toBe(false)

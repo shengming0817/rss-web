@@ -19,20 +19,28 @@ export function useOperation() {
           }
     return t(`identity.errors.${error.value}`, params)
   })
+  let generation = 0
+  function invalidate() {
+    generation++
+    busy.value = false
+    error.value = ''
+    retryAt.value = undefined
+  }
   let active = true
   onBeforeUnmount(() => {
     active = false
   })
   async function run<T>(work: () => Promise<T>): Promise<T | undefined> {
     if (busy.value) return undefined
+    const own = generation
     busy.value = true
     error.value = ''
     retryAt.value = undefined
     try {
       const result = await work()
-      return active ? result : undefined
+      return active && own === generation ? result : undefined
     } catch (failure) {
-      if (active) {
+      if (active && own === generation) {
         error.value =
           isRssApiError(failure) && failure.cause === 'wire' ? failure.code : 'unknown_result'
         if (
@@ -45,11 +53,11 @@ export function useOperation() {
       }
       return undefined
     } finally {
-      if (active) busy.value = false
+      if (active && own === generation) busy.value = false
     }
   }
   function checkpoint() {
     if (!active) throw new Error('Operation abandoned')
   }
-  return { busy, error, errorMessage, run, checkpoint }
+  return { busy, error, errorMessage, run, checkpoint, invalidate }
 }

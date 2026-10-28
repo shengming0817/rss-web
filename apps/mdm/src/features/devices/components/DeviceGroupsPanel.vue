@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
-import { comparison as queryComparison, allOf } from '../../../services/directory-query'
+import { comparison as queryComparison, allOf } from '@rss/api/mdm-query'
 import {
   VBtn,
   VDialog,
@@ -40,6 +44,23 @@ import GroupDependencies from '../components/GroupDependencies.vue'
 import EndpointPicker from '../components/EndpointPicker.vue'
 import { deviceBinding } from '../useDeviceBinding'
 import { deviceCondition } from '../clients/asset-model'
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'kind',
+    'systemSelector',
+    'assetContext',
+    'calculationRevision',
+    'presentation',
+    'revision',
+    'memberVersion',
+    'memberCount',
+    'ruleVersion',
+    'deleted',
+  ],
+  1000,
+)
+
 const props = defineProps<{ groupKind?: 'static' | 'dynamic' }>()
 const emit = defineEmits<{ locked: [value: boolean] }>()
 const { t } = useI18n(),
@@ -144,13 +165,12 @@ function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
 function loadList(next?: string) {
   list.value = undefined
   if (busy.value) return
-  const selection = next
+  const selection = directoryQuery.continues(next)
     ? applied
     : { name: query.value || undefined, kind: filter.value || undefined }
   void run(
     () =>
-      runtime.devices.groups.list({
-        cursor: next,
+      directoryQuery.read(next, (query) => runtime.devices.groups.list(query), {
         filter: allOf(
           selection.name ? queryComparison('name', '=icontains=', selection.name) : undefined,
           selection.kind ? queryComparison('kind', '==', selection.kind) : undefined,
@@ -459,6 +479,9 @@ function beginDelete() {
 function openGroup(group: string) {
   open(group)
 }
+directoryQuery.onClear(() => {
+  list.value = undefined
+})
 </script>
 <template>
   <MdmPage
@@ -467,6 +490,23 @@ function openGroup(group: string) {
     :busy="busy"
     :failure="failure"
   >
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="id / revision / kind / assetContext / deleted / name / memberCount / calculationRevision / memberVersion"
+      @load="loadList"
+    />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      v-if="!directoryQuery.complete.value"
+      :items="list?.items ?? []"
+      @open="
+        (row) => {
+          open(String(row.id))
+        }
+      "
+    />
+
     <template #actions
       ><v-btn :disabled="busy" variant="outlined" @click="loadList()">{{
         t('devices.reload')
@@ -519,7 +559,7 @@ function openGroup(group: string) {
           ]"
         /><v-btn type="submit" :disabled="busy">{{ t('devices.searchGroups') }}</v-btn>
       </form>
-      <v-table :aria-label="t('devices.groups')"
+      <v-table v-if="directoryQuery.complete.value" :aria-label="t('devices.groups')"
         ><thead>
           <tr>
             <th>{{ t('devices.name') }}</th>
@@ -555,9 +595,6 @@ function openGroup(group: string) {
           </tr>
         </tbody></v-table
       >
-      <v-btn v-if="list?.nextCursor" :disabled="busy" @click="loadList(list.nextCursor)">{{
-        t('devices.next')
-      }}</v-btn>
     </template>
     <template v-if="current">
       <v-btn variant="text" :disabled="busy || uncertain" @click="closeDetail"

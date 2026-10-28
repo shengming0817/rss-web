@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import {
   VForm,
   VFileInput,
@@ -24,6 +28,15 @@ import { useAttachment } from '../useAttachment'
 import { setupPanes, type AdeCommand } from '../clients/apple'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import MdmPage from '../../../ui/MdmPage.vue'
+const deviceQuery = useDirectoryQuery(
+  ['serial', 'deleted', 'profileUuid', 'observedAt', 'registration'],
+  1000,
+)
+
+const profileQuery = useDirectoryQuery(['id', 'revision', 'remoteUuid', 'configuration'], 1000)
+
+const organizationQuery = useDirectoryQuery(['id', 'ade', 'accountEnrollment'], 1000)
+
 const id = ref('')
 const runtime = useMdm(),
   client = runtime.onboarding.apple,
@@ -61,7 +74,10 @@ const serverUuid = ref(''),
   serials = ref(''),
   recoveryId = ref(''),
   remoteProfile = ref('')
-const seenCursors = new Set<string>()
+const organizationRows = ref<object[]>([]),
+  profileRows = ref<object[]>([]),
+  deviceRows = ref<object[]>([])
+const profileBaseline = ref<Awaited<ReturnType<typeof client.profile>>>()
 const blocked = computed(
   () =>
     busy.value ||
@@ -73,17 +89,17 @@ function refresh() {
   void run(
     async () => ({
       status: await client.ade(id.value),
-      profiles: await client.profiles(id.value),
-      devices: await client.devices(id.value),
+      profiles: await profileQuery.read(undefined, (query) => client.profiles(id.value, query)),
+      devices: await deviceQuery.read(undefined, (query) => client.devices(id.value, query)),
     }),
     (v) => {
       status.value = v.status
-      profiles.value = v.profiles.items
+      profileRows.value = v.profiles.items
+      profiles.value = profileQuery.complete.value ? v.profiles.items : []
       profileCursor.value = v.profiles.nextCursor
-      devices.value = v.devices.items
+      deviceRows.value = v.devices.items
+      devices.value = deviceQuery.complete.value ? v.devices.items : []
       cursor.value = v.devices.nextCursor
-      seenCursors.clear()
-      if (cursor.value) seenCursors.add(cursor.value)
       serverUuid.value = v.status.serverUuid
       orgId.value = v.status.orgId
       enabled.value = v.status.enabled
@@ -93,38 +109,32 @@ function refresh() {
 function list(cursor?: string) {
   if (!canRead.value) return
   void run(
-    () => client.organizations({ cursor }),
+    () => organizationQuery.read(cursor, (query) => client.organizations(query)),
     (v) => {
-      organizations.value = cursor ? [...organizations.value, ...v.items] : v.items
+      organizationRows.value = v.items
+      organizations.value = organizationQuery.complete.value ? v.items : []
       organizationCursor.value = v.nextCursor
     },
   )
 }
-function next() {
-  if (!cursor.value) return
-  const after = cursor.value
+function loadDevices(after?: string) {
+  if (!id.value) return
   void run(
-    () => client.devices(id.value, { cursor: after }),
-    (v) => {
-      if (
-        (v.nextCursor && seenCursors.has(v.nextCursor)) ||
-        v.items.some((d) => devices.value.some((old) => old.serial === d.serial))
-      ) {
-        failure.value = 'invalidResponse'
-        return
-      }
-      devices.value.push(...v.items)
-      cursor.value = v.nextCursor
-      if (cursor.value) seenCursors.add(cursor.value)
+    () => deviceQuery.read(after, (query) => client.devices(id.value, query)),
+    (page) => {
+      deviceRows.value = page.items
+      devices.value = deviceQuery.complete.value ? page.items : []
+      cursor.value = page.nextCursor
     },
   )
 }
-function moreProfiles() {
-  if (!profileCursor.value) return
+function loadProfiles(after?: string) {
+  if (!id.value) return
   void run(
-    () => client.profiles(id.value, { cursor: profileCursor.value! }),
+    () => profileQuery.read(after, (query) => client.profiles(id.value, query)),
     (page) => {
-      profiles.value.push(...page.items)
+      profileRows.value = page.items
+      profiles.value = profileQuery.complete.value ? page.items : []
       profileCursor.value = page.nextCursor
     },
   )
@@ -188,15 +198,21 @@ async function selectToken(value: File | File[] | null) {
     bytes.fill(0)
   }
 }
-function chooseProfile(profile: (typeof profiles.value)[number]) {
-  profileId.value = profile.id
-  profileName.value = profile.configuration.name
-  mandatory.value = profile.configuration.mandatory
-  removable.value = profile.configuration.removable
-  skip.value = [...profile.configuration.skip]
+async function chooseProfile(locator: { id: string }) {
+  await run(
+    () => client.profile(id.value, locator.id),
+    (profile) => {
+      profileBaseline.value = profile
+      profileId.value = profile.id
+      profileName.value = profile.configuration.name
+      mandatory.value = profile.configuration.mandatory
+      removable.value = profile.configuration.removable
+      skip.value = [...profile.configuration.skip]
+    },
+  )
 }
 function saveProfile() {
-  const old = profiles.value.find((p) => p.id === profileId.value)
+  const old = profileBaseline.value?.id === profileId.value ? profileBaseline.value : undefined
   submit({
     kind: 'profile',
     id: profileId.value || crypto.randomUUID(),
@@ -214,7 +230,7 @@ function assignment(clear: boolean) {
       .split(/\r?\n/)
       .map((v) => v.trim())
       .filter(Boolean),
-    profile = profiles.value.find((p) => p.id === profileId.value)
+    profile = profileBaseline.value?.id === profileId.value ? profileBaseline.value : undefined
   if (clear) submit({ kind: 'clear', devices: selection })
   else if (profile)
     submit({ kind: 'assign', profile: profile.id, revision: profile.revision, devices: selection })
@@ -268,16 +284,84 @@ watch(
 onBeforeUnmount(() => {
   token.value = ''
 })
+organizationQuery.onClear(() => {
+  organizations.value = []
+  organizationRows.value = []
+})
+profileQuery.onClear(() => {
+  profiles.value = []
+  profileRows.value = []
+})
+deviceQuery.onClear(() => {
+  devices.value = []
+  deviceRows.value = []
+})
+watch(
+  id,
+  () => {
+    profileQuery.reset()
+    deviceQuery.reset()
+    profileBaseline.value = undefined
+  },
+  { flush: 'sync' },
+)
+deviceQuery.restrict(canRead)
+profileQuery.restrict(canRead)
+organizationQuery.restrict(canRead)
 </script>
 <template>
   <MdmPage :title="t('onboarding.appleAde')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="deviceQuery"
+      :busy="busy"
+      hint="serial / deleted / profileUuid / observedAt"
+      @load="loadDevices"
+    />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      :required="['serial']"
+      v-if="!deviceQuery.complete.value"
+      :items="deviceRows"
+      @open="
+        (row) => {
+          serials = String(row.serial)
+        }
+      "
+    />
+
+    <DirectoryControls
+      :query="profileQuery"
+      :busy="busy"
+      hint="id / revision / remoteUuid"
+      @load="loadProfiles"
+    />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      v-if="!profileQuery.complete.value"
+      :items="profileRows"
+      @open="
+        (row) => {
+          chooseProfile({ id: String(row.id) })
+        }
+      "
+    />
+
+    <DirectoryControls :query="organizationQuery" :busy="busy" hint="id" @load="list" />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      v-if="!organizationQuery.complete.value"
+      :items="organizationRows"
+      @open="
+        (row) => {
+          id = String(row.id)
+        }
+      "
+    />
+
     <RegistrationStatus channel="macos_mdm" />
     <p>{{ t('onboarding.adeGuide') }}</p>
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
-      <v-btn v-if="organizationCursor" :disabled="busy" @click="list(organizationCursor)">{{
-        t('devices.next')
-      }}</v-btn>
       <v-select
         v-model="id"
         :label="t('onboarding.organization')"
@@ -469,10 +553,18 @@ onBeforeUnmount(() => {
           </tr>
         </tbody>
       </v-table>
-      <v-btn v-if="profileCursor" :disabled="busy" @click="moreProfiles">{{
-        t('devices.next')
-      }}</v-btn>
-      <v-btn v-if="cursor" type="button" :disabled="!!busy" @click="next">
+      <v-btn
+        v-if="profileCursor"
+        :disabled="busy"
+        @click="loadProfiles(profileCursor ?? undefined)"
+        >{{ t('devices.next') }}</v-btn
+      >
+      <v-btn
+        v-if="cursor"
+        type="button"
+        :disabled="!!busy"
+        @click="loadDevices(cursor ?? undefined)"
+      >
         {{ t('devices.next') }}
       </v-btn>
       <v-expansion-panels

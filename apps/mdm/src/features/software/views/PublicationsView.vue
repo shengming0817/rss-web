@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VBtn, VCheckbox, VDataTable, VSelect } from 'vuetify/components'
-import { comparison } from '../../../services/directory-query'
+import { comparison } from '@rss/api/mdm-query'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -11,6 +15,27 @@ import type { Publication, PublicationChange, Publish } from '../clients/publica
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import SoftwareResourceSelect from '../components/SoftwareResourceSelect.vue'
 import MdmPage from '../../../ui/MdmPage.vue'
+const targetQuery = useDirectoryQuery(['id', 'protocol', 'digest'], 100)
+
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'target',
+    'resource',
+    'version',
+    'revision',
+    'publication',
+    'contentDigest',
+    'manifestDigest',
+    'targetDigest',
+    'attempt',
+    'outcome',
+    'withdrawn',
+    'withdrawal',
+  ],
+  100,
+)
+
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -27,16 +52,27 @@ let pending: { id: string; body: Operation<PublicationChange> } | undefined
 function load(after?: string) {
   page.value = undefined
   void run(
-    () => client.list({ cursor: after }),
+    () => directoryQuery.read(after, (query) => client.list(query), {}),
     (v) => {
       page.value = v
+    },
+  )
+}
+async function chooseTarget(row: Record<string, unknown>) {
+  if (typeof row['id'] !== 'string' || busy.value || uncertain.value) return
+  const id = row['id']
+  await run(
+    () => client.targets({ filter: comparison('id', '==', id), limit: 1 }),
+    (value) => {
+      targets.value = value
+      target.value = id
     },
   )
 }
 function loadTargets(after?: string) {
   targets.value = undefined
   void run(
-    () => client.targets({ cursor: after }),
+    () => targetQuery.read(after, (query) => client.targets(query)),
     (v) => {
       targets.value = v
     },
@@ -165,9 +201,44 @@ watch(
   { flush: 'sync' },
 )
 onMounted(() => load())
+directoryQuery.onClear(() => {
+  page.value = undefined
+})
+targetQuery.onClear(() => {
+  targets.value = undefined
+})
 </script>
 <template>
   <MdmPage :title="t('software.publications')" :busy="busy" :failure="failure">
+    <DirectoryControls :query="targetQuery" :busy="busy" hint="id / protocol" @load="loadTargets" />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      v-if="!targetQuery.complete.value"
+      :items="targets?.items ?? []"
+      @open="
+        (row) => {
+          chooseTarget(row)
+        }
+      "
+    />
+
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选和排序：id / target / resource / version；operationId 支持筛选。"
+      @load="load"
+    />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      v-if="!directoryQuery.complete.value"
+      :items="page?.items ?? []"
+      @open="
+        (row) => {
+          open(String(row.id))
+        }
+      "
+    />
+
     <p>{{ t('software.directPublicationHint') }}</p>
     <VBtn :disabled="busy || uncertain" @click="create">{{ t('software.newPublication') }}</VBtn>
     <VBtn :disabled="busy || uncertain" @click="load()">{{
@@ -176,6 +247,7 @@ onMounted(() => load())
     <section v-if="page" class="console-panel">
       <p v-if="!page.items.length">{{ t('policies.empty') }}</p>
       <VDataTable
+        v-if="directoryQuery.complete.value"
         :aria-label="t('software.publicationRecords')"
         :items="page.items"
         item-value="id"
@@ -201,9 +273,6 @@ onMounted(() => load())
           }}<span v-if="item.withdrawn"> · {{ t('software.lifecycle_withdrawn') }}</span></template
         >
       </VDataTable>
-      <VBtn v-if="page.nextCursor" :disabled="busy || uncertain" @click="load(page.nextCursor)">{{
-        t('devices.next')
-      }}</VBtn>
     </section>
     <form v-if="!current" data-testid="publication-create" @submit.prevent="save">
       <fieldset :disabled="busy || uncertain">
@@ -228,9 +297,7 @@ onMounted(() => load())
           :disabled="busy || uncertain"
         />
         <p v-if="targets && !targets.items.length">{{ t('software.noTargets') }}</p>
-        <VBtn v-if="targets?.nextCursor" type="button" @click="loadTargets(targets.nextCursor)">{{
-          t('devices.next')
-        }}</VBtn>
+
         <VBtn type="submit" :disabled="!resource || !version || !target">{{
           t('software.publish')
         }}</VBtn>

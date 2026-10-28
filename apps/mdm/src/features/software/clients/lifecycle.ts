@@ -1,8 +1,4 @@
-import {
-  queryParameters,
-  projectedPage,
-  type DirectoryQuery,
-} from '../../../services/directory-query'
+import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { jsonObject } from '../../../services/json'
 import type { Operation } from '../../../services/useOperation'
@@ -110,7 +106,16 @@ function mutationReceipt<T extends { lifecycle: ReturnType<typeof lifecycle> }>(
   if (receipt.lifecycle.operation !== operation) throw new Error('Wrong lifecycle receipt')
   return receipt
 }
-const sourceFields = { source: sourceDefinition, snapshot: softwareSource, lifecycle }
+const sourceFields = {
+  id: identifier,
+  revision: identifier,
+  protocol: (v: unknown) =>
+    enumeration(v, ['private', 'winget_rest', 'winget_community', 'brew_tap'] as const),
+  state: (v: unknown) => enumeration(v, ['enabled', 'disabled'] as const),
+  source: sourceDefinition,
+  snapshot: softwareSource,
+  lifecycle,
+}
 export function createLifecycleClient(transport: HttpTransport) {
   return {
     sources: <F extends keyof typeof sourceFields = keyof typeof sourceFields>(
@@ -122,7 +127,6 @@ export function createLifecycleClient(transport: HttpTransport) {
         query: queryParameters({
           limit: 20,
           ...query,
-          fields: query.fields ?? Object.keys(sourceFields),
         }),
         successStatus: 200,
         decode(value) {

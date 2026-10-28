@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { count, identifier, nullable } from './decode'
-import { allOf, comparison, pageCursor, projectedPage, queryParameters } from './directory-query'
+const count = (value: unknown) => {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
+    throw new Error('Invalid count')
+  return value
+}
+const identifier = (value: unknown) => {
+  if (typeof value !== 'string' || !value) throw new Error('Invalid identifier')
+  return value
+}
+const nullable = <T>(value: unknown, decode: (value: unknown) => T) =>
+  value === null ? null : decode(value)
+import { allOf, comparison, pageCursor, projectedPage, queryParameters } from './mdm-query'
 
 describe('current directory protocol', () => {
   it('encodes literal filters and current continuation parameters without losing false or zero', () => {

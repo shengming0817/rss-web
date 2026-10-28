@@ -10,12 +10,7 @@ import {
   nullable,
   uuid,
 } from '../../../services/decode'
-import {
-  nextCursor,
-  pageCursor,
-  windowParameters,
-  type WindowQuery,
-} from '../../../services/directory-query'
+import { nextCursor, pageCursor, windowParameters, type WindowQuery } from '@rss/api/mdm-query'
 import { operationReference } from '../../policies/clients/events'
 export interface ActivityQuery extends WindowQuery {
   from?: number

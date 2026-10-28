@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import { VBtn, VCard, VCardActions, VCardText, VCardTitle, VDialog } from 'vuetify/components'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -8,6 +12,23 @@ import { useSettingsFacts, useSettingsAction } from '../useSettingsAction'
 import PackageUpload from './PackageUpload.vue'
 import OperationNotice from './OperationNotice.vue'
 import { uuid } from '../../../services/decode'
+const directoryQuery = useDirectoryQuery(
+  [
+    'releaseId',
+    'tenantId',
+    'target',
+    'state',
+    'platform',
+    'architecture',
+    'format',
+    'version',
+    'filename',
+    'length',
+    'installerSha256',
+  ],
+  1000,
+)
+
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.settings.packages
@@ -42,11 +63,20 @@ const targets = [
 const slots = computed(() =>
   targets.map((target) => ({
     ...target,
-    packages: packages.value.filter(
+    packages: (directoryQuery.complete.value ? packages.value : []).filter(
       (p) => p.target.platform === target.platform && p.target.architecture === target.architecture,
     ),
   })),
 )
+const packageDetail = ref<Awaited<ReturnType<typeof client.read>>>()
+function readPackage(release: string) {
+  return run(
+    () => client.read(release),
+    (value) => {
+      packageDetail.value = value
+    },
+  )
+}
 const pendingRelease = computed(() =>
   pending.value
     ? uuid((JSON.parse(pending.value.publicInput) as Record<string, unknown>)['release'])
@@ -72,9 +102,9 @@ watch(
 async function load(cursor?: string) {
   if (!cursor) packages.value = []
   return run(
-    () => client.list({ cursor }),
+    () => directoryQuery.read(cursor, (query) => client.list(query), {}),
     (v) => {
-      packages.value = cursor ? [...packages.value, ...v.items] : v.items
+      packages.value = v.items
       next.value = v.nextCursor
     },
   )
@@ -117,11 +147,31 @@ useSettingsFacts(() => {
   withdrawTarget.value = undefined
   uploadTarget.value = undefined
 })
+directoryQuery.onClear(() => {
+  packages.value = []
+})
 </script>
 <template>
+  <DirectoryControls
+    :query="directoryQuery"
+    :busy="busy"
+    hint="筛选和排序：releaseId / state / platform / architecture / format / version；filename / length 仅作投影。"
+    @load="load"
+  />
+  <DirectoryResults
+    :disabled="busy"
+    :required="['releaseId']"
+    v-if="!directoryQuery.complete.value"
+    :items="packages"
+    @open="
+      (row) => {
+        readPackage(String(row.releaseId))
+      }
+    "
+  />
+  <pre v-if="packageDetail">{{ packageDetail }}</pre>
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
   <VBtn :disabled="busy || !canRead" @click="load()">{{ t('settings.reload') }}</VBtn
-  ><VBtn v-if="next" :disabled="busy" @click="load(next)">{{ t('devices.next') }}</VBtn
   ><OperationNotice
     v-if="!withdrawTarget"
     :operation="pending"

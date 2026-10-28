@@ -1,12 +1,21 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import { VAlert, VBtn, VCard, VCardText, VSelect, VTextField } from 'vuetify/components'
-import { comparison as queryComparison } from '../../../services/directory-query'
+import { comparison as queryComparison } from '@rss/api/mdm-query'
 import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import type { ResourceRead } from '../../policies/clients/resources'
+const resourceQuery = useDirectoryQuery(
+  ['id', 'revision', 'kind', 'activeVersion', 'presentation'],
+  1000,
+)
+
 const props = defineProps<{ disabled?: boolean }>()
 const emit = defineEmits<{ change: [] }>()
 const resource = defineModel<string>('resource', { required: true }),
@@ -19,14 +28,18 @@ const page = ref<Awaited<ReturnType<typeof runtime.policies.resources.list>>>(),
 function load(after?: string) {
   void run(
     () =>
-      runtime.policies.resources.list({
+      resourceQuery.read(after, (query) => runtime.policies.resources.list(query), {
         filter: queryComparison('kind', '==', 'software'),
-        cursor: after,
       }),
     (v) => {
       page.value = v
     },
   )
+}
+async function chooseProjected(row: Record<string, unknown>) {
+  if (props.disabled || busy.value || typeof row['id'] !== 'string') return
+  resource.value = row['id']
+  await choose()
 }
 function open() {
   selected.value = undefined
@@ -60,8 +73,28 @@ watch(
   },
   { flush: 'sync' },
 )
+resourceQuery.onClear(() => {
+  page.value = undefined
+})
 </script>
 <template>
+  <DirectoryControls
+    :query="resourceQuery"
+    :busy="busy"
+    hint="id / revision / kind / active；sort: id / revision / kind"
+    @load="load"
+  />
+  <DirectoryResults
+    :disabled="busy"
+    v-if="!resourceQuery.complete.value"
+    :items="page?.items ?? []"
+    @open="
+      (row) => {
+        chooseProjected(row)
+      }
+    "
+  />
+
   <VCard class="my-3" variant="outlined"
     ><VCardText>
       <VTextField
@@ -82,7 +115,7 @@ watch(
           v-model="resource"
           :label="t('software.catalog')"
           :items="
-            page.items.map((item) => ({
+            (resourceQuery.complete.value ? page.items : []).map((item) => ({
               title: `${typeof item.presentation['name'] === 'string' ? item.presentation['name'] : item.id} · ${item.activeVersion ?? '—'}`,
               value: item.id,
             }))
@@ -90,12 +123,6 @@ watch(
           :disabled="props.disabled || busy"
           @update:model-value="choose"
         />
-        <VBtn
-          v-if="page.nextCursor"
-          :disabled="props.disabled || busy"
-          @click="load(page.nextCursor)"
-          >{{ t('devices.next') }}</VBtn
-        >
       </template>
       <VSelect
         v-if="selected"

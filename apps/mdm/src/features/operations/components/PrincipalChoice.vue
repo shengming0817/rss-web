@@ -33,7 +33,7 @@ const choices = computed(() => [
 function label(id: string) {
   const a = props.accounts.find((a) => a.principalId === id)
   return a
-    ? `${a.login ?? id}${!a.enabled || !a.memberActive ? ' · ' + t('operations.ruleUi.inactive') : ''}`
+    ? `${a.displayName ?? a.email ?? a.login ?? id}${a.enabled === false || a.memberActive === false ? ' · ' + t('operations.ruleUi.inactive') : ''}`
     : id
 }
 </script>

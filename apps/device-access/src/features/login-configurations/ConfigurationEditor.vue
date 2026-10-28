@@ -6,6 +6,9 @@ import { useRead } from '../../services/read'
 import { useMutation } from '../../services/mutation'
 import { useRevisionReview } from '../../services/revision-review'
 import { useDirectory } from '../../services/directory'
+import { computerColumns } from '@rss/device-access/client'
+import { comparison } from '@rss/api/mdm-query'
+import DirectoryControls from '../../ui/DirectoryControls.vue'
 import ReadState from '../../ui/ReadState.vue'
 import WriteState from '../../ui/WriteState.vue'
 const props = defineProps<{ existing: Configuration | null }>()
@@ -21,13 +24,37 @@ const r = useDa(),
   excluded = ref(props.existing?.exclusions.map((x) => x.id) ?? []),
   mode = ref(props.existing?.mode ?? 'platform_sso')
 const { data, busy, error, reload } = useRead((signal) => r.client.scopes(signal))
-const directory = useDirectory((cursor, signal) => r.client.computers(cursor, signal))
-const baseline = useRevisionReview(props.existing, (cursor, signal) =>
-  r.client.configurations(cursor, signal),
+const directory = useDirectory(
+  computerColumns,
+  100,
+  (query, signal) => r.client.computers(query, signal),
+  () => platform.value,
+  undefined,
+  () => ({ filter: comparison('platform', '==', platform.value) }),
+)
+const selectedPeople = ref(new Map(props.existing?.exclusions.map((v) => [v.id, v]) ?? []))
+const baseline = useRevisionReview(props.existing, (id, signal) =>
+  r.client.readConfiguration(id, signal),
 )
 const op = useMutation(() => '/configuration/' + (props.existing?.id ?? 'new'))
 const targetScope = computed(() => data.value?.find((s) => s.id === scope.value)),
-  targets = computed(() => directory.items.value.filter((c) => c.platform === platform.value))
+  targets = computed(() => [
+    ...new Map(
+      [
+        ...selectedPeople.value.values(),
+        ...(directory.data.value?.summaries ?? []).map((c) => ({ id: c.id, label: c.name })),
+      ].map((v) => [v.id, v]),
+    ).values(),
+  ])
+watch(
+  excluded,
+  (ids) => {
+    selectedPeople.value = new Map(
+      targets.value.filter((v) => ids.includes(v.id)).map((v) => [v.id, v]),
+    )
+  },
+  { deep: true },
+)
 const valid = computed(
   () => name.value.trim().length > 0 && !!targetScope.value && platform.value !== 'unknown',
 )
@@ -45,7 +72,7 @@ watch(platform, (v) => {
 function input(operationId: string): ConfigurationInput {
   const exclusions: Person[] = targets.value
     .filter((c) => excluded.value.includes(c.id))
-    .map((c) => ({ id: c.id, label: c.name }))
+    .map((c) => ({ id: c.id, label: c.label }))
   return {
     id,
     operationId,
@@ -60,7 +87,12 @@ function input(operationId: string): ConfigurationInput {
   }
 }
 async function save() {
-  if (baseline.busy.value || baseline.current.value || !valid.value || !directory.complete.value)
+  if (
+    baseline.busy.value ||
+    baseline.current.value ||
+    !valid.value ||
+    !directory.projectionComplete.value
+  )
     return
   const result = await op.run(
     (operationId, signal) => r.client.configuration(input(operationId), signal),
@@ -173,29 +205,22 @@ function acceptBaseline() {
           /><v-autocomplete
             v-model="excluded"
             :items="targets"
-            item-title="name"
+            item-title="label"
             item-value="id"
             :label="$t('da.mb36c0740a8')"
+            no-filter
             multiple
             chips
             :disabled="op.locked.value"
           />
           <p class="small muted mt-5">{{ $t('da.mbd7d083988') }}</p>
+          <DirectoryControls :query="directory" :busy="directory.busy.value || op.locked.value" />
           <ReadState
             :busy="directory.busy.value"
             :error="directory.error.value"
-            @retry="directory.loadMore"
+            @retry="directory.reload"
           />
-          <v-alert v-if="!directory.complete.value" type="info" :icon="false"
-            >设备目录尚未读取完整，请加载后续页再核对影响。</v-alert
-          >
-          <v-btn
-            v-if="!directory.complete.value"
-            :loading="directory.busy.value"
-            :disabled="directory.blocked.value"
-            @click="directory.loadMore"
-            >加载下一页</v-btn
-          ></template
+          <p>候选设备来自当前查询页；已选择的排除项跨页保留。</p> </template
         ><template v-else-if="step === 3"
           ><h3>{{ $t('da.m8c97403b16') }}</h3>
           <dl class="detail-list mt-4">
@@ -217,7 +242,7 @@ function acceptBaseline() {
                 {{
                   targets
                     .filter((c) => excluded.includes(c.id))
-                    .map((c) => c.name)
+                    .map((c) => c.label)
                     .join('、') || '无'
                 }}
               </dd>
@@ -275,7 +300,10 @@ function acceptBaseline() {
           v-if="step < 3"
           color="primary"
           :disabled="
-            !!error || busy || !name.trim() || (step === 2 && (!valid || !directory.complete.value))
+            !!error ||
+            busy ||
+            !name.trim() ||
+            (step === 2 && (!valid || !directory.projectionComplete.value))
           "
           @click="step++"
           >{{ step === 2 ? '核对影响' : '下一步' }}</v-btn

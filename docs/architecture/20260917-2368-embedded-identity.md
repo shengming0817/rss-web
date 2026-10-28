@@ -97,3 +97,5 @@ rm /tmp/rss-identity-web-dev.yaml
 ## 展示与主题
 
 Identity 与共享认证视图直接使用 Vuetify 4.3.0，沿用 MDM 的表单、表格、按钮与弹窗视觉规范。各应用独立安装 Vuetify；`@rss/core` 只提供主题、语言及设计 token。浅深主题继续由既有 theme store 驱动，菜单和对话框附着于认证主题容器。构建通过 Vuetify 的公开主题 API 生成外部 CSS，运行时关闭主题样式注入，宿主继续使用现有 CSP，无需开放内联 style 元素。
+
+账户管理与主体选择器共用 Identity accounts 查询入口，支持 filter、sort、fields、limit、cursor（默认 50、最多 100）。账户资料查询显式选择 local 或指定 IdP，读取权限由宿主按列表、详情及被筛选／排序引用的资料字段分别裁定；仅持有列表权限不能推断无权读取的资料。姓名、邮箱使用同一来源的最新接受观察，最新观察失效时不回退旧值。旧 UUID 账户游标不再接受，游标失效需显式重查；会话目录保留自身合同。

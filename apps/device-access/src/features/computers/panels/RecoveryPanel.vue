@@ -4,23 +4,46 @@ import type { Computer, Material, OriginalOperation } from '@rss/device-access/m
 import { RecoveryMetadataSummary, AccessAutomationStatus } from '@rss/device-access/components'
 import { useDa, identityKey } from '../../../context'
 import { useRead } from '../../../services/read'
+import { useDirectory } from '../../../services/directory'
+import { materialColumns } from '@rss/device-access/client'
+import { QueryRows } from '@rss/core'
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
 import { useMutation } from '../../../services/mutation'
 import { errorMessage } from '../../../services/status'
 import ReadState from '../../../ui/ReadState.vue'
 import WriteState from '../../../ui/WriteState.vue'
 const props = defineProps<{ device: Computer }>(),
   r = useDa(),
-  cursor = ref<string | null>(null),
   selected = ref<Material | null>(null),
   modal = ref(''),
   secret = ref(''),
   result = ref<OriginalOperation>(),
   proofBusy = ref(false),
   proofMessage = ref('')
-const { data, busy, error, reload } = useRead(
-  (signal) => r.client.materials(props.device.id, cursor.value, signal),
-  () => props.device.id + ':' + (cursor.value ?? ''),
+const directory = useDirectory(
+  materialColumns,
+  100,
+  (query, signal) => r.client.materials(props.device.id, query, signal),
+  () => props.device.id,
 )
+const { data, busy, error, reload } = directory
+
+const locator = ref<{ id: string; version: number; kind: string }>()
+const detail = useRead(
+  (signal) => r.client.material(props.device.id, locator.value!.id, locator.value!.version, signal),
+  () => props.device.id + ':' + JSON.stringify(locator.value),
+  {
+    enabled: () => !!locator.value,
+    accepted(value) {
+      open(value, locator.value!.kind)
+    },
+  },
+)
+function inspect(id: string, version: number, kind = 'inspect') {
+  const next = { id, version, kind }
+  if (JSON.stringify(locator.value) === JSON.stringify(next)) void detail.reload()
+  else locator.value = next
+}
 const rotation = useMutation(() => props.device.id + '/rotation/' + selected.value?.id),
   disclosure = useMutation(() => props.device.id + '/disclosure/' + selected.value?.id)
 let timer: ReturnType<typeof setTimeout> | undefined,
@@ -36,6 +59,7 @@ function clear() {
 function close() {
   clear()
   modal.value = ''
+  locator.value = undefined
   selected.value = null
 }
 function open(m: Material, kind: string) {
@@ -48,7 +72,6 @@ watch(
   () => props.device.id,
   () => {
     close()
-    cursor.value = null
   },
   { flush: 'sync' },
 )
@@ -111,15 +134,29 @@ async function prove() {
 <template>
   <h2>{{ $t('da.mc867fc2153') }}</h2>
   <p class="small muted mb-5">{{ $t('da.m34a19c6e24') }}</p>
-  <ReadState :busy="busy" :error="error" @retry="reload" /><template v-if="data"
-    ><RecoveryMetadataSummary :materials="data.items" />
-    <div v-for="m in data.items" :key="m.id + ':' + m.version" class="material-actions">
+  <DirectoryControls :query="directory" :busy="busy" /><ReadState
+    :busy="busy"
+    :error="error"
+    @retry="reload"
+  /><ReadState
+    :busy="detail.busy.value"
+    :error="detail.error.value"
+    @retry="detail.reload"
+  /><QueryRows
+    v-if="data && !data.summaries"
+    :items="data.items"
+    :fields="directory.applied.value?.fields ?? materialColumns"
+    :required="['id', 'version']"
+    @open="(row) => inspect(String(row.id), Number(row.version))"
+  /><template v-if="data"
+    ><RecoveryMetadataSummary :materials="data.summaries ?? []" />
+    <div v-for="m in data.summaries ?? []" :key="m.id + ':' + m.version" class="material-actions">
       <span>{{ m.subject.kind }} · v{{ m.version }}</span
       ><v-btn
         size="small"
         variant="text"
         :disabled="m.subject.kind !== 'rss_login' || !m.current"
-        @click="open(m, 'reveal')"
+        @click="inspect(m.id, m.version, 'reveal')"
         >{{ $t('da.m5e0a4efc9e') }}</v-btn
       ><v-btn
         size="small"
@@ -127,14 +164,11 @@ async function prove() {
         :disabled="
           m.subject.kind !== 'rss_login' || !m.current || !r.client.capabilities.rotation.available
         "
-        @click="open(m, 'rotate')"
+        @click="inspect(m.id, m.version, 'rotate')"
         >{{ $t('da.mf4b0208c22') }}</v-btn
       >
     </div>
-    <p v-if="!data.items.length" class="empty">{{ $t('da.me1fa48df2a') }}</p>
-    <v-btn v-if="data.nextCursor" variant="text" @click="cursor = data!.nextCursor">{{
-      $t('da.m4dbed88f59')
-    }}</v-btn></template
+    <p v-if="!data.items.length" class="empty">{{ $t('da.me1fa48df2a') }}</p> </template
   ><v-alert
     v-if="!r.client.capabilities.rotation.available"
     type="info"
@@ -152,11 +186,14 @@ async function prove() {
       }
     "
     ><v-card v-if="selected"
-      ><v-card-title>{{ modal === 'reveal' ? '受控查阅' : '核对本机材料轮换' }}</v-card-title
+      ><v-card-title>{{
+        modal === 'reveal' ? '受控查阅' : modal === 'rotate' ? '核对本机材料轮换' : '完整材料元数据'
+      }}</v-card-title
       ><v-card-text
         ><div class="target-summary">
           <strong>{{ device.name }} · {{ selected.subject.kind }} · v{{ selected.version }}</strong>
         </div>
+        <RecoveryMetadataSummary :materials="[selected]" />
         <template v-if="modal === 'reveal'"
           ><v-alert type="warning" :icon="false" class="my-5">{{ $t('da.mec73dbb549') }}</v-alert>
           <div v-if="secret" class="secret-preview">{{ secret }}</div>
@@ -172,7 +209,7 @@ async function prove() {
             >{{ $t('da.mc5058461b8') }}</v-btn
           >
           <p v-if="proofMessage" role="status">{{ proofMessage }}</p></template
-        ><template v-else
+        ><template v-else-if="modal === 'rotate'"
           ><p class="my-5">{{ $t('da.m4c86d52ab2') }}</p>
           <AccessAutomationStatus v-if="result" :operation="result" /><WriteState
             :state="rotation.state.value"

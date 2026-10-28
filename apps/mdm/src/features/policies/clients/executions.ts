@@ -1,9 +1,5 @@
 import { authorization, reauthorizationEligibility } from './authorization'
-import {
-  queryParameters,
-  projectedPage,
-  type DirectoryQuery,
-} from '../../../services/directory-query'
+import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import {

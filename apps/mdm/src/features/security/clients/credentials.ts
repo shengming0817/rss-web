@@ -1,4 +1,10 @@
-import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
+import {
+  queryParameters,
+  projectedPage,
+  comparison,
+  allOf,
+  type DirectoryQuery,
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   boolean,
@@ -118,19 +124,66 @@ export interface CredentialInput {
     unlockPassword?: string
   }
 }
+function materialFields(device: string) {
+  return {
+    id: uuid,
+    version: count,
+    current: boolean,
+    validity: (v: unknown) =>
+      enumeration(v, ['unverified', 'verified', 'unknown', 'superseded', 'revoked'] as const),
+    escrowed: boolean,
+    operation: uuid,
+    createdAt: integer,
+    invalidatedAt: (v: unknown) => nullable(v, integer),
+    binding: (value: unknown) => {
+      const v = closed(value, ['device', 'registration', 'generation', 'subject'])
+      if (v['device'] !== device || !count(v['generation']))
+        throw new Error('Wrong material binding')
+      return {
+        device,
+        registration: uuid(v['registration']),
+        generation: count(v['generation']),
+        subject: subject(v['subject']),
+      }
+    },
+  }
+}
 export function createCredentialsClient(transport: HttpTransport) {
   function versionPath(device: string, entry: Material) {
     return { device: identifier(device), id: entry.id, version: entry.version }
   }
   return {
-    list: (device: string, query: DirectoryQuery = {}) =>
+    list: <
+      F extends keyof ReturnType<typeof materialFields> = keyof ReturnType<typeof materialFields>,
+    >(
+      device: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/recovery-credentials',
         pathParams: { device },
         query: queryParameters({ limit: 100, ...query }),
         successStatus: 200,
-        decode: (v) => windowPage(v, (x) => material(x, device)),
+        decode: (v) => projectedPage(v, materialFields(device), query.fields, ['id', 'version']),
+      }),
+    read: (device: string, id: string, version: number) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/devices/{device}/recovery-credentials',
+        pathParams: { device },
+        query: queryParameters({
+          filter: allOf(comparison('id', '==', uuid(id)), comparison('version', '==', version)),
+          limit: 1,
+        }),
+        successStatus: 200,
+        decode(value) {
+          const page = projectedPage(value, materialFields(device))
+          const row = page.items[0]
+          if (!row || row.id !== id || row.version !== version || page.nextCursor)
+            throw new Error('Wrong material')
+          return material(row, device)
+        },
       }),
     reveal: (device: string, entry: Material) =>
       transport.request({

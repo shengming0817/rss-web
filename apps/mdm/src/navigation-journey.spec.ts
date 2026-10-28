@@ -177,7 +177,18 @@ it('opens a software policy from the workspace through the supported software pa
       },
     })
     vi.spyOn(app.mdm.policies.policies, 'list').mockResolvedValue({
-      items: [{ ...policy, customEvent: null, alias: null, toolName: 'workspace-software' }],
+      items: [
+        {
+          ...policy,
+          customEvent: null,
+          alias: null,
+          toolName: 'workspace-software',
+          action: 'software',
+          scope: app.seed.scope,
+          resource: 'agent',
+          category: null,
+        },
+      ],
       nextCursor: null,
     })
     const read = vi.spyOn(app.mdm.policies.policies, 'read').mockResolvedValue(policy)

@@ -13,6 +13,7 @@ const statuses: Readonly<Record<string, number>> = {
   reauthentication_required: 403,
   reauthentication_failed: 403,
   configuration_changed: 409,
+  account_cursor_invalidated: 409,
   revision_conflict: 409,
   operation_conflict: 409,
   provider_limit_reached: 409,

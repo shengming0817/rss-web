@@ -63,15 +63,16 @@ export function nativeComputer(value: unknown): Computer {
     lastObservedAt: times.length ? Math.max(...times) : null,
   }
 }
-export function nativeBinding(value: unknown, device: string): Binding {
-  const v = object(value)
-  same(v['device'], device)
-  const account = v['account'] === null ? null : object(v['account'])
+export function nativeAccountLabel(value: unknown) {
+  const account = value === null ? null : object(value)
   let accountLabel = 'unknown'
   if (account) {
     const platform = choice(account['platform'], ['windows', 'macos'])
     accountLabel = platform === 'windows' ? text(account['sid']) : uuid(account['generatedUid'])
   }
+  return accountLabel
+}
+export function nativeBindingObservations(value: unknown): Observation[] {
   const observations: Observation[] = []
   const native = (key: string, value: unknown) => {
     const v = choice(value, ['present', 'absent', 'unknown', 'needs_administrator'])
@@ -81,8 +82,8 @@ export function nativeBinding(value: unknown, device: string): Binding {
       value: v,
     })
   }
-  if (v['effect'] !== null) {
-    const e = object(v['effect']),
+  if (value !== null) {
+    const e = object(value),
       effect = choice(e['state'], ['applied', 'unbound', 'unknown', 'failed', 'whfb_retired'])
     observations.push({
       key: 'effect',
@@ -122,6 +123,13 @@ export function nativeBinding(value: unknown, device: string): Binding {
         ]),
       })
   }
+  return observations
+}
+export function nativeBinding(value: unknown, device: string): Binding {
+  const v = object(value)
+  same(v['device'], device)
+  const accountLabel = nativeAccountLabel(v['account'])
+  const observations = nativeBindingObservations(v['effect'])
   return {
     id: uuid(v['id']),
     device,

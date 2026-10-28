@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import { VBtn, VCard, VCheckbox, VForm, VTextField, VTextarea } from 'vuetify/components'
 import { ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -8,6 +12,23 @@ import { usePermission } from '../../enrollment/usePermission'
 import { useSettingsFacts, useSettingsSecrets } from '../useSettingsAction'
 import PermissionChoices from '../../operations/components/PermissionChoices.vue'
 import { keyMetadata, keyPermissions, type KeyIntent, type KeyMetadata } from '../clients/apiAccess'
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'revision',
+    'name',
+    'enabled',
+    'expiresAt',
+    'metadata',
+    'createdBy',
+    'createdAt',
+    'revoked',
+    'authorityRevision',
+    'credentialRevision',
+  ],
+  1000,
+)
+
 const runtime = useMdm(),
   client = runtime.settings.apiAccess,
   { t } = useI18n(),
@@ -59,11 +80,16 @@ async function read() {
   if (failure.value) clear()
   return ok
 }
+function openProjected(row: Record<string, unknown>) {
+  if (typeof row['id'] !== 'string') return
+  id.value = row['id']
+  void read()
+}
 async function load(after?: string) {
   clearSecret()
   rows.value = undefined
   await run(
-    () => client.keys({ cursor: after }),
+    () => directoryQuery.read(after, (query) => client.keys(query), {}),
     (v) => {
       rows.value = v
     },
@@ -166,8 +192,28 @@ async function compare() {
   }
   if (ok) resolvedConflict()
 }
+directoryQuery.onClear(() => {
+  rows.value = undefined
+})
 </script>
 <template>
+  <DirectoryControls
+    :query="directoryQuery"
+    :busy="busy"
+    hint="id / revision / name / enabled / revoked / createdAt / expiresAt"
+    @load="load"
+  />
+  <DirectoryResults
+    :disabled="busy || locked"
+    v-if="!directoryQuery.complete.value"
+    :items="rows?.items ?? []"
+    @open="
+      (row) => {
+        openProjected(row)
+      }
+    "
+  />
+
   <VCard
     class="console-panel"
     data-panel="api-access"
@@ -194,10 +240,7 @@ async function compare() {
           >
         </li>
       </ul>
-      <VBtn v-if="rows?.nextCursor" :disabled="busy" @click="load(rows.nextCursor)">{{
-        t('gap.next')
-      }}</VBtn
-      ><VTextField
+      <VTextField
         v-model="id"
         :disabled="locked"
         :readonly="!!current"

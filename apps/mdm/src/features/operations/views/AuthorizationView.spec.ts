@@ -121,7 +121,7 @@ async function fixture(
     },
   } as HttpTransport
   const accounts = vi.fn(
-    async (): Promise<Awaited<ReturnType<Runtime['api']['accounts']>>> => ({
+    async (): Promise<{ accounts: import('@rss/auth').Account[]; next: string | null }> => ({
       accounts: [
         {
           principalId: target,

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import {
   VForm,
   VSelect,
@@ -11,13 +15,20 @@ import {
   VTable,
   VTextField,
 } from 'vuetify/components'
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { usePermission } from '../usePermission'
 import { useOperation } from '../../../services/useOperation'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import MdmPage from '../../../ui/MdmPage.vue'
+const accountQuery = useDirectoryQuery(
+  ['account', 'revision', 'enabled', 'principalId', 'instanceId'],
+  1000,
+)
+
+const organizationQuery = useDirectoryQuery(['id', 'ade', 'accountEnrollment'], 1000)
+
 const id = ref('')
 const runtime = useMdm(),
   client = runtime.onboarding.apple,
@@ -43,11 +54,14 @@ const organizations = ref<Awaited<ReturnType<typeof client.organizations>>['item
   instanceId = ref(''),
   accountEnabled = ref(true),
   freshRead = ref(false)
-const selected = computed(
-  () => organizations.value.find((v) => v.id === id.value)?.accountEnrollment,
-)
+const organizationRows = ref<object[]>([]),
+  accountRows = ref<object[]>([])
+const selected = ref<Awaited<ReturnType<typeof client.accountConfiguration>>>(),
+  mapping = ref<Awaited<ReturnType<typeof client.account>>>()
+let creatingOrganization: string | undefined
 function newOrganization() {
-  id.value = crypto.randomUUID()
+  creatingOrganization = crypto.randomUUID()
+  id.value = creatingOrganization
 }
 function confirmComparison() {
   if (!freshRead.value || busy.value) return
@@ -57,24 +71,38 @@ function confirmComparison() {
 async function refresh(cursor?: string) {
   if (!canRead.value) return
   const ok = await run(
-    () => client.organizations({ cursor }),
+    () => organizationQuery.read(cursor, (query) => client.organizations(query)),
     (v) => {
-      organizations.value = cursor ? [...organizations.value, ...v.items] : v.items
+      organizationRows.value = v.items
+      organizations.value = organizationQuery.complete.value ? v.items : []
       organizationCursor.value = v.nextCursor
-      freshRead.value = true
     },
   )
   if (ok && selected.value) await loadAccounts()
 }
-function load() {
+async function load() {
+  accountQuery.reset()
   accounts.value = []
   accountCursor.value = null
-  if (selected.value) void loadAccounts()
-  const v = selected.value
-  domain.value = v?.domain ?? ''
-  serverUuid.value = v?.serverUuid ?? ''
-  signingKey.value = v?.signingKey ?? ''
-  enabled.value = v?.enabled ?? false
+  selected.value = undefined
+  mapping.value = undefined
+  domain.value = ''
+  serverUuid.value = ''
+  signingKey.value = ''
+  enabled.value = false
+  if (!id.value || id.value === creatingOrganization) return
+  const ok = await run(
+    () => client.accountConfiguration(id.value),
+    (value) => {
+      selected.value = value
+      domain.value = value.domain
+      serverUuid.value = value.serverUuid
+      signingKey.value = value.signingKey
+      enabled.value = value.enabled
+      freshRead.value = true
+    },
+  )
+  if (ok) await loadAccounts()
 }
 function saveOrganization() {
   if (!canWrite.value || uncertain.value) return
@@ -93,7 +121,7 @@ function saveOrganization() {
 }
 function saveMapping() {
   if (!canWrite.value || uncertain.value) return
-  const old = accounts.value.find((a) => a.account === name.value)
+  const old = mapping.value?.account === name.value ? mapping.value : undefined
   freshRead.value = false
   void runWrite(() =>
     client.accountMapping(id.value, name.value, crypto.randomUUID(), {
@@ -106,24 +134,37 @@ function saveMapping() {
     if (ok) void refresh()
   })
 }
-function chooseAccount(account: string) {
-  const value = accounts.value.find((a) => a.account === account)
-  name.value = account
-  principalId.value = value?.principalId ?? ''
-  instanceId.value = value?.instanceId ?? ''
-  accountEnabled.value = value?.enabled ?? true
+async function chooseAccount(account: string) {
+  await run(
+    () => client.account(id.value, account),
+    (value) => {
+      mapping.value = value
+      name.value = value.account
+      principalId.value = value.principalId
+      instanceId.value = value.instanceId
+      accountEnabled.value = value.enabled
+      freshRead.value = true
+    },
+  )
 }
 async function loadAccounts(cursor?: string) {
   if (!id.value || !canRead.value) return
   await run(
-    () => client.accounts(id.value, { cursor }),
+    () => accountQuery.read(cursor, (query) => client.accounts(id.value, query)),
     (page) => {
-      accounts.value = cursor ? [...accounts.value, ...page.items] : page.items
+      accountRows.value = page.items
+      accounts.value = accountQuery.complete.value ? page.items : []
       accountCursor.value = page.nextCursor
     },
   )
 }
-watch(id, load)
+watch(
+  id,
+  () => {
+    void load()
+  },
+  { flush: 'sync' },
+)
 watch(
   canRead,
   (allowed) => {
@@ -136,9 +177,62 @@ watch(
   },
   { immediate: true },
 )
+organizationQuery.onClear(() => {
+  organizations.value = []
+  organizationRows.value = []
+})
+accountQuery.onClear(() => {
+  accounts.value = []
+  accountRows.value = []
+})
+watch(
+  canRead,
+  (allowed) => {
+    if (!allowed) {
+      selected.value = undefined
+      mapping.value = undefined
+      organizationQuery.reset()
+      accountQuery.reset()
+    }
+  },
+  { flush: 'sync' },
+)
+accountQuery.restrict(canRead)
+organizationQuery.restrict(canRead)
 </script>
 <template>
+  <VBtn :disabled="busy || !id" @click="load()">{{ t('settings.reload') }}</VBtn>
   <MdmPage :title="t('onboarding.appleAccount')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="accountQuery"
+      :busy="busy"
+      hint="account / revision / enabled / principalId / instanceId"
+      @load="loadAccounts"
+    />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      :required="['account']"
+      v-if="!accountQuery.complete.value"
+      :items="accountRows"
+      @open="
+        (row) => {
+          chooseAccount(String(row.account))
+        }
+      "
+    />
+
+    <DirectoryControls :query="organizationQuery" :busy="busy" hint="id" @load="refresh" />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      v-if="!organizationQuery.complete.value"
+      :items="organizationRows"
+      @open="
+        (row) => {
+          id = String(row.id)
+        }
+      "
+    />
+
     <RegistrationStatus channel="macos_mdm" />
     <p>{{ t('onboarding.appleAccountGuide') }}</p>
     <v-btn
@@ -150,9 +244,7 @@ watch(
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
       <v-btn type="button" :disabled="!!busy" @click="refresh()">{{ t('devices.reload') }}</v-btn>
-      <v-btn v-if="organizationCursor" :disabled="busy" @click="refresh(organizationCursor)">{{
-        t('devices.next')
-      }}</v-btn>
+
       <v-select
         v-model="id"
         :label="t('onboarding.organization')"
@@ -180,9 +272,7 @@ watch(
       >
         {{ t('onboarding.newOrganization') }}
       </v-btn>
-      <v-btn v-if="accountCursor" :disabled="busy" @click="loadAccounts(accountCursor)">{{
-        t('devices.next')
-      }}</v-btn>
+
       <dl v-if="selected">
         <dt>{{ t('devices.revision') }}</dt>
         <dd>{{ selected.revision }}</dd>

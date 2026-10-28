@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import {
   VAlert,
   VBtn,
@@ -42,6 +46,11 @@ import {
   type Vault,
   type Version,
 } from './model'
+const entryQuery = useDirectoryQuery(
+  ['id', 'revision', 'retired', 'recommendedVersion', 'latest'],
+  200,
+)
+
 const runtime = useMdm(),
   client = runtime.security.certificateArchive,
   { t } = useI18n(),
@@ -87,7 +96,6 @@ const vault = ref<Vault>(),
   comparison = ref<number>(),
   pending = ref<string>(),
   diagnosis = ref(''),
-  filter = ref('all'),
   uploadFiles = ref<File[]>([]),
   files = ref<{ file: File; format: Format; password: string }[]>([]),
   format = ref<Format>('certificate'),
@@ -126,13 +134,7 @@ const sessionStamp = computed(() => {
 const unlocked = computed(
   () => vault.value?.unlockedUntil !== null && vault.value?.unlockedUntil !== undefined,
 )
-const displayed = computed(() =>
-  items.value.filter(
-    (e) =>
-      filter.value === 'all' ||
-      validity(e.latest.facts, asOf.value, reminderDays.value) === filter.value,
-  ),
-)
+const displayed = computed(() => items.value)
 const referenceVersions = computed(() => {
   const versions = new Map<string, Version>()
   for (const entry of items.value) versions.set(`${entry.id}:${entry.latest.version}`, entry.latest)
@@ -218,14 +220,21 @@ async function invoke<T>(request: () => Promise<T>): Promise<T> {
     throw e
   }
 }
+const projectedItems = ref<object[]>([])
 async function load(after?: string) {
   if (busy.value) return
   diagnosis.value = ''
   await op.run(
-    () => Promise.all([client.state(), client.list({ cursor: after }), client.settings()]),
+    () =>
+      Promise.all([
+        client.state(),
+        entryQuery.read(after, (query) => client.list(query)),
+        client.settings(),
+      ]),
     ([v, page, settings]) => {
       setVault(v)
-      items.value = after ? [...items.value, ...page.items] : page.items
+      projectedItems.value = page.items
+      items.value = entryQuery.complete.value ? page.items : []
       nextCursor.value = page.nextCursor
       asOf.value = page.asOf
       alertCounts.value = page.alerts
@@ -234,7 +243,6 @@ async function load(after?: string) {
       categories.value = settings.value.categories
       categoryText.value = categories.value.join('\n')
       settingsRevision.value = settings.revision
-      if (selected.value) selected.value = items.value.find((e) => e.id === selected.value?.id)
     },
   )
 }
@@ -408,12 +416,15 @@ async function submit() {
     }
   }
 }
-async function open(entry: Entry) {
+async function open(locator: Pick<Entry, 'id'>) {
   if (busy.value) return
   clearDownloads()
   await op.run(
-    () => client.history(entry.id),
-    (versions) => {
+    async () => ({
+      entry: await client.read(locator.id),
+      versions: await client.history(locator.id),
+    }),
+    ({ entry, versions }) => {
       selected.value = entry
       editorBase.value = structuredClone(toRaw(entry))
       history.value = versions.items
@@ -478,6 +489,10 @@ function date(value: number) {
   return new Date(value * 1000).toISOString()
 }
 onMounted(() => load())
+entryQuery.onClear(() => {
+  items.value = []
+  projectedItems.value = []
+})
 </script>
 <template>
   <MdmPage
@@ -486,6 +501,23 @@ onMounted(() => load())
     :busy="busy"
     :failure="failure"
   >
+    <DirectoryControls
+      :query="entryQuery"
+      :busy="busy"
+      hint="id / revision / retired / recommendedVersion"
+      @load="load"
+    />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      v-if="!entryQuery.complete.value"
+      :items="projectedItems"
+      @open="
+        (row) => {
+          open({ id: String(row.id) })
+        }
+      "
+    />
+
     <template #actions
       ><v-btn variant="tonal" :disabled="busy" @click="load()">{{
         t('security.archive.refresh')
@@ -566,17 +598,7 @@ onMounted(() => load())
     <v-card class="mb-4"
       ><v-card-text
         ><p class="text-body-2 mb-3">{{ t('console.loadedFilter') }}</p>
-        <v-select
-          id="archive-filter"
-          v-model="filter"
-          :label="t('security.archive.status')"
-          :items="[
-            { value: 'all', title: t('security.archive.all') },
-            ...['expired', 'expiring', 'not_yet_valid', 'valid', 'request', 'key', 'unparsed'].map(
-              (value) => ({ value, title: t(`security.archive.states.${value}`) }),
-            ),
-          ]"
-        /><v-alert v-if="!listingLoaded && busy && !failure" type="info" variant="tonal">{{
+        <v-alert v-if="!listingLoaded && busy && !failure" type="info" variant="tonal">{{
           t('console.reading')
         }}</v-alert
         ><v-alert v-else-if="listingLoaded && !displayed.length" type="info" variant="tonal">{{
@@ -614,9 +636,7 @@ onMounted(() => load())
               <td>{{ entry.latest.metadata.owner }}</td>
             </tr>
           </tbody></v-table
-        ><v-btn v-if="nextCursor" variant="text" :disabled="busy" @click="load(nextCursor)">{{
-          t('security.archive.more')
-        }}</v-btn>
+        >
       </v-card-text></v-card
     >
     <v-card

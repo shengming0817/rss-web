@@ -96,6 +96,50 @@ try {
   }
   phase = 'login'
   await login(f.tenant)
+  phase = 'directory-query-controls'
+  const queryResources = [randomUUID(), randomUUID()]
+  for (const id of queryResources)
+    await mutation(`/api/v1/resources/${id}`, { action: 'create', kind: 'script' })
+  await page.goto(at('policies/resources'))
+  await ready()
+  const queryControls = page.locator('.directory-query').first()
+  await queryControls.locator('summary').click()
+  const queryFilter = `id=in=(${queryResources.join(',')})`
+  await queryControls.getByLabel('筛选表达式', { exact: true }).fill(queryFilter)
+  await queryControls.getByLabel('每页数量', { exact: true }).fill('1')
+  await queryControls.getByLabel('返回字段', { exact: true }).selectOption(['id'])
+  const directoryResponse = () =>
+    page.waitForResponse(
+      (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/v1/resources',
+    )
+  let response = directoryResponse()
+  await queryControls.getByRole('button', { name: '应用查询', exact: true }).click()
+  const firstQueryPage = await (await response).json()
+  assert.equal(firstQueryPage.items.length, 1)
+  assert.deepEqual(Object.keys(firstQueryPage.items[0]), ['id'])
+  assert.ok(firstQueryPage.nextCursor)
+  await queryControls.getByLabel('筛选表达式', { exact: true }).fill("id=='draft-only'")
+  response = directoryResponse()
+  await queryControls.getByRole('button', { name: '下一页', exact: true }).click()
+  const continued = await response
+  assert.equal(new URL(continued.url()).searchParams.get('filter'), `(${queryFilter})`)
+  const secondQueryPage = await continued.json()
+  assert.notEqual(secondQueryPage.items[0].id, firstQueryPage.items[0].id)
+  response = directoryResponse()
+  await queryControls.getByRole('button', { name: '上一页', exact: true }).click()
+  assert.equal((await (await response).json()).items[0].id, firstQueryPage.items[0].id)
+  const fullResource = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === `/api/v1/resources/${firstQueryPage.items[0].id}`,
+  )
+  await page
+    .locator('.directory-results')
+    .first()
+    .getByRole('button', { name: '读取详情', exact: true })
+    .click()
+  assert.equal((await fullResource).status(), 200)
+  coverage.push('directory-applied-pagination-partial-detail')
   phase = 'credential-materials'
   const mac = await api('/api/v1/devices/fixture-mac'),
     registration = mac.primaryMdmRegistration

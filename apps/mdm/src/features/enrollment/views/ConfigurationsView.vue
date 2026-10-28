@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import {
   VForm,
   VAlert,
@@ -24,6 +28,22 @@ import { platforms, architectures } from '../clients/packages'
 import { configurationFilename, type configuration } from '../clients/configurations'
 import RegistrationStatus from '../../../components/RegistrationStatus.vue'
 import MdmPage from '../../../ui/MdmPage.vue'
+const directoryQuery = useDirectoryQuery(
+  [
+    'configurationId',
+    'state',
+    'createdAt',
+    'expiresAt',
+    'createdBy',
+    'targets',
+    'quantity',
+    'reserved',
+    'consumed',
+    'remaining',
+  ],
+  1000,
+)
+
 const runtime = useMdm(),
   client = runtime.onboarding.configurations,
   route = useRoute(),
@@ -48,7 +68,7 @@ function loadDirectory(cursor?: string) {
   if (!canRead.value) return
   directory.value = undefined
   void directoryOperation.run(
-    () => client.list({ cursor }),
+    () => directoryQuery.read(cursor, (query) => client.list(query), {}),
     (page) => {
       directory.value = page
     },
@@ -289,9 +309,31 @@ watch(
   },
   { flush: 'sync' },
 )
+directoryQuery.onClear(() => {
+  directory.value = undefined
+})
+directoryQuery.restrict(canRead)
 </script>
 <template>
   <MdmPage :title="t('onboarding.configurations')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="directoryOperation.busy.value"
+      hint="筛选：configurationId / state / createdAt / expiresAt / createdBy / platform / architecture；排序不包含 platform / architecture。"
+      @load="loadDirectory"
+    />
+    <DirectoryResults
+      :disabled="busy || uncertain"
+      :required="['configurationId']"
+      v-if="!directoryQuery.complete.value"
+      :items="directory?.items ?? []"
+      @open="
+        (row) => {
+          selectConfiguration(String(row.configurationId))
+        }
+      "
+    />
+
     <RegistrationStatus channel="agent" />
     <p v-if="!canRead">{{ t('devices.denied') }}</p>
     <template v-else>
@@ -314,7 +356,10 @@ watch(
             {{ t('devices.' + directoryOperation.failure.value) }}
           </v-alert>
           <p v-if="directory && !directory.items.length">{{ t('devices.empty') }}</p>
-          <p v-for="item in directory?.items" :key="item.configurationId">
+          <p
+            v-for="item in directoryQuery.complete.value ? directory?.items : []"
+            :key="item.configurationId"
+          >
             <v-btn
               :disabled="busy || uncertain || !!pending"
               @click="selectConfiguration(item.configurationId)"
@@ -326,12 +371,6 @@ watch(
             }}
             · {{ t('onboarding.remaining') }}: {{ item.remaining ?? t('onboarding.unlimited') }}
           </p>
-          <v-btn
-            v-if="directory?.nextCursor"
-            :disabled="directoryOperation.busy.value"
-            @click="loadDirectory(directory.nextCursor)"
-            >{{ t('devices.next') }}</v-btn
-          >
         </v-card-text></v-card
       >
       <v-expansion-panels

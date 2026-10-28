@@ -11,7 +11,7 @@ import {
   uuid,
 } from '../../../services/decode'
 import { member, positive, type Member } from './endpoint-model'
-import { pageCursor } from '../../../services/directory-query'
+import { pageCursor } from '@rss/api/mdm-query'
 export interface ConfirmAssociation {
   operationId: string
   associationId: string | null

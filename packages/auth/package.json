@@ -30,6 +30,7 @@
     ".": "./src/index.ts",
     "./styles.css": "./src/style.css",
     "./session": "./src/session.ts",
-    "./profile-json": "./src/profile-json.ts"
+    "./profile-json": "./src/profile-json.ts",
+    "./account-query": "./src/views/AccountQueryControls.vue"
   }
 }

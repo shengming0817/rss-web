@@ -112,6 +112,12 @@ for (const name of [
 }
 exports.validateFieldDefinition = 'FieldWrite#/$defs/FieldDefinition'
 declarations += `import type { FieldDefinition } from './FieldWrite'\nexport declare function validateFieldDefinition(value: unknown): value is FieldDefinition\n`
+// Directory projections validate only the selected real fields; never synthesize a full descriptor.
+for (const field of Object.keys(schemas.FieldView.properties)) {
+  const name = `validateFieldView${field[0].toUpperCase()}${field.slice(1)}`
+  exports[name] = `FieldView#/properties/${field}`
+  declarations += `export declare function ${name}(value: unknown): value is FieldView['${field}']\n`
+}
 const result = await build({
   stdin: {
     contents: standaloneCode(ajv, exports),

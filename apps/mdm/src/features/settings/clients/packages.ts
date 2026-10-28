@@ -1,8 +1,9 @@
 import {
   queryParameters,
   projectedPage,
+  projectedRow,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
 import {
@@ -287,6 +288,24 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
             }
           }
           return page
+        },
+      }),
+    read: (release: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/agent-packages/{id}',
+        pathParams: { id: uuid(release) },
+        successStatus: 200,
+        decode(value) {
+          const row = projectedRow(value, packageFields)
+          if (
+            row.releaseId !== release ||
+            row.tenantId !== tenant ||
+            row.target.platform !== row.platform ||
+            row.target.architecture !== row.architecture
+          )
+            throw new Error('Wrong package')
+          return row
         },
       }),
     withdraw: (id: string, release: string) =>

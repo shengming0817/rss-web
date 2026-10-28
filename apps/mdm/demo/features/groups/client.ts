@@ -9,11 +9,7 @@ import {
   string,
   uuid,
 } from '../../../src/services/decode'
-import {
-  nextCursor,
-  queryParameters,
-  type DirectoryQuery,
-} from '../../../src/services/directory-query'
+import { nextCursor, queryParameters, type DirectoryQuery } from '@rss/api/mdm-query'
 import { group, draft, resultRow, type Draft, type Person, type Device } from './model'
 const base = '/api/v1/mdm-candidate/groups'
 export function createDemoGroupsClient(transport: HttpTransport, tenant: string) {

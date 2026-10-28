@@ -1,9 +1,10 @@
 import {
   queryParameters,
   nextCursor,
-  windowPage,
+  projectedPage,
+  projectedRow,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -217,7 +218,7 @@ export function groupDefinition(value: unknown, tenant: string) {
     throw new Error('Invalid group members')
   const members = unique(
     v['members'].map((m) => user(m, tenant)),
-    (m) => m.principalId,
+    (m) => ('principalId' in m ? String(m.principalId) : JSON.stringify(m)),
   )
   if (new Set(members.map((m) => m.instanceId)).size > 1) throw new Error('Mixed instances')
   return { name: identifier(v['name']), enabled: boolean(v['enabled']), members }
@@ -303,14 +304,30 @@ export function createAuthorizationClient(
   function tenantOnly() {
     if (realm === 'platform') throw new Error('Directory is not available in the management realm')
   }
-  function list<T>(path: string, decode: (v: unknown) => T, query: DirectoryQuery = {}) {
-    return transport.request({
-      method: 'GET',
-      path,
-      query: queryParameters({ limit: 100, ...query, fields: ['id', 'revision', 'value'] }),
-      successStatus: 200,
-      decode: (value) => windowPage(value, (v) => revision(v, decode)),
-    })
+  const ruleFields = {
+    id: uuid,
+    revision: count,
+    deleted: boolean,
+    subjectKind: (v: unknown) => nullable(v, identifier),
+    value: (v: unknown) => nullable(v, decodeRule),
+  }
+  const groupFields = {
+    id: uuid,
+    revision: count,
+    deleted: boolean,
+    name: (v: unknown) => nullable(v, identifier),
+    enabled: (v: unknown) => nullable(v, boolean),
+    memberCount: (v: unknown) => nullable(v, count),
+    value: (v: unknown) => nullable(v, summary),
+  }
+  const memberFields = {
+    principalId: uuid,
+    tenantId: (v: unknown) => {
+      const id = uuid(v)
+      if (id !== tenant) throw new Error('Wrong tenant')
+      return id
+    },
+    instanceId: uuid,
   }
   function detail<T>(kind: string, id: string, decode: (v: unknown) => T) {
     return transport.request({
@@ -353,7 +370,10 @@ export function createAuthorizationClient(
       },
     })
   }
-  function memberPage(id: string, query: DirectoryQuery = {}) {
+  function memberPage<F extends keyof typeof memberFields = keyof typeof memberFields>(
+    id: string,
+    query: DirectoryQuery<F> = {},
+  ) {
     tenantOnly()
     return transport.request({
       method: 'GET',
@@ -362,7 +382,6 @@ export function createAuthorizationClient(
       query: queryParameters({
         limit: 100,
         ...query,
-        fields: ['principalId', 'tenantId', 'instanceId'],
       }),
       successStatus: 200,
       decode(value) {
@@ -372,8 +391,8 @@ export function createAuthorizationClient(
           id,
           revision: count(v['revision']),
           items: unique(
-            array(v['items'], (m) => user(m, tenant)),
-            (m) => m.principalId,
+            array(v['items'], (m) => projectedRow(m, memberFields, query.fields)),
+            (m) => ('principalId' in m ? String(m.principalId) : JSON.stringify(m)),
           ),
           nextCursor: nextCursor(v['nextCursor']),
         }
@@ -436,10 +455,27 @@ export function createAuthorizationClient(
       tenantOnly()
       return detail('user-groups', id, (v) => groupDefinition(v, tenant))
     },
-    rules: (query: DirectoryQuery = {}) => list(`${prefix}/rules`, decodeRule, query),
-    groups: (query: DirectoryQuery = {}) => {
+    rules: <F extends keyof typeof ruleFields = keyof typeof ruleFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
+      transport.request({
+        method: 'GET',
+        path: `${prefix}/rules`,
+        query: queryParameters({ limit: 50, ...query }),
+        successStatus: 200,
+        decode: (value) => projectedPage(value, ruleFields, query.fields, ['id']),
+      }),
+    groups: <F extends keyof typeof groupFields = keyof typeof groupFields>(
+      query: DirectoryQuery<F> = {},
+    ) => {
       tenantOnly()
-      return list(`${prefix}/user-groups`, summary, query)
+      return transport.request({
+        method: 'GET',
+        path: `${prefix}/user-groups`,
+        query: queryParameters({ limit: 50, ...query }),
+        successStatus: 200,
+        decode: (value) => projectedPage(value, groupFields, query.fields, ['id']),
+      })
     },
     departments: () => {
       tenantOnly()

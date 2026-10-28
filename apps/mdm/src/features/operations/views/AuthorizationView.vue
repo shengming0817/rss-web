@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
+import AccountQueryControls from '@rss/auth/account-query'
+
 import {
   VAlert,
   VBtn,
@@ -16,7 +22,7 @@ import OperationDialog from '../components/OperationDialog.vue'
 import { computed, onMounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { useIdentity } from '@rss/auth'
+import { useAccountDirectory } from '@rss/auth'
 import { isRssApiError } from '@rss/api/mdm'
 import { useMdm } from '../../../context'
 import { uuid, closed } from '../../../services/decode'
@@ -32,9 +38,11 @@ import MdmPage from '../../../ui/MdmPage.vue'
 import GrantFacts from '../components/GrantFacts.vue'
 import PermissionChoices from '../components/PermissionChoices.vue'
 import PrincipalChoice from '../components/PrincipalChoice.vue'
-import type { LocalAccount } from '../components/authorization-presentation'
+const ruleQuery = useDirectoryQuery(['id', 'revision', 'deleted', 'subjectKind', 'value'], 1000)
+
+const accountDirectory = useAccountDirectory()
+const { rows: accounts, next: accountCursor, loaded: accountsRead } = accountDirectory
 const runtime = useMdm(),
-  identity = useIdentity(),
   route = useRoute(),
   { t } = useI18n(),
   client = runtime.operations.authorization,
@@ -59,9 +67,6 @@ const page = ref<Awaited<ReturnType<typeof client.rules>>>(),
   preview = ref<'save' | 'delete'>(),
   remote = ref<Revision<Rule> | null>(),
   selectedDeleted = ref(false),
-  accounts = ref<LocalAccount[]>([]),
-  accountCursor = ref<string | null>(null),
-  accountsRead = ref(false),
   directoryDenied = ref(false)
 const bound = computed(() => {
     const s = runtime.session.state.value
@@ -174,7 +179,7 @@ function create() {
   clearDraft()
   editorOpen.value = true
 }
-async function select(row: Revision<Rule>) {
+async function select(row: Pick<Revision<Rule>, 'id'>) {
   if (busy.value || locked.value || !canRead.value) return
   clearDraft()
   editorOpen.value = false
@@ -186,66 +191,24 @@ async function select(row: Revision<Rule>) {
     },
   )
 }
-async function load(after: string | undefined, index: number) {
+async function load(after?: string, _index = 0) {
   if (!bound.value || busy.value || !canRead.value) return false
   page.value = undefined
   return run(
-    () => client.rules({ cursor: after }),
+    () => ruleQuery.read(after, (query) => client.rules(query)),
     (v) => {
       page.value = v
-      pageIndex.value = index
-      cursors.value = [...cursors.value.slice(0, index), after]
+      pageIndex.value = ruleQuery.trail.value.length
+      cursors.value = [...ruleQuery.trail.value, after]
     },
   )
-}
-async function next() {
-  if (page.value?.nextCursor && !busy.value) await load(page.value.nextCursor, pageIndex.value + 1)
-}
-async function previous() {
-  if (pageIndex.value > 0 && !busy.value)
-    await load(cursors.value[pageIndex.value - 1], pageIndex.value - 1)
 }
 async function loadAccounts(more = false) {
-  if (!canBrowse.value || busy.value) return
-  const cursor = more ? (accountCursor.value ?? undefined) : undefined
-  if (!more) {
-    accounts.value = []
-    accountsRead.value = false
-    accountCursor.value = null
-  }
-  directoryDenied.value = false
-  await run(
-    async () => {
-      try {
-        const page = await identity.api.accounts(cursor)
-        if (page.next !== null && page.next === cursor) throw new Error('Repeated account cursor')
-        return { page, denied: false }
-      } catch (error) {
-        if (isRssApiError(error) && error.status === 403) return { page: null, denied: true }
-        throw error
-      }
-    },
-    (result) => {
-      directoryDenied.value = result.denied
-      if (result.denied) {
-        accounts.value = []
-        accountsRead.value = false
-        accountCursor.value = null
-      }
-      if (result.page) {
-        accounts.value = [
-          ...new Map(
-            [...(more ? accounts.value : []), ...result.page.accounts].map((a) => [
-              a.principalId,
-              a,
-            ]),
-          ).values(),
-        ]
-        accountCursor.value = result.page.next
-        accountsRead.value = true
-      }
-    },
+  if (!canBrowse.value || busy.value || accountDirectory.busy.value) return
+  await accountDirectory.run(() =>
+    more ? accountDirectory.navigate(accountCursor.value ?? undefined) : accountDirectory.load(),
   )
+  directoryDenied.value = accountDirectory.error.value === 'insufficient_privilege'
 }
 function definition(): Rule {
   if (!effective.value || !bound.value) throw new Error('No current binding')
@@ -495,6 +458,10 @@ watch(
   { flush: 'post' },
 )
 onMounted(initialize)
+ruleQuery.onClear(() => {
+  page.value = undefined
+})
+ruleQuery.restrict(canRead)
 </script>
 <template>
   <MdmPage
@@ -502,6 +469,23 @@ onMounted(initialize)
     :busy="busy"
     :failure="failure"
   >
+    <DirectoryControls
+      :query="ruleQuery"
+      :busy="busy"
+      hint="id / revision / deleted / subjectKind"
+      @load="load"
+    />
+    <DirectoryResults
+      :disabled="busy || locked"
+      v-if="!ruleQuery.complete.value"
+      :items="page?.items ?? []"
+      @open="
+        (row) => {
+          select({ id: String(row.id) })
+        }
+      "
+    />
+
     <template #actions
       ><VBtn :disabled="busy || !bound" @click="initialize">{{ t('devices.reload') }}</VBtn
       ><VBtn color="primary" :disabled="locked || !canWrite" @click="create">{{
@@ -560,6 +544,7 @@ onMounted(initialize)
       >
     </section>
     <VDataTable
+      v-if="ruleQuery.complete.value"
       disable-sort
       hide-default-footer
       :items-per-page="-1"
@@ -592,15 +577,7 @@ onMounted(initialize)
         }}</VChip></template
       >
     </VDataTable>
-    <div class="settings-actions">
-      <span>{{ t('operations.ruleUi.page') }} {{ pageIndex + 1 }}</span
-      ><VBtn :disabled="busy || pageIndex === 0" @click="previous">{{
-        t('operations.ruleUi.previous')
-      }}</VBtn
-      ><VBtn :disabled="busy || !page?.nextCursor" @click="next">{{
-        t('operations.ruleUi.next')
-      }}</VBtn>
-    </div>
+
     <VExpansionPanels v-if="bound && effective" class="console-panel"
       ><VExpansionPanel>
         <VExpansionPanelTitle>{{ t('operations.ruleUi.effectiveTitle') }}</VExpansionPanelTitle
@@ -631,6 +608,20 @@ onMounted(initialize)
       @submit.prevent="($event.target as HTMLFormElement).reportValidity() &amp;&amp; (review('save'))"
     >
       <fieldset :disabled="locked || !canWrite || !effective">
+        <AccountQueryControls
+          v-if="canBrowse"
+          :query="accountDirectory.query"
+          :departments="runtime.realm === 'tenant'"
+          :busy="busy || accountDirectory.busy.value"
+          :previous="!!accountDirectory.trail.value.length"
+          :next="!!accountCursor"
+          @apply="loadAccounts()"
+          @first="accountDirectory.run(() => accountDirectory.navigate())"
+          @previous="
+            accountDirectory.run(() => accountDirectory.navigate(accountDirectory.previous.value))
+          "
+          @next="loadAccounts(true)"
+        />
         <PrincipalChoice
           v-if="platform"
           v-model="subjectId"
@@ -639,7 +630,7 @@ onMounted(initialize)
           :can-browse="canBrowse"
           :loaded="accountsRead"
           :denied="directoryDenied"
-          :more="!!accountCursor"
+          :more="false"
           :busy="busy"
           @load="loadAccounts()"
           @more="loadAccounts(true)"

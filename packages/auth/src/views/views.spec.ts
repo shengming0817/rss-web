@@ -282,13 +282,13 @@ describe('Identity views use actual app session and decoder modules', () => {
     await f.login()
     f.replies.push({
       accounts: [accountValue],
-      nextCursor: OTHER,
+      nextCursor: 'YWJjZGVm',
     })
     const { wrapper } = await view(AccountsView, f, 'accounts')
     f.replies.push({ accounts: [], nextCursor: null })
     await wrapper
       .findAll('button')
-      .find((b) => b.text() === '加载更多')!
+      .find((b) => b.text() === '下一页')!
       .trigger('click')
     await flushPromises()
     await wrapper
@@ -308,6 +308,7 @@ describe('Identity views use actual app session and decoder modules', () => {
       expect(new DOMWrapper(document.body).find('#account-password').exists()).toBe(false),
     )
     for (const label of ['停用账户', '停用成员']) {
+      f.replies.push(accountValue)
       await wrapper
         .findAll('button')
         .find((b) => b.text() === label)!
@@ -332,6 +333,7 @@ describe('Identity views use actual app session and decoder modules', () => {
         .trigger('click')
       await flushPromises()
     }
+    f.replies.push(accountValue)
     await wrapper
       .findAll('button')
       .find((b) => b.text() === '重置密码')!

@@ -1,9 +1,10 @@
 import {
   queryParameters,
-  windowPage,
-  nextCursor,
+  projectedPage,
+  projectedRow,
+  comparison,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -103,36 +104,64 @@ export function adeStatus(value: unknown, id: string) {
     externalDeviceVerification: 'not_observed' as const,
   }
 }
-export function appleOrganizations(value: unknown) {
-  return windowPage(value, (value) => {
-    const v = closed(value, ['id', 'accountEnrollment', 'ade']),
-      id = uuid(v['id'])
-    const accountEnrollment = nullable(v['accountEnrollment'], (value) => {
-      const a = closed(value, [
-        'domain',
-        'serverUuid',
-        'signingKey',
-        'enabled',
-        'revision',
-        'signingKeyConfigured',
-        'externalOrganizationVerification',
-      ])
-      if (a['externalOrganizationVerification'] !== 'not_observed')
-        throw new Error('Invalid verification')
-      const d = domain(a['domain'])
-      return {
-        domain: d,
-        serverUuid: uuid(a['serverUuid']),
-        signingKey: bounded(a['signingKey'], 128),
-        enabled: boolean(a['enabled']),
-        revision: count(a['revision']),
-        signingKeyConfigured: boolean(a['signingKeyConfigured']),
-        externalOrganizationVerification: 'not_observed' as const,
-      }
-    })
-    return { id, accountEnrollment, ade: nullable(v['ade'], (value) => adeStatus(value, id)) }
+function accountEnrollment(value: unknown) {
+  return nullable(value, (value) => {
+    const a = closed(value, [
+      'domain',
+      'serverUuid',
+      'signingKey',
+      'enabled',
+      'revision',
+      'signingKeyConfigured',
+      'externalOrganizationVerification',
+    ])
+    if (a['externalOrganizationVerification'] !== 'not_observed')
+      throw new Error('Invalid verification')
+    const d = domain(a['domain'])
+    return {
+      domain: d,
+      serverUuid: uuid(a['serverUuid']),
+      signingKey: bounded(a['signingKey'], 128),
+      enabled: boolean(a['enabled']),
+      revision: count(a['revision']),
+      signingKeyConfigured: boolean(a['signingKeyConfigured']),
+      externalOrganizationVerification: 'not_observed' as const,
+    }
   })
 }
+const organizationFields = {
+  id: uuid,
+  accountEnrollment,
+  ade: (value: unknown) =>
+    nullable(value, (v) => {
+      const r = record(v)
+      return adeStatus(v, uuid(r['organizationId']))
+    }),
+}
+const accountFields = {
+  account,
+  principalId: uuid,
+  instanceId: uuid,
+  revision: count,
+  enabled: boolean,
+}
+const profileFields = {
+  id: uuid,
+  revision: count,
+  configuration: setup,
+  remoteUuid: (v: unknown) => nullable(v, uuid),
+}
+const deviceFields = {
+  serial: (v: unknown) => bounded(v, 128),
+  deleted: boolean,
+  profileUuid: (v: unknown) => nullable(v, uuid),
+  observedAt: count,
+  registration: (v: unknown) => enumeration(v, ['not_implied'] as const),
+}
+export function appleOrganizations(value: unknown) {
+  return projectedPage(value, organizationFields, undefined, ['id'])
+}
+
 export function setup(value: unknown) {
   const v = closed(value, ['name', 'mandatory', 'removable', 'skip']),
     mandatory = boolean(v['mandatory']),
@@ -283,32 +312,65 @@ export function createAppleClient(transport: HttpTransport) {
     return result
   }
   return {
-    organizations: (query: DirectoryQuery = {}) =>
+    organizations: <F extends keyof typeof organizationFields = keyof typeof organizationFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/apple/organizations',
         query: queryParameters({ limit: 100, ...query }),
         successStatus: 200,
-        decode: appleOrganizations,
+        decode: (v) => projectedPage(v, organizationFields, query.fields, ['id']),
       }),
-    accounts: (id: string, query: DirectoryQuery = {}) =>
+    accounts: <F extends keyof typeof accountFields = keyof typeof accountFields>(
+      id: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/apple/organizations/{id}/account-enrollment/accounts',
         pathParams: params(id),
         query: queryParameters({ limit: 100, ...query }),
         successStatus: 200,
-        decode: (v) =>
-          windowPage(v, (value) => {
-            const a = closed(value, ['account', 'principalId', 'instanceId', 'revision', 'enabled'])
-            return {
-              account: account(a['account']),
-              principalId: uuid(a['principalId']),
-              instanceId: uuid(a['instanceId']),
-              revision: count(a['revision']),
-              enabled: boolean(a['enabled']),
-            }
-          }),
+        decode: (v) => projectedPage(v, accountFields, query.fields, ['account']),
+      }),
+    accountConfiguration: (id: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/apple/organizations/{id}/account-enrollment',
+        pathParams: params(id),
+        successStatus: 200,
+        decode(value) {
+          const result = accountEnrollment(value)
+          if (!result) throw new Error('Missing organization')
+          return result
+        },
+      }),
+    account: (id: string, name: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/apple/organizations/{id}/account-enrollment/accounts/{account}',
+        pathParams: { ...params(id), account: account(name) },
+        successStatus: 200,
+        decode(value) {
+          const row = projectedRow(value, accountFields)
+          if (row.account !== name) throw new Error('Wrong account')
+          return row
+        },
+      }),
+    profile: (id: string, profile: string) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/apple/organizations/{id}/ade/profiles',
+        pathParams: params(id),
+        query: queryParameters({ filter: comparison('id', '==', uuid(profile)), limit: 1 }),
+        successStatus: 200,
+        decode(value) {
+          const page = projectedPage(value, profileFields)
+          const row = page.items[0]
+          if (!row || row.id !== profile || page.nextCursor) throw new Error('Wrong profile')
+          return row
+        },
       }),
     accountOrganization: (id: string, operation: string, body: AccountOrganization) =>
       transport.request({
@@ -395,57 +457,29 @@ export function createAppleClient(transport: HttpTransport) {
         successStatus: 200,
         decode: (v) => adeOperation(v, operation),
       }),
-    profiles: (id: string, query: DirectoryQuery = {}) =>
+    profiles: <F extends keyof typeof profileFields = keyof typeof profileFields>(
+      id: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/apple/organizations/{id}/ade/profiles',
         pathParams: params(id),
         query: queryParameters({ limit: 100, ...query }),
         successStatus: 200,
-        decode: (v) =>
-          windowPage(v, (item) => {
-            const p = closed(item, ['id', 'revision', 'configuration', 'remoteUuid'])
-            return {
-              id: uuid(p['id']),
-              revision: count(p['revision']),
-              configuration: setup(p['configuration']),
-              remoteUuid: nullable(p['remoteUuid'], uuid),
-            }
-          }),
+        decode: (v) => projectedPage(v, profileFields, query.fields, ['id']),
       }),
-    devices: (id: string, query: DirectoryQuery = {}) =>
+    devices: <F extends keyof typeof deviceFields = keyof typeof deviceFields>(
+      id: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/apple/organizations/{id}/ade/devices',
         pathParams: params(id),
-        query: queryParameters({ limit: 100, ...query }),
+        query: queryParameters({ limit: 50, ...query }),
         successStatus: 200,
-        decode: (v) => {
-          const p = closed(v, ['items', 'nextCursor'])
-          return {
-            items: unique(
-              array(p['items'], (value) => {
-                const d = closed(value, [
-                  'serial',
-                  'deleted',
-                  'profileUuid',
-                  'observedAt',
-                  'registration',
-                ])
-                if (d['registration'] !== 'not_implied') throw new Error('Invented registration')
-                return {
-                  serial: bounded(d['serial'], 128),
-                  deleted: boolean(d['deleted']),
-                  profileUuid: nullable(d['profileUuid'], uuid),
-                  observedAt: count(d['observedAt']),
-                  registration: 'not_implied' as const,
-                }
-              }),
-              (v) => v.serial,
-            ),
-            nextCursor: nextCursor(p['nextCursor']),
-          }
-        },
+        decode: (value) => projectedPage(value, deviceFields, query.fields, ['serial']),
       }),
     bridge: '/api/v1/apple/account-enrollment/authenticate',
   }

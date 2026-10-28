@@ -4,25 +4,47 @@ import type { Computer, Binding } from '@rss/device-access/model'
 import { AccountBindingSummary } from '@rss/device-access/components'
 import { useDa, identityKey } from '../../../context'
 import { useRead } from '../../../services/read'
+import { useDirectory } from '../../../services/directory'
+import { bindingColumns } from '@rss/device-access/client'
+import { QueryRows } from '@rss/core'
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
 import { useMutation } from '../../../services/mutation'
 import { errorMessage } from '../../../services/status'
 import ReadState from '../../../ui/ReadState.vue'
 import WriteState from '../../../ui/WriteState.vue'
 const props = defineProps<{ device: Computer }>(),
   r = useDa(),
-  cursor = ref<string | null>(null),
   selected = ref<Binding | null>(null),
   proofBusy = ref(false),
   proofError = ref('')
-const { data, busy, error, reload } = useRead(
-  (signal) => r.client.bindings(props.device.id, cursor.value, signal),
-  () => props.device.id + ':' + (cursor.value ?? ''),
+const directory = useDirectory(
+  bindingColumns,
+  100,
+  (query, signal) => r.client.bindings(props.device.id, query, signal),
+  () => props.device.id,
 )
+const { data, busy, error, reload } = directory
+
+const locator = ref('')
+const detail = useRead(
+  (signal) => r.client.binding(props.device.id, locator.value, signal),
+  () => props.device.id + ':' + locator.value,
+  {
+    enabled: () => !!locator.value,
+    accepted(value) {
+      selected.value = value
+    },
+  },
+)
+function inspect(id: string) {
+  if (locator.value === id) void detail.reload()
+  else locator.value = id
+}
 watch(
   () => props.device.id,
   () => {
     selected.value = null
-    cursor.value = null
+    locator.value = ''
     proofError.value = ''
   },
   { flush: 'sync' },
@@ -98,19 +120,30 @@ async function prove() {
 </script>
 <template>
   <h2 class="mb-5">{{ $t('da.m32249c7116') }}</h2>
-  <ReadState :busy="busy" :error="error" @retry="reload" /><template v-if="data"
-    ><section v-for="b in data.items" :key="b.id" class="panel explanatory mb-4">
+  <DirectoryControls :query="directory" :busy="busy" /><ReadState
+    :busy="busy"
+    :error="error"
+    @retry="reload"
+  /><ReadState
+    :busy="detail.busy.value"
+    :error="detail.error.value"
+    @retry="detail.reload"
+  /><QueryRows
+    v-if="data && !data.summaries"
+    :items="data.items"
+    :fields="directory.applied.value?.fields ?? bindingColumns"
+    :required="['id']"
+    @open="(row) => inspect(String(row.id))"
+  /><template v-if="data"
+    ><section v-for="b in data.summaries ?? []" :key="b.id" class="panel explanatory mb-4">
       <AccountBindingSummary :binding="b" /><v-btn
         class="mt-4"
         variant="outlined"
-        @click="selected = b"
+        @click="inspect(b.id)"
         >{{ $t('da.m0eedf871b8') }}</v-btn
       >
     </section>
-    <p v-if="!data.items.length" class="empty">{{ $t('da.m60df48a3c6') }}</p>
-    <v-btn v-if="data.nextCursor" variant="text" @click="cursor = data!.nextCursor">{{
-      $t('da.mc74f901317')
-    }}</v-btn></template
+    <p v-if="!data.items.length" class="empty">{{ $t('da.m60df48a3c6') }}</p> </template
   ><v-alert type="info" :icon="false" class="mt-5">{{ $t('da.me6c3855132') }}</v-alert
   ><v-dialog
     :model-value="!!selected"

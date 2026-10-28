@@ -1,22 +1,19 @@
+import { queryParameters, comparison, allOf } from '@rss/api/mdm-query'
+import {
+  bindingDirectory,
+  materialDirectory,
+  applicationDirectory,
+  computerDirectory,
+  bindingDetail,
+  applicationDetail,
+} from './directory'
 import type { HttpTransport } from '@rss/api/mdm'
 import { CapabilityUnavailable } from '../model'
-import type { Computer, OriginalOperation } from '../model'
+import type { OriginalOperation } from '../model'
 import type { DeviceAccessClient } from '../client'
-import {
-  object,
-  closed,
-  text,
-  count,
-  bool,
-  uuid,
-  nullable,
-  list,
-  page,
-  same,
-  unique,
-} from '../model/decode'
+import { object, closed, text, count, bool, uuid, nullable, list, same } from '../model/decode'
 import { challenge } from './security'
-import { application, nativeBinding, nativeComputer, nativeMaterial } from './native'
+import { nativeComputer, nativeMaterial } from './native'
 export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
   const ready = { available: true, reason: null, source: 'service' as const }
   const missing = (reason: string) => ({ available: false, reason, source: 'service' as const })
@@ -36,21 +33,28 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       security: ready,
       audit: ready,
     },
-    computers: async (cursor, signal) =>
+    computers: (query, signal) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/device-views',
-        query: { fields: 'key,reference,endpoints', limit: 20, ...(cursor ? { cursor } : {}) },
+        query: queryParameters({ limit: 50, ...query }),
+        signal,
+        successStatus: 200,
+        decode: (value) => computerDirectory(value, query),
+      }),
+    viewComputers: (reference, signal) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/device-views/{kind}/{id}',
+        pathParams: reference,
         signal,
         successStatus: 200,
         decode(value) {
-          const p = page(value, (v) => {
-            const r = closed(v, ['key', 'reference', 'endpoints'])
-            return list(r['endpoints'], nativeComputer)
-          })
-          const byId = new Map<string, Computer>()
-          for (const c of p.items.flat()) byId.set(c.id, c)
-          return { items: [...byId.values()], nextCursor: p.nextCursor }
+          const row = object(value)
+          const actual = closed(row['reference'], ['kind', 'id'])
+          same(actual['kind'], reference.kind)
+          same(actual['id'], reference.id)
+          return list(row['endpoints'], nativeComputer)
         },
       }),
     computer: (device, signal) =>
@@ -70,18 +74,27 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
           return rows[0]
         },
       }),
-    bindings: (device, cursor, signal) =>
+    bindings: (device, query, signal) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/device-access',
         pathParams: { device },
-        query: { limit: 50, ...(cursor ? { cursor } : {}) },
+        query: queryParameters({ limit: 50, ...query }),
         signal,
         successStatus: 200,
-        decode: (v) => {
-          const p = page(v, (x) => nativeBinding(x, device))
-          unique(p.items, (x) => x.id)
-          return p
+        decode: (value) => bindingDirectory(value, device, query),
+      }),
+    binding: (device, id, signal) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/devices/{device}/device-access/bindings/{id}',
+        pathParams: { device, id: uuid(id) },
+        signal,
+        successStatus: 200,
+        decode: (value) => {
+          const row = bindingDetail(value, device)
+          same(row.id, id)
+          return row
         },
       }),
     changeBinding: (device, id, input, signal) =>
@@ -93,7 +106,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         signal,
         successStatus: 200,
         decode: (v) => {
-          const b = nativeBinding(v, device)
+          const b = bindingDetail(v, device)
           same(b.id, id)
           if (b.revision <= input.expectedRevision) throw new Error('Wrong revision')
           return b
@@ -106,7 +119,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         pathParams: { device, id: uuid(id) },
         signal,
         successStatus: 200,
-        decode: (v) => nativeBinding(v, device),
+        decode: (v) => bindingDetail(v, device),
       }),
     assignment: async () => unavailable('asset_contract'),
     people: async () => unavailable('asset_contract'),
@@ -114,16 +127,39 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
     passkeys: async () => unavailable('passkey_contract'),
     configurations: async () => unavailable('configuration_projection'),
     configuration: async () => unavailable('configuration_projection'),
+    readConfiguration: async () => unavailable('configuration_projection'),
     scopes: async () => unavailable('configuration_projection'),
-    materials: (device, cursor, signal) =>
+    materials: (device, query, signal) =>
       transport.request({
         method: 'GET',
         path: '/api/v1/devices/{device}/recovery-credentials',
         pathParams: { device },
-        query: { limit: 100, ...(cursor ? { cursor } : {}) },
+        query: queryParameters({ limit: 50, ...query }),
         signal,
         successStatus: 200,
-        decode: (value) => page(value, (v) => nativeMaterial(v, device)),
+        decode: (value) => materialDirectory(value, device, query),
+      }),
+    material: (device, id, version, signal) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/devices/{device}/recovery-credentials',
+        pathParams: { device },
+        query: queryParameters({
+          filter: allOf(
+            comparison('id', '==', uuid(id)),
+            comparison('version', '==', count(version)),
+          ),
+          limit: 1,
+        }),
+        signal,
+        successStatus: 200,
+        decode(value) {
+          const page = materialDirectory(value, device, {})
+          const row = page.summaries?.[0]
+          if (!row || row.id !== id || row.version !== version || page.nextCursor)
+            throw new Error('Wrong material')
+          return row
+        },
       }),
     materialChallenge: (device, material, operationId, signal) =>
       transport.request({
@@ -187,21 +223,29 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         },
       })
     },
-    applications: (cursor, signal) =>
-      transport.request({
+    applications: (query, signal) => {
+      const selection = {
+        limit: 50,
+        ...query,
+        filter: allOf("kind=='relying_party'", query.filter),
+      }
+      return transport.request({
         method: 'GET',
         path: '/api/v1/device-access/enterprise/configuration',
-        query: { filter: 'kind eq "relying_party"', limit: 50, ...(cursor ? { cursor } : {}) },
+        query: queryParameters(selection),
         signal,
         successStatus: 200,
-        decode: (v) =>
-          page(v, (raw) => {
-            const row = closed(raw, ['id', 'kind', 'value'])
-            same(row['kind'], 'relying_party')
-            const result = application(row['value'])
-            same(row['id'], 'rp:' + result.id)
-            return result
-          }),
+        decode: (value) => applicationDirectory(value, selection),
+      })
+    },
+    readApplication: (record, signal) =>
+      transport.request({
+        method: 'GET',
+        path: '/api/v1/device-access/enterprise/configuration/{id}',
+        pathParams: { id: record },
+        signal,
+        successStatus: 200,
+        decode: (value) => applicationDetail(value, record),
       }),
     application: async () => unavailable('application_operation_query'),
     audit: (device, cursor, signal) =>

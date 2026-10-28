@@ -1,8 +1,4 @@
-import {
-  queryParameters,
-  projectedPage,
-  type DirectoryQuery,
-} from '../../../services/directory-query'
+import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { boolean, closed, count, integer } from '../../../services/decode'
 import { endpointDirectoryFields, endpointDetail } from './endpoint-model'
