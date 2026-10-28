@@ -209,8 +209,15 @@ useSettingsFacts(() => (catalog.value = undefined))
                 <VExpansionPanelText>
                   <p>
                     {{ t('settings.savedVersion') }} {{ item.revision ?? '—' }} ·
-                    {{ t('settings.requestedVersion') }} {{ item.desiredRevision ?? '—' }} ·
-                    {{ t('settings.runtimeVersion') }} {{ item.appliedRevision ?? '—' }}
+                    {{
+                      t(
+                        item.id === 'storage' || item.id === 's3-key'
+                          ? 'settings.activeConnectionVersion'
+                          : 'settings.requestedVersion',
+                      )
+                    }}
+                    {{ item.desiredRevision ?? '—' }} · {{ t('settings.runtimeVersion') }}
+                    {{ item.appliedRevision ?? '—' }}
                   </p>
                   <p v-if="item.status === 'unknown' || item.reason">
                     {{

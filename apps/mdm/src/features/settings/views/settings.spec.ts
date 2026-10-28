@@ -2279,3 +2279,33 @@ it('shows storage candidate, active binding and unknown runtime observation sepa
   expect(f.wrapper.text()).toContain('资格通过不代表已经切换存储')
   expect(f.calls.filter((o) => o.method !== 'GET')).toHaveLength(0)
 })
+
+it('labels the storage catalog binding as active in overview evidence', async () => {
+  const f = await fixture(SettingsView, {}, 'tenant', 'settings-overview')
+  f.setHandler(() => ({
+    items: [
+      {
+        id: 'storage',
+        scope: 'tenant',
+        owner: 'software',
+        custody: 'storage_provider',
+        lifecycle: 'provider_credential',
+        status: 'configured',
+        revision: 2,
+        desiredRevision: 1,
+        appliedRevision: null,
+        configuredCount: 2,
+        reason: null,
+        actions: [],
+      },
+    ],
+    domains: [],
+  }))
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  const row = f.wrapper.get('[data-setting=storage]')
+  await row.get('.v-expansion-panel-title').trigger('click')
+  await flushPromises()
+  expect(row.text()).toMatch(/活动连接版本\s*1/)
+  expect(row.text()).not.toContain('请求应用版本')
+})
