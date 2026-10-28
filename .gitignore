@@ -16,3 +16,6 @@ dist/
 # 测试 / 覆盖率 / E2E 产物
 coverage/
 .vitest/
+
+# Generated from the committed MDM HTTP contract
+packages/api/src/generated/

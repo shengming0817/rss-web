@@ -14,5 +14,6 @@ specs/
 .claude/
 **/*.md
 
-# Reproducible validators are emitted by the fixed generator.
-packages/api/src/generated/mdm/*.js
+# Reproducible outputs and the exact producer snapshot are not hand formatted.
+packages/api/src/generated/
+contracts/mdm/http-v1.json

@@ -1,6 +1,0 @@
-export { default as validateRoot } from './scc06e298c74e819357ff.validator.js'
-export { default as validateConfiguration } from './vmgibkdnnbnelfallgpldegbdejnhlocjflganijghapeddiofjkhmbpmaeoommbg.validator.js'
-export { default as validateKeyRegistration } from './vhcpmgjjflhkiknnbimeielgalljhojpggaldgnfmfejingcbepkjimngacdcddfj.validator.js'
-export { default as validatePerson } from './vnhbmdadjooajdafmhdjnahifhocclkebnpnomjghjopfcpajcmcaodiencfbifen.validator.js'
-export { default as validateProofKind } from './vddhfjjbpcejbilfkmgoaligheaplacaaeeffcgmifiaiblkgldchmpecdlkjoohe.validator.js'
-export { default as validatePublicKey } from './vjamhcoieigcbfgcnfblfknianpchhbnncfjdjhogecklmnomnjjipfikogbfiebn.validator.js'

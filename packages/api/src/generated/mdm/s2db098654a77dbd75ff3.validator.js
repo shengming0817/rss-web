@@ -1,2 +1,0 @@
-/* Generated. Do not edit. */
-var f=e,c=e;function e(a,{instancePath:s="",parentData:i,parentDataProperty:o,rootData:d=a,dynamicAnchors:p={}}={}){let n=null,r=0,t=e.evaluated;return t.dynamicProps&&(t.props=void 0),t.dynamicItems&&(t.items=void 0),r===0&&r===0&&typeof a!="string"?(e.errors=[{instancePath:s,schemaPath:"#/type",keyword:"type",params:{type:"string"}}],!1):(e.errors=n,r===0)}e.evaluated={dynamicProps:!1,dynamicItems:!1};export{c as default,f as validate};
