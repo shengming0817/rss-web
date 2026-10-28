@@ -1,17 +1,8 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  identifier,
-  nullable,
-  string,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, identifier, nullable, string, unique, uuid } from '../../../services/decode'
 import { grant, permissions, user } from '../../operations/clients/authorization'
 export const keyPermissions = permissions.filter(
   (p) =>
@@ -31,7 +22,10 @@ export const keyPermissions = permissions.filter(
     ].includes(p),
 )
 export function keyMetadata(value: unknown) {
-  const v = closed(value, ['name', 'enabled', 'expiresAt', 'grants'])
+  if (!wireSchemas.getApiV1ApiKeysResponse.validateKeyMetadata(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const grants = unique(array(v['grants'], grant), (g) => JSON.stringify(g))
   if (
     !grants.length ||
@@ -41,23 +35,17 @@ export function keyMetadata(value: unknown) {
     throw new Error('Invalid key grants')
   const expiresAt = nullable(v['expiresAt'], count)
   if (expiresAt === 0) throw new Error('Invalid key expiry')
-  return { name: identifier(v['name']), enabled: boolean(v['enabled']), expiresAt, grants }
+  return { name: identifier(v['name']), enabled: v['enabled'], expiresAt, grants }
 }
 export type KeyMetadata = ReturnType<typeof keyMetadata>
 export type KeyIntent =
   | { kind: 'create' | 'update'; id: string; revision: number; metadata: KeyMetadata }
   | { kind: 'rotate' | 'revoke'; id: string; revision: number }
 export function keyRecord(value: unknown, tenant: string) {
-  const v = closed(value, [
-    'id',
-    'revision',
-    'authorityRevision',
-    'credentialRevision',
-    'metadata',
-    'createdBy',
-    'createdAt',
-    'revoked',
-  ])
+  if (!wireSchemas.getApiV1ApiKeysByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     id: uuid(v['id']),
     revision: count(v['revision']),
@@ -66,11 +54,14 @@ export function keyRecord(value: unknown, tenant: string) {
     metadata: keyMetadata(v['metadata']),
     createdBy: user(v['createdBy'], tenant),
     createdAt: count(v['createdAt']),
-    revoked: boolean(v['revoked']),
+    revoked: v['revoked'],
   }
 }
 export function networkPolicy(value: unknown) {
-  const v = closed(value, ['revision', 'networks'])
+  if (!wireSchemas.getApiV1TenantAdministrationApiAccessNetworkPolicyResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return { revision: count(v['revision']), networks: array(v['networks'], identifier) }
 }
 export function createApiAccess(transport: HttpTransport, tenant: string) {
@@ -106,8 +97,11 @@ export function createApiAccess(transport: HttpTransport, tenant: string) {
       }),
     change: (operationId: string, input: KeyIntent) => {
       const project = (value: unknown) => {
-        const v = closed(value, ['receipt', 'secret']),
-          r = closed(v['receipt'], ['id', 'revision', 'deleted'])
+        if (!wireSchemas.postApiV1ApiKeysResponse.validateKeyChangeResult(value))
+          throw new Error('Invalid contract value')
+
+        const v = value,
+          r = v['receipt']
         if (
           r['id'] !== input.id ||
           r['revision'] !== input.revision + 1 ||

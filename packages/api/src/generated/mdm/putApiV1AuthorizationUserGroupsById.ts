@@ -9,11 +9,12 @@ import type * as se9d5bbdc00c0640be207 from './se9d5bbdc00c0640be207'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<se9d5bbdc00c0640be207.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sb2bd5b2d0e682bdff2d0.Root
+export type * as Body from './se9d5bbdc00c0640be207'
+export type * as Response from './sb2bd5b2d0e682bdff2d0'
 export const putApiV1AuthorizationUserGroupsById = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

@@ -3,15 +3,15 @@ import { defineEndpoint } from '../../mdm-endpoint'
 
 import * as r from './responses'
 import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
-import v_sa83cc0163d9a1e56129d from './sa83cc0163d9a1e56129d.validator.js'
 import type * as sd71ef25b47b06f41b968 from './sd71ef25b47b06f41b968'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd71ef25b47b06f41b968.Root
+
+export type * as Response from './sd71ef25b47b06f41b968'
 export const postApiV1DeviceAccessBrokerByIdCancel = /* @__PURE__ */ defineEndpoint<
   Input,
   Output
@@ -25,17 +25,12 @@ export const postApiV1DeviceAccessBrokerByIdCancel = /* @__PURE__ */ defineEndpo
     queryOwner: null,
     publicRead: true,
     contentType: null,
-    requestHeaders: ['sec-fetch-site'],
+    requestHeaders: [],
     requiredHeaders: [],
     binary: false,
     statuses: [200],
   },
-  checks: {
-    headers: { 'sec-fetch-site': v_sa83cc0163d9a1e56129d },
-    path: v_s2780e2776b10651fb19c,
-    query: null,
-    body: null,
-  },
+  checks: { headers: {}, path: v_s2780e2776b10651fb19c, query: null, body: null },
   responses: [
     r.r1e6c95e856bb8404d76a,
     r.r188b9270e0a9d6de1391,

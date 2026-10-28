@@ -1,3 +1,4 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
@@ -5,16 +6,7 @@ import {
   type DirectoryQuery,
 } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  closed,
-  count,
-  identifier,
-  integer,
-  nullable,
-  record,
-  unique,
-} from '../../../services/decode'
+import { array, count, identifier, integer, nullable, unique } from '../../../services/decode'
 import { association } from './associations'
 import { viewEndpoint, type ViewEndpoint } from './endpoint-model'
 import {
@@ -42,11 +34,13 @@ function matches(a: ObjectRef, b: ObjectRef) {
   return objectKey(a) === objectKey(b)
 }
 function summary(value: unknown, detail = false) {
-  const v = closed(
-      value,
-      ['reference', 'association', 'endpoints'],
-      detail ? ['fields', 'lists', 'inventorySources'] : [],
-    ),
+  if (detail) {
+    if (!wireSchemas.getApiV1DeviceViewsByKindByIdResponse.validateRoot(value))
+      throw new Error('Invalid contract value')
+  } else if (!wireSchemas.getApiV1DeviceViewsResponse.validateProjection_DirectoryRow(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     ref = objectRef(v['reference']),
     a = nullable(v['association'], association),
     endpoints = unique(array(v['endpoints'], viewEndpoint), (e) => e.id)
@@ -66,15 +60,18 @@ function summary(value: unknown, detail = false) {
     throw new Error('Wrong association view')
   return { reference: ref, association: a, endpoints }
 }
-function fields(value: unknown, endpoints: ViewEndpoint[]) {
+function fields(
+  value: Record<string, wireSchemas.getApiV1DeviceViewsByKindByIdResponse.ResolvedDeviceField>,
+  endpoints: ViewEndpoint[],
+) {
   return Object.fromEntries(
-    Object.entries(record(value)).map(([key, x]) => {
+    Object.entries(value).map(([key, x]) => {
       fieldKey(key)
-      const f = closed(x, ['field', 'state', 'sources'])
+      const f = x
       if (f['field'] !== key) throw new Error('Wrong field key')
       const sources = unique(
         array(f['sources'], (x) => {
-          const s = closed(x, ['endpoint', 'fact']),
+          const s = x,
             id = identifier(s['endpoint'])
           if (!endpoints.some((e) => e.id === id)) throw new Error('Source outside view')
           const fact = sourceFact(s['fact'])
@@ -92,23 +89,19 @@ function fields(value: unknown, endpoints: ViewEndpoint[]) {
   )
 }
 export function decodeView(value: unknown, expected: ObjectRef) {
-  const v = closed(value, [
-      'reference',
-      'association',
-      'endpoints',
-      'fields',
-      'lists',
-      'inventorySources',
-    ]),
+  if (!wireSchemas.getApiV1DeviceViewsByKindByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     s = summary(v, true)
   if (!matches(s.reference, expected)) throw new Error('Wrong device view')
   return {
     ...s,
     fields: fields(v['fields'], s.endpoints),
     lists: Object.fromEntries(
-      Object.entries(record(v['lists'])).map(([key, x]) => {
+      Object.entries(v['lists']).map(([key, x]) => {
         fieldKey(key)
-        const l = closed(x, ['state', 'sources', 'itemKey'])
+        const l = x
         return [
           key,
           {
@@ -116,7 +109,7 @@ export function decodeView(value: unknown, expected: ObjectRef) {
             itemKey: nullable(l['itemKey'], identifier),
             sources: unique(
               array(l['sources'], (x) => {
-                const source = closed(x, ['endpoint', 'evidence', 'state', 'lastKnown', 'cursor']),
+                const source = x,
                   id = identifier(source['endpoint'])
                 if (!s.endpoints.some((e) => e.id === id))
                   throw new Error('List source outside view')
@@ -125,7 +118,7 @@ export function decodeView(value: unknown, expected: ObjectRef) {
                   evidence: evidence(source['evidence']),
                   state: listState(source['state']),
                   lastKnown: nullable(source['lastKnown'], (x) => {
-                    const last = closed(x, ['state', 'evidence'])
+                    const last = x
                     return {
                       state: nullable(last['state'], listState),
                       evidence: evidence(last['evidence']),
@@ -142,14 +135,14 @@ export function decodeView(value: unknown, expected: ObjectRef) {
     ),
     inventorySources: unique(
       array(v['inventorySources'], (x) => {
-        const p = closed(x, ['endpoint', 'quality', 'revisions']),
+        const p = x,
           id = identifier(p['endpoint'])
         if (!s.endpoints.some((e) => e.id === id)) throw new Error('Inventory outside view')
         return {
           endpoint: id,
           quality: array(p['quality'], qualityRun),
           revisions: Object.fromEntries(
-            Object.entries(record(p['revisions'])).map(([k, v]) => [fieldKey(k), count(v)]),
+            Object.entries(p['revisions']).map(([k, v]) => [fieldKey(k), count(v)]),
           ),
         }
       }),
@@ -162,6 +155,9 @@ export function decodeViews<F extends keyof typeof viewFields = keyof typeof vie
   value: unknown,
   fields?: readonly F[],
 ) {
+  if (!wireSchemas.getApiV1DeviceViewsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
   const page = projectedPage(value, viewFields, fields, ['key'])
   for (const row of page.items) {
     if (['reference', 'association', 'endpoints'].every((key) => key in row)) {

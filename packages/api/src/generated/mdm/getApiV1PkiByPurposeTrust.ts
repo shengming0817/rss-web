@@ -6,11 +6,12 @@ import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import type * as s2cbf9d9d3cd463af7072 from './s2cbf9d9d3cd463af7072'
 export type Input = {
   pathParams: { purpose: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s2cbf9d9d3cd463af7072.Root
+
+export type * as Response from './s2cbf9d9d3cd463af7072'
 export const getApiV1PkiByPurposeTrust = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/pki/{purpose}/trust',

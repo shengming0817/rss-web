@@ -7,11 +7,12 @@ import type * as s3c608716e1c45204c14d from './s3c608716e1c45204c14d'
 import type * as s9d10ef5ce6e24c52319c from './s9d10ef5ce6e24c52319c'
 export type Input = {
   body: WireInput<s9d10ef5ce6e24c52319c.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s3c608716e1c45204c14d.Root
+export type * as Body from './s9d10ef5ce6e24c52319c'
+export type * as Response from './s3c608716e1c45204c14d'
 export const putApiV1WindowsEntraPolicy = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/windows/entra-policy',

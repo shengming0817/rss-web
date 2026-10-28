@@ -7,11 +7,12 @@ import type * as s8895a2173376de187017 from './s8895a2173376de187017'
 import type * as sbc842f9b58507e9e6e12 from './sbc842f9b58507e9e6e12'
 export type Input = {
   query?: WireInput<s8895a2173376de187017.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sbc842f9b58507e9e6e12.Root
+
+export type * as Response from './sbc842f9b58507e9e6e12'
 export const getApiV1WebhooksSubscriptions = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/webhooks/subscriptions',

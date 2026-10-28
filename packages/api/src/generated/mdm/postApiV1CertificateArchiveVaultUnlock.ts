@@ -7,11 +7,12 @@ import type * as s1a106d29fc14a1412457 from './s1a106d29fc14a1412457'
 import type * as s577d7a61deac3e9a4c05 from './s577d7a61deac3e9a4c05'
 export type Input = {
   body: WireInput<s577d7a61deac3e9a4c05.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s1a106d29fc14a1412457.Root
+export type * as Body from './s577d7a61deac3e9a4c05'
+export type * as Response from './s1a106d29fc14a1412457'
 export const postApiV1CertificateArchiveVaultUnlock = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

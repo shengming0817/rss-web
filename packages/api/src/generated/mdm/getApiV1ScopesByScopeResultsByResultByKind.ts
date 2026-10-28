@@ -9,12 +9,12 @@ import type * as s61fec7a4609dbd3d4973 from './s61fec7a4609dbd3d4973'
 import type * as s9347b007bdf8c3c87e0b from './s9347b007bdf8c3c87e0b'
 export type Input = {
   pathParams: { scope: string; result: string; kind: string }
-  query?: WireInput<s9347b007bdf8c3c87e0b.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
+  query: WireInput<s9347b007bdf8c3c87e0b.Root>
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s38a12340c1db33e4b91f.Root | s61fec7a4609dbd3d4973.Root
+
 export const getApiV1ScopesByScopeResultsByResultByKind = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

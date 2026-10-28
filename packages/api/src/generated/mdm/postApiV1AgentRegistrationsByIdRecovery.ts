@@ -9,11 +9,12 @@ import type * as sf8530c02dbdddaf15a24 from './sf8530c02dbdddaf15a24'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sf8530c02dbdddaf15a24.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = se6fc33b671c8675dec38.Root
+export type * as Body from './sf8530c02dbdddaf15a24'
+export type * as Response from './se6fc33b671c8675dec38'
 export const postApiV1AgentRegistrationsByIdRecovery = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

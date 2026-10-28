@@ -1,7 +1,7 @@
 import * as api from '@rss/api/mdm-operations'
 /** Private, admitted software bytes through the sole authenticated executor. */
 import type { HttpTransport } from '@rss/api/mdm'
-import { record } from '../../../services/decode'
+
 import type { UploadTarget } from '../../policies/clients/resources'
 export function createSoftwareContentClient(transport: HttpTransport) {
   return {
@@ -19,7 +19,7 @@ export function createSoftwareContentClient(transport: HttpTransport) {
           ...(signal ? { signal } : {}),
         },
         (value) => {
-          const v = record(value)
+          const v = value
           if (!(v['bytes'] instanceof ArrayBuffer)) throw new Error('Invalid software content')
           return v['bytes']
         },

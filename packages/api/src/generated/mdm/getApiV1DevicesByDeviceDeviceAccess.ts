@@ -9,11 +9,12 @@ import type * as s4a3457345057f2f5536c from './s4a3457345057f2f5536c'
 export type Input = {
   pathParams: { device: string }
   query?: WireInput<s445c1f0f5d73bcaf8ea0.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s4a3457345057f2f5536c.Root
+
+export type * as Response from './s4a3457345057f2f5536c'
 export const getApiV1DevicesByDeviceDeviceAccess = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

@@ -9,11 +9,12 @@ import type * as s3a7a2dd05a307a19078c from './s3a7a2dd05a307a19078c'
 export type Input = {
   pathParams: { purpose: string }
   body: WireInput<s3a7a2dd05a307a19078c.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s187e2467e310bd65df36.Root
+export type * as Body from './s3a7a2dd05a307a19078c'
+export type * as Response from './s187e2467e310bd65df36'
 export const postApiV1PkiByPurposeRotations = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/pki/{purpose}/rotations',

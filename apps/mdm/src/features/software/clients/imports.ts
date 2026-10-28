@@ -1,17 +1,14 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
 import {
   array,
-  boolean,
-  closed,
   count,
   digest,
-  enumeration,
   identifier,
   integer,
   nullable,
-  record,
   string,
 } from '../../../services/decode'
 import {
@@ -20,31 +17,14 @@ import {
   softwareBehavior,
 } from '../../policies/clients/software-definition'
 export function importRequest(value: unknown) {
-  const v = closed(value, [
-    'asOfUnixSeconds',
-    'source',
-    'resource',
-    'resourceVersion',
-    'package',
-    'packageVersion',
-    'platform',
-    'architecture',
-    'variant',
-    'selection',
-    'behavior',
-    'installerLength',
-    'additionalArtifacts',
-    'dependencies',
-    'signatures',
-    'reboot',
-    'downgrade',
-    'nativeExport',
-  ])
-  const raw = record(v['selection']),
-    kind = enumeration(raw['kind'], ['winget', 'brew'] as const)
+  if (!wireSchemas.postApiV1SoftwareImportsBody.validateImportRequest(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+  const raw = v['selection'],
+    kind = raw['kind']
   let selection
   if (kind === 'winget') {
-    closed(raw, ['kind', 'installerType', 'scope', 'installerId', 'files'])
     selection = {
       kind,
       installerType: identifier(raw['installerType']),
@@ -53,7 +33,6 @@ export function importRequest(value: unknown) {
       files: array(raw['files'], identifier),
     }
   } else {
-    closed(raw, ['kind', 'path', 'bottleTag', 'sourceLength'])
     selection = {
       kind,
       path: identifier(raw['path']),
@@ -70,20 +49,20 @@ export function importRequest(value: unknown) {
     resourceVersion: identifier(v['resourceVersion']),
     package: identifier(v['package']),
     packageVersion: identifier(v['packageVersion']),
-    platform: enumeration(v['platform'], ['windows', 'macos'] as const),
-    architecture: enumeration(v['architecture'], ['x86_64', 'aarch64'] as const),
+    platform: v['platform'],
+    architecture: v['architecture'],
     variant: identifier(v['variant']),
     selection,
     behavior: softwareBehavior(v['behavior']),
     installerLength: length,
     additionalArtifacts: Object.fromEntries(
-      Object.entries(record(v['additionalArtifacts'])).map(([key, v]) => [
+      Object.entries(v['additionalArtifacts']).map(([key, v]) => [
         identifier(key),
         softwareArtifact(v),
       ]),
     ),
     dependencies: array(v['dependencies'], (value) => {
-      const d = closed(value, ['package', 'packageVersion', 'resource', 'version', 'sha256'])
+      const d = value
       return {
         package: identifier(d['package']),
         packageVersion: identifier(d['packageVersion']),
@@ -93,20 +72,16 @@ export function importRequest(value: unknown) {
       }
     }),
     signatures: array(v['signatures'], (value) => {
-      const s = closed(value, ['artifact', 'mechanism', 'publisher'])
+      const s = value
       return {
         artifact: identifier(s['artifact']),
-        mechanism: enumeration(s['mechanism'], [
-          'authenticode',
-          'apple_developer_id',
-          'msix',
-        ] as const),
+        mechanism: s['mechanism'],
         publisher: string(s['publisher']),
       }
     }),
-    reboot: enumeration(v['reboot'], ['forbid', 'report'] as const),
-    downgrade: enumeration(v['downgrade'], ['deny', 'allow'] as const),
-    nativeExport: boolean(v['nativeExport']),
+    reboot: v['reboot'],
+    downgrade: v['downgrade'],
+    nativeExport: v['nativeExport'],
   }
 }
 export type ImportRequest = ReturnType<typeof importRequest>

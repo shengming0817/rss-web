@@ -6,11 +6,11 @@ import v_s8ffca0d0c448a5b243f2 from './s8ffca0d0c448a5b243f2.validator.js'
 
 export type Input = {
   pathParams: { id: string; upload: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = void
+
 export const postApiV1ResourcesByIdUploadsByUploadComplete = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

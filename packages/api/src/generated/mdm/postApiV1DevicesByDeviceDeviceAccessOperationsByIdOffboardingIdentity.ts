@@ -12,11 +12,12 @@ export type Input = {
   pathParams: { device: string; id: string }
   query?: WireInput<s3c58116727b9a5caedba.Root> | undefined
   body: WireInput<s5f6a6b20923ac2d5c7be.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s4ad4cfe91fc3c0281701.Root
+export type * as Body from './s5f6a6b20923ac2d5c7be'
+export type * as Response from './s4ad4cfe91fc3c0281701'
 export const postApiV1DevicesByDeviceDeviceAccessOperationsByIdOffboardingIdentity =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

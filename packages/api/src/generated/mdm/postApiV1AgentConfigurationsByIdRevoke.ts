@@ -8,11 +8,12 @@ import type * as s1cbb519b9541aa95e884 from './s1cbb519b9541aa95e884'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s1cbb519b9541aa95e884.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = void
+export type * as Body from './s1cbb519b9541aa95e884'
+
 export const postApiV1AgentConfigurationsByIdRevoke = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

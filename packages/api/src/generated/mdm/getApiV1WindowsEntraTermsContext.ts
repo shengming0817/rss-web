@@ -2,14 +2,12 @@
 import { defineEndpoint } from '../../mdm-endpoint'
 
 import * as r from './responses'
-import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
+
 import type * as s09d9bdacc78438849554 from './s09d9bdacc78438849554'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s09d9bdacc78438849554.Root
+
+export type * as Response from './s09d9bdacc78438849554'
 export const getApiV1WindowsEntraTermsContext = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/windows/entra/terms/context',
@@ -20,12 +18,12 @@ export const getApiV1WindowsEntraTermsContext = /* @__PURE__ */ defineEndpoint<I
     queryOwner: null,
     publicRead: true,
     contentType: null,
-    requestHeaders: ['host'],
+    requestHeaders: [],
     requiredHeaders: [],
     binary: false,
     statuses: [200],
   },
-  checks: { headers: { host: v_s93ddaf583a2133fb6a6f }, path: null, query: null, body: null },
+  checks: { headers: {}, path: null, query: null, body: null },
   responses: [
     r.rab8b5f85000b583cb79f,
     r.r4d2b7ae832aff8965d5e,

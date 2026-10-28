@@ -1,10 +1,9 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 /** Native content-service upload sessions. No retry or session ownership here. */
 import type { HttpTransport } from '@rss/api/mdm'
 import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
 import {
-  boolean,
-  closed,
   count,
   digest,
   enumeration,
@@ -16,36 +15,25 @@ import {
 import type { UploadTarget } from './resources'
 import { softwareFormats, softwareSource } from './software-definition'
 export function decodeUpload(value: unknown, resource: string, upload: string) {
-  const v = closed(value, ['id', 'binding', 'offset', 'expires', 'complete'])
-  const b = closed(v['binding'], ['purpose', 'reference', 'length', 'sha256', 'actor'])
-  const purpose = closed(b['purpose'], ['kind', 'binding'])
-  enumeration(purpose['kind'], ['resource'] as const)
-  const r = closed(purpose['binding'], [
-    'inspection',
-    'storage_class',
-    'resource',
-    'version',
-    'variant',
-    'platform',
-    'architecture',
-    'resource_digest',
-    'source',
-    'origin',
-  ])
+  if (!wireSchemas.getApiV1ResourcesByIdUploadsByUploadResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+  const b = v['binding']
+  const purpose = b['purpose']
+  if (purpose.kind !== 'resource') throw new Error('Wrong upload purpose')
+  const r = purpose['binding']
   const binding = {
     purpose: {
       kind: 'resource' as const,
       binding: {
         inspection: nullable(r['inspection'], (value) => enumeration(value, softwareFormats)),
-        storage_class: enumeration(r['storage_class'], [
-          'artifact',
-          'native_configuration',
-        ] as const),
+        storage_class: r['storage_class'],
         resource: identifier(r['resource']),
         version: identifier(r['version']),
         variant: identifier(r['variant']),
-        platform: enumeration(r['platform'], ['windows', 'macos'] as const),
-        architecture: enumeration(r['architecture'], ['x86_64', 'aarch64'] as const),
+        platform: r['platform'],
+        architecture: r['architecture'],
         resource_digest: digest(r['resource_digest']),
         source: nullable(r['source'], softwareSource),
         origin: nullable(r['origin'], string),
@@ -61,7 +49,7 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
     binding,
     offset: count(v['offset']),
     expires: count(v['expires']),
-    complete: boolean(v['complete']),
+    complete: v['complete'],
   }
   if (
     result.id !== upload ||
@@ -108,7 +96,6 @@ export function createUploadsClient(transport: HttpTransport) {
           timeoutMs: MDM_CONTENT_TIMEOUT_MS,
           pathParams: { id, upload },
           query: { offset },
-          headers: { 'Content-Type': 'application/octet-stream' },
           body,
           ...(signal ? { signal } : {}),
         },

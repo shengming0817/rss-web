@@ -21,11 +21,14 @@ export function createMdmHttpTransport(
       )
         throw clientError()
       const publicRead = hostedConfiguration || (contract?.publicRead && options.method === 'GET')
+      const declaredDownloadHeader = (key: string) =>
+        ['range', 'if-range'].includes(key.toLowerCase()) &&
+        contract?.requestHeaders.some((name) => name.toLowerCase() === key.toLowerCase())
       if (
         publicRead &&
         (options.method !== 'GET' ||
           options.body !== undefined ||
-          Object.keys(options.headers ?? {}).length)
+          Object.keys(options.headers ?? {}).some((key) => !declaredDownloadHeader(key)))
       )
         throw clientError()
       if (options.responseType === 'arraybuffer' && !contract?.binary) throw clientError()
@@ -35,7 +38,9 @@ export function createMdmHttpTransport(
           ([key, value]) =>
             !['x-identity-request', 'x-csrf-token', 'idempotency-key'].includes(
               key.toLowerCase(),
-            ) && !(key.toLowerCase() === 'content-type' && value === contract?.contentType),
+            ) &&
+            !declaredDownloadHeader(key) &&
+            !(key.toLowerCase() === 'content-type' && value === contract?.contentType),
         )
       )
         throw clientError()

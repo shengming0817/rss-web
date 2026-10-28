@@ -10,11 +10,12 @@ import type * as s7692b27883053ca6f01b from './s7692b27883053ca6f01b'
 export type Input = {
   query?: WireInput<s7692b27883053ca6f01b.Root> | undefined
   body: WireInput<s1df8cba2a2cdc551529b.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s0dabad96483c2f03114b.Root
+export type * as Body from './s1df8cba2a2cdc551529b'
+export type * as Response from './s0dabad96483c2f03114b'
 export const postApiV1PoliciesPreviews = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/policies/previews',

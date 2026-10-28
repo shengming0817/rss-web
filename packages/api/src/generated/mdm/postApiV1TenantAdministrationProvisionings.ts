@@ -5,14 +5,17 @@ import * as r from './responses'
 import v_s199c4fa2dd58919b63c8 from './s199c4fa2dd58919b63c8.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import type * as s199c4fa2dd58919b63c8 from './s199c4fa2dd58919b63c8'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as sf3900578ddbd913a5a00 from './sf3900578ddbd913a5a00'
 export type Input = {
   body: WireInput<s199c4fa2dd58919b63c8.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sf3900578ddbd913a5a00.Root
+export type * as Body from './s199c4fa2dd58919b63c8'
+
 export const postApiV1TenantAdministrationProvisionings = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

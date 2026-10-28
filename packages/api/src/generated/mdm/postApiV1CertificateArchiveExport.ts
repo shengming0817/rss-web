@@ -4,15 +4,18 @@ import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s8eb0416a4f11052e9f5a from './s8eb0416a4f11052e9f5a.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s8eb0416a4f11052e9f5a from './s8eb0416a4f11052e9f5a'
 import type * as sdb275d0401c45a31fa5c from './sdb275d0401c45a31fa5c'
 export type Input = {
   body: WireInput<s8eb0416a4f11052e9f5a.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sdb275d0401c45a31fa5c.Root
+export type * as Body from './s8eb0416a4f11052e9f5a'
+export type * as Response from './sdb275d0401c45a31fa5c'
 export const postApiV1CertificateArchiveExport = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/certificate-archive/export',

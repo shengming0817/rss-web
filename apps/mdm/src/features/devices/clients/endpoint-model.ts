@@ -1,9 +1,9 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import { source, sourceKey } from '../../settings/clients/profiles'
 import { resolvedField } from './asset-model'
 import {
   array,
   boolean,
-  closed,
   count,
   enumeration,
   identifier,
@@ -29,21 +29,30 @@ export function positive(value: unknown) {
   return n
 }
 export function member(value: unknown) {
-  const v = closed(value, ['device', 'channel', 'registrationId', 'generation'])
+  if (!wireSchemas.getApiV1DeviceViewsResponse.validatePrimaryRegistration(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     device: identifier(v['device']),
-    channel: enumeration(v['channel'], channels),
+    channel: v['channel'],
     registrationId: uuid(v['registrationId']),
     generation: positive(v['generation']),
   }
 }
 export type Member = ReturnType<typeof member>
-const endpointKeys = ['id', 'status', 'primaryMdmRegistration', 'channels', 'enrollments']
+
 export function endpoint(value: unknown) {
-  return endpointFields(closed(value, endpointKeys, ['inventoryAvailable', 'capabilities']))
+  if (!wireSchemas.getApiV1DevicesResponse.validateProjection_Item(value))
+    throw new Error('Invalid contract value')
+
+  return endpointFields(value)
 }
 function person(value: unknown) {
-  const v = closed(value, ['tenantId', 'instanceId', 'principalId'])
+  if (!wireSchemas.getApiV1DeviceViewsResponse.validateUser(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     tenantId: uuid(v['tenantId']),
     instanceId: uuid(v['instanceId']),
@@ -51,18 +60,16 @@ function person(value: unknown) {
   }
 }
 export function personDisplay(value: unknown) {
-  const v = closed(value, ['login', 'profiles'])
+  if (!wireSchemas.getApiV1DeviceViewsResponse.validatePersonDisplay(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     login: nullable(v['login'], personText),
     profiles: unique(
       array(v['profiles'], (value) => {
-        const p = closed(value, ['source', 'status', 'displayName', 'username'])
-        const status = enumeration(p['status'], [
-          'available',
-          'missing',
-          'expired',
-          'unavailable',
-        ] as const)
+        const p = value
+        const status = p['status']
         const displayName = nullable(p['displayName'], personText)
         const username = nullable(p['username'], personText)
         if (status !== 'available' && (displayName !== null || username !== null))
@@ -80,16 +87,15 @@ function personText(value: unknown) {
 }
 export type PersonDisplay = ReturnType<typeof personDisplay>
 export function viewEndpoint(value: unknown) {
-  const v = closed(
-    value,
-    [...endpointKeys, 'assetState', 'platform'],
-    ['displayName', 'serialNumber', 'registrationUser', 'currentUser'],
-  )
-  const p = closed(v['platform'], ['state', 'values'])
+  if (!wireSchemas.getApiV1DeviceViewsByKindByIdResponse.validateEndpoint(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+  const p = v['platform']
   const platform = {
-    state: enumeration(p['state'], ['known', 'unknown', 'conflict'] as const),
+    state: p['state'],
     values: unique(
-      array(p['values'], (x) => enumeration(x, ['windows', 'macos'] as const)),
+      array(p['values'], (x) => x),
       (x) => x,
     ),
   }
@@ -99,14 +105,8 @@ export function viewEndpoint(value: unknown) {
     (platform.state === 'conflict' && platform.values.length < 2)
   )
     throw new Error('Invalid platform summary')
-  const owner =
-    v['registrationUser'] === undefined
-      ? undefined
-      : closed(v['registrationUser'], ['revision', 'user', 'display'])
-  const current =
-    v['currentUser'] === undefined
-      ? undefined
-      : closed(v['currentUser'], ['revision', 'state', 'user', 'confirmedAt', 'display'])
+  const owner = v.registrationUser ?? undefined
+  const current = v.currentUser ?? undefined
   const currentUser = current
     ? {
         revision: count(current['revision']),
@@ -125,7 +125,7 @@ export function viewEndpoint(value: unknown) {
     throw new Error('Personnel display has no related user')
   return {
     ...endpointFields(v),
-    assetState: enumeration(v['assetState'], ['active', 'archived', 'deleted'] as const),
+    assetState: v['assetState'],
     platform,
     displayName: v['displayName'] === undefined ? undefined : resolvedField(v['displayName']),
     serialNumber: v['serialNumber'] === undefined ? undefined : resolvedField(v['serialNumber']),
@@ -145,7 +145,10 @@ export const endpointDirectoryFields = {
   status: (value: unknown) => enumeration(value, endpointStatuses),
   primaryMdmRegistration: (value: unknown) =>
     nullable(value, (x) => {
-      const p = closed(x, ['registrationId', 'generation', 'source'])
+      if (!wireSchemas.getApiV1DevicesByDeviceResponse.validatePrimary(x))
+        throw new Error('Invalid contract value')
+
+      const p = x
       return {
         registrationId: uuid(p['registrationId']),
         generation: positive(p['generation']),
@@ -155,61 +158,36 @@ export const endpointDirectoryFields = {
   channels: (value: unknown) =>
     unique(
       array(value, (x) => {
-        const c = closed(x, [
-          'registrationId',
-          'channel',
-          'generation',
-          'status',
-          'source',
-          'platform',
-          'lastCommunicationReceivedAt',
-          'children',
-          'userContext',
-        ])
+        if (!wireSchemas.getApiV1DevicesByDeviceResponse.validateChannel(x))
+          throw new Error('Invalid registration channel')
+        const c = x
         return {
           registrationId: uuid(c['registrationId']),
-          channel: enumeration(c['channel'], channels),
+          channel: c['channel'],
           generation: positive(c['generation']),
-          status: enumeration(c['status'], ['active', 'revoked', 'superseded'] as const),
-          platform: nullable(c['platform'], (x) => enumeration(x, ['windows', 'macos'] as const)),
-          source: enumeration(c['source'], ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),
+          status: c['status'],
+          platform: nullable(c['platform'], (x) => x),
+          source: c['source'],
           lastCommunicationReceivedAt: nullable(c['lastCommunicationReceivedAt'], integer),
           children: array(c['children'], (x) => {
-            const s = closed(x, [
-              'registrationId',
-              'purpose',
-              'generation',
-              'status',
-              'ready',
-              'parentRegistrationId',
-              'parentGeneration',
-            ])
+            const s = x
             return {
               registrationId: uuid(s['registrationId']),
               purpose: enumeration(s['purpose'], ['windows_declared'] as const),
               generation: positive(s['generation']),
-              status: enumeration(s['status'], ['active', 'revoked', 'superseded'] as const),
-              ready: boolean(s['ready']),
+              status: s['status'],
+              ready: s['ready'],
               parentRegistrationId: uuid(s['parentRegistrationId']),
               parentGeneration: positive(s['parentGeneration']),
             }
           }),
           userContext: nullable(c['userContext'], (x) => {
-            const u = closed(x, [
-              'id',
-              'parentRegistrationId',
-              'parentGeneration',
-              'registrationStatus',
-            ])
+            const u = x
             return {
               id: uuid(u['id']),
               parentRegistrationId: uuid(u['parentRegistrationId']),
               parentGeneration: positive(u['parentGeneration']),
-              registrationStatus: enumeration(u['registrationStatus'], [
-                'active',
-                'revoked',
-                'superseded',
-              ] as const),
+              registrationStatus: u['registrationStatus'],
             }
           }),
         }
@@ -218,17 +196,23 @@ export const endpointDirectoryFields = {
     ),
   enrollments: (value: unknown) =>
     array(value, (x) => {
-      const e = closed(x, ['enrollmentId', 'source', 'status', 'expiresAt', 'platform'])
+      if (!wireSchemas.getApiV1DevicesByDeviceResponse.validateEnrollment(x))
+        throw new Error('Invalid contract value')
+
+      const e = x
       return {
         enrollmentId: uuid(e['enrollmentId']),
-        platform: nullable(e['platform'], (x) => enumeration(x, ['windows', 'macos'] as const)),
-        source: enumeration(e['source'], ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),
-        status: enumeration(e['status'], ['pending', 'bound', 'cancelled', 'expired'] as const),
+        platform: nullable(e['platform'], (x) => x),
+        source: e['source'],
+        status: e['status'],
         expiresAt: integer(e['expiresAt']),
       }
     }),
 }
-function endpointFields(v: Record<string, unknown>) {
+function endpointFields(v: unknown) {
+  if (!wireSchemas.getApiV1DevicesResponse.validateProjection_Item(v))
+    throw new Error('Invalid endpoint projection')
+
   return {
     id: endpointDirectoryFields.id(v['id']),
     status: endpointDirectoryFields.status(v['status']),
@@ -241,66 +225,36 @@ function endpointFields(v: Record<string, unknown>) {
 }
 export type Endpoint = ReturnType<typeof endpoint>
 function support(value: unknown) {
-  const v = closed(value, ['state', 'reason'])
+  if (!wireSchemas.getApiV1DevicesByDeviceResponse.validateSupport(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
-    state: enumeration(v['state'], [
-      'supported',
-      'unsupported',
-      'blocked',
-      'unknown',
-      'ready',
-    ] as const),
-    reason: nullable(v['reason'], (x) =>
-      enumeration(x, [
-        'product_not_configured',
-        'not_registered',
-        'capability_unknown',
-        'capability_not_supported',
-        'permission_denied',
-      ] as const),
-    ),
+    state: v['state'],
+    reason: nullable(v['reason'], (x) => x),
   }
 }
 export function endpointDetail(value: unknown, id: string) {
-  const v = closed(value, [
-    'id',
-    'status',
-    'primaryMdmRegistration',
-    'channels',
-    'enrollments',
-    'inventoryAvailable',
-    'capabilities',
-  ])
+  if (!wireSchemas.getApiV1DevicesByDeviceResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = endpointFields(v)
   if (result.id !== id) throw new Error('Wrong endpoint')
   return {
     ...result,
     inventoryAvailable: boolean(v['inventoryAvailable']),
     capabilities: array(v['capabilities'], (x) => {
-      const c = closed(x, [
-          'action',
-          'channel',
-          'productSupport',
-          'devicePrerequisite',
-          'permission',
-        ]),
-        p = closed(c['permission'], ['allowed', 'reason'])
+      const c = x,
+        p = c['permission']
       return {
         action: enumeration(c['action'], ['script', 'software', 'configuration'] as const),
         channel: enumeration(c['channel'], channels),
         productSupport: support(c['productSupport']),
         devicePrerequisite: support(c['devicePrerequisite']),
         permission: {
-          allowed: boolean(p['allowed']),
-          reason: nullable(p['reason'], (x) =>
-            enumeration(x, [
-              'product_not_configured',
-              'not_registered',
-              'capability_unknown',
-              'capability_not_supported',
-              'permission_denied',
-            ] as const),
-          ),
+          allowed: p['allowed'],
+          reason: nullable(p['reason'], (x) => x),
         },
       }
     }),

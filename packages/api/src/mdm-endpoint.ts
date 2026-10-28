@@ -46,8 +46,22 @@ export function defineEndpoint<Input extends object, Output>(description: Endpoi
     project?: (value: Output) => View,
   ): Promise<View> {
     const input = parameters as Arguments
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw clientError()
+    if (
+      input.query !== undefined &&
+      (!input.query || typeof input.query !== 'object' || Array.isArray(input.query))
+    )
+      throw clientError()
     const pathParams = params(input)
     for (const [key, value] of Object.entries(input.headers ?? {})) {
+      if (
+        typeof value !== 'string' ||
+        [...value].some((character) => {
+          const code = character.charCodeAt(0)
+          return (code < 32 && code !== 9) || code === 127
+        })
+      )
+        throw clientError()
       if (key.toLowerCase() === 'content-type' && value === description.contentType) continue
       const validate = Object.entries(description.checks.headers).find(
         ([name]) => name.toLowerCase() === key.toLowerCase(),
@@ -95,6 +109,7 @@ export function defineEndpoint<Input extends object, Output>(description: Endpoi
     if (description.contentType === 'application/octet-stream') {
       if (!(input.body instanceof ArrayBuffer)) throw clientError()
     } else if (description.checks.body) {
+      if (input.body === undefined) throw clientError()
       safeJson(input.body)
       // Validate the JSON representation sent by the executor (undefined means omitted).
       if (!description.checks.body(JSON.parse(JSON.stringify(input.body)))) throw clientError()
@@ -131,6 +146,7 @@ export function defineEndpoint<Input extends object, Output>(description: Endpoi
     }
     return transport.request(options as RequestOptions<View>)
   }
+  endpoint.method = description.method
   endpoint.url = (
     pathParams: Input extends { pathParams: infer P } ? P : Record<string, never>,
   ) => {

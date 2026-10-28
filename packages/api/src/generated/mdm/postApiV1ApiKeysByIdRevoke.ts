@@ -9,11 +9,12 @@ import type * as s774479751647dbf68ebd from './s774479751647dbf68ebd'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s774479751647dbf68ebd.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s4b5f8d930972bb79a082.Root
+export type * as Body from './s774479751647dbf68ebd'
+export type * as Response from './s4b5f8d930972bb79a082'
 export const postApiV1ApiKeysByIdRevoke = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/api-keys/{id}/revoke',

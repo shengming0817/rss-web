@@ -9,11 +9,12 @@ import type * as se6fc33b671c8675dec38 from './se6fc33b671c8675dec38'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s1cbb519b9541aa95e884.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = se6fc33b671c8675dec38.Root
+export type * as Body from './s1cbb519b9541aa95e884'
+export type * as Response from './se6fc33b671c8675dec38'
 export const postApiV1AgentRequestsByIdCancel = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/agent-requests/{id}/cancel',

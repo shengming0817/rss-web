@@ -1,24 +1,18 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  closed,
-  count,
-  digest,
-  enumeration,
-  identifier,
-  string,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, digest, identifier, string, unique, uuid } from '../../../services/decode'
 export const platforms = ['windows', 'macos'] as const
 export const architectures = ['x86_64', 'aarch64'] as const
 export const installerFormats = ['windows_exe', 'windows_msi', 'windows_msix', 'macos_pkg'] as const
 export function target(value: unknown) {
-  const v = closed(value, ['platform', 'architecture'])
+  if (!wireSchemas.getApiV1AgentPackagesResponse.validateTarget(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
-    platform: enumeration(v['platform'], platforms),
-    architecture: enumeration(v['architecture'], architectures),
+    platform: v['platform'],
+    architecture: v['architecture'],
   }
 }
 export function httpsOrigin(value: unknown) {
@@ -40,22 +34,16 @@ export function base64url(value: unknown, length: number) {
   return result
 }
 export function installer(value: unknown, tenant: string) {
-  const v = closed(value, [
-    'releaseId',
-    'tenantId',
-    'target',
-    'version',
-    'format',
-    'filename',
-    'length',
-    'installerSha256',
-  ])
+  if (!wireSchemas.postApiV1AgentPackagesResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = {
     releaseId: uuid(v['releaseId']),
     tenantId: uuid(v['tenantId']),
     target: target(v['target']),
     version: identifier(v['version']),
-    format: enumeration(v['format'], installerFormats),
+    format: v['format'],
     filename: identifier(v['filename']),
     length: count(v['length']),
     installerSha256: digest(v['installerSha256']),

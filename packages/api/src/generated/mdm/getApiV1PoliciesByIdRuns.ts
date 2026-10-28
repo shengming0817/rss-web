@@ -9,11 +9,12 @@ import type * as sac8ef99369b506eaf4b0 from './sac8ef99369b506eaf4b0'
 export type Input = {
   pathParams: { id: string }
   query?: WireInput<s7692b27883053ca6f01b.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sac8ef99369b506eaf4b0.Root
+
+export type * as Response from './sac8ef99369b506eaf4b0'
 export const getApiV1PoliciesByIdRuns = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/policies/{id}/runs',

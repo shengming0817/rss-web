@@ -6,11 +6,12 @@ import v_s8ffca0d0c448a5b243f2 from './s8ffca0d0c448a5b243f2.validator.js'
 import type * as s0e999965bc539278fe74 from './s0e999965bc539278fe74'
 export type Input = {
   pathParams: { id: string; operation: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s0e999965bc539278fe74.Root
+
+export type * as Response from './s0e999965bc539278fe74'
 export const getApiV1ResourcesByIdContentOperationsByOperation = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

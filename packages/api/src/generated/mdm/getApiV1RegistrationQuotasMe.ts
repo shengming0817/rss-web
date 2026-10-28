@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as s42310b2d42a7670683bc from './s42310b2d42a7670683bc'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s42310b2d42a7670683bc.Root
+
+export type * as Response from './s42310b2d42a7670683bc'
 export const getApiV1RegistrationQuotasMe = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/registration-quotas/me',

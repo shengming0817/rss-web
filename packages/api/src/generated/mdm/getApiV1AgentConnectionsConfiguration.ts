@@ -1,15 +1,12 @@
 /* Generated. Do not edit. */
 import { defineEndpoint } from '../../mdm-endpoint'
-
+import type { BinaryResponse } from '../../types'
 import * as r from './responses'
 
-import type * as s41c2f544d259dd11d912 from './s41c2f544d259dd11d912'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
-export type Output = s41c2f544d259dd11d912.Root
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
+export type Output = BinaryResponse
+
+export type * as Response from './s41c2f544d259dd11d912'
 export const getApiV1AgentConnectionsConfiguration = /* @__PURE__ */ defineEndpoint<
   Input,
   Output
@@ -25,7 +22,7 @@ export const getApiV1AgentConnectionsConfiguration = /* @__PURE__ */ defineEndpo
     contentType: null,
     requestHeaders: [],
     requiredHeaders: [],
-    binary: false,
+    binary: true,
     statuses: [200],
   },
   checks: { headers: {}, path: null, query: null, body: null },

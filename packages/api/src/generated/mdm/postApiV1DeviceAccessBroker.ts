@@ -3,16 +3,16 @@ import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 
 import * as r from './responses'
 import v_s4b8ade70ac0e57ce94b6 from './s4b8ade70ac0e57ce94b6.validator.js'
-import v_sa83cc0163d9a1e56129d from './sa83cc0163d9a1e56129d.validator.js'
 import type * as s4b8ade70ac0e57ce94b6 from './s4b8ade70ac0e57ce94b6'
 import type * as seec0bae2815af7a01ba3 from './seec0bae2815af7a01ba3'
 export type Input = {
   body: WireInput<s4b8ade70ac0e57ce94b6.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = seec0bae2815af7a01ba3.Root
+export type * as Body from './s4b8ade70ac0e57ce94b6'
+export type * as Response from './seec0bae2815af7a01ba3'
 export const postApiV1DeviceAccessBroker = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/device-access/broker',
@@ -23,17 +23,12 @@ export const postApiV1DeviceAccessBroker = /* @__PURE__ */ defineEndpoint<Input,
     queryOwner: null,
     publicRead: true,
     contentType: 'application/json',
-    requestHeaders: ['sec-fetch-site'],
+    requestHeaders: [],
     requiredHeaders: [],
     binary: false,
     statuses: [200],
   },
-  checks: {
-    headers: { 'sec-fetch-site': v_sa83cc0163d9a1e56129d },
-    path: null,
-    query: null,
-    body: v_s4b8ade70ac0e57ce94b6,
-  },
+  checks: { headers: {}, path: null, query: null, body: v_s4b8ade70ac0e57ce94b6 },
   responses: [
     r.ra784f750e23c88121021,
     r.r188b9270e0a9d6de1391,

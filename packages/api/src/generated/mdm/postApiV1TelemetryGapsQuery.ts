@@ -7,11 +7,12 @@ import type * as s1c11aca3947b9a16541f from './s1c11aca3947b9a16541f'
 import type * as sf6c665f58a7c922a6251 from './sf6c665f58a7c922a6251'
 export type Input = {
   body: WireInput<s1c11aca3947b9a16541f.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sf6c665f58a7c922a6251.Root
+export type * as Body from './s1c11aca3947b9a16541f'
+export type * as Response from './sf6c665f58a7c922a6251'
 export const postApiV1TelemetryGapsQuery = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/telemetry/gaps/query',

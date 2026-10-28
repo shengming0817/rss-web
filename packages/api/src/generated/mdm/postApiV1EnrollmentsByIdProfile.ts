@@ -8,11 +8,12 @@ import type * as sf4589da9b8ae1e210328 from './sf4589da9b8ae1e210328'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sf4589da9b8ae1e210328.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = BinaryResponse
+export type * as Body from './sf4589da9b8ae1e210328'
+export type * as Response from './s2db098654a77dbd75ff3'
 export const postApiV1EnrollmentsByIdProfile = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/enrollments/{id}/profile',

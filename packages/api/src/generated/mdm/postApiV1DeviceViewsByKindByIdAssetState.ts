@@ -9,11 +9,12 @@ import type * as sd57cb57ccdf1c5392703 from './sd57cb57ccdf1c5392703'
 export type Input = {
   pathParams: { kind: string; id: string }
   body: WireInput<s252e1629ae1bb50b4152.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd57cb57ccdf1c5392703.Root
+export type * as Body from './s252e1629ae1bb50b4152'
+export type * as Response from './sd57cb57ccdf1c5392703'
 export const postApiV1DeviceViewsByKindByIdAssetState = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

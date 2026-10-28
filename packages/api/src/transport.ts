@@ -38,7 +38,10 @@ function hasUnsafeUrlCharacter(value: string): boolean {
   })
 }
 
-export function resolvePath(path: string, params: Readonly<Record<string, string | number>> = {}): string {
+export function resolvePath(
+  path: string,
+  params: Readonly<Record<string, string | number>> = {},
+): string {
   if (
     (!path.startsWith('/api/') && path !== '/readyz') ||
     path.startsWith('//') ||
@@ -111,24 +114,32 @@ export async function execute<T>(
     const response = await instance.request(requestConfig(options, defaultTimeoutMs))
     if (options.contract) {
       let data: unknown = response.data
-      if (response.status >= 400 && options.responseType === 'arraybuffer' && data instanceof ArrayBuffer) {
+      if (
+        response.status >= 400 &&
+        response.status !== 413 &&
+        options.responseType === 'arraybuffer' &&
+        data instanceof ArrayBuffer
+      ) {
         if (data.byteLength > 16_384) throw protocolError(response.status)
-        try { data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data)) }
-        catch { throw protocolError(response.status) }
+        try {
+          data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data))
+        } catch {
+          throw protocolError(response.status)
+        }
       }
-      try { validateEndpointResponse(options.contract, response.status, data, response.headers) } catch { throw protocolError(response.status) }
+      try {
+        validateEndpointResponse(options.contract, response.status, data, response.headers)
+      } catch {
+        throw protocolError(response.status)
+      }
     }
-    const readinessUnavailable =
-      options.method === 'GET' &&
-      options.path === '/readyz' &&
-      Array.isArray(options.successStatus) &&
-      options.successStatus.length === 2 &&
-      options.successStatus[0] === 200 &&
-      options.successStatus[1] === 503 &&
-      response.status === 503
-    if (response.status >= 400 && !readinessUnavailable) {
+    const accepted = Array.isArray(options.successStatus)
+      ? options.successStatus.includes(response.status)
+      : response.status === options.successStatus
+    if (response.status >= 400 && !accepted) {
       let value: unknown = response.data
-      if ('responseType' in options && options.responseType === 'arraybuffer') {
+      if (response.status === 413 && options.responseType === 'arraybuffer') value = undefined
+      else if ('responseType' in options && options.responseType === 'arraybuffer') {
         if (!(value instanceof ArrayBuffer) || value.byteLength > 16_384)
           throw protocolError(response.status)
         try {
@@ -142,9 +153,6 @@ export async function execute<T>(
       )?.[1]
       throw decodeError(response.status, value, retryAfter)
     }
-    const accepted = Array.isArray(options.successStatus)
-      ? options.successStatus.includes(response.status)
-      : response.status === options.successStatus
     if (!accepted) throw protocolError(response.status)
     if (options.successStatus === 204 || options.responseType === 'empty') return undefined
     try {

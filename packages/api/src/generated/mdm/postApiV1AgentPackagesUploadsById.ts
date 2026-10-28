@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as sb9a62ab8328ec2810709 from './sb9a62ab8328ec2810709'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sb9a62ab8328ec2810709.Root
+
+export type * as Response from './sb9a62ab8328ec2810709'
 export const postApiV1AgentPackagesUploadsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/agent-packages/uploads/{id}',

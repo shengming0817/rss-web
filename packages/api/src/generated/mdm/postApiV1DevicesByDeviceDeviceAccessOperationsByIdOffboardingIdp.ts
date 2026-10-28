@@ -9,11 +9,12 @@ import type * as s92a69858670c4726b6ab from './s92a69858670c4726b6ab'
 export type Input = {
   pathParams: { device: string; id: string }
   body: WireInput<s92a69858670c4726b6ab.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s780d786ce8e55d9d7626.Root
+export type * as Body from './s92a69858670c4726b6ab'
+export type * as Response from './s780d786ce8e55d9d7626'
 export const postApiV1DevicesByDeviceDeviceAccessOperationsByIdOffboardingIdp =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

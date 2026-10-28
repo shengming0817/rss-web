@@ -9,11 +9,12 @@ import type * as s061b73130adb51509af6 from './s061b73130adb51509af6'
 export type Input = {
   pathParams: { device: string }
   query?: WireInput<s04014465fcb8c851b92b.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s061b73130adb51509af6.Root
+
+export type * as Response from './s061b73130adb51509af6'
 export const getApiV1DevicesByDeviceTimeline = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/devices/{device}/timeline',

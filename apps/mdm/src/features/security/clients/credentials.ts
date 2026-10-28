@@ -1,17 +1,8 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  boolean,
-  closed,
-  count,
-  enumeration,
-  identifier,
-  integer,
-  nullable,
-  record,
-  uuid,
-} from '../../../services/decode'
+import { count, identifier, integer, nullable, uuid } from '../../../services/decode'
 export const appleCredentialActions = [
   'configure_filevault',
   'collect_filevault',
@@ -23,28 +14,23 @@ export const appleCredentialActions = [
 ] as const
 export type AppleAction = (typeof appleCredentialActions)[number]
 export function subject(value: unknown) {
-  const kind = enumeration(record(value)['kind'], [
-    'rss_login',
-    'bitlocker',
-    'local_administrator',
-    'filevault',
-    'recovery_lock',
-    'lock_pin',
-  ] as const)
+  if (!wireSchemas.getApiV1DevicesByDeviceRecoveryCredentialsResponse.validateSubject(value))
+    throw new Error('Invalid contract value')
+
+  const kind = value['kind']
   if (kind === 'filevault' || kind === 'recovery_lock') {
-    closed(value, ['kind'])
     return { kind }
   }
   if (kind === 'bitlocker') {
-    const v = closed(value, ['kind', 'volume', 'protector'])
+    const v = value
     return { kind, volume: identifier(v['volume']), protector: uuid(v['protector']) }
   }
   if (kind === 'lock_pin') {
-    const v = closed(value, ['kind', 'operation'])
+    const v = value
     return { kind, operation: uuid(v['operation']) }
   }
   if (kind === 'rss_login') {
-    const v = closed(value, ['kind', 'binding', 'bindingGeneration', 'sid'])
+    const v = value
     return {
       kind,
       binding: uuid(v['binding']),
@@ -52,22 +38,19 @@ export function subject(value: unknown) {
       sid: identifier(v['sid']),
     }
   }
-  const v = closed(value, ['kind', 'sid'])
+  const v = value
   return { kind, sid: identifier(v['sid']) }
 }
 export function material(value: unknown, device: string) {
-  const v = closed(value, [
-      'id',
-      'binding',
-      'version',
-      'current',
-      'validity',
-      'escrowed',
-      'operation',
-      'createdAt',
-      'invalidatedAt',
-    ]),
-    binding = closed(v['binding'], ['device', 'registration', 'generation', 'subject'])
+  if (
+    !wireSchemas.postApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionRevokeResponse.validateRoot(
+      value,
+    )
+  )
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    binding = v['binding']
   if (binding['device'] !== device || !count(binding['generation']) || !count(v['version']))
     throw new Error('Wrong material binding')
   return {
@@ -79,15 +62,9 @@ export function material(value: unknown, device: string) {
       subject: subject(binding['subject']),
     },
     version: count(v['version']),
-    current: boolean(v['current']),
-    validity: enumeration(v['validity'], [
-      'unverified',
-      'verified',
-      'unknown',
-      'superseded',
-      'revoked',
-    ] as const),
-    escrowed: boolean(v['escrowed']),
+    current: v['current'],
+    validity: v['validity'],
+    escrowed: v['escrowed'],
     operation: uuid(v['operation']),
     createdAt: integer(v['createdAt']),
     invalidatedAt: nullable(v['invalidatedAt'], integer),

@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s7484bd9f4bfe320bfadd from './s7484bd9f4bfe320bfadd'
 export type Input = {
   pathParams: { operation: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s7484bd9f4bfe320bfadd.Root
+
+export type * as Response from './s7484bd9f4bfe320bfadd'
 export const getApiV1AppleMaterialOperationsByOperation = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

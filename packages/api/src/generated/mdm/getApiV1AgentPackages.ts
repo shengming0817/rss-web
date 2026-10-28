@@ -7,11 +7,12 @@ import type * as sc5a7c21f93832a0fa941 from './sc5a7c21f93832a0fa941'
 import type * as sd13abce01800ba6328fb from './sd13abce01800ba6328fb'
 export type Input = {
   query?: WireInput<sd13abce01800ba6328fb.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sc5a7c21f93832a0fa941.Root
+
+export type * as Response from './sc5a7c21f93832a0fa941'
 export const getApiV1AgentPackages = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/agent-packages',

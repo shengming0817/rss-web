@@ -7,6 +7,8 @@ import {
   getApiV1PoliciesByIdAssignments,
   getApiV1AssetFields,
   getApiV1ResourcesByIdVersionsByVersionScript,
+  getApiV1AgentEnrollPackagesByIdContent,
+  postApiV1PoliciesByIdReruns,
   postApiV1ResourcesByIdUploadsByUploadComplete,
   getReadyz,
 } from './generated/mdm'
@@ -16,6 +18,59 @@ import type { HttpTransport, RequestOptions, NoContentRequest } from './types'
 
 const id = '11111111-1111-4111-8111-111111111111'
 describe('fixed producer HTTP operations', () => {
+  it('sends declared range headers through the public and authenticated download executor', async () => {
+    const instance = axios.create(),
+      mock = new MockAdapter(instance)
+    const create = vi.spyOn(axios, 'create').mockReturnValue(instance)
+    const bytes = new Uint8Array([1, 2]).buffer
+    try {
+      const transport = createMdmTransport()
+      const headers = { Range: 'bytes=0-1', 'If-Range': '"fixture"' }
+      for (const [path, request] of [
+        [
+          `/api/v1/agent/enroll/packages/${id}/content`,
+          () => getApiV1AgentEnrollPackagesByIdContent(transport, { pathParams: { id }, headers }),
+        ],
+        [
+          `/api/v1/resources/${id}/versions/1/script`,
+          () =>
+            getApiV1ResourcesByIdVersionsByVersionScript(transport, {
+              query: { variant: 'default', platform: 'macos', architecture: 'aarch64' },
+              pathParams: { id, version: '1' },
+              headers,
+            }),
+        ],
+      ] as const) {
+        mock.onGet(path).reply((config) => {
+          expect(config.headers?.['Range']).toBe(headers.Range)
+          expect(config.headers?.['If-Range']).toBe(headers['If-Range'])
+          return [
+            206,
+            bytes,
+            {
+              'content-type': 'application/octet-stream',
+              'content-length': '2',
+              'content-range': 'bytes 0-1/3',
+              etag: '"fixture"',
+              'accept-ranges': 'bytes',
+              'cache-control': 'private, no-store',
+              'content-disposition': 'attachment; filename="fixture"',
+            },
+          ]
+        })
+        await expect(request()).resolves.toMatchObject({ bytes })
+      }
+      await expect(
+        getApiV1AgentEnrollPackagesByIdContent(transport, {
+          pathParams: { id },
+          headers: { Authorization: 'caller' } as never,
+        }),
+      ).rejects.toMatchObject({ cause: 'client' })
+    } finally {
+      create.mockRestore()
+      mock.restore()
+    }
+  })
   it('keeps unpublished requests in the explicit loopback demo composition', async () => {
     vi.stubGlobal('window', { location: { hostname: 'production.example' } })
     expect(() => createMdmDemoTransport()).toThrow()
@@ -64,6 +119,9 @@ describe('fixed producer HTTP operations', () => {
     }
     expect(validateTaskAdmission({ state: 'future_state' })).toBe(false)
     expect(validateTaskAdmission({ state: 'eligible', stage: '1' })).toBe(false)
+    expect(validateTaskAdmission({ state: 'eligible', stage: Number.MAX_SAFE_INTEGER + 1 })).toBe(
+      false,
+    )
   })
   it('rejects out of budget requests before invoking transport', async () => {
     const request = vi.fn()
@@ -75,8 +133,24 @@ describe('fixed producer HTTP operations', () => {
       getApiV1PoliciesByIdAssignments(transport, { pathParams: { id }, query: { limit: 0 } }),
     ).rejects.toMatchObject({ cause: 'client' })
     expect(request).not.toHaveBeenCalled()
+    await expect(
+      postApiV1PoliciesByIdReruns(transport, {
+        pathParams: { id },
+        body: {
+          operationId: id,
+          expectedRevision: Number.MAX_SAFE_INTEGER + 1,
+          input: { deadline: 1 },
+        },
+      }),
+    ).rejects.toMatchObject({ cause: 'client' })
+    expect(request).not.toHaveBeenCalled()
     await getApiV1AssetFields(transport, { query: { limit: 1000 } })
     expect(request).toHaveBeenCalledOnce()
+    await postApiV1PoliciesByIdReruns(transport, {
+      pathParams: { id },
+      body: { operationId: id, expectedRevision: Number.MAX_SAFE_INTEGER, input: { deadline: 1 } },
+    })
+    expect(request).toHaveBeenCalledTimes(2)
   })
   it('binds method/path/status and encodes scalar and tuple path carriers', async () => {
     const request = vi.fn(async (options: RequestOptions<unknown> | NoContentRequest) =>
@@ -140,6 +214,43 @@ describe('fixed producer HTTP operations', () => {
     await getReadyz(transport, {})
     expect(request.mock.calls[1]?.[0]).toMatchObject({ successStatus: [200, 503] })
   })
+  it('executes empty acknowledgements and the declared unavailable readiness response', async () => {
+    const instance = axios.create(),
+      mock = new MockAdapter(instance)
+    const create = vi.spyOn(axios, 'create').mockReturnValue(instance)
+    try {
+      const transport = createMdmTransport()
+      mock.onPost(`/api/v1/resources/script/uploads/${id}/complete`).reply(201, '')
+      await expect(
+        postApiV1ResourcesByIdUploadsByUploadComplete(transport, {
+          pathParams: { id: 'script', upload: id },
+        }),
+      ).resolves.toBeUndefined()
+      const observation = {
+        hostId: id,
+        operationId: id,
+        revision: 1,
+        materialDigest: '0'.repeat(64),
+        processGeneration: id,
+        tenantId: id,
+        instanceId: id,
+      }
+      mock
+        .onGet('/readyz')
+        .reply(503, { ready: false, observation }, { 'content-type': 'application/json' })
+      await expect(getReadyz(transport, {})).resolves.toEqual({ ready: false, observation })
+      mock
+        .onGet('/readyz')
+        .reply(503, { ready: 'false', observation }, { 'content-type': 'application/json' })
+      await expect(getReadyz(transport, {})).rejects.toMatchObject({
+        cause: 'protocol',
+        status: 503,
+      })
+    } finally {
+      create.mockRestore()
+      mock.restore()
+    }
+  })
   it('preserves Policy extensions and distinguishes missing/null core fields', () => {
     const definition = {
       customEvent: null,
@@ -162,7 +273,7 @@ describe('fixed producer HTTP operations', () => {
     delete missing['customEvent']
     expect(validatePolicyDefinition(missing)).toBe(false)
     expect(validatePolicyDefinition({ ...definition, action: { kind: 'unknown' } })).toBe(false)
-    expect(() => safeJson({ revision: Number.MAX_SAFE_INTEGER + 1 })).toThrow()
+    expect(() => safeJson({ value: 1e20 })).not.toThrow()
     expect(() => safeJson({ value: Infinity })).toThrow()
   })
   it('does not accept retired pagination fields through generated inputs', async () => {

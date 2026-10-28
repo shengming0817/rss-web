@@ -5,14 +5,17 @@ import * as r from './responses'
 import v_s2090d3e716e5c853e77f from './s2090d3e716e5c853e77f.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import type * as s2090d3e716e5c853e77f from './s2090d3e716e5c853e77f'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s6e7c9691967d82a7d06f from './s6e7c9691967d82a7d06f'
 export type Input = {
   body: WireInput<s2090d3e716e5c853e77f.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s6e7c9691967d82a7d06f.Root
+export type * as Body from './s2090d3e716e5c853e77f'
+export type * as Response from './s6e7c9691967d82a7d06f'
 export const postApiV1WebhooksMaterials = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/webhooks/materials',

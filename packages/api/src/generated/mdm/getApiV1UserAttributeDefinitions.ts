@@ -7,11 +7,12 @@ import type * as s7ed98cee8f051a8a7021 from './s7ed98cee8f051a8a7021'
 import type * as s84a78162d082ed170eb9 from './s84a78162d082ed170eb9'
 export type Input = {
   query?: WireInput<s7ed98cee8f051a8a7021.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s84a78162d082ed170eb9.Root
+
+export type * as Response from './s84a78162d082ed170eb9'
 export const getApiV1UserAttributeDefinitions = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/user-attribute-definitions',

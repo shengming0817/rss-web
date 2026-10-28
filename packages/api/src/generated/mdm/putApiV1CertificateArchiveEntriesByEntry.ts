@@ -5,16 +5,19 @@ import * as r from './responses'
 import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s5af2d02d53a2cf892214 from './s5af2d02d53a2cf892214.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s5af2d02d53a2cf892214 from './s5af2d02d53a2cf892214'
 import type * as s5d75b07cfdb05df673d3 from './s5d75b07cfdb05df673d3'
 export type Input = {
   pathParams: { entry: string }
   body: WireInput<s5af2d02d53a2cf892214.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s5d75b07cfdb05df673d3.Root
+export type * as Body from './s5af2d02d53a2cf892214'
+export type * as Response from './s5d75b07cfdb05df673d3'
 export const putApiV1CertificateArchiveEntriesByEntry = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

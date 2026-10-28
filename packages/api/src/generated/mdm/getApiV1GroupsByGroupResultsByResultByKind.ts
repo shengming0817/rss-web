@@ -10,11 +10,11 @@ import type * as sffed0745104b5af805f8 from './sffed0745104b5af805f8'
 export type Input = {
   pathParams: { group: string; result: string; kind: string }
   query?: WireInput<s7692b27883053ca6f01b.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s41744029688b67c79882.Root | sffed0745104b5af805f8.Root
+
 export const getApiV1GroupsByGroupResultsByResultByKind = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

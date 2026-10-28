@@ -6,11 +6,12 @@ import v_s38dfc3abed03868a7667 from './s38dfc3abed03868a7667.validator.js'
 import type * as s38dfc3abed03868a7667 from './s38dfc3abed03868a7667'
 export type Input = {
   body: WireInput<s38dfc3abed03868a7667.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = void
+export type * as Body from './s38dfc3abed03868a7667'
+
 export const postApiV1PkiCrls = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/pki/crls',

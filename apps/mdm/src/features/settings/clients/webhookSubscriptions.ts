@@ -1,10 +1,10 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   boolean,
-  closed,
   count,
   enumeration,
   identifier,
@@ -21,17 +21,13 @@ export const eventTypes = [
   'compliance.status.changed',
 ] as const
 export function webhookSettings(value: unknown) {
-  const v = closed(value, [
-      'presentation',
-      'endpoint',
-      'eventTypes',
-      'selection',
-      'keyReference',
-      'networkReference',
-    ]),
-    selection = closed(v['selection'], ['kind'], ['ids'])
-  const kind = enumeration(selection['kind'], ['allDevices', 'devices', 'groups'] as const)
-  closed(selection, kind === 'allDevices' ? ['kind'] : ['kind', 'ids'])
+  if (!wireSchemas.getApiV1WebhooksSubscriptionsResponse.validateSettings(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    selection = v['selection']
+  const kind = selection['kind']
+
   const endpoint = string(v['endpoint']),
     url = new URL(endpoint)
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash)
@@ -57,32 +53,25 @@ export function webhookSettings(value: unknown) {
   }
 }
 export function subscription(value: unknown) {
-  const v = closed(value, ['id', 'revision', 'targetVersion', 'enabled', 'deleted', 'settings'])
+  if (!wireSchemas.getApiV1WebhooksSubscriptionsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     id: uuid(v['id']),
     revision: count(v['revision']),
     targetVersion: count(v['targetVersion']),
-    enabled: boolean(v['enabled']),
-    deleted: boolean(v['deleted']),
+    enabled: v['enabled'],
+    deleted: v['deleted'],
     settings: webhookSettings(v['settings']),
   }
 }
 export type Subscription = ReturnType<typeof subscription>
 export function delivery(value: unknown) {
-  const v = closed(value, [
-    'id',
-    'eventId',
-    'subscriptionId',
-    'targetVersion',
-    'sourceDelivery',
-    'recoveryVersion',
-    'redriveWindowOpen',
-    'attempts',
-    'status',
-    'transportObservation',
-    'failureStage',
-    'failureReason',
-  ])
+  if (!wireSchemas.getApiV1WebhooksDeliveriesResponse.validateProjection_Delivery(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     id: uuid(v['id']),
     eventId: uuid(v['eventId']),
@@ -113,6 +102,9 @@ export type WebhookIntent =
   | { kind: 'replay' | 'redrive'; id: string; expectedVersion: number }
 export function createWebhookSubscriptions(transport: HttpTransport) {
   function page(value: unknown) {
+    if (!wireSchemas.getApiV1WebhooksDeliveriesResponse.validateRoot(value))
+      throw new Error('Invalid contract value')
+
     return windowPage(value, delivery)
   }
   return {
@@ -174,7 +166,9 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
         )
       const project = (value: unknown) => {
         if (input.kind === 'redrive') {
-          const v = closed(value, ['id', 'operationId', 'status', 'recoveryVersion'])
+          if (!wireSchemas.postApiV1WebhooksDeliveriesByIdRedriveResponse.validateRoot(value))
+            throw new Error('Invalid redrive receipt')
+          const v = value
           if (
             v['id'] !== input.id ||
             v['operationId'] !== operationId ||
@@ -188,7 +182,9 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
             recoveryVersion: count(v['recoveryVersion']),
           }
         }
-        const v = closed(value, ['id', 'eventId', 'sourceDelivery'])
+        if (!wireSchemas.postApiV1WebhooksDeliveriesByIdReplayResponse.validateRoot(value))
+          throw new Error('Invalid replay receipt')
+        const v = value
         if (v['sourceDelivery'] !== input.id) throw new Error('Wrong replay source')
         return {
           id: uuid(v['id']),

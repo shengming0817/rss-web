@@ -10,11 +10,12 @@ import type * as sab09409be7ef39b326a9 from './sab09409be7ef39b326a9'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sab09409be7ef39b326a9.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s38a12340c1db33e4b91f.Root | s61fec7a4609dbd3d4973.Root
+export type * as Body from './sab09409be7ef39b326a9'
+
 export const postApiV1ScopesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/scopes/{id}',

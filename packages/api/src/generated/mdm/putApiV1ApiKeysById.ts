@@ -9,11 +9,12 @@ import type * as sffd92cae45eed68f08d5 from './sffd92cae45eed68f08d5'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sffd92cae45eed68f08d5.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s4b5f8d930972bb79a082.Root
+export type * as Body from './sffd92cae45eed68f08d5'
+export type * as Response from './s4b5f8d930972bb79a082'
 export const putApiV1ApiKeysById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/api-keys/{id}',

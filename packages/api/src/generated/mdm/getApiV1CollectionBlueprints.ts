@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as s9ffd99be3aa25dd909c5 from './s9ffd99be3aa25dd909c5'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s9ffd99be3aa25dd909c5.Root
+
+export type * as Response from './s9ffd99be3aa25dd909c5'
 export const getApiV1CollectionBlueprints = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/collection-blueprints',

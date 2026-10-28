@@ -9,11 +9,12 @@ import type * as sb3a21862c394a7135b73 from './sb3a21862c394a7135b73'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s8a161b6a8bb654aa9b9c.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sb3a21862c394a7135b73.Root
+export type * as Body from './s8a161b6a8bb654aa9b9c'
+export type * as Response from './sb3a21862c394a7135b73'
 export const postApiV1PoliciesByIdReruns = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/policies/{id}/reruns',

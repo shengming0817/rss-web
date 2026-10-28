@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = BinaryResponse
+
+export type * as Response from './s2db098654a77dbd75ff3'
 export const getApiV1AppleOrganizationsByIdAdePublicKey = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

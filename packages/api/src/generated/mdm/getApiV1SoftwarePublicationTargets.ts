@@ -7,11 +7,12 @@ import type * as s2958143c28993ede2789 from './s2958143c28993ede2789'
 import type * as sd4d8b0f0563768816905 from './sd4d8b0f0563768816905'
 export type Input = {
   query?: WireInput<s2958143c28993ede2789.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd4d8b0f0563768816905.Root
+
+export type * as Response from './sd4d8b0f0563768816905'
 export const getApiV1SoftwarePublicationTargets = /* @__PURE__ */ defineEndpoint<Input, Output>(
   {
     ...{

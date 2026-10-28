@@ -7,11 +7,12 @@ import type * as s4d76a0e06d3f8982ec06 from './s4d76a0e06d3f8982ec06'
 import type * as sa645095276fe32395db9 from './sa645095276fe32395db9'
 export type Input = {
   body: WireInput<s4d76a0e06d3f8982ec06.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sa645095276fe32395db9.Root
+export type * as Body from './s4d76a0e06d3f8982ec06'
+export type * as Response from './sa645095276fe32395db9'
 export const postApiV1SoftwareImports = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/software/imports',

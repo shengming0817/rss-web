@@ -9,13 +9,14 @@ import type * as s07734418d3f2683d488a from './s07734418d3f2683d488a'
 import type * as s0b6b2575915556b12cf6 from './s0b6b2575915556b12cf6'
 export type Input = {
   pathParams: { id: string; upload: string }
-  query?: WireInput<s07734418d3f2683d488a.Root> | undefined
+  query: WireInput<s07734418d3f2683d488a.Root>
   body: ArrayBuffer
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s0b6b2575915556b12cf6.Root
+export type * as Body from './s2db098654a77dbd75ff3'
+export type * as Response from './s0b6b2575915556b12cf6'
 export const patchApiV1ResourcesByIdUploadsByUpload = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

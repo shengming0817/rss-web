@@ -7,11 +7,12 @@ import type * as s9d72cac75a8cd66b3d99 from './s9d72cac75a8cd66b3d99'
 import type * as se567b14aa549227198dd from './se567b14aa549227198dd'
 export type Input = {
   query?: WireInput<se567b14aa549227198dd.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s9d72cac75a8cd66b3d99.Root
+
+export type * as Response from './s9d72cac75a8cd66b3d99'
 export const getApiV1WindowsWnsVersions = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/windows/wns/versions',

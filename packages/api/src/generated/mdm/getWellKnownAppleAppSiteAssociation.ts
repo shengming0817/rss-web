@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as s3f0de9e147663c666433 from './s3f0de9e147663c666433'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s3f0de9e147663c666433.Root
+
+export type * as Response from './s3f0de9e147663c666433'
 export const getWellKnownAppleAppSiteAssociation = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

@@ -5,14 +5,17 @@ import * as r from './responses'
 import v_s3eba2416853aef561d15 from './s3eba2416853aef561d15.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import type * as s3eba2416853aef561d15 from './s3eba2416853aef561d15'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s602f1501cb1c03087f20 from './s602f1501cb1c03087f20'
 export type Input = {
   body: WireInput<s3eba2416853aef561d15.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s602f1501cb1c03087f20.Root
+export type * as Body from './s3eba2416853aef561d15'
+export type * as Response from './s602f1501cb1c03087f20'
 export const postApiV1WindowsWns = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/windows/wns',

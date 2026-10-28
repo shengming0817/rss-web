@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as sf060295aae4e2325556f from './sf060295aae4e2325556f'
 export type Input = {
   pathParams: { tenant: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sf060295aae4e2325556f.Root
+
+export type * as Response from './sf060295aae4e2325556f'
 export const postApiV1ApplePlatformSsoByTenantNonce = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

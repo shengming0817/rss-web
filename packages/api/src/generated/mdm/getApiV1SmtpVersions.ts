@@ -7,11 +7,12 @@ import type * as s7a03321e95d1fb9e01a6 from './s7a03321e95d1fb9e01a6'
 import type * as se567b14aa549227198dd from './se567b14aa549227198dd'
 export type Input = {
   query?: WireInput<se567b14aa549227198dd.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s7a03321e95d1fb9e01a6.Root
+
+export type * as Response from './s7a03321e95d1fb9e01a6'
 export const getApiV1SmtpVersions = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/smtp/versions',

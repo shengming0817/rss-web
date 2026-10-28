@@ -2,14 +2,12 @@
 import { defineEndpoint } from '../../mdm-endpoint'
 
 import * as r from './responses'
-import v_sa83cc0163d9a1e56129d from './sa83cc0163d9a1e56129d.validator.js'
+
 import type * as s9617e1237fc62f252b8d from './s9617e1237fc62f252b8d'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s9617e1237fc62f252b8d.Root
+
+export type * as Response from './s9617e1237fc62f252b8d'
 export const postApiV1DeviceAccessBrokerBrowser = /* @__PURE__ */ defineEndpoint<Input, Output>(
   {
     ...{
@@ -21,17 +19,12 @@ export const postApiV1DeviceAccessBrokerBrowser = /* @__PURE__ */ defineEndpoint
       queryOwner: null,
       publicRead: true,
       contentType: null,
-      requestHeaders: ['sec-fetch-site'],
+      requestHeaders: [],
       requiredHeaders: [],
       binary: false,
       statuses: [200],
     },
-    checks: {
-      headers: { 'sec-fetch-site': v_sa83cc0163d9a1e56129d },
-      path: null,
-      query: null,
-      body: null,
-    },
+    checks: { headers: {}, path: null, query: null, body: null },
     responses: [
       r.rfd325e4b9d472b22287a,
       r.r188b9270e0a9d6de1391,

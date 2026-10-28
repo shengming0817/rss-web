@@ -10,11 +10,12 @@ import type * as sffed0745104b5af805f8 from './sffed0745104b5af805f8'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s6fe42206a36ff8d89d6e.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s41744029688b67c79882.Root | sffed0745104b5af805f8.Root
+export type * as Body from './s6fe42206a36ff8d89d6e'
+
 export const postApiV1GroupsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/groups/{id}',

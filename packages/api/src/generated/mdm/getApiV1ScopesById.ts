@@ -7,11 +7,11 @@ import type * as s38a12340c1db33e4b91f from './s38a12340c1db33e4b91f'
 import type * as s61fec7a4609dbd3d4973 from './s61fec7a4609dbd3d4973'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s38a12340c1db33e4b91f.Root | s61fec7a4609dbd3d4973.Root
+
 export const getApiV1ScopesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/scopes/{id}',

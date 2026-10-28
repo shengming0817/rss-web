@@ -1,11 +1,10 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   boolean,
-  closed,
   count,
-  enumeration,
   identifier,
   integer,
   nullable,
@@ -16,34 +15,19 @@ import { jsonObject } from '../../../services/json'
 import { objectRef } from './objects'
 import { decodeNativeObservation } from '../../policies/clients/native'
 export function memberships(value: unknown) {
-  const v = closed(value, ['items', 'nextCursor', 'associationCurrent'])
+  if (!wireSchemas.getApiV1DevicesByDeviceGroupsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
-    associationCurrent: boolean(v['associationCurrent']),
+    associationCurrent: v['associationCurrent'],
     nextCursor: nullable(v['nextCursor'], string),
     items: array(v['items'], (value) => {
-      const i = closed(value, [
-        'id',
-        'presentation',
-        'kind',
-        'assetContext',
-        'revision',
-        'memberVersion',
-        'calculationRevision',
-        'memberSet',
-        'currentRuleVersion',
-        'evaluatedRuleVersion',
-        'inputVersion',
-        'asOf',
-        'ruleCurrent',
-        'objects',
-        'associationCurrent',
-        'inputCurrent',
-        'evaluation',
-      ])
+      const i = value
       return {
         id: uuid(i['id']),
         presentation: jsonObject(i['presentation'], 65536),
-        kind: enumeration(i['kind'], ['static', 'dynamic', 'system'] as const),
+        kind: i['kind'],
         assetContext: identifier(i['assetContext']),
         revision: count(i['revision']),
         memberVersion: count(i['memberVersion']),
@@ -53,42 +37,34 @@ export function memberships(value: unknown) {
         evaluatedRuleVersion: nullable(i['evaluatedRuleVersion'], identifier),
         inputVersion: string(i['inputVersion']),
         asOf: integer(i['asOf']),
-        ruleCurrent: boolean(i['ruleCurrent']),
+        ruleCurrent: i['ruleCurrent'],
         objects: array(i['objects'], objectRef),
         associationCurrent: nullable(i['associationCurrent'], boolean),
-        inputCurrent: boolean(i['inputCurrent']),
-        evaluation: enumeration(i['evaluation'], ['current', 'stale'] as const),
+        inputCurrent: i['inputCurrent'],
+        evaluation: i['evaluation'],
       }
     }),
   }
 }
 export function ddmPage(value: unknown) {
-  const v = closed(value, ['items', 'nextCursor', 'availability', 'effect', 'compliance'])
+  if (!wireSchemas.getApiV1DevicesByDeviceDdmResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     nextCursor: nullable(v['nextCursor'], string),
-    availability: enumeration(v['availability'], [
-      'current_registration',
-      'no_current_registration',
-    ] as const),
-    effect: enumeration(v['effect'], ['unverified'] as const),
-    compliance: enumeration(v['compliance'], ['unknown'] as const),
+    availability: v['availability'],
+    effect: v['effect'],
+    compliance: v['compliance'],
     items: array(v['items'], (value) => {
-      const i = closed(value, [
-        'operationId',
-        'registrationId',
-        'generation',
-        'channel',
-        'userKey',
-        'nativeValuesRedacted',
-        'observation',
-      ])
+      const i = value
       return {
         operationId: uuid(i['operationId']),
         registrationId: uuid(i['registrationId']),
         generation: count(i['generation']),
-        channel: enumeration(i['channel'], ['mdm.apple'] as const),
+        channel: i['channel'],
         userKey: string(i['userKey']),
-        nativeValuesRedacted: boolean(i['nativeValuesRedacted']),
+        nativeValuesRedacted: i['nativeValuesRedacted'],
         observation: decodeNativeObservation(i['observation']),
       }
     }),

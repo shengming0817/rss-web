@@ -3,15 +3,15 @@ import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 
 import * as r from './responses'
 import v_s16519ec9eb2dd0c913c4 from './s16519ec9eb2dd0c913c4.validator.js'
-import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import type * as s16519ec9eb2dd0c913c4 from './s16519ec9eb2dd0c913c4'
 export type Input = {
   body: WireInput<s16519ec9eb2dd0c913c4.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = void
+export type * as Body from './s16519ec9eb2dd0c913c4'
+
 export const postApiV1WindowsEntraTermsFinish = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/windows/entra/terms/finish',
@@ -22,17 +22,12 @@ export const postApiV1WindowsEntraTermsFinish = /* @__PURE__ */ defineEndpoint<I
     queryOwner: null,
     publicRead: true,
     contentType: 'application/x-www-form-urlencoded',
-    requestHeaders: ['host'],
+    requestHeaders: [],
     requiredHeaders: [],
     binary: false,
     statuses: [302],
   },
-  checks: {
-    headers: { host: v_s93ddaf583a2133fb6a6f },
-    path: null,
-    query: null,
-    body: v_s16519ec9eb2dd0c913c4,
-  },
+  checks: { headers: {}, path: null, query: null, body: v_s16519ec9eb2dd0c913c4 },
   responses: [
     r.r64c02fa8488d43a62223,
     r.r4d2b7ae832aff8965d5e,

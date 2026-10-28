@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s2a0898b43f049c34865c from './s2a0898b43f049c34865c'
 export type Input = {
   pathParams: { entry: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s2a0898b43f049c34865c.Root
+
+export type * as Response from './s2a0898b43f049c34865c'
 export const getApiV1CertificateArchiveEntriesByEntry = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

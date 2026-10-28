@@ -8,11 +8,12 @@ import type * as sa26868c9f00beb721704 from './sa26868c9f00beb721704'
 import type * as se4cd96d4a6279bbde76c from './se4cd96d4a6279bbde76c'
 export type Input = {
   body: WireInput<se4cd96d4a6279bbde76c.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
+export type * as Body from './se4cd96d4a6279bbde76c'
+
 export const putApiV1AssetFieldLayout = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/asset-field-layout',

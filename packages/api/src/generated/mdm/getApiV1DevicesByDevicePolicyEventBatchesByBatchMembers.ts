@@ -9,11 +9,12 @@ import type * as sd13abce01800ba6328fb from './sd13abce01800ba6328fb'
 export type Input = {
   pathParams: { device: string; batch: string }
   query?: WireInput<sd13abce01800ba6328fb.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s606ab4889f4d6c850474.Root
+
+export type * as Response from './s606ab4889f4d6c850474'
 export const getApiV1DevicesByDevicePolicyEventBatchesByBatchMembers =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

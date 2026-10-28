@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as sa1565ef5b5e66e91e0dc from './sa1565ef5b5e66e91e0dc'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = sa1565ef5b5e66e91e0dc.Root
+
+export type * as Response from './sa1565ef5b5e66e91e0dc'
 export const getApiV1StorageConnections = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/storage/connections',

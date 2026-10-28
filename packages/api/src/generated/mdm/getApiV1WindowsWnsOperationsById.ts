@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s602f1501cb1c03087f20 from './s602f1501cb1c03087f20'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s602f1501cb1c03087f20.Root
+
+export type * as Response from './s602f1501cb1c03087f20'
 export const getApiV1WindowsWnsOperationsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/windows/wns/operations/{id}',

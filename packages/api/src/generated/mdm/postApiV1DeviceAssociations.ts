@@ -7,11 +7,12 @@ import type * as s4ed73360eae9ce3097ee from './s4ed73360eae9ce3097ee'
 import type * as sb79d1c10adfc0e14a9e2 from './sb79d1c10adfc0e14a9e2'
 export type Input = {
   body: WireInput<sb79d1c10adfc0e14a9e2.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s4ed73360eae9ce3097ee.Root
+export type * as Body from './sb79d1c10adfc0e14a9e2'
+export type * as Response from './s4ed73360eae9ce3097ee'
 export const postApiV1DeviceAssociations = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/device-associations',

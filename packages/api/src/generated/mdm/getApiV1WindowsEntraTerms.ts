@@ -2,16 +2,15 @@
 import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 
 import * as r from './responses'
-import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import v_scd3e4beea6a68705539f from './scd3e4beea6a68705539f.validator.js'
 import type * as scd3e4beea6a68705539f from './scd3e4beea6a68705539f'
 export type Input = {
-  query?: WireInput<scd3e4beea6a68705539f.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
+  query: WireInput<scd3e4beea6a68705539f.Root>
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = void
+
 export const getApiV1WindowsEntraTerms = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/windows/entra/terms',
@@ -22,17 +21,12 @@ export const getApiV1WindowsEntraTerms = /* @__PURE__ */ defineEndpoint<Input, O
     queryOwner: null,
     publicRead: true,
     contentType: null,
-    requestHeaders: ['host'],
+    requestHeaders: [],
     requiredHeaders: [],
     binary: false,
     statuses: [302],
   },
-  checks: {
-    headers: { host: v_s93ddaf583a2133fb6a6f },
-    path: null,
-    query: v_scd3e4beea6a68705539f,
-    body: null,
-  },
+  checks: { headers: {}, path: null, query: v_scd3e4beea6a68705539f, body: null },
   responses: [
     r.r64c02fa8488d43a62223,
     r.r4d2b7ae832aff8965d5e,

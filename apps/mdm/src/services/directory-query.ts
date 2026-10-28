@@ -128,7 +128,18 @@ export function windowParameters(query: WindowQuery = {}, maximum = 200) {
   if (query.limit !== undefined && query.limit > maximum) throw new Error('Invalid page size')
   return queryParameters(query)
 }
-export function windowPage<T>(value: unknown, decode: (value: unknown) => T) {
+export function windowPage<V, T>(
+  value: { items: readonly V[]; nextCursor: string | null },
+  decode: (value: V) => T,
+): { items: T[]; nextCursor: string | null }
+export function windowPage<T>(
+  value: unknown,
+  decode: (value: unknown) => T,
+): { items: T[]; nextCursor: string | null }
+export function windowPage<T>(value: unknown, decode: (value: never) => T) {
   const page = closed(value, ['items', 'nextCursor'])
-  return { items: array(page['items'], decode), nextCursor: nextCursor(page['nextCursor']) }
+  return {
+    items: array(page['items'], (item) => decode(item as never)),
+    nextCursor: nextCursor(page['nextCursor']),
+  }
 }

@@ -10,11 +10,11 @@ import type * as sa26868c9f00beb721704 from './sa26868c9f00beb721704'
 export type Input = {
   pathParams: { field: string }
   query?: WireInput<s7692b27883053ca6f01b.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
+
 export const getApiV1AssetFieldsByFieldReferences = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

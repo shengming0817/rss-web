@@ -6,12 +6,13 @@ import v_s491c7c96c89aa056f89c from './s491c7c96c89aa056f89c.validator.js'
 import type * as s491c7c96c89aa056f89c from './s491c7c96c89aa056f89c'
 import type * as se0f185df775bf078698c from './se0f185df775bf078698c'
 export type Input = {
-  query?: WireInput<s491c7c96c89aa056f89c.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
+  query: WireInput<s491c7c96c89aa056f89c.Root>
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = se0f185df775bf078698c.Root
+
+export type * as Response from './se0f185df775bf078698c'
 export const getApiV1ApplePlatformSsoConfiguration = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

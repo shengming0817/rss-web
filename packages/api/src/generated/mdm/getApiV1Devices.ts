@@ -7,11 +7,12 @@ import type * as sd13abce01800ba6328fb from './sd13abce01800ba6328fb'
 import type * as sfb2f92a6b6f8d6da2031 from './sfb2f92a6b6f8d6da2031'
 export type Input = {
   query?: WireInput<sd13abce01800ba6328fb.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sfb2f92a6b6f8d6da2031.Root
+
+export type * as Response from './sfb2f92a6b6f8d6da2031'
 export const getApiV1Devices = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/devices',

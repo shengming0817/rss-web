@@ -9,11 +9,12 @@ import type * as s23b5cb6214d4a3c7a4b6 from './s23b5cb6214d4a3c7a4b6'
 export type Input = {
   pathParams: { id: string }
   query?: WireInput<s1c8a3d706a206fdc8639.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s23b5cb6214d4a3c7a4b6.Root
+
+export type * as Response from './s23b5cb6214d4a3c7a4b6'
 export const getApiV1AuthorizationUserGroupsByIdMembers = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

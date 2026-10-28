@@ -2,17 +2,17 @@
 import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 
 import * as r from './responses'
-import v_sa83cc0163d9a1e56129d from './sa83cc0163d9a1e56129d.validator.js'
 import v_sc0717647ca270975a0e4 from './sc0717647ca270975a0e4.validator.js'
 import type * as s3ebe630f953853917e4a from './s3ebe630f953853917e4a'
 import type * as sc0717647ca270975a0e4 from './sc0717647ca270975a0e4'
 export type Input = {
   body: WireInput<sc0717647ca270975a0e4.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s3ebe630f953853917e4a.Root
+export type * as Body from './sc0717647ca270975a0e4'
+export type * as Response from './s3ebe630f953853917e4a'
 export const postApiV1DeviceAccessBrokerComplete = /* @__PURE__ */ defineEndpoint<
   Input,
   Output
@@ -26,17 +26,12 @@ export const postApiV1DeviceAccessBrokerComplete = /* @__PURE__ */ defineEndpoin
     queryOwner: null,
     publicRead: true,
     contentType: 'application/json',
-    requestHeaders: ['sec-fetch-site'],
+    requestHeaders: [],
     requiredHeaders: [],
     binary: false,
     statuses: [200],
   },
-  checks: {
-    headers: { 'sec-fetch-site': v_sa83cc0163d9a1e56129d },
-    path: null,
-    query: null,
-    body: v_sc0717647ca270975a0e4,
-  },
+  checks: { headers: {}, path: null, query: null, body: v_sc0717647ca270975a0e4 },
   responses: [
     r.r1e1114981cd3b947fa9e,
     r.r188b9270e0a9d6de1391,

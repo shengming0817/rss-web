@@ -9,11 +9,12 @@ import type * as s64e73751a3138750a005 from './s64e73751a3138750a005'
 export type Input = {
   pathParams: { tenant: string }
   body: WireInput<s049226c2108ac14aeb07.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s64e73751a3138750a005.Root
+export type * as Body from './s049226c2108ac14aeb07'
+export type * as Response from './s64e73751a3138750a005'
 export const postApiV1ApplePlatformSsoByTenantBrowserBegin = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

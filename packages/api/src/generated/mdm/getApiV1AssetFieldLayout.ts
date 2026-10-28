@@ -5,12 +5,9 @@ import * as r from './responses'
 
 import type * as s271d385f77f8ed16b86e from './s271d385f77f8ed16b86e'
 import type * as sa26868c9f00beb721704 from './sa26868c9f00beb721704'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
+
 export const getApiV1AssetFieldLayout = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/asset-field-layout',

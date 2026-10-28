@@ -120,6 +120,16 @@ const utc = (at: number) =>
         <pre>{{ JSON.stringify(run.result.native, null, 2) }}</pre>
       </MdmDisclosure>
     </section>
+    <MdmDisclosure
+      v-if="
+        run.result &&
+        ['access', 'unmanage', 'native_software'].includes(run.result.kind) &&
+        'evidence' in run.result
+      "
+    >
+      <template #title>{{ t('software.readEvidence') }}</template>
+      <pre>{{ JSON.stringify(run.result.evidence, null, 2) }}</pre>
+    </MdmDisclosure>
     <MdmDisclosure v-if="run.result?.kind === 'script' && 'stdout' in run.result.diagnostics">
       <template #title>{{ t('software.diagnostics') }}</template>
       <p>

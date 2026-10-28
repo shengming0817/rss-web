@@ -9,11 +9,12 @@ import type * as s7692b27883053ca6f01b from './s7692b27883053ca6f01b'
 export type Input = {
   pathParams: { device: string }
   query?: WireInput<s7692b27883053ca6f01b.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s06e5e6c0c3d706b05fe4.Root
+
+export type * as Response from './s06e5e6c0c3d706b05fe4'
 export const getApiV1DevicesByDeviceDdm = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/devices/{device}/ddm',

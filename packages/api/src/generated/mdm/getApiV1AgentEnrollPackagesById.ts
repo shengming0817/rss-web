@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as sd350455d06ad459d6726 from './sd350455d06ad459d6726'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd350455d06ad459d6726.Root
+
+export type * as Response from './sd350455d06ad459d6726'
 export const getApiV1AgentEnrollPackagesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/agent/enroll/packages/{id}',

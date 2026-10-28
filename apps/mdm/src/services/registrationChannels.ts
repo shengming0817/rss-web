@@ -1,15 +1,20 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import { array, closed, count, enumeration, nullable, string, unique, uuid } from './decode'
+import { array, count, enumeration, nullable, string, unique, uuid } from './decode'
 
 export const registrationChannels = ['agent', 'windows_mdm', 'macos_mdm'] as const
 export type RegistrationChannel = (typeof registrationChannels)[number]
 export function nativeChannel(source: 'mdm.windows' | 'mdm.apple'): RegistrationChannel {
   return source === 'mdm.windows' ? 'windows_mdm' : 'macos_mdm'
 }
-export type Admission = 'allowed' | 'paused'
+export type Admission =
+  wireSchemas.putApiV1RegistrationChannelsByChannelAdmissionResponse.Root['admission']
 function setting(value: unknown) {
-  const v = closed(value, ['channel', 'revision', 'admission'])
+  if (!wireSchemas.putApiV1RegistrationChannelsByChannelAdmissionResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     channel: enumeration(v['channel'], registrationChannels),
     revision: count(v['revision']),
@@ -17,12 +22,15 @@ function setting(value: unknown) {
   }
 }
 export function decodeChannels(value: unknown, tenant: string, instance: string) {
-  const v = closed(value, ['tenantId', 'instanceId', 'publicEndpoints', 'channels'])
+  if (!wireSchemas.getApiV1RegistrationChannelsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (uuid(v['tenantId']) !== tenant || uuid(v['instanceId']) !== instance)
     throw new Error('Wrong registration binding')
   const channels = unique(
     array(v['channels'], (item) => {
-      const c = closed(item, ['channel', 'revision', 'admission', 'availability', 'reason'])
+      const c = item
       const result = {
         ...setting({ channel: c['channel'], revision: c['revision'], admission: c['admission'] }),
         availability: enumeration(c['availability'], ['unconfigured', 'ready', 'fault'] as const),
@@ -48,13 +56,8 @@ export function decodeChannels(value: unknown, tenant: string, instance: string)
   )
   if (channels.length !== registrationChannels.length)
     throw new Error('Missing registration channel')
-  const e = closed(v['publicEndpoints'], [
-    'console',
-    'agent',
-    'windowsEnrollment',
-    'windowsManagement',
-    'appleManagement',
-  ])
+  const e = v.publicEndpoints
+
   function endpoint(value: unknown) {
     const text = string(value),
       url = new URL(text)

@@ -7,11 +7,12 @@ import type * as sbb5f28450e6fcb868566 from './sbb5f28450e6fcb868566'
 import type * as sf77685e7a3af5e51275e from './sf77685e7a3af5e51275e'
 export type Input = {
   body: WireInput<sf77685e7a3af5e51275e.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sbb5f28450e6fcb868566.Root
+export type * as Body from './sf77685e7a3af5e51275e'
+export type * as Response from './sbb5f28450e6fcb868566'
 export const putApiV1AgentConnections = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/agent-connections',

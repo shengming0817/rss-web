@@ -7,11 +7,11 @@ import type * as s41744029688b67c79882 from './s41744029688b67c79882'
 import type * as sffed0745104b5af805f8 from './sffed0745104b5af805f8'
 export type Input = {
   pathParams: { group: string; task: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s41744029688b67c79882.Root | sffed0745104b5af805f8.Root
+
 export const getApiV1GroupsByGroupTasksByTask = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/groups/{group}/tasks/{task}',

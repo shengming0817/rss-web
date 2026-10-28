@@ -6,11 +6,12 @@ import v_s7b8b5381c2f948ff396b from './s7b8b5381c2f948ff396b.validator.js'
 import type * as s9e88d7ebae0c26ccec2f from './s9e88d7ebae0c26ccec2f'
 export type Input = {
   pathParams: { id: string; task: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s9e88d7ebae0c26ccec2f.Root
+
+export type * as Response from './s9e88d7ebae0c26ccec2f'
 export const getApiV1PoliciesByIdRunsByTask = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/policies/{id}/runs/{task}',

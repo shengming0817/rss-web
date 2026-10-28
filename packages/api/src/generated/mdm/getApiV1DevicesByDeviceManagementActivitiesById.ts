@@ -6,11 +6,12 @@ import v_s43dfa931ac7fd7e25d88 from './s43dfa931ac7fd7e25d88.validator.js'
 import type * as sd4eec8e9b722c4ae989f from './sd4eec8e9b722c4ae989f'
 export type Input = {
   pathParams: { device: string; id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd4eec8e9b722c4ae989f.Root
+
+export type * as Response from './sd4eec8e9b722c4ae989f'
 export const getApiV1DevicesByDeviceManagementActivitiesById = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

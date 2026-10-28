@@ -6,11 +6,12 @@ import v_s43dfa931ac7fd7e25d88 from './s43dfa931ac7fd7e25d88.validator.js'
 import type * as s229c2b28f1f4f5f18fa9 from './s229c2b28f1f4f5f18fa9'
 export type Input = {
   pathParams: { id: string; version: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s229c2b28f1f4f5f18fa9.Root
+
+export type * as Response from './s229c2b28f1f4f5f18fa9'
 export const getApiV1SoftwareResourcesByIdVersionsByVersion = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

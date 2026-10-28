@@ -7,11 +7,12 @@ import type * as s2c4070fc28cd88d91112 from './s2c4070fc28cd88d91112'
 import type * as s8895a2173376de187017 from './s8895a2173376de187017'
 export type Input = {
   query?: WireInput<s8895a2173376de187017.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s2c4070fc28cd88d91112.Root
+
+export type * as Response from './s2c4070fc28cd88d91112'
 export const getApiV1WebhooksDeliveries = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/webhooks/deliveries',

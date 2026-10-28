@@ -9,11 +9,12 @@ import type * as sc9774fe93c91b00f6261 from './sc9774fe93c91b00f6261'
 export type Input = {
   pathParams: { id: string; revision: string }
   body: WireInput<s4d56a81d15cbe99b6685.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sc9774fe93c91b00f6261.Root
+export type * as Body from './s4d56a81d15cbe99b6685'
+export type * as Response from './sc9774fe93c91b00f6261'
 export const postApiV1SoftwareSourcesByIdRevisionsByRevision = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

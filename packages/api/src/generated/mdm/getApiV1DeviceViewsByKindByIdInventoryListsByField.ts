@@ -9,11 +9,12 @@ import type * as s7692b27883053ca6f01b from './s7692b27883053ca6f01b'
 export type Input = {
   pathParams: { kind: string; id: string; field: string }
   query?: WireInput<s7692b27883053ca6f01b.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s73e3fbcb3a1d354400df.Root
+
+export type * as Response from './s73e3fbcb3a1d354400df'
 export const getApiV1DeviceViewsByKindByIdInventoryListsByField =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

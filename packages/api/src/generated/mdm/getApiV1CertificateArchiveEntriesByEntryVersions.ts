@@ -9,11 +9,12 @@ import type * as sfb7d9c02dd6a8f89490a from './sfb7d9c02dd6a8f89490a'
 export type Input = {
   pathParams: { entry: string }
   query?: WireInput<sfb7d9c02dd6a8f89490a.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s96ffb5d7e1504db4ba39.Root
+
+export type * as Response from './s96ffb5d7e1504db4ba39'
 export const getApiV1CertificateArchiveEntriesByEntryVersions = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

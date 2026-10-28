@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as s77ab0efa03a2d15f243d from './s77ab0efa03a2d15f243d'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s77ab0efa03a2d15f243d.Root
+
+export type * as Response from './s77ab0efa03a2d15f243d'
 export const getApiV1WindowsEntraPolicy = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/windows/entra-policy',

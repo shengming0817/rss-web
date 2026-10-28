@@ -9,11 +9,12 @@ import type * as sd9d14a0458a190e87966 from './sd9d14a0458a190e87966'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sd9d14a0458a190e87966.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sa46661c47e7ff515c2f1.Root
+export type * as Body from './sd9d14a0458a190e87966'
+export type * as Response from './sa46661c47e7ff515c2f1'
 export const postApiV1WebhooksDeliveriesByIdRedrive = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

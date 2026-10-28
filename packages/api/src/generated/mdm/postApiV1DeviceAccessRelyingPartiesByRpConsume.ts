@@ -9,11 +9,12 @@ import type * as seea59b52c7f8817b498f from './seea59b52c7f8817b498f'
 export type Input = {
   pathParams: { rp: string }
   body: WireInput<seea59b52c7f8817b498f.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s9451ff436cd63bee9bb3.Root
+export type * as Body from './seea59b52c7f8817b498f'
+export type * as Response from './s9451ff436cd63bee9bb3'
 export const postApiV1DeviceAccessRelyingPartiesByRpConsume = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

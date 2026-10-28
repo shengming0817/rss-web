@@ -1,3 +1,4 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
@@ -7,9 +8,8 @@ import {
 } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
+  record,
   array,
-  boolean,
-  closed,
   count,
   enumeration,
   identifier,
@@ -117,7 +117,10 @@ export const tenantAdministrationPermissions = [
 export const permissions = [...devicePermissions, ...tenantPermissions] as const
 export type Permission = (typeof permissions)[number]
 export function user(value: unknown, tenant: string, instance?: string) {
-  const v = closed(value, ['instanceId', 'tenantId', 'principalId'])
+  if (!wireSchemas.getApiV1ApiKeysResponse.validateUser(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = {
     instanceId: uuid(v['instanceId']),
     tenantId: uuid(v['tenantId']),
@@ -129,7 +132,10 @@ export function user(value: unknown, tenant: string, instance?: string) {
 }
 export type User = ReturnType<typeof user>
 export function source(value: unknown) {
-  const v = closed(value, ['providerId', 'issuer', 'configurationVersion'])
+  if (!wireSchemas.getApiV1AuthorizationResponse.validateSource(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = {
     providerId: uuid(v['providerId']),
     issuer: string(v['issuer']),
@@ -149,27 +155,28 @@ export function source(value: unknown) {
   return result
 }
 export function subject(value: unknown, tenant: string) {
-  const kind = enumeration(closed(value, ['kind'], ['user', 'id', 'source', 'matching'])['kind'], [
-    'user',
-    'idp_group',
-    'department',
-    'user_group',
-  ] as const)
-  if (kind === 'user') return { kind, user: user(closed(value, ['kind', 'user'])['user'], tenant) }
-  if (kind === 'user_group') return { kind, id: uuid(closed(value, ['kind', 'id'])['id']) }
-  const v = closed(value, ['kind', 'source', 'id'], kind === 'department' ? ['matching'] : [])
+  if (!wireSchemas.getApiV1AuthorizationResponse.validateSubject(value))
+    throw new Error('Invalid contract value')
+
+  const kind = value['kind']
+  if (kind === 'user') return { kind, user: user(value['user'], tenant) }
+  if (kind === 'user_group') return { kind, id: uuid(value['id']) }
+  const v = value
   const common = { source: source(v['source']), id: identifier(v['id']) }
   return kind === 'department'
-    ? { kind, ...common, matching: enumeration(v['matching'], ['exact', 'subtree'] as const) }
+    ? { kind, ...common, matching: v.kind === 'department' ? v.matching : 'exact' }
     : { kind, ...common }
 }
 export type Subject = ReturnType<typeof subject>
 export function grant(value: unknown) {
-  const v = closed(value, ['operation', 'scope']),
+  if (!wireSchemas.postApiV1ApiKeysBody.validateGrant(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     operation = enumeration(v['operation'], permissions)
-  const raw = closed(v['scope'], ['kind'], ['id']),
-    kind = enumeration(raw['kind'], ['tenant', 'all_devices', 'device'] as const)
-  closed(raw, kind === 'device' ? ['kind', 'id'] : ['kind'])
+  const raw = v['scope'],
+    kind = raw['kind']
+
   const scope = kind === 'device' ? { kind, id: identifier(raw['id']) } : { kind }
   if ((devicePermissions as readonly string[]).includes(operation) === (kind === 'tenant'))
     throw new Error('Invalid permission scope')
@@ -177,7 +184,10 @@ export function grant(value: unknown) {
 }
 export type Grant = ReturnType<typeof grant>
 export function rule(value: unknown, tenant: string) {
-  const v = closed(value, ['subject', 'grants']),
+  if (!wireSchemas.putApiV1AuthorizationRulesByIdBody.validateRule(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     grants = unique(array(v['grants'], grant), (v) => JSON.stringify(v))
   if (!grants.length || grants.length > 256) throw new Error('Invalid grants')
   return { subject: subject(v['subject'], tenant), grants }
@@ -213,7 +223,10 @@ export interface Revision<T> {
   value: T | null
 }
 export function groupDefinition(value: unknown, tenant: string) {
-  const v = closed(value, ['name', 'enabled', 'members'])
+  if (!wireSchemas.putApiV1AuthorizationUserGroupsByIdBody.validateUserGroup(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (!Array.isArray(v['members']) || v['members'].length > 10000)
     throw new Error('Invalid group members')
   const members = unique(
@@ -221,53 +234,44 @@ export function groupDefinition(value: unknown, tenant: string) {
     (m) => m.principalId,
   )
   if (new Set(members.map((m) => m.instanceId)).size > 1) throw new Error('Mixed instances')
-  return { name: identifier(v['name']), enabled: boolean(v['enabled']), members }
+  return { name: identifier(v['name']), enabled: v['enabled'], members }
 }
 export type UserGroup = ReturnType<typeof groupDefinition>
 function revision<T>(value: unknown, decode: (v: unknown) => T): Revision<T> {
-  const v = closed(value, ['id', 'revision', 'value']),
+  const v = record(value),
     revision = count(v['revision'])
   if (!revision) throw new Error('Invalid revision')
   return { id: uuid(v['id']), revision, value: nullable(v['value'], decode) }
 }
 function summary(value: unknown) {
-  const v = closed(value, ['name', 'enabled', 'memberCount'])
+  if (!wireSchemas.getApiV1AuthorizationUserGroupsResponse.validateGroupSummary(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     name: identifier(v['name']),
-    enabled: boolean(v['enabled']),
+    enabled: v['enabled'],
     memberCount: count(v['memberCount']),
   }
 }
 export function departments(value: unknown) {
-  const status = enumeration(
-    closed(
-      value,
-      ['status'],
-      ['source', 'snapshotId', 'observedAt', 'expiresAt', 'snapshot', 'reason'],
-    )['status'],
-    ['available', 'expired', 'unavailable'] as const,
-  )
+  if (!wireSchemas.getApiV1AuthorizationDepartmentsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const status = value['status']
   if (status === 'expired') {
-    closed(value, ['status'])
     return { status }
   }
   if (status === 'unavailable') {
-    const v = closed(value, ['status', 'reason'])
+    const v = value
     return { status, reason: identifier(v['reason']) }
   }
-  const v = closed(value, [
-      'status',
-      'source',
-      'snapshotId',
-      'observedAt',
-      'expiresAt',
-      'snapshot',
-    ]),
-    s = closed(v['snapshot'], ['version', 'sourceRevision', 'nodes', 'memberships'])
+  const v = value,
+    s = v['snapshot']
   if (s['version'] !== 1) throw new Error('Invalid department version')
   const nodes = unique(
     array(s['nodes'], (item) => {
-      const n = closed(item, ['id', 'displayName', 'parentId'])
+      const n = item
       return {
         id: identifier(n['id']),
         displayName: identifier(n['displayName']),
@@ -316,11 +320,13 @@ export function createAuthorizationClient(
   const write =
     <T>(id: string, body: Change<T>) =>
     (value: unknown) => {
-      const v = closed(value, ['id', 'revision', 'deleted'])
+      if (!wireSchemas.putApiV1AuthorizationRulesByIdResponse.validateRoot(value))
+        throw new Error('Invalid authorization receipt')
+      const v = value
       const result = {
         id: uuid(v['id']),
         revision: count(v['revision']),
-        deleted: boolean(v['deleted']),
+        deleted: v['deleted'],
       }
       if (
         result.id !== id ||
@@ -369,14 +375,7 @@ export function createAuthorizationClient(
           tenantId: tenant,
           principalId: uuid(v['principalId']),
           grants: array(v['grants'], (value) => {
-            const g = closed(value, [
-              'ruleId',
-              'ruleRevision',
-              'subject',
-              'operation',
-              'scope',
-              'observation',
-            ])
+            const g = value
             return {
               ...grantForRealm({ operation: g['operation'], scope: g['scope'] }, realm),
               ruleId: uuid(g['ruleId']),
@@ -388,7 +387,7 @@ export function createAuthorizationClient(
                 return s
               })(),
               observation: nullable(g['observation'], (value) => {
-                const o = closed(value, ['snapshotId', 'observedAt', 'expiresAt', 'sourceRevision'])
+                const o = value
                 return {
                   snapshotId: uuid(o['snapshotId']),
                   observedAt: count(o['observedAt']),

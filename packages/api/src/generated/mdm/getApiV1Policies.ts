@@ -7,11 +7,12 @@ import type * as sbed3362870960228df9e from './sbed3362870960228df9e'
 import type * as sd13abce01800ba6328fb from './sd13abce01800ba6328fb'
 export type Input = {
   query?: WireInput<sd13abce01800ba6328fb.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sbed3362870960228df9e.Root
+
+export type * as Response from './sbed3362870960228df9e'
 export const getApiV1Policies = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/policies',

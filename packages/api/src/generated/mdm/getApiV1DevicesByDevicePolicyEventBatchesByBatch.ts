@@ -6,11 +6,12 @@ import v_s8ffca0d0c448a5b243f2 from './s8ffca0d0c448a5b243f2.validator.js'
 import type * as sb0bd7a9b4f6ce9c8487b from './sb0bd7a9b4f6ce9c8487b'
 export type Input = {
   pathParams: { device: string; batch: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sb0bd7a9b4f6ce9c8487b.Root
+
+export type * as Response from './sb0bd7a9b4f6ce9c8487b'
 export const getApiV1DevicesByDevicePolicyEventBatchesByBatch = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

@@ -7,11 +7,12 @@ import type * as s1c8a3d706a206fdc8639 from './s1c8a3d706a206fdc8639'
 import type * as sda42731061f40a52ecfd from './sda42731061f40a52ecfd'
 export type Input = {
   query?: WireInput<s1c8a3d706a206fdc8639.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sda42731061f40a52ecfd.Root
+
+export type * as Response from './sda42731061f40a52ecfd'
 export const getApiV1TenantAdministrationAuthorizationRules = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

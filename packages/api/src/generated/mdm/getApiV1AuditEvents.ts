@@ -7,11 +7,12 @@ import type * as s061b73130adb51509af6 from './s061b73130adb51509af6'
 import type * as sd3ff87200d414a25e729 from './sd3ff87200d414a25e729'
 export type Input = {
   query?: WireInput<sd3ff87200d414a25e729.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s061b73130adb51509af6.Root
+
+export type * as Response from './s061b73130adb51509af6'
 export const getApiV1AuditEvents = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/audit-events',

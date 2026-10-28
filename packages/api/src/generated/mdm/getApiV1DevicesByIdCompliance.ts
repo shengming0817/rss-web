@@ -6,11 +6,12 @@ import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import type * as s7e994211702aff7ca517 from './s7e994211702aff7ca517'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s7e994211702aff7ca517.Root
+
+export type * as Response from './s7e994211702aff7ca517'
 export const getApiV1DevicesByIdCompliance = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/devices/{id}/compliance',

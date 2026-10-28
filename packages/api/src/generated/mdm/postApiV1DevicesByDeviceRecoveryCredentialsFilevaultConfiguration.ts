@@ -9,11 +9,12 @@ import type * as se58b3ca368565529e820 from './se58b3ca368565529e820'
 export type Input = {
   pathParams: { device: string }
   body: WireInput<se58b3ca368565529e820.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s6a8231261193db9b58a7.Root
+export type * as Body from './se58b3ca368565529e820'
+export type * as Response from './s6a8231261193db9b58a7'
 export const postApiV1DevicesByDeviceRecoveryCredentialsFilevaultConfiguration =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

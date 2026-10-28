@@ -6,11 +6,12 @@ import v_s43dfa931ac7fd7e25d88 from './s43dfa931ac7fd7e25d88.validator.js'
 import type * as sc9774fe93c91b00f6261 from './sc9774fe93c91b00f6261'
 export type Input = {
   pathParams: { id: string; revision: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sc9774fe93c91b00f6261.Root
+
+export type * as Response from './sc9774fe93c91b00f6261'
 export const getApiV1SoftwareSourcesByIdRevisionsByRevision = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

@@ -9,11 +9,12 @@ import type * as sca0018c524c748cf3473 from './sca0018c524c748cf3473'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sca0018c524c748cf3473.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sa17e2de8601ff511229f.Root
+export type * as Body from './sca0018c524c748cf3473'
+export type * as Response from './sa17e2de8601ff511229f'
 export const postApiV1WebhooksSubscriptionsByIdTest = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

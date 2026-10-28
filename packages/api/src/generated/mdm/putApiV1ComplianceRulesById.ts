@@ -9,11 +9,12 @@ import type * as sd03a28b4ba4e008938cc from './sd03a28b4ba4e008938cc'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sd03a28b4ba4e008938cc.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s4fe1ade68c62efb4332b.Root
+export type * as Body from './sd03a28b4ba4e008938cc'
+export type * as Response from './s4fe1ade68c62efb4332b'
 export const putApiV1ComplianceRulesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/compliance-rules/{id}',

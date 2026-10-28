@@ -7,11 +7,12 @@ import type * as s165a90b552fbde957c87 from './s165a90b552fbde957c87'
 import type * as s1c8a3d706a206fdc8639 from './s1c8a3d706a206fdc8639'
 export type Input = {
   query?: WireInput<s1c8a3d706a206fdc8639.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s165a90b552fbde957c87.Root
+
+export type * as Response from './s165a90b552fbde957c87'
 export const getApiV1TenantAdministrationTenants = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

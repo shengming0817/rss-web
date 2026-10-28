@@ -7,11 +7,12 @@ import type * as s2958143c28993ede2789 from './s2958143c28993ede2789'
 import type * as s77d122e1469806b7fc7e from './s77d122e1469806b7fc7e'
 export type Input = {
   query?: WireInput<s2958143c28993ede2789.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s77d122e1469806b7fc7e.Root
+
+export type * as Response from './s77d122e1469806b7fc7e'
 export const getApiV1SoftwareSources = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/software/sources',

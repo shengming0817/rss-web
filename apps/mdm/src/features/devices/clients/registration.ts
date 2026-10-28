@@ -1,8 +1,8 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
-  closed,
   count,
   enumeration,
   identifier,
@@ -24,8 +24,11 @@ function limit(value: unknown) {
   return n
 }
 export function configuration(value: unknown) {
-  const v = closed(value, ['revision', 'limits'])
-  const raw = closed(v['limits'], registrationChannels)
+  if (!wireSchemas.getApiV1RegistrationQuotasDefaultsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+  const raw = v['limits']
   const limits: Limits = {
     agent: nullable(raw['agent'], limit),
     windows_mdm: nullable(raw['windows_mdm'], limit),
@@ -34,7 +37,10 @@ export function configuration(value: unknown) {
   return { revision: count(v['revision']), limits }
 }
 export function usage(value: unknown, tenant: string, expected?: User) {
-  const v = closed(value, ['tenantId', 'instanceId', 'principalId', 'channels', 'asOf'])
+  if (!wireSchemas.getApiV1SelfEnrollmentsResponse.validateUsage(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const identity = user(
     { tenantId: v['tenantId'], instanceId: v['instanceId'], principalId: v['principalId'] },
     tenant,
@@ -46,7 +52,7 @@ export function usage(value: unknown, tenant: string, expected?: User) {
     throw new Error('Wrong usage user')
   const items = unique(
     array(v['channels'], (raw) => {
-      const c = closed(raw, ['channel', 'limit', 'active', 'reserved', 'used', 'overLimit'])
+      const c = raw
       const result = {
         channel: enumeration(c['channel'], registrationChannels),
         limit: limit(c['limit']),
@@ -73,7 +79,10 @@ export function createRegistrationClient(transport: HttpTransport, tenant: strin
     return { instance: value.instanceId, principal: value.principalId }
   }
   const responsibility = (value: unknown) => {
-    const v = closed(value, ['revision', 'user'])
+    if (!wireSchemas.getApiV1DevicesByDeviceRegistrationUserResponse.validateRoot(value))
+      throw new Error('Invalid contract value')
+
+    const v = value
     return { revision: count(v['revision']), user: nullable(v['user'], (v) => user(v, tenant)) }
   }
   return {

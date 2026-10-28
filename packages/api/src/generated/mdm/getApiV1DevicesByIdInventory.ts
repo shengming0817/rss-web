@@ -10,11 +10,11 @@ import type * as sa26868c9f00beb721704 from './sa26868c9f00beb721704'
 export type Input = {
   pathParams: { id: string }
   query?: WireInput<s310feb5d295c8e03f66d.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
+
 export const getApiV1DevicesByIdInventory = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/devices/{id}/inventory',

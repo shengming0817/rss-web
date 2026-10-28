@@ -9,11 +9,12 @@ import type * as s92beaadd2584184014a6 from './s92beaadd2584184014a6'
 export type Input = {
   pathParams: { id: string }
   query?: WireInput<s7692b27883053ca6f01b.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s92beaadd2584184014a6.Root
+
+export type * as Response from './s92beaadd2584184014a6'
 export const getApiV1PoliciesByIdAssignments = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/policies/{id}/assignments',

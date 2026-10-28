@@ -1,7 +1,8 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 /** Administrator-only continuation of existing registration/signing attempts. No device-key owner. */
 import type { HttpTransport } from '@rss/api/mdm'
-import { array, closed, enumeration, count, nullable, uuid } from '../../../services/decode'
+import { array, enumeration, count, nullable, uuid } from '../../../services/decode'
 import { encoded } from '../../settings/clients/pki'
 import { base64url, platforms } from './packages'
 export function publicChain(value: unknown) {
@@ -10,7 +11,10 @@ export function publicChain(value: unknown) {
   return chain
 }
 export function recoveryGrant(value: unknown) {
-  const v = closed(value, ['wireVersion', 'operationId', 'secret', 'platform', 'csr'])
+  if (!wireSchemas.postApiV1AgentRegistrationsByIdRecoveryBody.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (v['wireVersion'] !== 1) throw new Error('Invalid enrollment version')
   return {
     wireVersion: 1 as const,
@@ -22,31 +26,25 @@ export function recoveryGrant(value: unknown) {
 }
 export type RecoveryGrant = ReturnType<typeof recoveryGrant>
 export function grantReceipt(value: unknown) {
-  const v = closed(value, ['wireVersion', 'grantId', 'state', 'expiresAt', 'platform'])
+  if (!wireSchemas.postApiV1AgentRequestsByIdCancelResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (v['wireVersion'] !== 1 || count(v['expiresAt']) === 0)
     throw new Error('Invalid grant receipt')
   return {
     wireVersion: 1 as const,
     grantId: uuid(v['grantId']),
-    state: enumeration(v['state'], [
-      'pending',
-      'available',
-      'consumed',
-      'revoked',
-      'expired',
-    ] as const),
+    state: v['state'],
     expiresAt: count(v['expiresAt']),
     platform: enumeration(v['platform'], platforms),
   }
 }
 export function issuanceCandidate(value: unknown, issuance: string) {
-  const v = closed(value, [
-    'wireVersion',
-    'issuanceId',
-    'operationId',
-    'certificateChain',
-    'activateBefore',
-  ])
+  if (!wireSchemas.postApiV1AgentIssuancesByIdRecoverResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (
     v['wireVersion'] !== 1 ||
     uuid(v['issuanceId']) !== issuance ||

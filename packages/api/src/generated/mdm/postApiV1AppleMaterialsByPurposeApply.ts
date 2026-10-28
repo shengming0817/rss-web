@@ -6,15 +6,18 @@ import v_s064fea475518c24a5d46 from './s064fea475518c24a5d46.validator.js'
 import v_s0f36e8c4d5aab52e9951 from './s0f36e8c4d5aab52e9951.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import type * as s0f36e8c4d5aab52e9951 from './s0f36e8c4d5aab52e9951'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s7484bd9f4bfe320bfadd from './s7484bd9f4bfe320bfadd'
 export type Input = {
   pathParams: { purpose: string }
   body: WireInput<s0f36e8c4d5aab52e9951.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s7484bd9f4bfe320bfadd.Root
+export type * as Body from './s0f36e8c4d5aab52e9951'
+export type * as Response from './s7484bd9f4bfe320bfadd'
 export const postApiV1AppleMaterialsByPurposeApply = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

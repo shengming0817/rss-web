@@ -7,11 +7,12 @@ import type * as s340cc96da431cca52cce from './s340cc96da431cca52cce'
 import type * as s5ab61abd8a8699f3078e from './s5ab61abd8a8699f3078e'
 export type Input = {
   query?: WireInput<s340cc96da431cca52cce.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s5ab61abd8a8699f3078e.Root
+
+export type * as Response from './s5ab61abd8a8699f3078e'
 export const getApiV1ComplianceRules = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/compliance-rules',

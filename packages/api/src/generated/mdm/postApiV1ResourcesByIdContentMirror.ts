@@ -7,12 +7,12 @@ import v_s97aad074ef160008f059 from './s97aad074ef160008f059.validator.js'
 import type * as s97aad074ef160008f059 from './s97aad074ef160008f059'
 export type Input = {
   pathParams: { id: string }
-  query?: WireInput<s97aad074ef160008f059.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
+  query: WireInput<s97aad074ef160008f059.Root>
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = void
+
 export const postApiV1ResourcesByIdContentMirror = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

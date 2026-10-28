@@ -1,26 +1,13 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  closed,
-  count,
-  enumeration,
-  identifier,
-  integer,
-  nullable,
-  uuid,
-} from '../../../services/decode'
+import { array, count, identifier, integer, nullable, uuid } from '../../../services/decode'
 import { deviceObject, type ObjectRef } from './objects'
 export function retirement(value: unknown, id: string) {
-  const v = closed(value, [
-    'id',
-    'policy',
-    'version',
-    'target',
-    'createdAt',
-    'forcedAt',
-    'channels',
-  ])
+  if (!wireSchemas.getApiV1DeviceRetirementsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (v['id'] !== id) throw new Error('Wrong retirement')
   return {
     id: uuid(v['id']),
@@ -30,26 +17,15 @@ export function retirement(value: unknown, id: string) {
     createdAt: integer(v['createdAt']),
     forcedAt: nullable(v['forcedAt'], integer),
     channels: array(v['channels'], (x) => {
-      const c = closed(x, [
-        'device',
-        'channel',
-        'registration',
-        'generation',
-        'parentRegistration',
-        'stage',
-        'effect',
-        'execution',
-        'blockingExecution',
-        'reason',
-      ])
+      const c = x
       return {
         device: identifier(c['device']),
-        channel: enumeration(c['channel'], ['mdm', 'agent'] as const),
+        channel: c['channel'],
         registration: uuid(c['registration']),
         generation: count(c['generation']),
         parentRegistration: nullable(c['parentRegistration'], uuid),
-        stage: enumeration(c['stage'], ['cleanup', 'unenroll', 'revoke', 'complete'] as const),
-        effect: enumeration(c['effect'], ['pending', 'confirmed', 'unknown', 'blocked'] as const),
+        stage: c['stage'],
+        effect: c['effect'],
         execution: nullable(c['execution'], uuid),
         blockingExecution: nullable(c['blockingExecution'], uuid),
         reason: nullable(c['reason'], identifier),

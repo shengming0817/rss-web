@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as sf5d1714cdc4570e84f02 from './sf5d1714cdc4570e84f02'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = sf5d1714cdc4570e84f02.Root
+
+export type * as Response from './sf5d1714cdc4570e84f02'
 export const getApiV1RegistrationQuotasDefaults = /* @__PURE__ */ defineEndpoint<Input, Output>(
   {
     ...{

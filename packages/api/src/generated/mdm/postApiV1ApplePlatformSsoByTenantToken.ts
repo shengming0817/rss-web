@@ -8,11 +8,12 @@ import type * as s9bb39261157ef43cd2f4 from './s9bb39261157ef43cd2f4'
 export type Input = {
   pathParams: { tenant: string }
   body: WireInput<s9bb39261157ef43cd2f4.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = BinaryResponse
+export type * as Body from './s9bb39261157ef43cd2f4'
+export type * as Response from './s93ddaf583a2133fb6a6f'
 export const postApiV1ApplePlatformSsoByTenantToken = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

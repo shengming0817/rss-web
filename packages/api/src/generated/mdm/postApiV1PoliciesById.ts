@@ -9,11 +9,12 @@ import type * as se406a353c310b5499ff9 from './se406a353c310b5499ff9'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<se406a353c310b5499ff9.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s5317d3fd5e6c0d9e499f.Root
+export type * as Body from './se406a353c310b5499ff9'
+export type * as Response from './s5317d3fd5e6c0d9e499f'
 export const postApiV1PoliciesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/policies/{id}',

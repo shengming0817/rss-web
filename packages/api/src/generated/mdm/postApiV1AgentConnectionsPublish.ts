@@ -7,11 +7,12 @@ import type * as s41c2f544d259dd11d912 from './s41c2f544d259dd11d912'
 import type * as sc8c2f4456ede7b109ebe from './sc8c2f4456ede7b109ebe'
 export type Input = {
   body: WireInput<sc8c2f4456ede7b109ebe.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s41c2f544d259dd11d912.Root
+export type * as Body from './sc8c2f4456ede7b109ebe'
+export type * as Response from './s41c2f544d259dd11d912'
 export const postApiV1AgentConnectionsPublish = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/agent-connections/publish',

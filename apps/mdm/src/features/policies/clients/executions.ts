@@ -1,3 +1,4 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { authorization, reauthorizationEligibility } from './authorization'
 import {
@@ -8,13 +9,11 @@ import {
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
-  closed,
   count,
   enumeration,
   identifier,
   integer,
   nullable,
-  record,
   string,
   uuid,
 } from '../../../services/decode'
@@ -44,12 +43,11 @@ const executionFields = {
     return path
   },
   evidence: (v: unknown) => {
-    if (!('commandStatus' in record(v))) return decodeRunEvidence(v)
-    const raw = closed(
-      v,
-      ['commandStatus', 'observation', 'dispatchFailure'],
-      ['agentInstallation'],
-    )
+    if (!wireSchemas.getApiV1OperationsResponse.validateExecutionEvidence(v))
+      throw new Error('Invalid contract value')
+
+    if (!('commandStatus' in v)) return decodeRunEvidence(v)
+    const raw = v
     return {
       kind: 'command' as const,
       commandStatus: identifier(raw['commandStatus']),
@@ -87,8 +85,14 @@ export function createExecutionsClient(transport: HttpTransport) {
             ) {
               const expected =
                 row.kind === 'command'
-                  ? `/api/v1/devices/${new URLSearchParams({ id: String(row.device) }).toString().slice(3).replaceAll('+', '%20')}/operations/${row.id}`
-                  : `/api/v1/policies/${row.policy}/runs/${row.id}`
+                  ? api.getApiV1DevicesByDeviceOperationsById.url({
+                      device: String(row.device),
+                      id: String(row.id),
+                    })
+                  : api.getApiV1PoliciesByIdRunsByTask.url({
+                      id: String(row.policy),
+                      task: String(row.id),
+                    })
               if ((row.kind === 'action_run' && row.policy === null) || row.detailUrl !== expected)
                 throw new Error('Wrong operation locator')
             }

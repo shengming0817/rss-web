@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s34e4957182434620ca59 from './s34e4957182434620ca59'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s34e4957182434620ca59.Root
+
+export type * as Response from './s34e4957182434620ca59'
 export const getApiV1AgentConfigurationOperationsById = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

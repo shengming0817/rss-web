@@ -6,11 +6,12 @@ import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import type * as sa6bbea59fc348f9bfd9f from './sa6bbea59fc348f9bfd9f'
 export type Input = {
   pathParams: { device: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sa6bbea59fc348f9bfd9f.Root
+
+export type * as Response from './sa6bbea59fc348f9bfd9f'
 export const getApiV1TaskSigningTrustDevicesByDeviceObservation =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

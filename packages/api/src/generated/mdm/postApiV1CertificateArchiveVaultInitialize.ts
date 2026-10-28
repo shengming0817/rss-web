@@ -4,15 +4,18 @@ import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s577d7a61deac3e9a4c05 from './s577d7a61deac3e9a4c05.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s577d7a61deac3e9a4c05 from './s577d7a61deac3e9a4c05'
 import type * as s5d75b07cfdb05df673d3 from './s5d75b07cfdb05df673d3'
 export type Input = {
   body: WireInput<s577d7a61deac3e9a4c05.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s5d75b07cfdb05df673d3.Root
+export type * as Body from './s577d7a61deac3e9a4c05'
+export type * as Response from './s5d75b07cfdb05df673d3'
 export const postApiV1CertificateArchiveVaultInitialize = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

@@ -7,11 +7,12 @@ import type * as s1c8a3d706a206fdc8639 from './s1c8a3d706a206fdc8639'
 import type * as scb2a8262712daf7b19a0 from './scb2a8262712daf7b19a0'
 export type Input = {
   query?: WireInput<s1c8a3d706a206fdc8639.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = scb2a8262712daf7b19a0.Root
+
+export type * as Response from './scb2a8262712daf7b19a0'
 export const getApiV1AuthorizationUserGroups = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/authorization/user-groups',

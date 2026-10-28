@@ -9,11 +9,12 @@ import type * as s9ac58ba2afac6c9b8382 from './s9ac58ba2afac6c9b8382'
 export type Input = {
   pathParams: { id: string }
   query?: WireInput<s3eb636eb1138c59aba08.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s9ac58ba2afac6c9b8382.Root
+
+export type * as Response from './s9ac58ba2afac6c9b8382'
 export const getApiV1UserProfilesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/user-profiles/{id}',

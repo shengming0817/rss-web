@@ -6,11 +6,12 @@ import v_s7b8b5381c2f948ff396b from './s7b8b5381c2f948ff396b.validator.js'
 import type * as s8cbdbd7193b2523964dc from './s8cbdbd7193b2523964dc'
 export type Input = {
   pathParams: { id: string; task: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s8cbdbd7193b2523964dc.Root
+
+export type * as Response from './s8cbdbd7193b2523964dc'
 export const getApiV1ComplianceRulesByIdTasksByTask = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

@@ -5,14 +5,17 @@ import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s5675524a9b3a513e39a6 from './s5675524a9b3a513e39a6.validator.js'
 import type * as s1f9ec870f9210de30870 from './s1f9ec870f9210de30870'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s5675524a9b3a513e39a6 from './s5675524a9b3a513e39a6'
 export type Input = {
   body: WireInput<s5675524a9b3a513e39a6.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s1f9ec870f9210de30870.Root
+export type * as Body from './s5675524a9b3a513e39a6'
+export type * as Response from './s1f9ec870f9210de30870'
 export const postApiV1Enrollments = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/enrollments',

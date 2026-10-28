@@ -6,11 +6,12 @@ import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import type * as s6d4ceac0799aad34dd6d from './s6d4ceac0799aad34dd6d'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s6d4ceac0799aad34dd6d.Root
+
+export type * as Response from './s6d4ceac0799aad34dd6d'
 export const getApiV1SoftwarePublicationsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/software/publications/{id}',

@@ -1,2 +1,9 @@
 /* Generated from f6abe27154d3c500984ffb5b24789ed751441aa7. Do not edit. */
-export type { Tofadlkoflbcbkoepdkfkeikcgnbiglonkfhnionajgocejahgpaledheijlgnpke as Root } from './types'
+export type { Tgoigindkdofdapeicnplhphcnafgboaebpddmlhkoidjnlecipdijopoegfoobjc as Root } from './types'
+export type { Tknbcddfbejjmbomnbghfdgjjoeicdpkmjlccledbolfggpfgckfhfhphbajdafgg as AccessWindowsAuthority } from './types'
+export type { Taaeaeogigebfdhapbhbbmenhkmpkcjafeeendmpcdmopcobamehneefologjapjg as PolicyEventName } from './types'
+export type { Telppcgkgbcddgkmnkbklaioikbblpeanggdjnmnoplmnjllnblghngijekonmokc as PolicyEventRequest } from './types'
+export type { Tgclmnfaacdjenjdpcldeeodlblcgihfckknaheoidppblkfhapjoffjkceingeki as PolicyEventSource } from './types'
+export type { Tpcaejnolmgpkhgiongcpeeigeamakgolckdmfciaanbnajglpaadnppahjmemnpj as SoftwareExecutionContext } from './types'
+export type { Tjnocjecgpmggpaibnmangnbeghelipjinkhmjbplnfjinnlhlgkhgbpaieddhfip as SoftwareInteractiveUser } from './types'
+export type { Taolniagbcaaejofheconlmeggifkgnjonolaodldbppikipbbgdlccookhihnjdc as SoftwareReadCredential } from './types'

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decodeWorkspace, decodeMdmConfig } from './workspace'
+import { decodeDemoWorkspace } from '../../demo/workspace'
 describe('MDM app configuration and navigation', () => {
   it('fails closed for origin mismatch and unrecognized module source', () => {
     expect(() =>
@@ -11,8 +12,8 @@ describe('MDM app configuration and navigation', () => {
   })
   it('keeps unknown navigation distinct from a denied entry', () => {
     expect(
-      decodeWorkspace({ modules: [{ id: 'devices', source: 'real', available: null }] }).modules[0]
-        ?.available,
+      decodeDemoWorkspace({ modules: [{ id: 'devices', source: 'mock', available: null }] })
+        .modules[0]?.available,
     ).toBeNull()
     expect(
       decodeWorkspace({ modules: [{ id: 'devices', source: 'real', available: false }] }).modules[0]

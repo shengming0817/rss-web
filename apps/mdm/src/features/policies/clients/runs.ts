@@ -1,3 +1,4 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { windowParameters, windowPage, type WindowQuery } from '../../../services/directory-query'
 import { subject } from '../../security/clients/credentials'
@@ -6,25 +7,22 @@ import type { HttpTransport } from '@rss/api/mdm'
 
 import {
   array,
-  boolean,
-  closed,
   count,
   digest,
   enumeration,
   identifier,
   integer,
   nullable,
-  record,
   string,
   uuid,
 } from '../../../services/decode'
 function diagnostics(value: unknown, detail: boolean) {
-  const d = closed(
-    value,
-    detail
-      ? ['stdout', 'stderr', 'durationMs', 'executedAt', 'failure']
-      : ['durationMs', 'executedAt', 'failure'],
-  )
+  if (detail) {
+    if (!wireSchemas.getApiV1PoliciesByIdRunsByTaskResponse.validateTaskDiagnostics(value))
+      throw new Error('Invalid diagnostics')
+  } else if (!wireSchemas.getApiV1PoliciesByIdRunsResponse.validateDiagnosticsSummary(value))
+    throw new Error('Invalid diagnostics')
+  const d = value
   function stream(v: unknown) {
     if (typeof v !== 'string' || new TextEncoder().encode(v).byteLength > 16384)
       throw new Error('Invalid diagnostics')
@@ -33,187 +31,110 @@ function diagnostics(value: unknown, detail: boolean) {
   return {
     durationMs: count(d['durationMs']),
     executedAt: integer(d['executedAt']),
-    failure: nullable(d['failure'], (v) =>
-      enumeration(v, [
-        'launch_failed',
-        'timed_out',
-        'cancelled',
-        'non_zero_exit',
-        'output_limit',
-        'capture_failed',
-      ] as const),
-    ),
-    ...(detail ? { stdout: stream(d['stdout']), stderr: stream(d['stderr']) } : {}),
+    failure: nullable(d['failure'], (v) => v),
+    ...('stdout' in d && 'stderr' in d
+      ? { stdout: stream(d.stdout), stderr: stream(d.stderr) }
+      : {}),
   }
 }
 function result(value: unknown, detail: boolean) {
+  if (detail) {
+    if (!wireSchemas.getApiV1PoliciesByIdRunsByTaskResponse.validateRunResult(value))
+      throw new Error('Invalid run result')
+  } else if (!wireSchemas.getApiV1PoliciesByIdRunsResponse.validateSummaryResult(value))
+    throw new Error('Invalid run result')
   const materialText = (value: unknown) => {
     const text = string(value)
     if (!text || new TextEncoder().encode(text).byteLength > 1024 || /\p{Cc}/u.test(text))
       throw new Error('Invalid observed text')
     return text
   }
-  if ('entryOutcome' in record(value)) {
-    const v = closed(value, ['entryOutcome'], detail ? [] : ['diagnostics'])
+  if ('entryOutcome' in value) {
+    const v = value
     if ('diagnostics' in v && v['diagnostics'] !== null)
       throw new Error('Invalid enrollment diagnostics')
     return {
       kind: 'enrollment' as const,
-      entryOutcome: enumeration(v['entryOutcome'], [
-        'opened',
-        'user_required',
-        'third_party_conflict',
-        'unsupported',
-        'failed',
-        'unknown',
-      ] as const),
+      entryOutcome: v['entryOutcome'],
     }
   }
-  if ('recoveredByTask' in record(value)) {
-    const v = closed(
-      value,
-      ['effect', 'recoveredByTask', 'recoveredByAttempt'],
-      detail ? [] : ['diagnostics'],
-    )
+  if ('recoveredByTask' in value) {
+    const v = value
     if ('diagnostics' in v && v['diagnostics'] !== null)
       throw new Error('Invalid recovery diagnostics')
     return {
       kind: 'credential_recovery' as const,
-      effect: enumeration(v['effect'], ['not_attempted', 'unchanged', 'applied'] as const),
+      effect: v['effect'],
       recoveredByTask: uuid(v['recoveredByTask']),
       recoveredByAttempt: nullable(v['recoveredByAttempt'], uuid),
     }
   }
-  if ('complete' in record(value) && 'items' in record(value)) {
-    const v = closed(
-      value,
-      ['recovery', 'failure', 'definitionDigest', 'complete', 'items'],
-      detail ? [] : ['diagnostics'],
-    )
+  if ('complete' in value && 'items' in value) {
+    const v = value
     if ('diagnostics' in v && v['diagnostics'] !== null)
       throw new Error('Invalid credential diagnostics')
     return {
       kind: 'credential' as const,
-      recovery: nullable(v['recovery'], (x) =>
-        enumeration(x, ['not_attempted', 'unchanged', 'applied'] as const),
-      ),
-      failure: nullable(v['failure'], (x) =>
-        enumeration(x, [
-          'no_materials',
-          'unsupported',
-          'permission_denied',
-          'owner_conflict',
-          'target_missing',
-          'recovery_state',
-          'native_failure',
-        ] as const),
-      ),
+      recovery: nullable(v['recovery'], (x) => x),
+      failure: nullable(v['failure'], (x) => x),
       definitionDigest: digest(v['definitionDigest']),
-      complete: boolean(v['complete']),
+      complete: v['complete'],
       items: array(v['items'], (value) => {
-        const i = closed(value, ['subject', 'outcome']),
+        const i = value,
           target = subject(i['subject'])
         if (!['rss_login', 'bitlocker', 'local_administrator'].includes(target.kind))
           throw new Error('Wrong credential subject')
         return {
           subject: target,
-          outcome: enumeration(i['outcome'], [
-            'verified',
-            'escrowed',
-            'unknown',
-            'failed',
-            'blocked',
-          ] as const),
+          outcome: i['outcome'],
         }
       }),
     }
   }
   // Native history spans immutable Policy versions, including prior script versions.
-  if ('exitCode' in record(value)) {
-    const v = closed(value, [
-      'collectedAt',
-      'receivedAt',
-      'exitCode',
-      'quality',
-      'budgetValid',
-      'outputReference',
-      'schemaValid',
-      'diagnostics',
-      'trusted',
-      ...(detail ? ['output'] : []),
-    ])
+  if ('exitCode' in value) {
+    const v = value
     const outputReference = nullable(v['outputReference'], (value) => {
-      const r = closed(value, ['bytes', 'sha256']),
+      const r = value,
         hash = string(r['sha256'])
       if (!/^[0-9a-f]{64}$/.test(hash)) throw new Error('Invalid output reference')
       return { bytes: count(r['bytes']), sha256: hash }
     })
-    if (detail && outputReference !== null && v['output'] !== null)
+    if ('output' in v && outputReference !== null && v.output !== null)
       throw new Error('Inconsistent output reference')
     return {
       kind: 'script' as const,
       collectedAt: integer(v['collectedAt']),
       receivedAt: integer(v['receivedAt']),
-      budgetValid: boolean(v['budgetValid']),
+      budgetValid: v['budgetValid'],
       outputReference,
       exitCode: nullable(v['exitCode'], integer),
-      quality: enumeration(v['quality'], ['complete', 'partial', 'truncated', 'failed'] as const),
-      schemaValid: boolean(v['schemaValid']),
+      quality: v['quality'],
+      schemaValid: v['schemaValid'],
       diagnostics: diagnostics(v['diagnostics'], detail),
-      trusted: boolean(v['trusted']),
-      ...(detail ? { output: jsonValue(v['output'], 1024 * 1024) } : {}),
+      trusted: v['trusted'],
+      ...('output' in v ? { output: jsonValue(v.output, 1024 * 1024) } : {}),
     }
   }
-  if ('queries' in record(value)) {
-    const v = closed(
-      value,
-      [
-        'queries',
-        'planDigest',
-        'outputReference',
-        'trusted',
-        'receivedAt',
-        ...(detail ? ['native'] : []),
-      ],
-      detail ? [] : ['diagnostics'],
-    )
+  if ('queries' in value) {
+    const v = value
     if (!detail && 'diagnostics' in v && v['diagnostics'] !== null)
       throw new Error('Invalid collection diagnostics')
-    const reference = closed(v['outputReference'], ['bytes', 'sha256']),
+    const reference = v['outputReference'],
       sha256 = string(reference['sha256'])
     if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error('Invalid collection output reference')
     return {
       kind: 'collection' as const,
       queries: Object.fromEntries(
-        Object.entries(record(v['queries'])).map(([id, value]) => {
-          const q = closed(value, [
-            'queryDigest',
-            'collectedAt',
-            'status',
-            'enumerationComplete',
-            'rowCount',
-          ])
+        Object.entries(v['queries']).map(([id, value]) => {
+          const q = value
           return [
             identifier(id),
             {
               queryDigest: digest(q['queryDigest']),
               collectedAt: integer(q['collectedAt']),
-              status: enumeration(q['status'], [
-                'complete',
-                'failed',
-                'partial',
-                'not_scanned',
-                'source_unavailable',
-                'user_absent',
-                'store_unavailable',
-                'unsupported',
-                'denied',
-                'timeout',
-                'truncated',
-                'missing',
-                'invalid',
-              ] as const),
-              enumerationComplete: boolean(q['enumerationComplete']),
+              status: q['status'],
+              enumerationComplete: q['enumerationComplete'],
               rowCount: count(q['rowCount']),
             },
           ]
@@ -221,65 +142,39 @@ function result(value: unknown, detail: boolean) {
       ),
       planDigest: digest(v['planDigest']),
       outputReference: { bytes: count(reference['bytes']), sha256 },
-      trusted: boolean(v['trusted']),
+      trusted: v['trusted'],
       receivedAt: integer(v['receivedAt']),
-      ...(detail ? { native: jsonValue(v['native'], 16 * 1024 * 1024) } : {}),
+      ...('native' in v ? { native: jsonValue(v.native, 16 * 1024 * 1024) } : {}),
     }
   }
-  const v = closed(value, ['intent', 'definitionDigest', 'evidence', 'effect', 'effectObservedAt']),
-    intent = enumeration(v['intent'], ['install', 'uninstall', 'detect'] as const),
+  if ('bindingId' in value) return { kind: 'access' as const, evidence: value }
+  if ('unmanageOutcome' in value) return { kind: 'unmanage' as const, evidence: value }
+  if ('operation' in value) return { kind: 'native_software' as const, evidence: value }
+  if (!('intent' in value) || !('evidence' in value)) throw new Error('Unsupported run result')
+  const v = value,
+    intent = v.intent,
     definitionDigest = digest(v['definitionDigest']),
-    evidence = closed(v['evidence'], ['intent', 'definitionDigest', 'steps'])
+    evidence = v['evidence']
   if (
     evidence['intent'] !== intent ||
     JSON.stringify(digest(evidence['definitionDigest'])) !== JSON.stringify(definitionDigest)
   )
     throw new Error('Wrong software evidence binding')
   const steps = array(evidence['steps'], (value) => {
-    const step = closed(value, [
-        'index',
-        'stepDigest',
-        'target',
-        'package',
-        'identity',
-        'before',
-        'after',
-        'process',
-        'rebootRequired',
-        'diagnostics',
-      ]),
-      targetKind = enumeration(record(step['target'])['kind'], ['device', 'user'] as const),
-      target = closed(
-        step['target'],
-        targetKind === 'device' ? ['kind'] : ['kind', 'identity', 'sessionId'],
-      )
+    const step = value,
+      target = step['target'],
+      targetKind = target.kind
     function observation(value: unknown) {
-      const state = enumeration(record(value)['state'], ['present', 'absent', 'unknown'] as const),
-        v = closed(
+      if (
+        !wireSchemas.getApiV1PoliciesByIdRunsByTaskResponse.validateSoftwareDetectionObservation(
           value,
-          state === 'present'
-            ? ['state', 'version', 'evidenceSha256', 'observedAt']
-            : state === 'absent'
-              ? ['state', 'evidenceSha256', 'observedAt']
-              : ['state', 'diagnostic'],
         )
-      if (state === 'unknown') return { state, diagnostic: string(v['diagnostic']) }
-      return {
-        state,
-        evidenceSha256: digest(v['evidenceSha256']),
-        observedAt: integer(v['observedAt']),
-        ...(state === 'present' ? { version: materialText(v['version']) } : {}),
-      }
-    }
-    const pk = enumeration(record(step['process'])['kind'], [
-        'not_run',
-        'exited',
-        'failed',
-      ] as const),
-      process = closed(
-        step['process'],
-        pk === 'exited' ? ['kind', 'code'] : pk === 'failed' ? ['kind', 'failure'] : ['kind'],
       )
+        throw new Error('Invalid detection evidence')
+      return value.state === 'present' ? { ...value, version: materialText(value.version) } : value
+    }
+    const process = step['process'],
+      pk = process.kind
     return {
       index: count(step['index']),
       stepDigest: digest(step['stepDigest']),
@@ -301,17 +196,10 @@ function result(value: unknown, detail: boolean) {
           : pk === 'failed'
             ? {
                 kind: pk,
-                failure: enumeration(process['failure'], [
-                  'launch_failed',
-                  'timed_out',
-                  'cancelled',
-                  'non_zero_exit',
-                  'output_limit',
-                  'capture_failed',
-                ] as const),
+                failure: process['failure'],
               }
             : { kind: pk },
-      rebootRequired: boolean(step['rebootRequired']),
+      rebootRequired: step['rebootRequired'],
       diagnostics: diagnostics(step['diagnostics'], detail),
     }
   })
@@ -322,63 +210,47 @@ function result(value: unknown, detail: boolean) {
     intent,
     definitionDigest,
     evidence: { intent, definitionDigest, steps },
-    effect: enumeration(v['effect'], ['verified', 'unknown', 'waiting_reboot', 'failed'] as const),
-    effectObservedAt: integer(v['effectObservedAt']),
+    effect: v['effect'],
+    effectObservedAt: nullable(v['effectObservedAt'], integer),
   }
 }
 export function runState(value: unknown) {
-  const v = closed(value, ['delivery', 'execution', 'cancellation', 'deadline', 'startedAt']),
-    kind = enumeration(record(v['delivery'])['kind'], ['queued', 'claimed', 'received'] as const),
-    d = closed(v['delivery'], kind === 'queued' ? ['kind'] : ['kind', 'attempt', 'leaseUntil'])
+  if (!wireSchemas.getApiV1OperationsResponse.validateRunState(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    d = v['delivery'],
+    kind = d.kind
   return {
     delivery:
       kind === 'queued'
         ? { kind }
         : { kind, attempt: uuid(d['attempt']), leaseUntil: integer(d['leaseUntil']) },
-    execution: enumeration(v['execution'], [
-      'not_started',
-      'running',
-      'succeeded',
-      'failed',
-      'waiting_reboot',
-      'unknown',
-    ] as const),
-    cancellation: enumeration(v['cancellation'], ['none', 'requested', 'confirmed'] as const),
+    execution: v['execution'],
+    cancellation: v['cancellation'],
     deadline: integer(v['deadline']),
     startedAt: nullable(v['startedAt'], integer),
   }
 }
 function scriptAuthorization(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['policy', 'self_service'] as const)
+  if (!wireSchemas.getApiV1PoliciesByIdRunsByTaskResponse.validateTaskAuthorization(value))
+    throw new Error('Invalid contract value')
+
+  const kind = value['kind']
   if (kind === 'policy') {
-    const v = closed(value, ['kind', 'policyId', 'policyVersion'])
+    const v = value
     return { kind, policyId: uuid(v['policyId']), policyVersion: uuid(v['policyVersion']) }
   }
-  const v = closed(value, [
-      'kind',
-      'requestId',
-      'subject',
-      'source',
-      'policyId',
-      'policyRevision',
-      'policyVersion',
-      'allowAi',
-      'riskLevel',
-      'confirmed',
-    ]),
-    rawSubject = record(v['subject']),
-    subjectKind = enumeration(rawSubject['kind'], ['device', 'user'] as const),
+  const v = value,
+    rawSubject = v['subject'],
+    subjectKind = rawSubject['kind'],
     subject =
       subjectKind === 'device'
-        ? ({ kind: subjectKind, ...closed(rawSubject, ['kind']) } as { kind: 'device' })
+        ? ({ ...rawSubject } as { kind: 'device' })
         : {
             kind: subjectKind,
             user: (() => {
-              const u = closed(closed(rawSubject, ['kind', 'user'])['user'], [
-                'tenantId',
-                'instanceId',
-                'principalId',
-              ])
+              const u = rawSubject['user']
               return {
                 tenantId: uuid(u['tenantId']),
                 instanceId: uuid(u['instanceId']),
@@ -386,9 +258,9 @@ function scriptAuthorization(value: unknown) {
               }
             })(),
           },
-    source = enumeration(v['source'], ['human', 'ai'] as const),
-    allowAi = boolean(v['allowAi']),
-    confirmed = boolean(v['confirmed']),
+    source = v['source'],
+    allowAi = v['allowAi'],
+    confirmed = v['confirmed'],
     riskLevel = count(v['riskLevel']),
     policyRevision = count(v['policyRevision'])
   if (
@@ -411,7 +283,10 @@ function scriptAuthorization(value: unknown) {
   }
 }
 export function decodeRunEvidence(value: unknown) {
-  const v = closed(value, ['state', 'effect', 'result'])
+  if (!wireSchemas.getApiV1OperationsResponse.validateRunEvidence(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     kind: 'action_run' as const,
     state: runState(v['state']),
@@ -429,23 +304,14 @@ export function decodeRunEvidence(value: unknown) {
   }
 }
 export function policyRun(value: unknown, detail: boolean) {
-  const v = closed(
-    value,
-    [
-      'taskId',
-      'device',
-      'registrationId',
-      'generation',
-      'availableAt',
-      'deadline',
-      'state',
-      'effect',
-      'userAction',
-      'result',
-      ...(detail ? [] : ['occurrence']),
-    ],
-    ['attemptId', 'authorization', ...(detail ? ['policyId', 'operationId'] : [])],
+  if (
+    !wireSchemas.getApiV1PoliciesByIdRunsByTaskResponse.validateRoot(value) &&
+    !wireSchemas.getApiV1PoliciesByIdRunsResponse.validateRunSummary(value)
   )
+    throw new Error('Invalid contract value')
+  if (detail !== 'nodes' in value) throw new Error('Wrong run representation')
+
+  const v = value
   const state = runState(v['state']),
     deadline = integer(v['deadline'])
   if (
@@ -481,7 +347,7 @@ export function policyRun(value: unknown, detail: boolean) {
           ...('policyId' in v ? { policyId: uuid(v['policyId']) } : {}),
           ...('operationId' in v ? { operationId: uuid(v['operationId']) } : {}),
         }
-      : { occurrence: string(v['occurrence']) }),
+      : { occurrence: 'occurrence' in v ? string(v.occurrence) : '' }),
   }
 }
 export type PolicyRun = ReturnType<typeof policyRun>

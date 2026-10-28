@@ -9,11 +9,12 @@ import type * as see297009d4ac604a51ac from './see297009d4ac604a51ac'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<see297009d4ac604a51ac.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s35fa082ec5650aeb0a50.Root
+export type * as Body from './see297009d4ac604a51ac'
+export type * as Response from './s35fa082ec5650aeb0a50'
 export const deleteApiV1ComplianceRulesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:DELETE:/api/v1/compliance-rules/{id}',

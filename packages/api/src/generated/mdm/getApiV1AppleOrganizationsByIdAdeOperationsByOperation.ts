@@ -6,11 +6,12 @@ import v_s7b8b5381c2f948ff396b from './s7b8b5381c2f948ff396b.validator.js'
 import type * as sfd66e22b1dd3f5c2a0f9 from './sfd66e22b1dd3f5c2a0f9'
 export type Input = {
   pathParams: { id: string; operation: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sfd66e22b1dd3f5c2a0f9.Root
+
+export type * as Response from './sfd66e22b1dd3f5c2a0f9'
 export const getApiV1AppleOrganizationsByIdAdeOperationsByOperation =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

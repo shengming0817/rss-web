@@ -114,6 +114,16 @@ function transform(schema, mode) {
     !result['$ref']
   )
     result.additionalProperties = false
+  // Rust integers must remain exact in JavaScript; floating point fields keep their wire range.
+  if (
+    result.type === 'integer' ||
+    (Array.isArray(result.type) &&
+      result.type.includes('integer') &&
+      !result.type.includes('number'))
+  ) {
+    result.minimum = Math.max(result.minimum ?? Number.MIN_SAFE_INTEGER, Number.MIN_SAFE_INTEGER)
+    result.maximum = Math.min(result.maximum ?? Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+  }
   if (mode === 'types') {
     if (result.prefixItems) {
       result.additionalItems = result.items ?? true
@@ -264,7 +274,9 @@ function typeName(id, pointer = '') {
   if (fingerprints.has(key)) return fingerprints.get(key)
   if (visiting.has(key)) return 'cycle:' + key
   visiting.add(key)
-  const node = schemaWalk(resolveNode(id, pointer), (ref) => typeName(id, ref.slice(1)))
+  const node = schemaWalk(transform(resolveNode(id, pointer), 'validation'), (ref) =>
+    typeName(id, ref.slice(1)),
+  )
   const name =
     'T' + [...digest(node)].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('')
   visiting.delete(key)
@@ -272,7 +284,10 @@ function typeName(id, pointer = '') {
   typeNodes.set(key, { id, pointer, name })
   return name
 }
-for (const id of [...needed].sort()) typeName(id)
+for (const id of [...needed].sort()) {
+  typeName(id)
+  for (const name of Object.keys(schemas[id].$defs ?? {})) typeName(id, '/$defs/' + name)
+}
 for (const { id, name, pointer } of ownerNames.values())
   typeName(id, pointer === '' ? '' : '/$defs/' + name)
 const definitions = {}
@@ -309,7 +324,13 @@ for (const id of [...needed].sort()) {
   exports[name] = id
   await output(
     name + '.ts',
-    `/* Generated from ${source.revision}. Do not edit. */\nexport type {${typeName(id)} as Root} from './types'\n`,
+    `/* Generated from ${source.revision}. Do not edit. */\nexport type {${typeName(id)} as Root} from './types'\n` +
+      Object.keys(schemas[id].$defs ?? {})
+        .map(
+          (definition) =>
+            `export type {${typeName(id, '/$defs/' + definition)} as ${definition}} from './types'\n`,
+        )
+        .join(''),
   )
 }
 let ownerTypes = ''
@@ -320,6 +341,17 @@ for (const [name, { id, name: original, pointer }] of [...ownerNames].sort(([a],
   exports['validate' + name] = pointer === '' ? id : `${id}#/$defs/${original}`
 }
 await output('owners.ts', ownerTypes)
+// Scoped named definitions are available to consumers that also validate editor/demo input.
+// Share identical resolved validation graphs, while recursive graphs retain their source scope.
+for (const id of [...needed].sort()) {
+  let code = `export type * from './${short(id)}'\nexport {default as validateRoot} from './${short(id)}.validator.js'\n`
+  for (const name of Object.keys(schemas[id].$defs ?? {}).sort()) {
+    const validator = 'v' + typeName(id, '/$defs/' + name).slice(1)
+    exports[validator] ??= `${id}#/$defs/${name}`
+    code += `export {default as validate${name}} from './${validator}.validator.js'\n`
+  }
+  await output(short(id) + '.schema.ts', code)
+}
 for (const [name, ref] of Object.entries(exports)) {
   const bundled = await build({
     stdin: {
@@ -343,7 +375,9 @@ for (const [name, ref] of Object.entries(exports)) {
   } else await writeFile(new URL(filename, target), code)
   const type = name.startsWith('validate')
     ? `import('./owners').${name.slice(8)}`
-    : `import('./${name}').Root`
+    : name.startsWith('v')
+      ? `import('./types').T${name.slice(1)}`
+      : `import('./${name}').Root`
   await output(
     name + '.validator.d.ts',
     `declare function validate(value:unknown):value is ${type}\nexport default validate\n`,
@@ -411,8 +445,25 @@ const operationName = (e) =>
     .filter(Boolean)
     .map((s) => s[0].toUpperCase() + s.slice(1))
     .join('')
+const browserOwnedHeaders = new Set([
+  'cookie',
+  'host',
+  'origin',
+  'sec-fetch-site',
+  'content-length',
+  'x-csrf-token',
+  'x-identity-request',
+  'authorization',
+  'x-api-key',
+])
+const headerName = (name) =>
+  name
+    .split('-')
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join('-')
 const names = new Set()
 let index = ''
+let schemaIndex = ''
 for (const e of endpoints) {
   const name = operationName(e)
   if (names.has(name)) throw new Error(`Duplicate generated operation ${name}`)
@@ -441,17 +492,35 @@ for (const e of endpoints) {
     else types = captures.map(() => 'string')
     args.push(`pathParams: {${captures.map((c, i) => `${c}: ${types[i] ?? 'string'}`).join(';')}}`)
   }
-  if (e.request.query) args.push(`query?: WireInput<${typeOf(e.request.query)}> | undefined`)
+  if (e.request.query) {
+    const optional = ajv.getSchema(e.request.query.schemaId)({})
+    args.push(
+      `query${optional ? '?' : ''}: WireInput<${typeOf(e.request.query)}>${optional ? ' | undefined' : ''}`,
+    )
+  }
   if (e.request.body)
     args.push(
       `body: ${e.request.body.content_type === 'application/octet-stream' ? 'ArrayBuffer' : `WireInput<${typeOf(e.request.body.schema)}>`}`,
     )
-  args.push('headers?: Readonly<Record<string, string>> | undefined')
+  const requestHeaders = Object.entries(e.request.headers).filter(
+    ([key]) => !browserOwnedHeaders.has(key.toLowerCase()),
+  )
+  const requiredHeaders = e.request.required_headers.filter(
+    (key) => !browserOwnedHeaders.has(key.toLowerCase()),
+  )
+  if (requestHeaders.length)
+    args.push(
+      `headers${requiredHeaders.length ? '' : '?'}: {${requestHeaders.map(([key, ref]) => `${JSON.stringify(headerName(key))}${requiredHeaders.includes(key) ? '' : '?'}: ${typeOf(ref)}`).join(';')}}${requiredHeaders.length ? '' : '| undefined'}`,
+    )
   args.push('signal?: AbortSignal | undefined', 'timeoutMs?: number | undefined')
   const success = e.responses.filter(
     (r) => r.status < 400 || (e.path === '/readyz' && r.status === 503),
   )
-  const binary = success.some((r) => r.body && !r.body.content_type.startsWith('application/json'))
+  const binary = success.some(
+    (r) =>
+      r.body &&
+      (!r.body.content_type.startsWith('application/json') || 'content-disposition' in r.headers),
+  )
   const returns =
     [
       ...new Set(
@@ -475,29 +544,8 @@ for (const e of endpoints) {
     queryOwner: e.request.query_owner,
     publicRead: !e.authentication,
     contentType: e.request.body?.content_type ?? null,
-    requestHeaders: Object.keys(e.request.headers).filter(
-      (k) =>
-        ![
-          'cookie',
-          'origin',
-          'x-csrf-token',
-          'x-identity-request',
-          'authorization',
-          'x-api-key',
-        ].includes(k.toLowerCase()),
-    ),
-    requiredHeaders: e.request.required_headers.filter(
-      (k) =>
-        ![
-          'cookie',
-          'host',
-          'origin',
-          'x-csrf-token',
-          'x-identity-request',
-          'authorization',
-          'x-api-key',
-        ].includes(k.toLowerCase()),
-    ),
+    requestHeaders: requestHeaders.map(([key]) => key),
+    requiredHeaders,
     binary,
     statuses: [...new Set(success.map((r) => r.status))],
   }
@@ -524,14 +572,26 @@ for (const e of endpoints) {
     ${imports}
     export type Input = {${args.join(';')}}
     export type Output = ${returns}
+    ${e.request.body ? `export type * as Body from './${rootFor(e.request.body.schema)}'` : ''}
+    ${success.length === 1 && success[0].body ? `export type * as Response from './${rootFor(success[0].body.schema)}'` : ''}
     export const ${name} = /* @__PURE__ */ defineEndpoint<Input, Output>({
       ...${JSON.stringify(descriptor)}, checks: {${checks}}, responses: [${responses.join(',')}]
     })
   `,
   )
   index += `export { ${name} } from './${name}'\n`
+  index += `export type * as ${name}Contract from './${name}'\n`
+  if (e.request.body)
+    schemaIndex += `export * as ${name}Body from './${rootFor(e.request.body.schema)}.schema'\n`
+  if (success.length === 1 && success[0].body)
+    schemaIndex += `export * as ${name}Response from './${rootFor(success[0].body.schema)}.schema'\n`
+  else
+    for (const response of success)
+      if (response.body)
+        schemaIndex += `export * as ${name}Response${response.status} from './${rootFor(response.body.schema)}.schema'\n`
 }
 await output('index.ts', index)
+await output('schemas.ts', schemaIndex)
 for (const name of await readdir(target)) {
   if (!outputFiles.has(name)) {
     if (checking) throw new Error(`Obsolete generated contract: ${name}`)

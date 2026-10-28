@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as sdadd471d4ab6a0440532 from './sdadd471d4ab6a0440532'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = sdadd471d4ab6a0440532.Root
+
+export type * as Response from './sdadd471d4ab6a0440532'
 export const getApiV1AgentEnrollmentSettings = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/agent-enrollment-settings',

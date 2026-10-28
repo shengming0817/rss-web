@@ -1,6 +1,7 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import { checked } from '../../../contracts/collection/check'
 import { jsonObject } from '../../../services/json'
-import { string, enumeration, record, closed, count } from '../../../services/decode'
+import { string } from '../../../services/decode'
 import {
   validatePolicyAction,
   validatePolicyDefinition,
@@ -320,9 +321,12 @@ export function taskAdmission(value: unknown) {
   return checked(validateTaskAdmission, value)
 }
 export function eligibility(value: unknown) {
-  const state = enumeration(record(value)['state'], ['eligible', 'pending', 'excluded'] as const)
-  const v = closed(value, state === 'eligible' ? ['state', 'entry'] : ['state'])
-  return state === 'eligible' ? { state, entry: count(v['entry']) } : { state }
+  if (!wireSchemas.postApiV1PoliciesPreviewsResponse.validateScopeAdmission(value))
+    throw new Error('Invalid contract value')
+
+  return value.state === 'eligible'
+    ? { state: value.state, entry: value.entry }
+    : { state: value.state }
 }
 
 export type ConfigurationDefinition = PolicyDefinition & {

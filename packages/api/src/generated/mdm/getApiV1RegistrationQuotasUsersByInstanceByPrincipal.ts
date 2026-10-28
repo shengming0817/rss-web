@@ -6,11 +6,12 @@ import v_s7b8b5381c2f948ff396b from './s7b8b5381c2f948ff396b.validator.js'
 import type * as sf5d1714cdc4570e84f02 from './sf5d1714cdc4570e84f02'
 export type Input = {
   pathParams: { instance: string; principal: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sf5d1714cdc4570e84f02.Root
+
+export type * as Response from './sf5d1714cdc4570e84f02'
 export const getApiV1RegistrationQuotasUsersByInstanceByPrincipal =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

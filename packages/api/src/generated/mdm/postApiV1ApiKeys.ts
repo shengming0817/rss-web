@@ -7,11 +7,12 @@ import type * as s4879399eedb7a1303746 from './s4879399eedb7a1303746'
 import type * as s4b5f8d930972bb79a082 from './s4b5f8d930972bb79a082'
 export type Input = {
   body: WireInput<s4879399eedb7a1303746.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s4b5f8d930972bb79a082.Root
+export type * as Body from './s4879399eedb7a1303746'
+export type * as Response from './s4b5f8d930972bb79a082'
 export const postApiV1ApiKeys = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/api-keys',

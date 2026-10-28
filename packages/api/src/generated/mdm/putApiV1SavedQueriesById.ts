@@ -10,11 +10,12 @@ import type * as sbf316d1ec539bc6e5a72 from './sbf316d1ec539bc6e5a72'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sbf316d1ec539bc6e5a72.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
+export type * as Body from './sbf316d1ec539bc6e5a72'
+
 export const putApiV1SavedQueriesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/saved-queries/{id}',

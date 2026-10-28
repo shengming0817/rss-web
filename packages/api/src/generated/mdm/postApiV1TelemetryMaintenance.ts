@@ -7,11 +7,12 @@ import type * as sb208b9c7103b5f70017f from './sb208b9c7103b5f70017f'
 import type * as se67ddc7ea50312c35b59 from './se67ddc7ea50312c35b59'
 export type Input = {
   body: WireInput<sb208b9c7103b5f70017f.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = se67ddc7ea50312c35b59.Root
+export type * as Body from './sb208b9c7103b5f70017f'
+export type * as Response from './se67ddc7ea50312c35b59'
 export const postApiV1TelemetryMaintenance = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/telemetry/maintenance',

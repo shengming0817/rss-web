@@ -1,2 +1,4 @@
 /* Generated from f6abe27154d3c500984ffb5b24789ed751441aa7. Do not edit. */
-export type { Tknghgfiijggfojbkhllhepjanmmenceoolgknmnfbblbepifmjnekehbpbpagfld as Root } from './types'
+export type { Thcpicekkhmfklnbamhpdddgoealodclmohgohijjjeolifjmapkeikkimbcdcaco as Root } from './types'
+export type { Tmojcehfhjhofiidmegbaadkjocfphgcndabphidkndhnhoblmdkebpijofnecmdo as Channel } from './types'
+export type { Tmmdclofnomelmkpamidbablbklfeppjohbakcdpajnckdagomkpbknlgpceghehf as PrimaryRegistration } from './types'

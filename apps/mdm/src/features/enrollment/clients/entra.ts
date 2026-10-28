@@ -1,15 +1,7 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  enumeration,
-  nullable,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, nullable, unique, uuid } from '../../../services/decode'
 import { base64url } from './packages'
 export function text(value: unknown, max: number, multiline = false) {
   if (
@@ -25,21 +17,17 @@ export function text(value: unknown, max: number, multiline = false) {
   return value
 }
 export function entraPolicy(value: unknown) {
-  const v = closed(value, [
-    'enabled',
-    'allUsers',
-    'users',
-    'termsVersion',
-    'termsText',
-    'allowBackground',
-  ])
+  if (!wireSchemas.putApiV1WindowsEntraPolicyBody.validatePolicy(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = {
-    enabled: boolean(v['enabled']),
-    allUsers: boolean(v['allUsers']),
+    enabled: v['enabled'],
+    allUsers: v['allUsers'],
     users: unique(array(v['users'], uuid), (v) => v),
     termsVersion: text(v['termsVersion'], 128),
     termsText: text(v['termsText'], 32768, true),
-    allowBackground: boolean(v['allowBackground']),
+    allowBackground: v['allowBackground'],
   }
   if (
     result.users.length > 256 ||
@@ -53,19 +41,15 @@ export function entraPolicy(value: unknown) {
   return result
 }
 export function termsContext(value: unknown) {
-  const v = closed(value, [
-    'termsText',
-    'termsVersion',
-    'mode',
-    'canDecline',
-    'csrfToken',
-    'expiresAt',
-  ])
+  if (!wireSchemas.getApiV1WindowsEntraTermsContextResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = {
     termsText: text(v['termsText'], 32768, true),
     termsVersion: text(v['termsVersion'], 128),
-    mode: nullable(v['mode'], (v) => enumeration(v, ['azureadjoin'] as const)),
-    canDecline: boolean(v['canDecline']),
+    mode: nullable(v['mode'], (v) => v),
+    canDecline: v['canDecline'],
     csrfToken: base64url(v['csrfToken'], 32),
     expiresAt: count(v['expiresAt']),
   }

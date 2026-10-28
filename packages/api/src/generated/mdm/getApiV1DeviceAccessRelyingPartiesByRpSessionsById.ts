@@ -6,11 +6,12 @@ import v_s8ffca0d0c448a5b243f2 from './s8ffca0d0c448a5b243f2.validator.js'
 import type * as sbbb9e3291739418317bc from './sbbb9e3291739418317bc'
 export type Input = {
   pathParams: { rp: string; id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sbbb9e3291739418317bc.Root
+
+export type * as Response from './sbbb9e3291739418317bc'
 export const getApiV1DeviceAccessRelyingPartiesByRpSessionsById =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

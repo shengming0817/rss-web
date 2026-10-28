@@ -6,11 +6,12 @@ import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import type * as sc75dd95d01d7745ba44d from './sc75dd95d01d7745ba44d'
 export type Input = {
   pathParams: { device: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sc75dd95d01d7745ba44d.Root
+
+export type * as Response from './sc75dd95d01d7745ba44d'
 export const getApiV1AgentConnectionsDevicesByDeviceObservation =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

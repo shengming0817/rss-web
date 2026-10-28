@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as sd9d15437a8e3e1fcfae5 from './sd9d15437a8e3e1fcfae5'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = sd9d15437a8e3e1fcfae5.Root
+
+export type * as Response from './sd9d15437a8e3e1fcfae5'
 export const getApiV1WindowsWns = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/windows/wns',

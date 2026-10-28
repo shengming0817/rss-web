@@ -4,15 +4,18 @@ import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s884f4c832a072b4806bf from './s884f4c832a072b4806bf.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s53b9032eeb42a82f4191 from './s53b9032eeb42a82f4191'
 import type * as s884f4c832a072b4806bf from './s884f4c832a072b4806bf'
 export type Input = {
   body: WireInput<s884f4c832a072b4806bf.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s53b9032eeb42a82f4191.Root
+export type * as Body from './s884f4c832a072b4806bf'
+export type * as Response from './s53b9032eeb42a82f4191'
 export const postApiV1SelfEnrollments = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/self-enrollments',

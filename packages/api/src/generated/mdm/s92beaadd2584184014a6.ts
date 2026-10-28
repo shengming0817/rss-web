@@ -1,2 +1,11 @@
 /* Generated from f6abe27154d3c500984ffb5b24789ed751441aa7. Do not edit. */
-export type { Tekedbfdhhliejcknajobhffelkigamkbgoepcoedohmcogneocamafjjcaekhfpl as Root } from './types'
+export type { Tnffnhcconcfapnindmlcocaonibohlendijedmfkhhpdndkgfdjjkccjpmdlhhgp as Root } from './types'
+export type { Tfabmfbagncmkoeapejnoidoemdogacgiiifjhhgmgfbmjecdpeegjlfgjndnlfae as Assignment } from './types'
+export type { Thlpofkegkadncmbnphanehmbbpodgdomfdacbejikfleljjhimgdhgfllbhaemfi as Availability } from './types'
+export type { Tmojcehfhjhofiidmegbaadkjocfphgcndabphidkndhnhoblmdkebpijofnecmdo as Channel } from './types'
+export type { Tmjhjlapfngglpcchodiepghichpkpjlokkohccjjocjelkcpjmfebmefbdlapccm as DeviceObject } from './types'
+export type { Tjcpjcapkjdibcknigebhffgobjjgefigjgalmniapmmhblaieggcjeibheefcfkj as ObjectRef } from './types'
+export type { Tmmdclofnomelmkpamidbablbklfeppjohbakcdpajnckdagomkpbknlgpceghehf as PrimaryRegistration } from './types'
+export type { Tpdgpkcfdmdhjbihpimjmecgpaiddammmkeaiakaapeidmdjifjlhgcedkhhcjgci as ScopeAdmission } from './types'
+export type { Tlnledjnaobpbgmlobogegdadkmkjcfchemggcaicfkiihlpfoophpjdncbaopdmk as TaskAdmission } from './types'
+export type { Teebkfefggienajemjclcklnaaggapibkhgiijmfiogpldbmnjkccchlcbfagbplj as TaskAdmissionState } from './types'

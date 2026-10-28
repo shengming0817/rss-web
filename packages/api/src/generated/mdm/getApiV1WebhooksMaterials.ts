@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as s12ebabc14ce10bb865dd from './s12ebabc14ce10bb865dd'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s12ebabc14ce10bb865dd.Root
+
+export type * as Response from './s12ebabc14ce10bb865dd'
 export const getApiV1WebhooksMaterials = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/webhooks/materials',

@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s1d80535d61d96851c188 from './s1d80535d61d96851c188'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s1d80535d61d96851c188.Root
+
+export type * as Response from './s1d80535d61d96851c188'
 export const getApiV1PoliciesByIdSoftwareRollout = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

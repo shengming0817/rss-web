@@ -1,3 +1,4 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
@@ -10,14 +11,11 @@ import {
   array,
   uuid,
   unique,
-  closed,
   count,
   integer,
-  boolean,
   digest,
   string,
   nullable,
-  record,
   enumeration,
   identifier,
 } from '../../../services/decode'
@@ -29,49 +27,45 @@ import {
   architectures,
 } from '../../enrollment/clients/packages'
 export function installerFacts(value: unknown) {
-  const v = closed(value, ['format', 'version', 'architectures', 'bundleId'])
+  if (!wireSchemas.getApiV1AgentPackagesOperationsByIdResponse.validateInstallerFacts(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     format: enumeration(v['format'], ['exe', 'msi', 'msix', 'pkg'] as const),
     version: nullable(v['version'], string),
     architectures: unique(
-      array(v['architectures'], (x) => enumeration(x, ['x86_64', 'aarch64'] as const)),
+      array(v['architectures'], (x) => x),
       (x) => x,
     ),
     bundleId: nullable(v['bundleId'], string),
   }
 }
 function installerInspection(value: unknown) {
-  const status = enumeration(record(value)['status'], [
-    'parsed',
-    'skipped_size_limit',
-    'not_requested',
-    'rejected',
-  ] as const)
+  if (!wireSchemas.getApiV1AgentPackagesUploadsByIdResponse.validateInstallerInspection(value))
+    throw new Error('Invalid contract value')
+
+  const status = value['status']
   if (status === 'parsed') {
-    const v = closed(value, ['status', 'facts'])
+    const v = value
     return { status, facts: installerFacts(v['facts']) }
   }
-  closed(value, ['status'])
+
   return { status }
 }
 export function savedInstaller(value: unknown, expected: string) {
-  const v = closed(value, [
-    'packageId',
-    'resource',
-    'version',
-    'variant',
-    'productVersion',
-    'material',
-    'sha256',
-    'length',
-    'filename',
-    'href',
-    'storageRevision',
-  ])
+  if (!wireSchemas.postApiV1AgentPackagesSaveResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (
     uuid(v['packageId']) !== expected ||
     v['resource'] !== expected ||
-    v['href'] !== `/api/v1/software/resources/${expected}/versions/${identifier(v['version'])}`
+    v['href'] !==
+      api.getApiV1SoftwareResourcesByIdVersionsByVersion.url({
+        id: expected,
+        version: identifier(v['version']),
+      })
   )
     throw new Error('Wrong saved package')
   return {
@@ -101,10 +95,14 @@ const packageFields = {
 }
 export function createManagedPackages(transport: HttpTransport, tenant: string) {
   function uploadStatus(value: unknown, id: string) {
-    const v = closed(value, ['id', 'binding', 'offset', 'expires', 'complete'])
-    const b = closed(v['binding'], ['purpose', 'reference', 'length', 'sha256', 'actor'])
-    const p = closed(b['purpose'], ['kind', 'binding'])
-    const binding = closed(p['binding'], ['resource', 'filename'])
+    if (!wireSchemas.getApiV1ResourcesByIdUploadsByUploadResponse.validateRoot(value))
+      throw new Error('Invalid contract value')
+
+    const v = value
+    const b = v['binding']
+    const p = b['purpose']
+    if (p.kind !== 'software') throw new Error('Wrong upload purpose')
+    const binding = p['binding']
     if (uuid(v['id']) !== id || p['kind'] !== 'software' || binding['resource'] !== id)
       throw new Error('Wrong upload')
     const offset = count(v['offset']),
@@ -113,7 +111,7 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
     return {
       offset,
       length,
-      complete: boolean(v['complete']),
+      complete: v['complete'],
       expires: integer(v['expires']),
       sha256: digest(b['sha256']),
       filename: string(binding['filename']),
@@ -163,7 +161,8 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
             v['resource'] !== operationId ||
             v['upload'] !== operationId ||
             v['length'] !== length ||
-            v['href'] !== `/api/v1/resources/${operationId}/uploads/${operationId}`
+            v['href'] !==
+              api.getApiV1ResourcesByIdUploadsByUpload.url({ id: operationId, upload: operationId })
           )
             throw new Error('Wrong upload preparation')
           const offset = count(v['offset'])
@@ -220,7 +219,8 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
           const value = installer(v, tenant)
           return { kind: 'publish' as const, value }
         }
-        const result = closed(v, ['withdrawn'])
+        const result = v
+        if (!('withdrawn' in result)) throw new Error('Wrong withdrawal receipt')
         if (uuid(result['withdrawn']) !== packageId) throw new Error('Wrong withdrawal')
         return { kind: 'withdraw' as const, value: packageId }
       }),
@@ -237,7 +237,9 @@ export function createManagedPackages(transport: HttpTransport, tenant: string) 
             if ('tenantId' in row && row.tenantId !== tenant)
               throw new Error('Wrong package tenant')
             if (!query.fields) {
-              const metadataRow = record(row)
+              if (!('platform' in row) || !('architecture' in row))
+                throw new Error('Missing package target')
+              const metadataRow = row
               const platform = metadataRow['platform'],
                 architecture = metadataRow['architecture']
               const metadata = Object.fromEntries(

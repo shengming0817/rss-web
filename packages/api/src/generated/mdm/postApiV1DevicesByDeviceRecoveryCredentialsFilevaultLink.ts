@@ -9,11 +9,12 @@ import type * as s6a8231261193db9b58a7 from './s6a8231261193db9b58a7'
 export type Input = {
   pathParams: { device: string }
   body: WireInput<s1cfbb83a2079530faf16.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s6a8231261193db9b58a7.Root
+export type * as Body from './s1cfbb83a2079530faf16'
+export type * as Response from './s6a8231261193db9b58a7'
 export const postApiV1DevicesByDeviceRecoveryCredentialsFilevaultLink =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

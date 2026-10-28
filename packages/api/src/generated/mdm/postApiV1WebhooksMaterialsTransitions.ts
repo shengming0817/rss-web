@@ -4,15 +4,18 @@ import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s4ac1141d30f390ee5432 from './s4ac1141d30f390ee5432.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s4ac1141d30f390ee5432 from './s4ac1141d30f390ee5432'
 import type * as sc77c5d5a32484f598813 from './sc77c5d5a32484f598813'
 export type Input = {
   body: WireInput<s4ac1141d30f390ee5432.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sc77c5d5a32484f598813.Root
+export type * as Body from './s4ac1141d30f390ee5432'
+export type * as Response from './sc77c5d5a32484f598813'
 export const postApiV1WebhooksMaterialsTransitions = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

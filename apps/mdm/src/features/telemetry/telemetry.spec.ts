@@ -539,7 +539,7 @@ it('validates mappings from the producer schema and rejects retired shapes, unkn
   ).toMatchObject({ conversion: { kind: 'array_member' } })
 })
 it('normalizes server sufficient statistics and discrete aggregates without deriving samples', () => {
-  const b = (value: unknown) =>
+  const b = (value: Parameters<typeof bucket>[0]['value']) =>
     bucket({
       window: { start: 100, end: 200 },
       value,
@@ -567,7 +567,7 @@ it('normalizes server sufficient statistics and discrete aggregates without deri
   })
   expect(() => b({ Mean: { sum: { F64: 2 }, count: 0 } })).toThrow()
   expect(() => numeric({ type: 'u64', value: Number.MAX_SAFE_INTEGER + 1 })).toThrow()
-  expect(() => b({ Unknown: 1 })).toThrow()
+  expect(() => b({ Unknown: 1 } as never)).toThrow()
 })
 it('rejects malformed health and gap contracts rather than treating diagnostics as metric coverage', () => {
   expect(() =>

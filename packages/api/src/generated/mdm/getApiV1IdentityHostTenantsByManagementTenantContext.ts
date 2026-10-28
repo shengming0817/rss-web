@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s2f58da8e6ac46140d9e8 from './s2f58da8e6ac46140d9e8'
 export type Input = {
   pathParams: { management_tenant: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s2f58da8e6ac46140d9e8.Root
+
+export type * as Response from './s2f58da8e6ac46140d9e8'
 export const getApiV1IdentityHostTenantsByManagementTenantContext =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

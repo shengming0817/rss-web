@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s424694f490b3f87028e2 from './s424694f490b3f87028e2'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s424694f490b3f87028e2.Root
+
+export type * as Response from './s424694f490b3f87028e2'
 export const getApiV1AppleOrganizationsByIdAde = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/apple/organizations/{id}/ade',

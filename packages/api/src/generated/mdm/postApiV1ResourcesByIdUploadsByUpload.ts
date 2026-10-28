@@ -8,12 +8,13 @@ import type * as s0b6b2575915556b12cf6 from './s0b6b2575915556b12cf6'
 import type * as s97aad074ef160008f059 from './s97aad074ef160008f059'
 export type Input = {
   pathParams: { id: string; upload: string }
-  query?: WireInput<s97aad074ef160008f059.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
+  query: WireInput<s97aad074ef160008f059.Root>
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s0b6b2575915556b12cf6.Root
+
+export type * as Response from './s0b6b2575915556b12cf6'
 export const postApiV1ResourcesByIdUploadsByUpload = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

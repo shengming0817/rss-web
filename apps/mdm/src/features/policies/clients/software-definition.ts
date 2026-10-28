@@ -1,14 +1,13 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as wireValidators from '@rss/api/mdm-validators'
 import {
   array,
-  boolean,
-  closed,
   count,
   digest,
   enumeration,
   identifier,
   integer,
   nullable,
-  record,
   string,
   unique,
 } from '../../../services/decode'
@@ -47,18 +46,21 @@ function materialText(value: unknown, max = 1024) {
     throw new Error('Invalid software text')
   return text
 }
-function dictionary<T>(
-  value: unknown,
-  decode: (v: unknown) => T,
+function dictionary<V, T>(
+  value: Readonly<Record<string, V>>,
+  decode: (v: V) => T,
   max: number,
   keyDecode = identifier,
 ): Record<string, T> {
-  const entries = Object.entries(record(value))
+  const entries = Object.entries(value)
   if (entries.length > max) throw new Error('Invalid software collection')
   return Object.fromEntries(entries.map(([key, item]) => [keyDecode(key), decode(item)]))
 }
 export function softwareSource(value: unknown) {
-  const v = closed(value, ['id', 'revision', 'sha256'])
+  if (!wireSchemas.postApiV1ResourcesByIdBody.validateSoftwareSource(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     id: identifier(v['id']),
     revision: identifier(v['revision']),
@@ -66,17 +68,12 @@ export function softwareSource(value: unknown) {
   }
 }
 export function softwareInvocation(value: unknown) {
-  const v = closed(value, [
-    'runAs',
-    'arguments',
-    'environment',
-    'timeoutSeconds',
-    'outputBytes',
-    'exitCodes',
-  ])
+  if (!wireValidators.validateNativeInvocation(value)) throw new Error('Invalid software contract')
+
+  const v = value
   const arguments_ = array(v['arguments'], literal),
     environment = dictionary(v['environment'], literal, 32)
-  const c = closed(v['exitCodes'], ['success', 'reboot'])
+  const c = v['exitCodes']
   const code = (v: unknown) => bounded(v, -2147483648, 2147483647)
   const success = unique(array(c['success'], code), (x) => x),
     reboot = unique(array(c['reboot'], code), (x) => x)
@@ -89,7 +86,7 @@ export function softwareInvocation(value: unknown) {
   )
     throw new Error('Invalid software invocation')
   return {
-    runAs: enumeration(v['runAs'], ['system', 'logged_in_user'] as const),
+    runAs: v['runAs'],
     arguments: arguments_,
     environment,
     timeoutSeconds: bounded(v['timeoutSeconds'], 1, 86400),
@@ -98,42 +95,42 @@ export function softwareInvocation(value: unknown) {
   }
 }
 function script(value: unknown) {
-  const v = closed(value, ['interpreter', 'entry', 'invocation'])
+  if (!wireValidators.validateSoftwareScript(value)) throw new Error('Invalid software contract')
+
+  const v = value
   return {
-    interpreter: enumeration(v['interpreter'], ['power_shell7', 'posix_sh', 'bash'] as const),
+    interpreter: v['interpreter'],
     entry: materialText(v['entry']),
     invocation: softwareInvocation(v['invocation']),
   }
 }
 function removal(value: unknown) {
-  const v = closed(value, ['installer', 'invocation'])
+  if (!wireValidators.validateNativeRemoval(value)) throw new Error('Invalid software contract')
+
+  const v = value
   return { installer: identifier(v['installer']), invocation: softwareInvocation(v['invocation']) }
 }
 function detection(value: unknown) {
-  const kind = enumeration(record(value)['kind'], [
-    'msi_product',
-    'pkg_receipt',
-    'registry',
-    'file',
-    'script',
-  ] as const)
+  if (!wireValidators.validateSoftwareDetection(value)) throw new Error('Invalid software contract')
+
+  const kind = value['kind']
   if (kind === 'script') {
-    const v = closed(value, ['kind', 'command'])
+    const v = value
     return { kind, command: script(v['command']) }
   }
   if (kind === 'msi_product') {
-    const v = closed(value, ['kind', 'productCode', 'version']),
+    const v = value,
       productCode = identifier(v['productCode'])
     if (!/^\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}$/i.test(productCode))
       throw new Error('Invalid product code')
     return { kind, productCode, version: materialText(v['version']) }
   }
   if (kind === 'pkg_receipt') {
-    const v = closed(value, ['kind', 'receipt', 'version'])
+    const v = value
     return { kind, receipt: materialText(v['receipt'], 255), version: materialText(v['version']) }
   }
   if (kind === 'registry') {
-    const v = closed(value, ['kind', 'scope', 'key', 'value', 'version'])
+    const v = value
     return {
       kind,
       scope: scope(v['scope']),
@@ -142,7 +139,7 @@ function detection(value: unknown) {
       version: materialText(v['version']),
     }
   }
-  const v = closed(value, ['kind', 'scope', 'path', 'version', 'sha256'])
+  const v = value
   return {
     kind,
     scope: scope(v['scope']),
@@ -152,7 +149,9 @@ function detection(value: unknown) {
   }
 }
 export function softwareArtifact(value: unknown) {
-  const v = closed(value, ['reference', 'origin', 'length', 'sha256']),
+  if (!wireValidators.validateSoftwareArtifact(value)) throw new Error('Invalid software contract')
+
+  const v = value,
     origin = nullable(v['origin'], string)
   if (origin !== null) {
     const url = new URL(origin)
@@ -178,15 +177,17 @@ function native(v: Record<string, unknown>) {
   }
 }
 function manifest(value: unknown) {
-  const v = closed(value, ['schema', 'platform', 'architecture', 'entries'])
+  if (!wireValidators.validateBundleManifest(value)) throw new Error('Invalid software contract')
+
+  const v = value
   return {
     schema: bounded(v['schema'], 1, 1),
-    platform: enumeration(v['platform'], ['windows', 'macos'] as const),
-    architecture: enumeration(v['architecture'], ['x86_64', 'aarch64'] as const),
+    platform: v['platform'],
+    architecture: v['architecture'],
     entries: dictionary(
       v['entries'],
       (x) => {
-        const e = closed(x, ['length', 'sha256'])
+        const e = x
         return { length: count(e['length']), sha256: digest(e['sha256']) }
       },
       4096,
@@ -195,10 +196,12 @@ function manifest(value: unknown) {
   }
 }
 function dmgPayload(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['app_copy', 'contained_pkg'] as const)
+  if (!wireValidators.validateDmgPayload(value)) throw new Error('Invalid software contract')
+
+  const kind = value['kind']
   if (kind === 'app_copy') {
-    const v = closed(value, ['kind', 'application', 'uninstall']),
-      a = closed(v['application'], ['path', 'bundleId', 'version', 'targetName'])
+    const v = value,
+      a = v['application']
     return {
       kind,
       application: {
@@ -207,10 +210,10 @@ function dmgPayload(value: unknown) {
         version: materialText(a['version']),
         targetName: materialText(a['targetName']),
       },
-      uninstall: boolean(v['uninstall']),
+      uninstall: v['uninstall'],
     }
   }
-  const v = closed(value, ['kind', 'path', 'length', 'sha256', 'receipt', 'uninstall'])
+  const v = value
   return {
     kind,
     path: materialText(v['path']),
@@ -226,28 +229,29 @@ function versionQuad(value: unknown) {
   return v
 }
 function msixIdentity(value: unknown) {
-  const v = closed(value, ['name', 'publisher', 'version', 'architecture', 'resourceId'])
+  if (!wireValidators.validateMsixIdentity(value)) throw new Error('Invalid software contract')
+
+  const v = value
   return {
     name: materialText(v['name'], 255),
     publisher: materialText(v['publisher']),
     version: versionQuad(v['version']),
-    architecture: enumeration(v['architecture'], ['x86_64', 'aarch64', 'neutral'] as const),
+    architecture: v['architecture'],
     resourceId: string(v['resourceId']),
   }
 }
 function msixContainer(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['package', 'bundle'] as const)
-  const v = closed(
-    value,
-    kind === 'package' ? ['kind', 'installer'] : ['kind', 'installer', 'members'],
-  )
+  if (!wireValidators.validateMsixContainer(value)) throw new Error('Invalid software contract')
+
+  const v = value
+  const kind = v.kind
   const installer = identifier(v['installer'])
   if (kind === 'package') return { kind, installer }
   return {
     kind,
     installer,
     members: array(v['members'], (x) => {
-      const m = closed(x, ['path', 'identity', 'length', 'sha256'])
+      const m = x
       return {
         path: materialText(m['path']),
         identity: msixIdentity(m['identity']),
@@ -258,58 +262,37 @@ function msixContainer(value: unknown) {
   }
 }
 function deployment(value: unknown) {
-  const kind = enumeration(record(value)['kind'], [
-    'device_provisioning',
-    'target_user_registration',
-  ] as const)
+  if (!wireValidators.validateMsixDeployment(value)) throw new Error('Invalid software contract')
+
+  const kind = value['kind']
   if (kind === 'device_provisioning') {
-    closed(value, ['kind'])
     return { kind }
   }
-  const v = closed(value, ['kind', 'target']),
-    t = record(v['target']),
-    targetKind = enumeration(t['kind'], ['active_interactive', 'exact'] as const)
+  const v = value,
+    t = v['target'],
+    targetKind = t['kind']
   const target =
     targetKind === 'exact'
-      ? { kind: targetKind, identity: identifier(closed(t, ['kind', 'identity'])['identity']) }
-      : ({ kind: targetKind, ...closed(t, ['kind']) } as { kind: 'active_interactive' })
+      ? { kind: targetKind, identity: identifier(t['identity']) }
+      : ({ ...t } as { kind: 'active_interactive' })
   return { kind, target }
 }
 export function softwareBehavior(value: unknown) {
-  const kind = enumeration(record(value)['kind'], softwareFormats)
+  if (!wireValidators.validateSoftwareBehavior(value)) throw new Error('Invalid software contract')
+
+  const kind = value['kind']
   if (kind === 'msi' || kind === 'pkg' || kind === 'winget' || kind === 'brew') {
     return {
       kind,
-      ...native(
-        closed(value, [
-          'kind',
-          'installer',
-          'scope',
-          'install',
-          'upgradeInvocation',
-          'upgrade',
-          'uninstall',
-          'detect',
-        ]),
-      ),
+      ...native(value),
     }
   }
   if (kind === 'exe') {
-    const v = closed(value, [
-      'kind',
-      'installer',
-      'scope',
-      'install',
-      'upgradeInvocation',
-      'upgrade',
-      'uninstall',
-      'detect',
-      'layout',
-    ])
+    const v = value
     return { kind, ...native(v), layout: dictionary(v['layout'], identifier, 64, materialText) }
   }
   if (kind === 'bundle') {
-    const v = closed(value, ['kind', 'archive', 'manifest', 'install', 'uninstall', 'detect'])
+    const v = value
     return {
       kind,
       archive: identifier(v['archive']),
@@ -320,15 +303,7 @@ export function softwareBehavior(value: unknown) {
     }
   }
   if (kind === 'dmg') {
-    const v = closed(value, [
-      'kind',
-      'image',
-      'volume',
-      'scope',
-      'invocation',
-      'upgrade',
-      'payload',
-    ])
+    const v = value
     return {
       kind,
       image: identifier(v['image']),
@@ -339,19 +314,7 @@ export function softwareBehavior(value: unknown) {
       payload: dmgPayload(v['payload']),
     }
   }
-  const v = closed(value, [
-    'kind',
-    'container',
-    'identity',
-    'dependencies',
-    'deployment',
-    'minimumOs',
-    'requireSideload',
-    'allowUnsigned',
-    'uninstall',
-    'invocation',
-    'upgrade',
-  ])
+  const v = value
   return {
     kind,
     container: msixContainer(v['container']),
@@ -359,38 +322,41 @@ export function softwareBehavior(value: unknown) {
     dependencies: array(v['dependencies'], msixIdentity),
     deployment: deployment(v['deployment']),
     minimumOs: versionQuad(v['minimumOs']),
-    requireSideload: boolean(v['requireSideload']),
-    allowUnsigned: boolean(v['allowUnsigned']),
-    uninstall: boolean(v['uninstall']),
+    requireSideload: v['requireSideload'],
+    allowUnsigned: v['allowUnsigned'],
+    uninstall: v['uninstall'],
     invocation: softwareInvocation(v['invocation']),
     upgrade: upgrade(v['upgrade']),
   }
 }
 function provenance(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['private', 'imported'] as const)
+  if (!wireValidators.validateSoftwareProvenance(value))
+    throw new Error('Invalid software contract')
+
+  const kind = value['kind']
   if (kind === 'private') {
-    closed(value, ['kind'])
     return { kind }
   }
-  const v = closed(value, ['kind', 'snapshot', 'converter', 'files'])
+  const v = value
   return {
     kind,
     snapshot: materialText(v['snapshot'], 128),
     converter: materialText(v['converter'], 128),
     files: array(v['files'], (x) => {
-      const f = closed(x, ['path', 'content'])
+      const f = x
       return { path: materialText(f['path']), content: softwareArtifact(f['content']) }
     }),
   }
 }
 function softwareExport(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['disabled', 'winget', 'brew'] as const)
+  if (!wireValidators.validateSoftwareExport(value)) throw new Error('Invalid software contract')
+
+  const kind = value['kind']
   if (kind === 'disabled') {
-    closed(value, ['kind'])
     return { kind }
   }
   if (kind === 'winget') {
-    const v = closed(value, ['kind', 'locale', 'name', 'publisher', 'description', 'license'])
+    const v = value
     return {
       kind,
       locale: materialText(v['locale'], 4096),
@@ -400,13 +366,13 @@ function softwareExport(value: unknown) {
       license: materialText(v['license'], 4096),
     }
   }
-  const v = closed(value, ['kind', 'name', 'description', 'homepage', 'payload']),
-    p = record(v['payload']),
-    pk = enumeration(p['kind'], ['cask', 'bottle'] as const)
+  const v = value,
+    p = v['payload'],
+    pk = p['kind']
   const payload =
     pk === 'cask'
       ? (() => {
-          const b = closed(p, ['kind', 'path', 'receipts'])
+          const b = p
           return {
             kind: pk,
             path: materialText(b['path']),
@@ -414,16 +380,7 @@ function softwareExport(value: unknown) {
           }
         })()
       : (() => {
-          const b = closed(p, [
-            'kind',
-            'artifact',
-            'source',
-            'tag',
-            'cellar',
-            'revision',
-            'rebuild',
-            'executable',
-          ])
+          const b = p
           return {
             kind: pk,
             artifact: identifier(b['artifact']),
@@ -444,28 +401,20 @@ function softwareExport(value: unknown) {
   }
 }
 function softwareMaterial(value: unknown) {
-  const v = closed(value, ['bundle_id', 'format', 'installer'])
+  if (!wireValidators.validateSoftwareMaterial(value)) throw new Error('Invalid software contract')
+
+  const v = value
   return {
     bundle_id: nullable(v['bundle_id'], (value) => materialText(value, 255)),
-    format: enumeration(v['format'], softwareFormats),
+    format: v['format'],
     installer: identifier(v['installer']),
   }
 }
 export function decodeSoftwareDefinition(value: unknown) {
-  const v = closed(value, [
-    'source',
-    'package',
-    'version',
-    'provenance',
-    'artifacts',
-    'material',
-    'behavior',
-    'signatures',
-    'reboot',
-    'downgrade',
-    'dependencies',
-    'export',
-  ])
+  if (!wireValidators.validateSoftwareDefinition(value))
+    throw new Error('Invalid software contract')
+
+  const v = value
   const result = {
     source: softwareSource(v['source']),
     package: materialText(v['package']),
@@ -475,22 +424,18 @@ export function decodeSoftwareDefinition(value: unknown) {
     material: softwareMaterial(v['material']),
     behavior: nullable(v['behavior'], softwareBehavior),
     signatures: array(v['signatures'], (x) => {
-      const s = closed(x, ['artifact', 'mechanism', 'publisher'])
+      const s = x
       return {
         artifact: identifier(s['artifact']),
-        mechanism: enumeration(s['mechanism'], [
-          'authenticode',
-          'apple_developer_id',
-          'msix',
-        ] as const),
+        mechanism: s['mechanism'],
         publisher: materialText(s['publisher']),
       }
     }),
-    reboot: enumeration(v['reboot'], ['forbid', 'report'] as const),
-    downgrade: enumeration(v['downgrade'], ['deny', 'allow'] as const),
+    reboot: v['reboot'],
+    downgrade: v['downgrade'],
     dependencies: unique(
       array(v['dependencies'], (x) => {
-        const d = closed(x, ['resource', 'version', 'sha256'])
+        const d = x
         return {
           resource: identifier(d['resource']),
           version: identifier(d['version']),

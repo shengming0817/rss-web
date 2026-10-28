@@ -6,11 +6,12 @@ import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import type * as scdd63b30010d757a497f from './scdd63b30010d757a497f'
 export type Input = {
   pathParams: { tenant: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = scdd63b30010d757a497f.Root
+
+export type * as Response from './scdd63b30010d757a497f'
 export const getApiV1TenantAdministrationTenantsByTenant = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

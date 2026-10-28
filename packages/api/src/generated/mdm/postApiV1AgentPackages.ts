@@ -7,11 +7,12 @@ import type * as s52f142bdf79b7670b376 from './s52f142bdf79b7670b376'
 import type * as sd350455d06ad459d6726 from './sd350455d06ad459d6726'
 export type Input = {
   body: WireInput<s52f142bdf79b7670b376.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd350455d06ad459d6726.Root
+export type * as Body from './s52f142bdf79b7670b376'
+export type * as Response from './sd350455d06ad459d6726'
 export const postApiV1AgentPackages = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/agent-packages',

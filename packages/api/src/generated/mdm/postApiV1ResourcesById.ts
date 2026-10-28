@@ -9,11 +9,12 @@ import type * as s9380f58e3aae0cef1deb from './s9380f58e3aae0cef1deb'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s83f00e82710457bba089.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s9380f58e3aae0cef1deb.Root
+export type * as Body from './s83f00e82710457bba089'
+export type * as Response from './s9380f58e3aae0cef1deb'
 export const postApiV1ResourcesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/resources/{id}',

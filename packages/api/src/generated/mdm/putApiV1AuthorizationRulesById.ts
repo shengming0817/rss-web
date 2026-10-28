@@ -9,11 +9,12 @@ import type * as sb2bd5b2d0e682bdff2d0 from './sb2bd5b2d0e682bdff2d0'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s27b6fb0c25e480068afd.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sb2bd5b2d0e682bdff2d0.Root
+export type * as Body from './s27b6fb0c25e480068afd'
+export type * as Response from './sb2bd5b2d0e682bdff2d0'
 export const putApiV1AuthorizationRulesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/authorization/rules/{id}',

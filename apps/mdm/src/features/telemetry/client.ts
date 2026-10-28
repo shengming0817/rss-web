@@ -1,15 +1,6 @@
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  enumeration,
-  nullable,
-  uuid,
-  positive,
-} from '../../services/decode'
+import { array, count, enumeration, nullable, uuid, positive } from '../../services/decode'
 import { exactResource } from '../policies/clients/model'
 import { sourceIds } from '../devices/clients/asset-model'
 import {
@@ -78,33 +69,22 @@ export function createTelemetryClient(transport: HttpTransport, tenant: string) 
             device,
             evaluatedAtMicros: count(v['evaluatedAtMicros']),
             registration: nullable(v['registration'], (x) => {
-              const r = closed(x, ['id', 'generation'])
+              const r = x
               return { id: uuid(r['id']), generation: positive(r['generation']) }
             }),
             configurations: array(v['configurations'], (x) => {
-              const c = closed(x, [
-                'policyId',
-                'policyVersionId',
-                'resource',
-                'source',
-                'projection',
-                'sampleMillis',
-                'normalSampleMillis',
-                'boostExpiresAt',
-                'uploadMillis',
-                'supported',
-              ])
+              const c = x
               return {
                 policyId: uuid(c['policyId']),
                 policyVersionId: uuid(c['policyVersionId']),
                 resource: exactResource(c['resource']),
                 source: enumeration(c['source'], sourceIds),
-                projection: enumeration(c['projection'], ['current', 'history', 'both'] as const),
+                projection: c['projection'],
                 sampleMillis: positive(c['sampleMillis']),
                 normalSampleMillis: positive(c['normalSampleMillis']),
                 boostExpiresAt: nullable(c['boostExpiresAt'], positive),
                 uploadMillis: positive(c['uploadMillis']),
-                supported: boolean(c['supported']),
+                supported: c['supported'],
               }
             }),
           }

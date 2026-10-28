@@ -6,11 +6,12 @@ import v_s33edd380603c929a420d from './s33edd380603c929a420d.validator.js'
 import type * as s46cea25ab746f60ee04e from './s46cea25ab746f60ee04e'
 export type Input = {
   pathParams: { device: string; id: string; version: number }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s46cea25ab746f60ee04e.Root
+
+export type * as Response from './s46cea25ab746f60ee04e'
 export const postApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionRevoke =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

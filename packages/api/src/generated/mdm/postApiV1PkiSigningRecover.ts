@@ -7,11 +7,12 @@ import type * as s6d3b0b793aa8bf725079 from './s6d3b0b793aa8bf725079'
 import type * as s7a1eb4724f869f7e7c18 from './s7a1eb4724f869f7e7c18'
 export type Input = {
   body: WireInput<s6d3b0b793aa8bf725079.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s7a1eb4724f869f7e7c18.Root
+export type * as Body from './s6d3b0b793aa8bf725079'
+export type * as Response from './s7a1eb4724f869f7e7c18'
 export const postApiV1PkiSigningRecover = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/pki/signing/recover',

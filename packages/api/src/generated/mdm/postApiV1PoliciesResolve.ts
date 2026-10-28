@@ -7,11 +7,12 @@ import type * as s4499524f9bbee40a1f52 from './s4499524f9bbee40a1f52'
 import type * as sd510fda7c0dd1426ba1f from './sd510fda7c0dd1426ba1f'
 export type Input = {
   body: WireInput<sd510fda7c0dd1426ba1f.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s4499524f9bbee40a1f52.Root
+export type * as Body from './sd510fda7c0dd1426ba1f'
+export type * as Response from './s4499524f9bbee40a1f52'
 export const postApiV1PoliciesResolve = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/policies/resolve',

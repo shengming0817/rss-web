@@ -10,11 +10,12 @@ import type * as see297009d4ac604a51ac from './see297009d4ac604a51ac'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<see297009d4ac604a51ac.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
+export type * as Body from './see297009d4ac604a51ac'
+
 export const postApiV1SavedQueriesByIdExecute = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/saved-queries/{id}/execute',

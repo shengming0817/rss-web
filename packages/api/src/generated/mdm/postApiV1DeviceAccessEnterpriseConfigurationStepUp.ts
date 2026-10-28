@@ -7,11 +7,12 @@ import type * as s7edf8df834dd518a35ab from './s7edf8df834dd518a35ab'
 import type * as scc06e298c74e819357ff from './scc06e298c74e819357ff'
 export type Input = {
   body: WireInput<scc06e298c74e819357ff.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s7edf8df834dd518a35ab.Root
+export type * as Body from './scc06e298c74e819357ff'
+export type * as Response from './s7edf8df834dd518a35ab'
 export const postApiV1DeviceAccessEnterpriseConfigurationStepUp =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

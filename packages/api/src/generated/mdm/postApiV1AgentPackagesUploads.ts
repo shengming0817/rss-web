@@ -7,11 +7,12 @@ import type * as sdc2854185665d00dd855 from './sdc2854185665d00dd855'
 import type * as sf31e42276863c37e5d2f from './sf31e42276863c37e5d2f'
 export type Input = {
   body: WireInput<sf31e42276863c37e5d2f.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sdc2854185665d00dd855.Root
+export type * as Body from './sf31e42276863c37e5d2f'
+export type * as Response from './sdc2854185665d00dd855'
 export const postApiV1AgentPackagesUploads = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/agent-packages/uploads',

@@ -6,13 +6,21 @@ import v_s2c1f1f6c101efe8843f2 from './s2c1f1f6c101efe8843f2.validator.js'
 import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import type * as s246e6834ed9fb29c7d99 from './s246e6834ed9fb29c7d99'
 import type * as s2c1f1f6c101efe8843f2 from './s2c1f1f6c101efe8843f2'
+import type * as s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f'
 export type Input = {
   body: WireInput<s2c1f1f6c101efe8843f2.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers?:
+    | {
+        'X-Smallstep-Signature'?: s93ddaf583a2133fb6a6f.Root
+        'X-Smallstep-Webhook-Id'?: s93ddaf583a2133fb6a6f.Root
+      }
+    | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s246e6834ed9fb29c7d99.Root
+export type * as Body from './s2c1f1f6c101efe8843f2'
+export type * as Response from './s246e6834ed9fb29c7d99'
 export const postApiV1AppleScepChallenge = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/apple/scep/challenge',

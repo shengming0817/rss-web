@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as sde8e788492e52d6a79a8 from './sde8e788492e52d6a79a8'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = sde8e788492e52d6a79a8.Root
+
+export type * as Response from './sde8e788492e52d6a79a8'
 export const getApiV1SettingsCatalog = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/settings/catalog',

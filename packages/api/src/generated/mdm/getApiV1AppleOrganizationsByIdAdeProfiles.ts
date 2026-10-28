@@ -9,11 +9,12 @@ import type * as sc888cdbdded566f73a27 from './sc888cdbdded566f73a27'
 export type Input = {
   pathParams: { id: string }
   query?: WireInput<s1c8a3d706a206fdc8639.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sc888cdbdded566f73a27.Root
+
+export type * as Response from './sc888cdbdded566f73a27'
 export const getApiV1AppleOrganizationsByIdAdeProfiles = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

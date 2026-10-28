@@ -9,11 +9,12 @@ import type * as sd13abce01800ba6328fb from './sd13abce01800ba6328fb'
 export type Input = {
   pathParams: { id: string }
   query?: WireInput<sd13abce01800ba6328fb.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = saca4d81f6cd52181d171.Root
+
+export type * as Response from './saca4d81f6cd52181d171'
 export const getApiV1SoftwareResourcesByIdVersions = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

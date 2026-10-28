@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as s1a106d29fc14a1412457 from './s1a106d29fc14a1412457'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s1a106d29fc14a1412457.Root
+
+export type * as Response from './s1a106d29fc14a1412457'
 export const getApiV1CertificateArchiveVault = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/certificate-archive/vault',

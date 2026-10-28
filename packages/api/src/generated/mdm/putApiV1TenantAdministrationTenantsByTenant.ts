@@ -5,16 +5,19 @@ import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import v_sbb9a3bd8a0c0c2e881cb from './sbb9a3bd8a0c0c2e881cb.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as sbb9a3bd8a0c0c2e881cb from './sbb9a3bd8a0c0c2e881cb'
 import type * as sf3900578ddbd913a5a00 from './sf3900578ddbd913a5a00'
 export type Input = {
   pathParams: { tenant: string }
   body: WireInput<sbb9a3bd8a0c0c2e881cb.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sf3900578ddbd913a5a00.Root
+export type * as Body from './sbb9a3bd8a0c0c2e881cb'
+export type * as Response from './sf3900578ddbd913a5a00'
 export const putApiV1TenantAdministrationTenantsByTenant = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

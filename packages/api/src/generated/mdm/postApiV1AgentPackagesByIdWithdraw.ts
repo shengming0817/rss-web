@@ -8,11 +8,12 @@ import type * as s9f0d3012a1fda851dac6 from './s9f0d3012a1fda851dac6'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s9f0d3012a1fda851dac6.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = void
+export type * as Body from './s9f0d3012a1fda851dac6'
+
 export const postApiV1AgentPackagesByIdWithdraw = /* @__PURE__ */ defineEndpoint<Input, Output>(
   {
     ...{

@@ -6,11 +6,12 @@ import v_s62cc715dab3e12b24b71 from './s62cc715dab3e12b24b71.validator.js'
 import type * as s2a150818b4dbdf16a0b1 from './s2a150818b4dbdf16a0b1'
 export type Input = {
   pathParams: { id: string; account: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s2a150818b4dbdf16a0b1.Root
+
+export type * as Response from './s2a150818b4dbdf16a0b1'
 export const getApiV1AppleOrganizationsByIdAccountEnrollmentAccountsByAccount =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

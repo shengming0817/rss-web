@@ -90,4 +90,4 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 
 Git 对象缓存位于 `~/.cache/rss-web/rss-mdm.git`，缺失时只获取 pin 指定的完整提交；可用 `RSS_MDM_CONTRACT_GIT=/absolute/git-store` 复用已有对象库。无需相邻 checkout、干净 HEAD 或重建 Rust。Git 使用已有凭据；CI 冷缓存访问私有 Azure 源时使用只读 secret `RSS_MDM_GIT_TOKEN`，token 只通过子进程环境传给 Git，不写入缓存或日志。无法取得指定对象时检查明确失败。
 
-升级时显式更新 pin 的 revision、blob、SHA-256，重新生成并迁移实际消费者；不会追随远端 develop。生产领域调用仅引用 `@rss/api/mdm-operations`；作者模型和 canonical 编码复用 `@rss/api/mdm-types`、`@rss/api/mdm-validators`，不维护第二套 wire 定义。Identity 与宿主静态配置继续使用原有边界。
+升级时显式更新 pin 的 revision、blob、SHA-256，重新生成并迁移实际消费者；不会追随远端 develop。生产 HTTP 调用使用 `@rss/api/mdm-operations`；作者模型和 canonical 编码复用 `@rss/api/mdm-types`、`@rss/api/mdm-validators`；其它领域投影和未知编辑输入使用 `@rss/api/mdm-schemas` 自动导出的 scoped 类型与静态校验器，不维护第二套 wire 定义。整数按 JavaScript 精确范围校验，浮点字段保留 producer 的数值语义。Identity 与宿主静态配置继续使用原有边界。

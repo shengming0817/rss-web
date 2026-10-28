@@ -6,11 +6,12 @@ import v_s7b8b5381c2f948ff396b from './s7b8b5381c2f948ff396b.validator.js'
 import type * as sd3b75317544a2a3b5414 from './sd3b75317544a2a3b5414'
 export type Input = {
   pathParams: { id: string; operation: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd3b75317544a2a3b5414.Root
+
+export type * as Response from './sd3b75317544a2a3b5414'
 export const getApiV1AgentIssuancesByIdRecoveryOperationsByOperation =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

@@ -1,2 +1,10 @@
 /* Generated from f6abe27154d3c500984ffb5b24789ed751441aa7. Do not edit. */
-export type { Tpbieiljemigcdkickoogndegalhaiicneoagkecdnekpnnomfjlkdlnkgehdlndj as Root } from './types'
+export type { Tjgcagibdenlbkjhnfnnohjhbipojpceiegllgceoeapbllnakpfdbklkbnnogcjm as Root } from './types'
+export type { Toihdoopckleahnpfgfabiepmcfdinlkjbcojphpfflfjfbijpmbieffahogghglh as Architecture } from './types'
+export type { Tfgdkmojjmalpogolkgingcofihcbijmpiipkahaehjcmcnkodfbaoolfghchecge as Binding } from './types'
+export type { Tjkffmdfdnbkpnkgnghogfndonilphiekjnofejmphmniljkmjmbmljpeeplbeppd as Platform } from './types'
+export type { Tmffhnnmldgiabfocdpfedclnbednnnldnlkcoodoopkeaadelfaldmganheiipdi as Purpose } from './types'
+export type { Tfkblnjeecgkdbfgmoopnlalnbhljncijlgijaapfooloijpcjgldmkaaeidhgjha as ResourceBinding } from './types'
+export type { Tgabngedlpmbdeekpllajckecllfockeidipoojcjldjgeeijogeljnloooklljpo as SoftwareFormat } from './types'
+export type { Tfafohlincjpfehkfkcedemnllinocfpjkjhkcbmeaicaijkhamilbihkibilnllm as SoftwareSource } from './types'
+export type { Tdcdjhpcadonagjllgbcgclfnfhihapcmagmedcjnaeedjegjccmjphifkmjbjfgp as StorageClass } from './types'

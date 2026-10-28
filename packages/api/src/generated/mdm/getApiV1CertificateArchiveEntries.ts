@@ -7,11 +7,12 @@ import type * as s34ded281790a324bbab8 from './s34ded281790a324bbab8'
 import type * as sd46deaa31bc1acc6c6c1 from './sd46deaa31bc1acc6c6c1'
 export type Input = {
   query?: WireInput<sd46deaa31bc1acc6c6c1.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s34ded281790a324bbab8.Root
+
+export type * as Response from './s34ded281790a324bbab8'
 export const getApiV1CertificateArchiveEntries = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/certificate-archive/entries',

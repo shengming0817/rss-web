@@ -1,2 +1,3 @@
 /* Generated from f6abe27154d3c500984ffb5b24789ed751441aa7. Do not edit. */
-export type { Tefmgibkdncpecffigpidedjeakchbpfdlecedgkijnopofakobjmbidajhknkidj as Root } from './types'
+export type { Tlkfgenogkaphjlbdlgllicaigfonbfmmonaoebebkecelknmimghpabbnodepcbb as Root } from './types'
+export type { Tbchlfffccjpgbjmnbbaolmlhiclpffldbfgcdbechfnihcfpfloffedgibebpfon as Policy } from './types'

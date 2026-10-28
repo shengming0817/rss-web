@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as se5e10264a418cac68328 from './se5e10264a418cac68328'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = se5e10264a418cac68328.Root
+
+export type * as Response from './se5e10264a418cac68328'
 export const getApiV1ApiKeysById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/api-keys/{id}',

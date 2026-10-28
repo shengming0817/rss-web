@@ -7,11 +7,12 @@ import type * as sb05a07a6e6f9e78a64ea from './sb05a07a6e6f9e78a64ea'
 import type * as se567b14aa549227198dd from './se567b14aa549227198dd'
 export type Input = {
   query?: WireInput<se567b14aa549227198dd.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sb05a07a6e6f9e78a64ea.Root
+
+export type * as Response from './sb05a07a6e6f9e78a64ea'
 export const getApiV1StorageConnectionsVersions = /* @__PURE__ */ defineEndpoint<Input, Output>(
   {
     ...{

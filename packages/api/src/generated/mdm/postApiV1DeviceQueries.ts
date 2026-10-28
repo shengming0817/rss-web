@@ -8,11 +8,12 @@ import type * as s6d58c3709f872e55dd0e from './s6d58c3709f872e55dd0e'
 import type * as sa26868c9f00beb721704 from './sa26868c9f00beb721704'
 export type Input = {
   body: WireInput<s6d58c3709f872e55dd0e.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
+export type * as Body from './s6d58c3709f872e55dd0e'
+
 export const postApiV1DeviceQueries = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/device-queries',

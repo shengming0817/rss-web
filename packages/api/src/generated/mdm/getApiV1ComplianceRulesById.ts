@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as sf64dc7d29ebf2c0f8e56 from './sf64dc7d29ebf2c0f8e56'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sf64dc7d29ebf2c0f8e56.Root
+
+export type * as Response from './sf64dc7d29ebf2c0f8e56'
 export const getApiV1ComplianceRulesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/compliance-rules/{id}',

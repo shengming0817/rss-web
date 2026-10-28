@@ -7,11 +7,12 @@ import type * as sdadd471d4ab6a0440532 from './sdadd471d4ab6a0440532'
 import type * as sf389bcce38688e234a27 from './sf389bcce38688e234a27'
 export type Input = {
   body: WireInput<sf389bcce38688e234a27.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sdadd471d4ab6a0440532.Root
+export type * as Body from './sf389bcce38688e234a27'
+export type * as Response from './sdadd471d4ab6a0440532'
 export const putApiV1AgentEnrollmentSettings = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/agent-enrollment-settings',

@@ -70,7 +70,7 @@ it('keeps caller credentials and tenant authority out of generated requests', as
       getApiV1PoliciesByIdAssignments(createMdmTransport(), {
         pathParams: { id: '11111111-1111-4111-8111-111111111111' },
         headers: { [header]: 'secret' },
-      }),
+      } as never),
     ).rejects.toMatchObject({ cause: 'client' })
 })
 it('enforces the complete UTF-8 JSON ingress budget on generated operations', async () => {

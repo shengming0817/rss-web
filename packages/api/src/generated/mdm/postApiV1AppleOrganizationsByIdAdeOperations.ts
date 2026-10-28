@@ -5,16 +5,19 @@ import * as r from './responses'
 import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_sa1ccc7b0969202f4e1b2 from './sa1ccc7b0969202f4e1b2.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s76bee28d789f1ee50b50 from './s76bee28d789f1ee50b50'
 import type * as sa1ccc7b0969202f4e1b2 from './sa1ccc7b0969202f4e1b2'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sa1ccc7b0969202f4e1b2.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s76bee28d789f1ee50b50.Root
+export type * as Body from './sa1ccc7b0969202f4e1b2'
+export type * as Response from './s76bee28d789f1ee50b50'
 export const postApiV1AppleOrganizationsByIdAdeOperations = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

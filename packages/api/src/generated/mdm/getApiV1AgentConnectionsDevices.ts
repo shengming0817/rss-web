@@ -6,12 +6,13 @@ import v_s0e111723f2591c5e4126 from './s0e111723f2591c5e4126.validator.js'
 import type * as s0e111723f2591c5e4126 from './s0e111723f2591c5e4126'
 import type * as sd24e83f4660962f18043 from './sd24e83f4660962f18043'
 export type Input = {
-  query?: WireInput<s0e111723f2591c5e4126.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
+  query: WireInput<s0e111723f2591c5e4126.Root>
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd24e83f4660962f18043.Root
+
+export type * as Response from './sd24e83f4660962f18043'
 export const getApiV1AgentConnectionsDevices = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/agent-connections/devices',

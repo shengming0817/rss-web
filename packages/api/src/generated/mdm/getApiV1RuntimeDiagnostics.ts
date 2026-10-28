@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as sdc2897722ddd3c9fa9d3 from './sdc2897722ddd3c9fa9d3'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = sdc2897722ddd3c9fa9d3.Root
+
+export type * as Response from './sdc2897722ddd3c9fa9d3'
 export const getApiV1RuntimeDiagnostics = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/runtime/diagnostics',

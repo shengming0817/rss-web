@@ -6,11 +6,12 @@ import v_sbbc93fda2f575095f684 from './sbbc93fda2f575095f684.validator.js'
 import type * as sf64dc7d29ebf2c0f8e56 from './sf64dc7d29ebf2c0f8e56'
 export type Input = {
   pathParams: { id: string; revision: number }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sf64dc7d29ebf2c0f8e56.Root
+
+export type * as Response from './sf64dc7d29ebf2c0f8e56'
 export const getApiV1ComplianceRulesByIdVersionsByRevision = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

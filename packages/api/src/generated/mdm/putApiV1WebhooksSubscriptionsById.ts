@@ -9,11 +9,12 @@ import type * as sd611c7989c8858f68490 from './sd611c7989c8858f68490'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s8c3da98605990ecdb4aa.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd611c7989c8858f68490.Root
+export type * as Body from './s8c3da98605990ecdb4aa'
+export type * as Response from './sd611c7989c8858f68490'
 export const putApiV1WebhooksSubscriptionsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/webhooks/subscriptions/{id}',

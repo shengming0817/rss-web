@@ -1,11 +1,10 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 /** Safe formal FactView, shared by audit queries and path-bound device timelines. */
 import type { HttpTransport } from '@rss/api/mdm'
 import {
-  array,
   enumeration,
-  boolean,
-  closed,
+  array,
   count,
   identifier,
   integer,
@@ -37,7 +36,7 @@ export function auditQuery(query: AuditQuery): AuditQuery {
     if (text !== undefined) identifier(text)
   if (query.operationId !== undefined) uuid(query.operationId)
   if (query.outcome !== undefined)
-    enumeration(query.outcome, ['succeeded', 'denied', 'failed', 'unknown'])
+    enumeration(query.outcome, ['succeeded', 'denied', 'failed', 'unknown'] as const)
   if (query.from !== undefined) count(query.from)
   if (query.until !== undefined) count(query.until)
   if (query.from !== undefined && query.until !== undefined && query.from >= query.until)
@@ -48,33 +47,13 @@ export function auditQuery(query: AuditQuery): AuditQuery {
   return { ...query }
 }
 export function timelinePage(value: unknown) {
-  const v = closed(value, ['items', 'nextCursor', 'coverage']),
-    coverage = closed(v['coverage'], ['complete'])
+  if (!wireSchemas.getApiV1AuditEventsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    coverage = v['coverage']
   const items = array(v['items'], (x) => {
-    const e = closed(x, [
-      'source',
-      'eventId',
-      'position',
-      'recordedAt',
-      'observedAt',
-      'actorKind',
-      'actor',
-      'action',
-      'target',
-      'deviceId',
-      'operationId',
-      'relatedOperationIds',
-      'requestId',
-      'registrationId',
-      'registrationRequestId',
-      'instanceId',
-      'auditOutcome',
-      'phase',
-      'executionState',
-      'effect',
-      'requestWriteOutcome',
-      'supported',
-    ])
+    const e = x
     return {
       source: identifier(e['source']),
       eventId: identifier(e['eventId']),
@@ -85,7 +64,7 @@ export function timelinePage(value: unknown) {
       actor: identifier(e['actor']),
       action: identifier(e['action']),
       target: (() => {
-        const target = closed(e['target'], ['type', 'id'])
+        const target = e['target']
         return { type: identifier(target['type']), id: identifier(target['id']) }
       })(),
       deviceId: nullable(e['deviceId'], identifier),
@@ -100,14 +79,14 @@ export function timelinePage(value: unknown) {
       executionState: nullable(e['executionState'], identifier),
       effect: identifier(e['effect']),
       requestWriteOutcome: nullable(e['requestWriteOutcome'], identifier),
-      supported: boolean(e['supported']),
+      supported: e['supported'],
     }
   })
   return {
     items,
     nextCursor: cursor(v['nextCursor']),
     coverage: {
-      complete: boolean(coverage['complete']),
+      complete: coverage['complete'],
     },
   }
 }

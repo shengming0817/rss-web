@@ -7,11 +7,12 @@ import type * as s1eb0fa2c9b43255a0a42 from './s1eb0fa2c9b43255a0a42'
 import type * as s8e9224ea08a3c830c8d5 from './s8e9224ea08a3c830c8d5'
 export type Input = {
   query?: WireInput<s8e9224ea08a3c830c8d5.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s1eb0fa2c9b43255a0a42.Root
+
+export type * as Response from './s1eb0fa2c9b43255a0a42'
 export const getApiV1Groups = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/groups',

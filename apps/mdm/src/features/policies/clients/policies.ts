@@ -1,3 +1,4 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { decodeCapability, decodeSelector, toolName, type CapabilitySelector } from './addressing'
 import {
@@ -10,7 +11,7 @@ import {
 } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
-import { count, array, closed, nullable, uuid, string, enumeration } from '../../../services/decode'
+import { count, array, nullable, uuid, string, enumeration } from '../../../services/decode'
 import {
   decodePolicy,
   policyName,
@@ -45,11 +46,16 @@ export interface PreviewInput {
   definition: PolicyDefinition
   scopeResult?: string
 }
-function baseTargetFacts(v: Record<string, unknown>) {
+function baseTargetFacts(
+  v: Pick<
+    api.postApiV1PoliciesPreviewsContract.Response.PreviewTarget,
+    'object' | 'channel' | 'availability' | 'reason' | 'target' | 'taskAdmission'
+  >,
+) {
   return {
     object: objectRef(v['object']),
     channel: nullable(v['channel'], (v) => enumeration(v, channels)),
-    availability: enumeration(v['availability'], ['ready', 'unavailable'] as const),
+    availability: v['availability'],
     reason: nullable(v['reason'], string),
     target: nullable(v['target'], primaryRegistration),
     taskAdmission: nullable(v['taskAdmission'], taskAdmission),
@@ -108,15 +114,9 @@ export function createPoliciesClient(transport: HttpTransport) {
             action,
             scopeResult: result,
             items: array(v['items'], (value) => {
-              const d = closed(value, [
-                'object',
-                'channel',
-                'availability',
-                'reason',
-                'target',
-                'eligibility',
-                'taskAdmission',
-              ])
+              if (!wireSchemas.postApiV1PoliciesPreviewsResponse.validatePreviewTarget(value))
+                throw new Error('Invalid preview target')
+              const d = value
               if (
                 action.kind === 'unmanage_device' &&
                 (d['channel'] !== null || d['target'] !== null || d['taskAdmission'] !== null)
@@ -136,18 +136,7 @@ export function createPoliciesClient(transport: HttpTransport) {
           const v = value
           return {
             items: array(v['items'], (value) => {
-              const d = closed(value, [
-                'object',
-                'channel',
-                'availability',
-                'reason',
-                'target',
-                'qualification',
-                'sources',
-                'scopeResult',
-                'taskAdmission',
-                'operationIds',
-              ])
+              const d = value
               return {
                 ...baseTargetFacts(d),
                 qualification: eligibility(d['qualification']),

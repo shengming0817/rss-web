@@ -1,21 +1,10 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import { CapabilityUnavailable } from '../model'
 import type { Computer, OriginalOperation } from '../model'
 import type { DeviceAccessClient } from '../client'
-import {
-  object,
-  closed,
-  text,
-  count,
-  bool,
-  uuid,
-  nullable,
-  list,
-  page,
-  same,
-  unique,
-} from '../model/decode'
+import { text, count, uuid, nullable, list, page, same, unique } from '../model/decode'
 import { challenge } from './security'
 import { application, nativeBinding, nativeComputer, nativeMaterial } from './native'
 export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
@@ -46,7 +35,9 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         },
         (value) => {
           const p = page(value, (v) => {
-            const r = closed(v, ['key', 'reference', 'endpoints'])
+            if (!wireSchemas.getApiV1DeviceViewsResponse.validateProjection_DirectoryRow(v))
+              throw new Error('Invalid device row')
+            const r = v
             return list(r['endpoints'], nativeComputer)
           })
           const byId = new Map<string, Computer>()
@@ -59,8 +50,8 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         transport,
         { pathParams: { kind: 'endpoint', id: device }, signal },
         (value) => {
-          const v = object(value),
-            r = closed(v['reference'], ['kind', 'id'])
+          const v = value,
+            r = v['reference']
           same(r['kind'], 'endpoint')
           same(r['id'], device)
           const rows = list(v['endpoints'], nativeComputer)
@@ -136,7 +127,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
           signal,
         },
         (value) => {
-          const v = closed(value, ['material', 'secret']),
+          const v = value,
             m = nativeMaterial(v['material'], device)
           same(m.id, material.id)
           same(m.version, material.version)
@@ -151,7 +142,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         transport,
         { pathParams: { device, id: uuid(id) }, signal },
         (value): OriginalOperation => {
-          const v = object(value) // Operations remain opaque beyond their exact identity and native state.
+          const v = value // Operations remain opaque beyond their exact identity and native state.
           same(v['operationId'], id)
           return {
             id,
@@ -167,12 +158,18 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       api.getApiV1DeviceAccessEnterpriseConfiguration(
         transport,
         {
-          query: { filter: 'kind eq "relying_party"', limit: 50, ...(cursor ? { cursor } : {}) },
+          query: { filter: 'kind==relying_party', limit: 50, ...(cursor ? { cursor } : {}) },
           signal,
         },
         (v) =>
           page(v, (raw) => {
-            const row = closed(raw, ['id', 'kind', 'value'])
+            if (
+              !wireSchemas.getApiV1DeviceAccessEnterpriseConfigurationResponse.validateProjection_RecordView(
+                raw,
+              )
+            )
+              throw new Error('Invalid application row')
+            const row = raw
             same(row['kind'], 'relying_party')
             const result = application(row['value'])
             same(row['id'], 'rp:' + result.id)
@@ -182,11 +179,15 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
     application: async () => unavailable('application_operation_query'),
     audit: (device, cursor, signal) => {
       const project = (value: unknown) => {
-        const v = closed(value, ['items', 'nextCursor', 'coverage'])
-        bool(closed(v['coverage'], ['complete'])['complete'])
+        if (
+          !wireSchemas.getApiV1AuditEventsResponse.validateRoot(value) &&
+          !wireSchemas.getApiV1DevicesByDeviceTimelineResponse.validateRoot(value)
+        )
+          throw new Error('Invalid audit response')
+        const v = value
         return {
           items: list(v['items'], (raw) => {
-            const r = object(raw)
+            const r = raw
             return {
               id: text(r['eventId']),
               recordedAt: count(r['recordedAt']),

@@ -1,10 +1,10 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { authorization, reauthorizationEligibility } from './authorization'
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
-  closed,
   count,
   enumeration,
   identifier,
@@ -14,29 +14,19 @@ import {
   uuid,
 } from '../../../services/decode'
 
-export type DeviceControlAction =
-  | { kind: 'restart' }
-  | {
-      kind: 'lock'
-      confirmed: true
-      expectedRegistrationId: string
-      expectedGeneration: number
-      pin: string
-    }
-  | { kind: 'wipe'; confirmed: true; expectedRegistrationId: string; expectedGeneration: number }
+export type DeviceControlAction = Extract<
+  wireSchemas.postApiV1DevicesByDeviceOperationsBody.Action,
+  { kind: 'restart' | 'lock' | 'wipe' }
+>
 export function deviceControlAction(value: unknown): DeviceControlAction {
-  const kind = enumeration(record(value)['kind'], ['restart', 'lock', 'wipe'] as const)
+  if (!wireSchemas.postApiV1DevicesByDeviceOperationsBody.validateAction(value))
+    throw new Error('Invalid action')
+
+  const kind = value['kind']
   if (kind === 'restart') {
-    closed(value, ['kind'])
     return { kind }
   }
-  const v = closed(value, [
-    'kind',
-    'confirmed',
-    'expectedRegistrationId',
-    'expectedGeneration',
-    ...(kind === 'lock' ? ['pin'] : []),
-  ])
+  const v = value
   const generation = count(v['expectedGeneration'])
   if (v['confirmed'] !== true || generation < 1)
     throw new Error('Explicit registration confirmation required')
@@ -45,23 +35,19 @@ export function deviceControlAction(value: unknown): DeviceControlAction {
     expectedRegistrationId: uuid(v['expectedRegistrationId']),
     expectedGeneration: generation,
   }
-  if (kind === 'wipe') return { kind, ...confirmation }
+  if (v.kind === 'wipe') return { kind: v.kind, ...confirmation }
   const pin = string(v['pin'])
   if (!/^[0-9]{6}$/.test(pin)) throw new Error('Invalid lock PIN')
-  return { kind, ...confirmation, pin }
+  return { kind: v.kind, ...confirmation, pin }
 }
 export function decodeNativeTask(value: unknown) {
-  const v = closed(value, ['platform', 'kind', 'name', 'objects'])
+  if (!wireSchemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateTaskSummary(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
-    platform: enumeration(v['platform'], ['windows', 'macos'] as const),
-    kind: enumeration(v['kind'], [
-      'sync_ml',
-      'msi',
-      'command',
-      'install_profile',
-      'remove_profile',
-      'declarations',
-    ] as const),
+    platform: v['platform'],
+    kind: v['kind'],
     name: identifier(v['name']),
     objects: array(v['objects'], identifier),
   }
@@ -79,6 +65,9 @@ export function controlKind(task: ReturnType<typeof decodeNativeTask>) {
   return null
 }
 export function decodeNativeObservation(value: unknown) {
+  if (!wireSchemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateObservation(value))
+    throw new Error('Invalid contract value')
+
   const raw = record(value),
     protocol = enumeration(raw['protocol'], ['syncml', 'mdm.apple'] as const),
     scope = enumeration(raw['observationScope'], [
@@ -87,21 +76,8 @@ export function decodeNativeObservation(value: unknown) {
       'profile_presence',
       'declarations',
     ] as const)
-  const base = ['protocol', 'observationScope', 'progress', 'effect']
-  const v =
-    protocol === 'syncml'
-      ? closed(value, [...base, 'receipts'], ['effectReason'])
-      : scope === 'declarations'
-        ? closed(
-            value,
-            [...base, 'synchronization', 'compliance'],
-            ['inputVersion', 'expected', 'nativeStatus', 'receivedAt'],
-          )
-        : closed(
-            value,
-            [...base, 'receipts'],
-            ['result', 'fields', 'error', 'nativeStatus', 'receivedAt'],
-          )
+
+  const v = protocol === 'syncml' ? value : scope === 'declarations' ? value : value
   if ((protocol === 'syncml') !== (scope === 'native_objects'))
     throw new Error('Wrong native protocol')
   return {
@@ -113,26 +89,15 @@ export function decodeNativeObservation(value: unknown) {
   }
 }
 export function decodeNativeOperation(value: unknown, id: string) {
-  const v = closed(value, [
-    'operationId',
-    'commandId',
-    'revision',
-    'task',
-    'target',
-    'inputVersion',
-    'deadline',
-    'dispatchFailure',
-    'authorization',
-    'reauthorization',
-    'commandStatus',
-    'agentInstallation',
-    'observation',
-  ])
+  if (!wireSchemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (uuid(v['operationId']) !== id || uuid(v['commandId']) !== id)
     throw new Error('Wrong operation')
-  const target = record(v['target']),
-    kind = enumeration(target['kind'], ['device', 'user'] as const)
-  closed(target, kind === 'device' ? ['kind'] : ['kind', 'userId'])
+  const target = v['target'],
+    kind = target['kind']
+
   return {
     operationId: id,
     commandId: id,
@@ -144,16 +109,7 @@ export function decodeNativeOperation(value: unknown, id: string) {
     dispatchFailure: nullable(v['dispatchFailure'], (v) => jsonValue(v, 16384)),
     authorization: authorization(v['authorization']),
     reauthorization: reauthorizationEligibility(v['reauthorization']),
-    commandStatus: enumeration(v['commandStatus'], [
-      'queued',
-      'published',
-      'received',
-      'applied',
-      'rejected',
-      'timed_out',
-      'superseded',
-      'cancelled',
-    ] as const),
+    commandStatus: v['commandStatus'],
     agentInstallation: nullable(v['agentInstallation'], (v) => jsonValue(v, 65536)),
     observation: decodeNativeObservation(v['observation']),
   }

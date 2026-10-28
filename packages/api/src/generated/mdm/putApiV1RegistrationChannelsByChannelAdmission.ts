@@ -5,16 +5,19 @@ import * as r from './responses'
 import v_s0a2fafc72af175ff497e from './s0a2fafc72af175ff497e.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_sd934d24f2707f0add9c0 from './sd934d24f2707f0add9c0.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s9630987703775d9c7b34 from './s9630987703775d9c7b34'
 import type * as sd934d24f2707f0add9c0 from './sd934d24f2707f0add9c0'
 export type Input = {
   pathParams: { channel: string }
   body: WireInput<sd934d24f2707f0add9c0.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s9630987703775d9c7b34.Root
+export type * as Body from './sd934d24f2707f0add9c0'
+export type * as Response from './s9630987703775d9c7b34'
 export const putApiV1RegistrationChannelsByChannelAdmission = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

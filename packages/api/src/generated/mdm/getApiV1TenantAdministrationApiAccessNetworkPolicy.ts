@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as sd1e866692469c738328b from './sd1e866692469c738328b'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = sd1e866692469c738328b.Root
+
+export type * as Response from './sd1e866692469c738328b'
 export const getApiV1TenantAdministrationApiAccessNetworkPolicy =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

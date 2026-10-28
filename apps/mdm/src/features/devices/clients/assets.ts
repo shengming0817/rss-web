@@ -1,3 +1,4 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { checked } from '../../../contracts/collection/check'
 import {
@@ -19,13 +20,11 @@ import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   boolean,
-  closed,
   count,
   enumeration,
   identifier,
   integer,
   nullable,
-  record,
   string,
   unique,
   uuid,
@@ -51,10 +50,10 @@ import {
 } from './asset-model'
 export * from './asset-model'
 export function decodeInventory(value: unknown, tenant: string) {
-  return inventory(assetEnvelope(value, tenant, 'detail', ['device'])['device'])
+  return inventory(assetEnvelope(value, tenant, 'detail')['device'])
 }
 export function decodeCatalog(value: unknown, tenant: string) {
-  const v = assetEnvelope(value, tenant, 'field_list', ['dictionary', 'items', 'nextCursor'])
+  const v = assetEnvelope(value, tenant, 'field_list')
   if (v['dictionary'] !== 'assets-v1') throw new Error('Unknown asset dictionary')
   return {
     dictionary: 'assets-v1',
@@ -73,13 +72,13 @@ export interface FieldLayout {
   groups: FieldDisplayGroup[]
 }
 export function decodeFieldLayout(value: unknown, tenant: string): FieldLayout {
-  const v = assetEnvelope(value, tenant, 'field_layout', ['revision', 'editable', 'groups'])
+  const v = assetEnvelope(value, tenant, 'field_layout')
   return {
     revision: count(v['revision']),
-    editable: boolean(v['editable']),
+    editable: v['editable'],
     groups: unique(
       array(v['groups'], (value) => {
-        const g = closed(value, ['id', 'name', 'fields'])
+        const g = value
         const fields = unique(array(g['fields'], fieldKey), (x) => x)
         if (fields.some((x) => !x.startsWith('custom.'))) throw new Error('Invalid display field')
         return { id: uuid(g['id']), name: identifier(g['name']), fields }
@@ -89,7 +88,7 @@ export function decodeFieldLayout(value: unknown, tenant: string): FieldLayout {
   }
 }
 export function decodeAssetPage(value: unknown, tenant: string) {
-  const v = assetEnvelope(value, tenant, 'page', ['items', 'nextCursor', 'snapshot', 'summary'])
+  const v = assetEnvelope(value, tenant, 'page')
   return {
     kind: 'page' as const,
     items: unique(array(v['items'], inventory), (d) => d.device),
@@ -99,43 +98,26 @@ export function decodeAssetPage(value: unknown, tenant: string) {
   }
 }
 export function decodeCollectionRun(value: unknown, tenant: string, id: string) {
-  const v = closed(assetEnvelope(value, tenant, 'collection_run', ['run'])['run'], [
-    'id',
-    'registration',
-    'generation',
-    'source',
-    'epoch',
-    'delivery',
-    'fingerprint',
-    'coverage',
-    'complete',
-    'dataset',
-    'templateVersion',
-    'sequence',
-    'startedAt',
-    'finishedAt',
-    'result',
-    'reason',
-    'deliveryPending',
-    'fields',
-  ])
+  const v = assetEnvelope(value, tenant, 'collection_run')['run']
   if (uuid(v['id']) !== id || count(v['generation']) < 1) throw new Error('Wrong collection run')
   const source = enumeration(v['source'], sourceIds)
   const quality = qualityRun(
     Object.fromEntries(
-      [
-        'dataset',
-        'templateVersion',
-        'fingerprint',
-        'coverage',
-        'complete',
-        'source',
-        'epoch',
-        'sequence',
-        'result',
-        'deliveryPending',
-        'fields',
-      ]
+      (
+        [
+          'dataset',
+          'templateVersion',
+          'fingerprint',
+          'coverage',
+          'complete',
+          'source',
+          'epoch',
+          'sequence',
+          'result',
+          'deliveryPending',
+          'fields',
+        ] as const
+      )
         .map((k) => [k, v[k]])
         .concat([
           ['runId', id],
@@ -145,19 +127,14 @@ export function decodeCollectionRun(value: unknown, tenant: string, id: string) 
         ]),
     ),
   )
-  const delivery = closed(v['delivery'], ['receipt', 'projection'])
+  const delivery = v['delivery']
   return {
     id,
     quality,
     delivery: {
-      projection: enumeration(delivery['projection'], [
-        'projected',
-        'pending',
-        'pending_receipt',
-        'not_applicable',
-      ] as const),
+      projection: delivery['projection'],
       receipt: nullable(delivery['receipt'], (x) => {
-        const r = closed(x, ['batch_id', 'received_at', 'decision'])
+        const r = x
         return {
           batchId: identifier(r['batch_id']),
           receivedAt: count(r['received_at']),
@@ -179,14 +156,14 @@ const savedFields = {
 }
 export function createAssetsClient(transport: HttpTransport, tenant: string) {
   const accepted = (value: unknown, operation: string) => {
-    const v = assetEnvelope(value, tenant, 'accepted', ['task', 'statusUrl'])
+    const v = assetEnvelope(value, tenant, 'accepted')
     const task = uuid(v['task'])
-    if (task !== operation || v['statusUrl'] !== `/api/v1/device-queries/${task}`)
+    if (task !== operation || v['statusUrl'] !== api.getApiV1DeviceQueriesById.url({ id: task }))
       throw new Error('Wrong status URL')
     return { task, statusUrl: string(v['statusUrl']) }
   }
   const saved = (value: unknown, id: string) => {
-    const result = savedQuery(assetEnvelope(value, tenant, 'saved', ['query'])['query'])
+    const result = savedQuery(assetEnvelope(value, tenant, 'saved')['query'])
     if (result.id !== id) throw new Error('Wrong saved query')
     return result
   }
@@ -195,7 +172,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
       api.getApiV1AssetFieldLayout(transport, {}, (v) => decodeFieldLayout(v, tenant)),
     saveFieldLayout: (body: Operation<{ groups: FieldDisplayGroup[] }>) =>
       api.putApiV1AssetFieldLayout(transport, { body }, (value) => {
-        const v = assetEnvelope(value, tenant, 'field_layout_written', ['revision'])
+        const v = assetEnvelope(value, tenant, 'field_layout_written')
         return { revision: count(v['revision']) }
       }),
     async catalog() {
@@ -222,11 +199,10 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         transport,
         { pathParams: { field }, body: checked(validateFieldWrite, body) },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'field', ['field', 'version', 'definition'])
+          const v = assetEnvelope(value, tenant, 'field')
           if (v['field'] !== field || v['version'] !== body.expectedRevision + 1)
             throw new Error('Wrong field receipt')
-          if (v['definition'] !== null)
-            fieldDefinition({ ...record(v['definition']), operations: [] })
+          if (v['definition'] !== null) fieldDefinition({ ...v['definition'], operations: [] })
           return { version: count(v['version']) }
         },
       ),
@@ -241,12 +217,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           },
         },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'field_references', [
-            'field',
-            'impact',
-            'mappings',
-            'nextCursor',
-          ])
+          const v = assetEnvelope(value, tenant, 'field_references')
           if (v['field'] !== field) throw new Error('Wrong reference field')
           return {
             impact: checked(validateFieldImpact, v['impact']),
@@ -262,7 +233,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         transport,
         { pathParams: { key, revision } },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'retention_policy', ['policy'])
+          const v = assetEnvelope(value, tenant, 'retention_policy')
           const p = nullable(v['policy'], retentionPolicy)
           if (p && (p.key !== key || p.revision !== revision))
             throw new Error('Wrong retention version')
@@ -271,7 +242,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
       ),
     writeRetention: (body: Operation<ReturnType<typeof retentionPolicy>>) =>
       api.postApiV1AssetRetentionPolicies(transport, { body }, (value) => {
-        const v = assetEnvelope(value, tenant, 'retention_policy', ['policy']),
+        const v = assetEnvelope(value, tenant, 'retention_policy'),
           p = retentionPolicy(v['policy'])
         if (p.key !== body.input.key || p.revision !== body.expectedRevision + 1)
           throw new Error('Wrong retention receipt')
@@ -305,19 +276,14 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         transport,
         { pathParams: { id: device }, query: { cursor: next, limit: 20 } },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'inventory_scopes', [
-            'device',
-            'watermark',
-            'items',
-            'nextCursor',
-          ])
+          const v = assetEnvelope(value, tenant, 'inventory_scopes')
           if (v['device'] !== device) throw new Error('Wrong scope directory device')
           return {
             device,
             watermark: count(v['watermark']),
             items: unique(
               array(v['items'], (x) => {
-                const item = closed(x, ['scope'])
+                const item = x
                 const scope = collectionScope(item['scope'])
                 if (scope.kind === 'device') throw new Error('Device scope is implicit')
                 return scope
@@ -336,14 +302,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 20 },
         },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'list_items', [
-            'device',
-            'field',
-            'watermark',
-            'total',
-            'items',
-            'nextCursor',
-          ])
+          const v = assetEnvelope(value, tenant, 'list_items')
           if (v['device'] !== device || v['field'] !== field) throw new Error('Wrong list page')
           return {
             items: array(v['items'], readScalar),
@@ -367,29 +326,15 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 100 },
         },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'collection_items', [
-            'run',
-            'field',
-            'items',
-            'nextCursor',
-          ])
+          const v = assetEnvelope(value, tenant, 'collection_items')
           if (v['run'] !== id || v['field'] !== field) throw new Error('Wrong item quality')
           return {
             items: array(v['items'], (x) => {
-              const item = closed(x, ['index', 'quality', 'value'])
+              const item = x
               return {
                 index: count(item['index']),
                 value: nullable(item['value'], readScalar),
-                quality: enumeration(item['quality'], [
-                  'pending',
-                  'success',
-                  'unsupported',
-                  'failed',
-                  'invalid',
-                  'missing',
-                  'unknown',
-                  'deleted',
-                ] as const),
+                quality: item['quality'],
               }
             }),
             nextCursor: nextCursor(v['nextCursor']),
@@ -404,16 +349,13 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
       ),
     status: (task: string) =>
       api.getApiV1DeviceQueriesById(transport, { pathParams: { id: task } }, (value) => {
-        const v = assetEnvelope(value, tenant, 'query_status', [
-          'task',
-          'status',
-          'summary',
-          'failure',
-          'resultUrl',
-        ])
+        const v = assetEnvelope(value, tenant, 'query_status')
         if (uuid(v['task']) !== task) throw new Error('Wrong task')
         const resultUrl = cursor(v['resultUrl'])
-        if (resultUrl !== null && resultUrl !== `/api/v1/device-queries/${task}/items`)
+        if (
+          resultUrl !== null &&
+          resultUrl !== api.getApiV1DeviceQueriesByIdItems.url({ id: task })
+        )
           throw new Error('Wrong result URL')
         return {
           task,
@@ -438,13 +380,13 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         transport,
         { pathParams: { id: task, facet: facet }, query: { limit: 20, cursor: next } },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'facets', ['task', 'facet', 'items', 'nextCursor'])
+          const v = assetEnvelope(value, tenant, 'facets')
           if (uuid(v['task']) !== task || v['facet'] !== facet) throw new Error('Wrong facet')
           return {
             task,
             facet,
             items: array(v['items'], (item) => {
-              const i = closed(item, ['label', 'total'])
+              const i = item
               return { label: string(i['label']), total: count(i['total']) }
             }),
             nextCursor: cursor(v['nextCursor']),
@@ -456,7 +398,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         transport,
         { pathParams: { id: device, field: field }, body },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'assignment', ['device', 'field', 'revision'])
+          const v = assetEnvelope(value, tenant, 'assignment')
           if (identifier(v['device']) !== device || fieldKey(v['field']) !== field)
             throw new Error('Wrong assignment')
           return { device, field, revision: count(v['revision']) }
@@ -469,7 +411,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         transport,
         { query: queryParameters({ limit: 20, ...query }) },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'saved_list', ['items', 'nextCursor'])
+          const v = assetEnvelope(value, tenant, 'saved_list')
           return {
             items: array(v['items'], (item) => {
               const row = projectedRow(item, savedFields, query.fields)
@@ -501,7 +443,10 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
 }
 
 export function retentionPolicy(value: unknown) {
-  const p = closed(value, ['key', 'revision', 'rawSeconds', 'summarySeconds', 'restoreSeconds'])
+  if (!wireSchemas.getApiV1DevicesByIdInventoryResponse200.validateRetentionPolicy(value))
+    throw new Error('Invalid contract value')
+
+  const p = value
   const result = {
     key: retentionKey(p['key']),
     revision: count(p['revision']),

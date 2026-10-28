@@ -7,11 +7,12 @@ import type * as sa52cac221787f58a97f5 from './sa52cac221787f58a97f5'
 import type * as scfdccae02b8f695c4cb9 from './scfdccae02b8f695c4cb9'
 export type Input = {
   body: WireInput<sa52cac221787f58a97f5.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = scfdccae02b8f695c4cb9.Root
+export type * as Body from './sa52cac221787f58a97f5'
+export type * as Response from './scfdccae02b8f695c4cb9'
 export const postApiV1TelemetryAggregate = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/telemetry/aggregate',

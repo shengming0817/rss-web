@@ -45,8 +45,7 @@ export function safeJson(value: unknown): void {
   const active = new Set<object>()
   function visit(v: unknown): void {
     if (typeof v === 'number') {
-      if (!Number.isFinite(v) || (Number.isInteger(v) && !Number.isSafeInteger(v)))
-        throw clientError()
+      if (!Number.isFinite(v)) throw clientError()
     } else if (v !== null && typeof v === 'object') {
       if (active.has(v)) throw clientError()
       active.add(v)
@@ -87,7 +86,19 @@ export function validateEndpointResponse(
     )
       return false
     if (!r.validate) return data === undefined || data === null || data === ''
-    if (contract.binary && contract.statuses.includes(status)) return data instanceof ArrayBuffer
+    if (contract.binary && contract.statuses.includes(status)) {
+      if (!(data instanceof ArrayBuffer)) return false
+      if (r.media?.startsWith('application/json')) {
+        try {
+          const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data))
+          safeJson(value)
+          return r.validate(value)
+        } catch {
+          return false
+        }
+      }
+      return true
+    }
     return r.validate(data)
   })
   if (!accepted) throw protocolError(status)

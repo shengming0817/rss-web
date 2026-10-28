@@ -9,11 +9,12 @@ import type * as sa6ffedd226e42590479c from './sa6ffedd226e42590479c'
 export type Input = {
   pathParams: { id: string; version: string }
   body: WireInput<sa6ffedd226e42590479c.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s1ab6208ca464a62c0586.Root
+export type * as Body from './sa6ffedd226e42590479c'
+export type * as Response from './s1ab6208ca464a62c0586'
 export const postApiV1SoftwareResourcesByIdVersionsByVersion = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

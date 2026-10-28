@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as sf4807b71e8c3510b1ccf from './sf4807b71e8c3510b1ccf'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sf4807b71e8c3510b1ccf.Root
+
+export type * as Response from './sf4807b71e8c3510b1ccf'
 export const getApiV1StorageConnectionsOperationsById = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

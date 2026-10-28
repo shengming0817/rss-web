@@ -1,17 +1,17 @@
 /* Generated. Do not edit. */
 import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
-
+import type { BinaryResponse } from '../../types'
 import * as r from './responses'
 import v_sf1ae017c63f8eb29cc9a from './sf1ae017c63f8eb29cc9a.validator.js'
-import type * as s34124627e7fa005603be from './s34124627e7fa005603be'
 import type * as sf1ae017c63f8eb29cc9a from './sf1ae017c63f8eb29cc9a'
 export type Input = {
   body: WireInput<sf1ae017c63f8eb29cc9a.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
-export type Output = s34124627e7fa005603be.Root
+export type Output = BinaryResponse
+export type * as Body from './sf1ae017c63f8eb29cc9a'
+export type * as Response from './s34124627e7fa005603be'
 export const postApiV1AgentConfigurations = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/agent-configurations',
@@ -24,7 +24,7 @@ export const postApiV1AgentConfigurations = /* @__PURE__ */ defineEndpoint<Input
     contentType: 'application/json',
     requestHeaders: [],
     requiredHeaders: [],
-    binary: false,
+    binary: true,
     statuses: [200],
   },
   checks: { headers: {}, path: null, query: null, body: v_sf1ae017c63f8eb29cc9a },

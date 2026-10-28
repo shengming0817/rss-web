@@ -5,16 +5,19 @@ import * as r from './responses'
 import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s48fb3fffcea18280c889 from './s48fb3fffcea18280c889.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s48fb3fffcea18280c889 from './s48fb3fffcea18280c889'
 import type * as sea6c7bf019995a17adc7 from './sea6c7bf019995a17adc7'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s48fb3fffcea18280c889.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sea6c7bf019995a17adc7.Root
+export type * as Body from './s48fb3fffcea18280c889'
+export type * as Response from './sea6c7bf019995a17adc7'
 export const putApiV1AppleOrganizationsByIdAccountEnrollment = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

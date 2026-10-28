@@ -1,49 +1,26 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { operationReceipt, positive, publicText, sha256 } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  enumeration,
-  nullable,
-  record,
-  string,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, nullable, string, unique, uuid } from '../../../services/decode'
 export const applePurposes = ['apns', 'profile', 'managed_account'] as const
 export type ApplePurpose = (typeof applePurposes)[number]
 export function appleDirectory(value: unknown) {
-  const v = closed(value, [
-    'revision',
-    'desiredRevision',
-    'versions',
-    'runtimeObservation',
-    'accountBindings',
-  ])
+  if (!wireSchemas.getApiV1AppleMaterialsByPurposeResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (v['runtimeObservation'] !== 'separate') throw new Error('Invalid observation boundary')
   const accounts = Object.fromEntries(
-    Object.entries(record(v['accountBindings'])).map(([id, v]) => [string(id), positive(v)]),
+    Object.entries(v['accountBindings']).map(([id, v]) => [string(id), positive(v)]),
   )
   return {
     revision: count(v['revision']),
     desiredRevision: nullable(v['desiredRevision'], positive),
     accountBindings: accounts,
     versions: unique(
-      array(v['versions'], (value) => {
-        const m = closed(value, [
-          'revision',
-          'keyId',
-          'publicKeyDigest',
-          'csr',
-          'certificateChainPem',
-          'certificateDigest',
-          'topic',
-          'expiresAt',
-          'revoked',
-        ])
+      array(Object.values(v['materials']), (value) => {
+        const m = value
         return {
           revision: positive(m['revision']),
           keyId: uuid(m['keyId']),
@@ -53,7 +30,7 @@ export function appleDirectory(value: unknown) {
           certificateDigest: nullable(m['certificateDigest'], sha256),
           topic: nullable(m['topic'], string),
           expiresAt: nullable(m['expiresAt'], count),
-          revoked: boolean(m['revoked']),
+          revoked: m['revoked'],
         }
       }),
       (v) => v.revision,
@@ -61,27 +38,16 @@ export function appleDirectory(value: unknown) {
   }
 }
 export function appleReceipt(value: unknown) {
-  const state = enumeration(record(value)['state'], [
-    'awaiting_certificate',
-    'validated',
-    'pending_application',
-    'revoked',
-  ] as const)
-  const extra =
-    state === 'awaiting_certificate'
-      ? ['keyId', 'csr', 'publicKeyDigest']
-      : state === 'validated'
-        ? ['keyId', 'certificateDigest', 'expiresAt']
-        : state === 'pending_application'
-          ? ['desiredRevision']
-          : ['materialRevision']
-  const v = closed(value, ['operationId', 'revision', 'state', ...extra])
+  if (!wireSchemas.getApiV1AppleMaterialOperationsByOperationResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const common = { operationId: uuid(v['operationId']), revision: positive(v['revision']) }
-  switch (state) {
+  switch (v.state) {
     case 'awaiting_certificate':
       return {
         ...common,
-        state,
+        state: v.state,
         keyId: uuid(v['keyId']),
         csr: publicText(v['csr']),
         publicKeyDigest: sha256(v['publicKeyDigest']),
@@ -89,15 +55,15 @@ export function appleReceipt(value: unknown) {
     case 'validated':
       return {
         ...common,
-        state,
+        state: v.state,
         keyId: uuid(v['keyId']),
         certificateDigest: sha256(v['certificateDigest']),
         expiresAt: count(v['expiresAt']),
       }
     case 'pending_application':
-      return { ...common, state, desiredRevision: positive(v['desiredRevision']) }
+      return { ...common, state: v.state, desiredRevision: positive(v['desiredRevision']) }
     case 'revoked':
-      return { ...common, state, materialRevision: positive(v['materialRevision']) }
+      return { ...common, state: v.state, materialRevision: positive(v['materialRevision']) }
   }
 }
 export type AppleDirectory = ReturnType<typeof appleDirectory>
@@ -116,7 +82,7 @@ export function createAppleMaterials(transport: HttpTransport) {
     read: (purpose: ApplePurpose) =>
       api.getApiV1AppleMaterialsByPurpose(
         transport,
-        { pathParams: { purpose: enumeration(purpose, applePurposes) } },
+        { pathParams: { purpose: purpose } },
         appleDirectory,
       ),
     operation: (id: string) =>
@@ -129,7 +95,7 @@ export function createAppleMaterials(transport: HttpTransport) {
       api.postApiV1AppleMaterialsByPurposeKeys(
         transport,
         {
-          pathParams: { purpose: enumeration(purpose, applePurposes) },
+          pathParams: { purpose: purpose },
           headers: { 'Idempotency-Key': uuid(id) },
           body: input,
         },
@@ -143,7 +109,7 @@ export function createAppleMaterials(transport: HttpTransport) {
       api.postApiV1AppleMaterialsByPurposeCertificates(
         transport,
         {
-          pathParams: { purpose: enumeration(purpose, applePurposes) },
+          pathParams: { purpose: purpose },
           headers: { 'Idempotency-Key': uuid(id) },
           body: input,
         },
@@ -157,7 +123,7 @@ export function createAppleMaterials(transport: HttpTransport) {
       api.postApiV1AppleMaterialsByPurposeApply(
         transport,
         {
-          pathParams: { purpose: enumeration(purpose, applePurposes) },
+          pathParams: { purpose: purpose },
           headers: { 'Idempotency-Key': uuid(id) },
           body: input,
         },
@@ -171,7 +137,7 @@ export function createAppleMaterials(transport: HttpTransport) {
       api.postApiV1AppleMaterialsByPurposeRevoke(
         transport,
         {
-          pathParams: { purpose: enumeration(purpose, applePurposes) },
+          pathParams: { purpose: purpose },
           headers: { 'Idempotency-Key': uuid(id) },
           body: input,
         },

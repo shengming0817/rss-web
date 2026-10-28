@@ -1,6 +1,7 @@
 import * as api from '@rss/api/mdm-operations'
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import type { HttpTransport } from '@rss/api/mdm'
-import { array, enumeration, record, string, uuid } from './decode'
+import { record, string, uuid } from './decode'
 export const moduleIds = ['devices', 'policies', 'software', 'security', 'operations'] as const
 export type ModuleId = (typeof moduleIds)[number]
 export type Source = 'real' | 'mock'
@@ -12,20 +13,12 @@ export interface ModuleState {
 export interface Workspace {
   modules: ModuleState[]
 }
-export function decodeWorkspace(value: unknown): Workspace {
-  const v = record(value)
-  const modules = array(v['modules'], (item) => {
-    const m = record(item)
-    if (m['available'] !== null && typeof m['available'] !== 'boolean')
-      throw new Error('Invalid navigation')
-    return {
-      id: enumeration(m['id'], moduleIds),
-      source: enumeration(m['source'], ['real', 'mock'] as const),
-      available: m['available'],
-    }
-  })
-  if (new Set(modules.map((m) => m.id)).size !== modules.length) throw new Error('Duplicate module')
-  return { modules }
+export function decodeWorkspace(value: unknown) {
+  if (!wireSchemas.getApiV1MdmCandidateWorkspaceResponse.validateRoot(value))
+    throw new Error('Invalid workspace')
+  if (new Set(value.modules.map((module) => module.id)).size !== value.modules.length)
+    throw new Error('Duplicate module')
+  return value
 }
 export function decodeMdmConfig(value: unknown, origin: string) {
   const v = record(value)
@@ -41,13 +34,8 @@ export function decodeMdmConfig(value: unknown, origin: string) {
 }
 export function createWorkspaceClient(transport: HttpTransport) {
   return {
-    async read() {
-      return api.getApiV1MdmCandidateWorkspace(transport, {}, (value) => {
-        const workspace = decodeWorkspace(value)
-        if (workspace.modules.some((m) => m.source !== 'real'))
-          throw new Error('Unexpected simulated data')
-        return workspace
-      })
+    async read(): Promise<Workspace> {
+      return api.getApiV1MdmCandidateWorkspace(transport, {}, decodeWorkspace)
     },
   }
 }

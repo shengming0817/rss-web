@@ -6,11 +6,12 @@ import v_s00f36fe53926740ce43d from './s00f36fe53926740ce43d.validator.js'
 import type * as s00f36fe53926740ce43d from './s00f36fe53926740ce43d'
 export type Input = {
   body: WireInput<s00f36fe53926740ce43d.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = void
+export type * as Body from './s00f36fe53926740ce43d'
+
 export const postApiV1AppleAccountEnrollmentFinish = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

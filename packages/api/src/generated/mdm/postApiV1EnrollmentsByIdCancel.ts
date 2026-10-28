@@ -6,15 +6,18 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_sdb40fb623f348de0acc9 from './sdb40fb623f348de0acc9.validator.js'
 import type * as s1f9ec870f9210de30870 from './s1f9ec870f9210de30870'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as sdb40fb623f348de0acc9 from './sdb40fb623f348de0acc9'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<sdb40fb623f348de0acc9.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s1f9ec870f9210de30870.Root
+export type * as Body from './sdb40fb623f348de0acc9'
+export type * as Response from './s1f9ec870f9210de30870'
 export const postApiV1EnrollmentsByIdCancel = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/enrollments/{id}/cancel',

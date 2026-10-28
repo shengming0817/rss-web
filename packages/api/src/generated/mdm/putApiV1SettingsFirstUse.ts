@@ -5,14 +5,17 @@ import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s72fbb87b696979aed411 from './s72fbb87b696979aed411.validator.js'
 import type * as s00ad822e102779a95fad from './s00ad822e102779a95fad'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s72fbb87b696979aed411 from './s72fbb87b696979aed411'
 export type Input = {
   body: WireInput<s72fbb87b696979aed411.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s00ad822e102779a95fad.Root
+export type * as Body from './s72fbb87b696979aed411'
+export type * as Response from './s00ad822e102779a95fad'
 export const putApiV1SettingsFirstUse = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/settings/first-use',

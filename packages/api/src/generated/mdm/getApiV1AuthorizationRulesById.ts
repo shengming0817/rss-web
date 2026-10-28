@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s3b6f5afbed305be6a5cc from './s3b6f5afbed305be6a5cc'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s3b6f5afbed305be6a5cc.Root
+
+export type * as Response from './s3b6f5afbed305be6a5cc'
 export const getApiV1AuthorizationRulesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/authorization/rules/{id}',

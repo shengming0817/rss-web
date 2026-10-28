@@ -1,9 +1,8 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
-  closed,
-  enumeration,
   identifier,
   integer,
   nullable,
@@ -27,25 +26,17 @@ export interface RevokeAssociation {
   reason: string
 }
 export function association(value: unknown) {
-  const v = closed(value, [
-    'id',
-    'version',
-    'state',
-    'members',
-    'evidence',
-    'confirmedBy',
-    'confirmedAt',
-    'revokedBy',
-    'revokedAt',
-    'reason',
-  ])
+  if (!wireSchemas.getApiV1DeviceViewsResponse.validateAssociation(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const members = unique(array(v['members'], member), (m) => m.device)
   if (members.length !== 2 || new Set(members.map((m) => m.channel)).size !== 2)
     throw new Error('Invalid association members')
   return {
     id: uuid(v['id']),
     version: positive(v['version']),
-    state: enumeration(v['state'], ['confirmed', 'needs_verification', 'revoked'] as const),
+    state: v['state'],
     members,
     evidence: string(v['evidence']),
     confirmedBy: identifier(v['confirmedBy']),

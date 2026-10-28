@@ -1,68 +1,47 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { windowParameters, windowPage } from '../../../services/directory-query'
 import { operationReceipt, positive } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  boolean,
-  closed,
-  count,
-  enumeration,
-  nullable,
-  uuid,
-  string,
-} from '../../../services/decode'
-function receiptHead(value: unknown, keys: string[]) {
-  return closed(value, ['operationId', 'revision', ...keys])
-}
+import { count, enumeration, nullable, uuid, string } from '../../../services/decode'
+
 export function storageReceipt(value: unknown) {
-  const v = receiptHead(value, [
-    'profile',
-    'state',
-    'failureReason',
-    'selected',
-    'revoked',
-    'qualifiedAt',
-    'expiresAt',
-  ])
+  if (!wireSchemas.postApiV1StorageConnectionsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     revision: positive(v['revision']),
     profile: string(v['profile']),
     state: enumeration(v['state'], ['pending', 'qualified', 'rejected'] as const),
     failureReason: nullable(v['failureReason'], string),
-    selected: boolean(v['selected']),
-    revoked: boolean(v['revoked']),
+    selected: v['selected'],
+    revoked: v['revoked'],
     qualifiedAt: nullable(v['qualifiedAt'], count),
     expiresAt: nullable(v['expiresAt'], count),
   }
 }
 export function mailReceipt(value: unknown) {
-  const v = receiptHead(value, ['profile', 'state', 'attemptedAt', 'acceptedAt', 'failureReason'])
+  if (!wireSchemas.postApiV1SmtpResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     revision: positive(v['revision']),
     profile: string(v['profile']),
-    state: enumeration(v['state'], [
-      'pending',
-      'submitting',
-      'accepted',
-      'failed',
-      'unknown',
-    ] as const),
+    state: v['state'],
     attemptedAt: nullable(v['attemptedAt'], count),
     acceptedAt: nullable(v['acceptedAt'], count),
     failureReason: nullable(v['failureReason'], string),
   }
 }
 export function wnsReceipt(value: unknown) {
-  const v = receiptHead(value, [
-    'packageFamilyName',
-    'qualifiedAt',
-    'attemptedAt',
-    'failureReason',
-    'selected',
-    'revoked',
-  ])
+  if (!wireSchemas.getApiV1WindowsWnsResponse.validateReceipt(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     revision: positive(v['revision']),
@@ -70,15 +49,18 @@ export function wnsReceipt(value: unknown) {
     qualifiedAt: nullable(v['qualifiedAt'], count),
     attemptedAt: nullable(v['attemptedAt'], count),
     failureReason: nullable(v['failureReason'], string),
-    selected: boolean(v['selected']),
-    revoked: boolean(v['revoked']),
+    selected: v['selected'],
+    revoked: v['revoked'],
   }
 }
 export function wnsOperation(value: unknown) {
-  const v = closed(value, ['kind', 'receipt']),
-    kind = enumeration(v['kind'], ['material', 'revocation'] as const)
+  if (!wireSchemas.postApiV1WindowsWnsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    kind = v['kind']
   if (kind === 'material') return { kind, receipt: wnsReceipt(v['receipt']) }
-  const r = receiptHead(v['receipt'], ['materialRevision'])
+  const r = v['receipt']
   return {
     kind,
     receipt: {
@@ -93,16 +75,26 @@ function providerState<T extends { revision: number }>(
   selection: 'desiredRevision' | 'selectedRevision',
   decode: (v: unknown) => T,
 ) {
-  const keys = ['revision', selection, 'versionCount', 'current', 'latest']
-  if (selection === 'desiredRevision') keys.push('applied')
-  const v = closed(value, keys)
+  if (
+    !wireSchemas.getApiV1StorageConnectionsResponse.validateRoot(value) &&
+    !wireSchemas.getApiV1SmtpResponse.validateRoot(value) &&
+    !wireSchemas.getApiV1WindowsWnsResponse.validateRoot(value)
+  )
+    throw new Error('Invalid contract value')
+
+  const v = value
+  if ((selection === 'desiredRevision') !== 'desiredRevision' in v)
+    throw new Error('Wrong provider selection')
   return {
     revision: count(v['revision']),
-    activeRevision: nullable(v[selection], positive),
+    activeRevision: nullable(
+      'desiredRevision' in v ? v.desiredRevision : v.selectedRevision,
+      positive,
+    ),
     versionCount: count(v['versionCount']),
     current: nullable(v['current'], decode),
     latest: nullable(v['latest'], decode),
-    applied: selection === 'desiredRevision' ? nullable(v['applied'], decode) : null,
+    applied: 'applied' in v ? nullable(v.applied, decode) : null,
   }
 }
 export type StorageInput = {

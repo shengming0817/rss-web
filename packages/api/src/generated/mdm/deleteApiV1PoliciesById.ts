@@ -9,11 +9,12 @@ import type * as se8e651c8c40193b72ad1 from './se8e651c8c40193b72ad1'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<se8e651c8c40193b72ad1.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s5317d3fd5e6c0d9e499f.Root
+export type * as Body from './se8e651c8c40193b72ad1'
+export type * as Response from './s5317d3fd5e6c0d9e499f'
 export const deleteApiV1PoliciesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:DELETE:/api/v1/policies/{id}',

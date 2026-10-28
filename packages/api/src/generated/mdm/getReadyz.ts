@@ -5,12 +5,9 @@ import * as r from './responses'
 
 import type * as s0054b9a64feea4192670 from './s0054b9a64feea4192670'
 import type * as s2ba1b38c2dac7fee8936 from './s2ba1b38c2dac7fee8936'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s2ba1b38c2dac7fee8936.Root | s0054b9a64feea4192670.Root
+
 export const getReadyz = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/readyz',

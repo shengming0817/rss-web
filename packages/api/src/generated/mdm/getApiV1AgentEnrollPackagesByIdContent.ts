@@ -4,14 +4,17 @@ import type { BinaryResponse } from '../../types'
 import * as r from './responses'
 import v_s00404e686415370f1711 from './s00404e686415370f1711.validator.js'
 import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
-
+import type * as s00404e686415370f1711 from './s00404e686415370f1711'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
+  headers?:
+    | { 'If-Range'?: s00404e686415370f1711.Root; Range?: s00404e686415370f1711.Root }
+    | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = BinaryResponse
+
 export const getApiV1AgentEnrollPackagesByIdContent = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

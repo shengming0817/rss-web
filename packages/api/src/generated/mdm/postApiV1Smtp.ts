@@ -5,14 +5,17 @@ import * as r from './responses'
 import v_s1d2d6075c5ba56015b71 from './s1d2d6075c5ba56015b71.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import type * as s1d2d6075c5ba56015b71 from './s1d2d6075c5ba56015b71'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s53fc97ce97974b595b0a from './s53fc97ce97974b595b0a'
 export type Input = {
   body: WireInput<s1d2d6075c5ba56015b71.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s53fc97ce97974b595b0a.Root
+export type * as Body from './s1d2d6075c5ba56015b71'
+export type * as Response from './s53fc97ce97974b595b0a'
 export const postApiV1Smtp = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/smtp',

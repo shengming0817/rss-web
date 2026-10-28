@@ -6,11 +6,12 @@ import v_s43dfa931ac7fd7e25d88 from './s43dfa931ac7fd7e25d88.validator.js'
 import type * as sb86d695444ec4150e617 from './sb86d695444ec4150e617'
 export type Input = {
   pathParams: { kind: string; id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sb86d695444ec4150e617.Root
+
+export type * as Response from './sb86d695444ec4150e617'
 export const getApiV1DeviceViewsByKindById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/device-views/{kind}/{id}',

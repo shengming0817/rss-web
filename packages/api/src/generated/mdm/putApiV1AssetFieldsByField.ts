@@ -10,11 +10,12 @@ import type * as sbb8ccf5ce4bc0ebd789c from './sbb8ccf5ce4bc0ebd789c'
 export type Input = {
   pathParams: { field: string }
   body: WireInput<sbb8ccf5ce4bc0ebd789c.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
+export type * as Body from './sbb8ccf5ce4bc0ebd789c'
+
 export const putApiV1AssetFieldsByField = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/asset-fields/{field}',

@@ -7,11 +7,12 @@ import type * as s815e6f1767bf30910253 from './s815e6f1767bf30910253'
 import type * as scb8fe85f6fb98320f5d0 from './scb8fe85f6fb98320f5d0'
 export type Input = {
   body: WireInput<s815e6f1767bf30910253.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = scb8fe85f6fb98320f5d0.Root
+export type * as Body from './s815e6f1767bf30910253'
+export type * as Response from './scb8fe85f6fb98320f5d0'
 export const postApiV1TelemetryHealth = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/telemetry/health',

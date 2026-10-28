@@ -1,10 +1,9 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { windowParameters, windowPage, type WindowQuery } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
-  closed,
   count,
-  boolean,
   identifier,
   string,
   enumeration,
@@ -21,53 +20,43 @@ export interface EnrollmentInput {
   source: 'mdm.windows' | 'mdm.apple'
   windowsProfile?: 'Full' | 'Device'
 }
-const statusKeys = ['enrollmentId', 'status', 'expiresAt', 'registrationId', 'source']
-function status(value: Record<string, unknown>) {
+type EnrollmentStatusWire = Pick<
+  wireSchemas.postApiV1EnrollmentsResponse.Root,
+  'enrollmentId' | 'status' | 'expiresAt' | 'registrationId'
+> & {
+  source: NonNullable<
+    wireSchemas.getApiV1DevicesByDeviceRegistrationsResponse.Projection_Row['source']
+  >
+}
+function status(value: EnrollmentStatusWire) {
   return {
     enrollmentId: uuid(value['enrollmentId']),
     status: enumeration(value['status'], ['pending', 'bound', 'cancelled'] as const),
     expiresAt: integer(value['expiresAt']),
     registrationId: nullable(value['registrationId'], uuid),
-    source: enumeration(value['source'], enrollmentSources),
+    source: value['source'],
   }
 }
-export function decodeEnrollmentReceipt(value: unknown, id: string) {
-  const result = status(closed(value, statusKeys))
+export function decodeEnrollmentReceipt(value: EnrollmentStatusWire, id: string) {
+  const result = status(value)
   if (result.enrollmentId !== id) throw new Error('Wrong enrollment')
   return result
 }
 export function decodeEnrollment(value: unknown, id: string) {
-  const v = closed(value, [...statusKeys, 'instructions', 'progress'])
+  if (!wireSchemas.getApiV1EnrollmentsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = {
     enrollmentId: uuid(v['enrollmentId']),
-    status: enumeration(v['status'], ['pending', 'bound', 'cancelled', 'expired'] as const),
+    status: v['status'],
     expiresAt: integer(v['expiresAt']),
     registrationId: nullable(v['registrationId'], uuid),
     source: enumeration(v['source'], ['mdm.windows', 'mdm.apple'] as const),
   }
   if (result.enrollmentId !== id) throw new Error('Wrong enrollment')
-  const i = closed(
-    v['instructions'],
-    ['platform'],
-    [
-      'server',
-      'discoveryUrl',
-      'username',
-      'windowsProfile',
-      'requiresLocalAdministrator',
-      'profileUrl',
-      'managedAccount',
-      'enrollmentMethod',
-    ],
-  )
-  const platform = enumeration(i['platform'], [
-    'windows',
-    'windows_entra',
-    'macos',
-    'macos_account',
-    'macos_ade',
-    'unavailable',
-  ] as const)
+  const i = v['instructions']
+  const platform = i['platform']
   function https(value: unknown) {
     const raw = string(value),
       url = new URL(raw)
@@ -77,36 +66,26 @@ export function decodeEnrollment(value: unknown, id: string) {
   }
   function instructions() {
     if (platform === 'windows') {
-      closed(i, [
-        'platform',
-        'server',
-        'discoveryUrl',
-        'username',
-        'windowsProfile',
-        'requiresLocalAdministrator',
-      ])
       return {
         platform,
         server: identifier(i['server']),
         discoveryUrl: https(i['discoveryUrl']),
         username: identifier(i['username']),
-        windowsProfile: enumeration(i['windowsProfile'], ['Full', 'Device'] as const),
-        requiresLocalAdministrator: boolean(i['requiresLocalAdministrator']),
+        windowsProfile: i['windowsProfile'],
+        requiresLocalAdministrator: i['requiresLocalAdministrator'],
       }
     }
     if (platform === 'windows_entra') {
-      closed(i, ['platform', 'discoveryUrl', 'windowsProfile', 'enrollmentMethod'])
       return {
         platform,
         discoveryUrl: https(i['discoveryUrl']),
-        windowsProfile: enumeration(i['windowsProfile'], ['Full', 'Device'] as const),
+        windowsProfile: i['windowsProfile'],
         enrollmentMethod: enumeration(i['enrollmentMethod'], ['entra_user_credential'] as const),
       }
     }
     if (platform === 'macos') {
-      closed(i, ['platform', 'profileUrl', 'enrollmentMethod'])
       const profileUrl = string(i['profileUrl'])
-      if (profileUrl !== `/api/v1/enrollments/${id}/profile`)
+      if (profileUrl !== api.postApiV1EnrollmentsByIdProfile.url({ id }))
         throw new Error('Wrong profile locator')
       return {
         platform,
@@ -117,7 +96,6 @@ export function decodeEnrollment(value: unknown, id: string) {
       }
     }
     if (platform === 'macos_account') {
-      closed(i, ['platform', 'managedAccount', 'enrollmentMethod'])
       return {
         platform,
         managedAccount: identifier(i['managedAccount']),
@@ -127,7 +105,6 @@ export function decodeEnrollment(value: unknown, id: string) {
       }
     }
     if (platform === 'macos_ade') {
-      closed(i, ['platform', 'enrollmentMethod'])
       return {
         platform,
         enrollmentMethod: enumeration(i['enrollmentMethod'], [
@@ -135,17 +112,10 @@ export function decodeEnrollment(value: unknown, id: string) {
         ] as const),
       }
     }
-    closed(i, ['platform'])
+
     return { platform }
   }
-  const p = closed(v['progress'], [
-    'profilePrepared',
-    'certificateIssued',
-    'firstAuthenticatedCheckIn',
-    'systemConfirmation',
-    'managementReady',
-    'diagnostic',
-  ])
+  const p = v['progress']
   const observation = (v: unknown) =>
     enumeration(v, ['observed', 'unknown', 'not_applicable'] as const)
   return {
@@ -153,40 +123,29 @@ export function decodeEnrollment(value: unknown, id: string) {
     instructions: instructions(),
     progress: {
       profilePrepared: observation(p['profilePrepared']),
-      certificateIssued: boolean(p['certificateIssued']),
-      firstAuthenticatedCheckIn: boolean(p['firstAuthenticatedCheckIn']),
+      certificateIssued: p['certificateIssued'],
+      firstAuthenticatedCheckIn: p['firstAuthenticatedCheckIn'],
       systemConfirmation: observation(p['systemConfirmation']),
-      managementReady: boolean(p['managementReady']),
-      diagnostic: enumeration(p['diagnostic'], [
-        'awaiting_system_confirmation',
-        'awaiting_certificate',
-        'awaiting_first_check_in',
-        'awaiting_device_token',
-        'reauthentication_required',
-        'expired',
-        'cancelled',
-        'revoked',
-        'superseded',
-        'credential_unavailable',
-        'channel_unavailable',
-        'ready',
-      ] as const),
+      managementReady: p['managementReady'],
+      diagnostic: p['diagnostic'],
     },
   }
 }
 function receipt(value: unknown, operationId: string, id?: string) {
-  const v = closed(value, ['operationId', ...statusKeys])
+  if (!wireSchemas.postApiV1EnrollmentsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = status(v)
   if (uuid(v['operationId']) !== operationId || (id !== undefined && result.enrollmentId !== id))
     throw new Error('Wrong enrollment receipt')
   return { operationId, ...result }
 }
 export function registration(value: unknown) {
-  const v = closed(
-    value,
-    ['registrationId', 'enrollmentId', 'agentGrantId', 'source', 'generation', 'status'],
-    ['userContextId'],
-  )
+  if (!wireSchemas.getApiV1DevicesByDeviceRegistrationsResponse.validateProjection_Row(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     registrationId: uuid(v['registrationId']),
     enrollmentId: nullable(v['enrollmentId'], uuid),

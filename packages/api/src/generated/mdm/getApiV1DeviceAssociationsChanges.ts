@@ -7,11 +7,12 @@ import type * as s5fefc34a40952312ecbe from './s5fefc34a40952312ecbe'
 import type * as s6b59a8f88074a117377b from './s6b59a8f88074a117377b'
 export type Input = {
   query?: WireInput<s5fefc34a40952312ecbe.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s6b59a8f88074a117377b.Root
+
+export type * as Response from './s6b59a8f88074a117377b'
 export const getApiV1DeviceAssociationsChanges = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/device-associations/changes',

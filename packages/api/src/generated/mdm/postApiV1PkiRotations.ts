@@ -7,11 +7,12 @@ import type * as s187e2467e310bd65df36 from './s187e2467e310bd65df36'
 import type * as s3e6d4ded39a22646ac60 from './s3e6d4ded39a22646ac60'
 export type Input = {
   body: WireInput<s3e6d4ded39a22646ac60.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s187e2467e310bd65df36.Root
+export type * as Body from './s3e6d4ded39a22646ac60'
+export type * as Response from './s187e2467e310bd65df36'
 export const postApiV1PkiRotations = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/pki/rotations',

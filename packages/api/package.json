@@ -13,6 +13,7 @@
     "./mdm-operations": "./src/generated/mdm/index.ts",
     "./mdm-types": "./src/generated/mdm/owners.ts",
     "./mdm-validators": "./src/generated/mdm/owner-validators.ts",
+    "./mdm-schemas": "./src/generated/mdm/schemas.ts",
     "./mdm-demo": "./src/mdm-demo.ts"
   },
   "files": [

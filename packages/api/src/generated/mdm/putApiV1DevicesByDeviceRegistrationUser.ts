@@ -5,16 +5,19 @@ import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s89bcc10a1fec99808d6b from './s89bcc10a1fec99808d6b.validator.js'
 import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s89bcc10a1fec99808d6b from './s89bcc10a1fec99808d6b'
 import type * as sbf8d6593c67b3a303a7a from './sbf8d6593c67b3a303a7a'
 export type Input = {
   pathParams: { device: string }
   body: WireInput<s89bcc10a1fec99808d6b.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sbf8d6593c67b3a303a7a.Root
+export type * as Body from './s89bcc10a1fec99808d6b'
+export type * as Response from './sbf8d6593c67b3a303a7a'
 export const putApiV1DevicesByDeviceRegistrationUser = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

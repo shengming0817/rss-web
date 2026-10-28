@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as s8d536fd2906ba05edc3c from './s8d536fd2906ba05edc3c'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s8d536fd2906ba05edc3c.Root
+
+export type * as Response from './s8d536fd2906ba05edc3c'
 export const getApiV1MdmCandidateWorkspace = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/mdm-candidate/workspace',

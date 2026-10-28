@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s2c4070fc28cd88d91112 from './s2c4070fc28cd88d91112'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s2c4070fc28cd88d91112.Root
+
+export type * as Response from './s2c4070fc28cd88d91112'
 export const getApiV1WebhooksDeliveriesById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/webhooks/deliveries/{id}',

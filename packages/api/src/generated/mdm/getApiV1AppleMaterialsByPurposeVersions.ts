@@ -9,11 +9,12 @@ import type * as se567b14aa549227198dd from './se567b14aa549227198dd'
 export type Input = {
   pathParams: { purpose: string }
   query?: WireInput<se567b14aa549227198dd.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s6cc36bc27dcc12b9c73a.Root
+
+export type * as Response from './s6cc36bc27dcc12b9c73a'
 export const getApiV1AppleMaterialsByPurposeVersions = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

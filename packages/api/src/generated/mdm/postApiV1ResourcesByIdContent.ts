@@ -8,13 +8,14 @@ import v_s97aad074ef160008f059 from './s97aad074ef160008f059.validator.js'
 import type * as s97aad074ef160008f059 from './s97aad074ef160008f059'
 export type Input = {
   pathParams: { id: string }
-  query?: WireInput<s97aad074ef160008f059.Root> | undefined
+  query: WireInput<s97aad074ef160008f059.Root>
   body: ArrayBuffer
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = void
+export type * as Body from './s2db098654a77dbd75ff3'
+
 export const postApiV1ResourcesByIdContent = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/resources/{id}/content',

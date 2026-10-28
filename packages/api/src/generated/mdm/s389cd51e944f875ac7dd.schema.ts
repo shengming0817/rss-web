@@ -1,0 +1,2 @@
+export type * from './s389cd51e944f875ac7dd'
+export { default as validateRoot } from './s389cd51e944f875ac7dd.validator.js'

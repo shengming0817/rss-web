@@ -5,14 +5,17 @@ import * as r from './responses'
 import v_s231e98024ad7b38f25d2 from './s231e98024ad7b38f25d2.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import type * as s231e98024ad7b38f25d2 from './s231e98024ad7b38f25d2'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as sf5d1714cdc4570e84f02 from './sf5d1714cdc4570e84f02'
 export type Input = {
   body: WireInput<s231e98024ad7b38f25d2.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sf5d1714cdc4570e84f02.Root
+export type * as Body from './s231e98024ad7b38f25d2'
+export type * as Response from './sf5d1714cdc4570e84f02'
 export const putApiV1RegistrationQuotasDefaults = /* @__PURE__ */ defineEndpoint<Input, Output>(
   {
     ...{

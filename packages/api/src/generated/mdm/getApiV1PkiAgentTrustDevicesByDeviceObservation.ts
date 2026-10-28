@@ -6,11 +6,12 @@ import v_s93ddaf583a2133fb6a6f from './s93ddaf583a2133fb6a6f.validator.js'
 import type * as s7aa3bad346b4304fb72a from './s7aa3bad346b4304fb72a'
 export type Input = {
   pathParams: { device: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s7aa3bad346b4304fb72a.Root
+
+export type * as Response from './s7aa3bad346b4304fb72a'
 export const getApiV1PkiAgentTrustDevicesByDeviceObservation = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

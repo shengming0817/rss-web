@@ -8,11 +8,12 @@ import type * as s4cd0bbb789185bf36951 from './s4cd0bbb789185bf36951'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s4cd0bbb789185bf36951.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = never
+export type * as Body from './s4cd0bbb789185bf36951'
+
 export const postApiV1DevicesByIdActions = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/devices/{id}/actions',

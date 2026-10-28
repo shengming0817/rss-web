@@ -7,11 +7,12 @@ import type * as s41ede31d29ee5a04f1a4 from './s41ede31d29ee5a04f1a4'
 import type * as s445c1f0f5d73bcaf8ea0 from './s445c1f0f5d73bcaf8ea0'
 export type Input = {
   query?: WireInput<s445c1f0f5d73bcaf8ea0.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s41ede31d29ee5a04f1a4.Root
+
+export type * as Response from './s41ede31d29ee5a04f1a4'
 export const getApiV1DeviceAccessEnterpriseConfiguration = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

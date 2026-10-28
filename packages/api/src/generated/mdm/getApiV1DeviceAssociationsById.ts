@@ -6,11 +6,12 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import type * as s4ed73360eae9ce3097ee from './s4ed73360eae9ce3097ee'
 export type Input = {
   pathParams: { id: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s4ed73360eae9ce3097ee.Root
+
+export type * as Response from './s4ed73360eae9ce3097ee'
 export const getApiV1DeviceAssociationsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/device-associations/{id}',

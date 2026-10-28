@@ -8,11 +8,12 @@ import type * as sa26868c9f00beb721704 from './sa26868c9f00beb721704'
 import type * as sfc1c50296a07d3a8c697 from './sfc1c50296a07d3a8c697'
 export type Input = {
   body: WireInput<sfc1c50296a07d3a8c697.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
+export type * as Body from './sfc1c50296a07d3a8c697'
+
 export const postApiV1AssetRetentionPolicies = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/asset-retention-policies',

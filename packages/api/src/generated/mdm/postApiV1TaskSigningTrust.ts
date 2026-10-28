@@ -4,15 +4,18 @@ import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s69c396f4e076a721047d from './s69c396f4e076a721047d.validator.js'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s487806c4bc580e91030e from './s487806c4bc580e91030e'
 import type * as s69c396f4e076a721047d from './s69c396f4e076a721047d'
 export type Input = {
   body: WireInput<s69c396f4e076a721047d.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s487806c4bc580e91030e.Root
+export type * as Body from './s69c396f4e076a721047d'
+export type * as Response from './s487806c4bc580e91030e'
 export const postApiV1TaskSigningTrust = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/task-signing/trust',

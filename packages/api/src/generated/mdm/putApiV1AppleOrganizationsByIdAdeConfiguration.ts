@@ -6,15 +6,18 @@ import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s5a19892cce151476a129 from './s5a19892cce151476a129.validator.js'
 import type * as s0722124979bc576e8deb from './s0722124979bc576e8deb'
+import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s5a19892cce151476a129 from './s5a19892cce151476a129'
 export type Input = {
   pathParams: { id: string }
   body: WireInput<s5a19892cce151476a129.Root>
-  headers?: Readonly<Record<string, string>> | undefined
+  headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = s0722124979bc576e8deb.Root
+export type * as Body from './s5a19892cce151476a129'
+export type * as Response from './s0722124979bc576e8deb'
 export const putApiV1AppleOrganizationsByIdAdeConfiguration = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

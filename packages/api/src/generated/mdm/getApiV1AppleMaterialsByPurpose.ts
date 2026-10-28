@@ -6,11 +6,12 @@ import v_s064fea475518c24a5d46 from './s064fea475518c24a5d46.validator.js'
 import type * as sae990fb7b4a07148badb from './sae990fb7b4a07148badb'
 export type Input = {
   pathParams: { purpose: string }
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sae990fb7b4a07148badb.Root
+
+export type * as Response from './sae990fb7b4a07148badb'
 export const getApiV1AppleMaterialsByPurpose = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/apple/materials/{purpose}',

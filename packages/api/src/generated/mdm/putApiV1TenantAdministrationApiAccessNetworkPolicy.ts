@@ -7,11 +7,12 @@ import type * as sbf2eef75dfac61d491c3 from './sbf2eef75dfac61d491c3'
 import type * as sd1e866692469c738328b from './sd1e866692469c738328b'
 export type Input = {
   body: WireInput<sbf2eef75dfac61d491c3.Root>
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = sd1e866692469c738328b.Root
+export type * as Body from './sbf2eef75dfac61d491c3'
+export type * as Response from './sd1e866692469c738328b'
 export const putApiV1TenantAdministrationApiAccessNetworkPolicy =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

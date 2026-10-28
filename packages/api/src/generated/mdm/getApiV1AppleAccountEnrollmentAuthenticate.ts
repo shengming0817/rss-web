@@ -3,12 +3,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import type { BinaryResponse } from '../../types'
 import * as r from './responses'
 
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = BinaryResponse
+
+export type * as Response from './s93ddaf583a2133fb6a6f'
 export const getApiV1AppleAccountEnrollmentAuthenticate = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

@@ -5,15 +5,19 @@ import * as r from './responses'
 import v_s00404e686415370f1711 from './s00404e686415370f1711.validator.js'
 import v_s43dfa931ac7fd7e25d88 from './s43dfa931ac7fd7e25d88.validator.js'
 import v_s5541ad0ddbad2f9a961a from './s5541ad0ddbad2f9a961a.validator.js'
+import type * as s00404e686415370f1711 from './s00404e686415370f1711'
 import type * as s5541ad0ddbad2f9a961a from './s5541ad0ddbad2f9a961a'
 export type Input = {
   pathParams: { id: string; version: string }
-  query?: WireInput<s5541ad0ddbad2f9a961a.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
+  query: WireInput<s5541ad0ddbad2f9a961a.Root>
+  headers?:
+    | { 'If-Range'?: s00404e686415370f1711.Root; Range?: s00404e686415370f1711.Root }
+    | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = BinaryResponse
+
 export const getApiV1SoftwareResourcesByIdVersionsByVersionContent =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{

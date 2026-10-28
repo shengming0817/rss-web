@@ -7,12 +7,13 @@ import v_s3b410be5dc3146c7b58a from './s3b410be5dc3146c7b58a.validator.js'
 import type * as s3b410be5dc3146c7b58a from './s3b410be5dc3146c7b58a'
 export type Input = {
   pathParams: { flow: string }
-  query?: WireInput<s3b410be5dc3146c7b58a.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
+  query: WireInput<s3b410be5dc3146c7b58a.Root>
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = BinaryResponse
+
+export type * as Response from './s93ddaf583a2133fb6a6f'
 export const getApiV1AppleAccountEnrollmentAuthenticateByFlow = /* @__PURE__ */ defineEndpoint<
   Input,
   Output

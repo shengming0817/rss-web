@@ -9,11 +9,12 @@ import type * as seb000dfe692318cb3f4a from './seb000dfe692318cb3f4a'
 export type Input = {
   pathParams: { id: string }
   query?: WireInput<sc72f1771b276adf604d8.Root> | undefined
-  headers?: Readonly<Record<string, string>> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
 export type Output = seb000dfe692318cb3f4a.Root
+
+export type * as Response from './seb000dfe692318cb3f4a'
 export const getApiV1GroupsByIdReferences = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/groups/{id}/references',

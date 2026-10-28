@@ -1,33 +1,13 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { operationReceipt, positive, sha256 } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  nullable,
-  record,
-  string,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, nullable, string, unique, uuid } from '../../../services/decode'
 export function webhookMaterial(value: unknown) {
-  const v = closed(value, [
-    'operationId',
-    'reference',
-    'revision',
-    'configurationSha256',
-    'keyDigest',
-    'challenge',
-    'confirmed',
-    'revoked',
-    'endpoint',
-    'networkReference',
-    'attemptedAt',
-    'confirmedAt',
-    'failureReason',
-  ])
+  if (!wireSchemas.postApiV1WebhooksMaterialsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     reference: string(v['reference']),
@@ -35,8 +15,8 @@ export function webhookMaterial(value: unknown) {
     configurationSha256: sha256(v['configurationSha256']),
     keyDigest: sha256(v['keyDigest']),
     challenge: string(v['challenge']),
-    confirmed: boolean(v['confirmed']),
-    revoked: boolean(v['revoked']),
+    confirmed: v['confirmed'],
+    revoked: v['revoked'],
     endpoint: nullable(v['endpoint'], string),
     networkReference: nullable(v['networkReference'], string),
     attemptedAt: nullable(v['attemptedAt'], count),
@@ -45,7 +25,10 @@ export function webhookMaterial(value: unknown) {
   }
 }
 export function webhookHead(value: unknown) {
-  const v = closed(value, ['reference', 'revision', 'activeRevision', 'retiringRevision'])
+  if (!wireSchemas.getApiV1WebhooksMaterialsResponse.validateHead(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     reference: string(v['reference']),
     revision: positive(v['revision']),
@@ -54,14 +37,11 @@ export function webhookHead(value: unknown) {
   }
 }
 export function webhookOperation(value: unknown) {
-  if ('configurationSha256' in record(value)) return webhookMaterial(value)
-  const v = closed(value, [
-    'operationId',
-    'reference',
-    'revision',
-    'activeRevision',
-    'retiringRevision',
-  ])
+  if (!wireSchemas.getApiV1WebhooksMaterialsOperationsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  if ('configurationSha256' in value) return webhookMaterial(value)
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     ...webhookHead({

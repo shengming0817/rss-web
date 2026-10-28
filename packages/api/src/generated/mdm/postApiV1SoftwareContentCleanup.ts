@@ -4,12 +4,10 @@ import { defineEndpoint } from '../../mdm-endpoint'
 import * as r from './responses'
 
 import type * as s756e9a1f2ae1debf7f18 from './s756e9a1f2ae1debf7f18'
-export type Input = {
-  headers?: Readonly<Record<string, string>> | undefined
-  signal?: AbortSignal | undefined
-  timeoutMs?: number | undefined
-}
+export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
 export type Output = s756e9a1f2ae1debf7f18.Root
+
+export type * as Response from './s756e9a1f2ae1debf7f18'
 export const postApiV1SoftwareContentCleanup = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/software/content/cleanup',
