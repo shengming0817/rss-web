@@ -95,7 +95,8 @@ try {
     await page.locator('input[value="agent"]').uncheck()
     await page.locator('input[value="windows_mdm"]').check()
     await step('通知与其他集成')
-    await page.locator('[data-capability=smtp]').getByRole('combobox').click()
+    // Vuetify's readonly input has pointer-events:none; the field is the click activator.
+    await page.locator('[data-capability=smtp] .v-field').click()
     await page.getByRole('option', { name: '明确跳过', exact: true }).click()
     await page
       .getByPlaceholder('跳过理由', { exact: true })
@@ -198,7 +199,7 @@ try {
       assert.equal(await page.locator('input[value="windows_mdm"]').isDisabled(), true)
       await step('通知与其他集成')
       assert.equal(
-        await page.locator('[data-capability=smtp]').getByRole('combobox').isDisabled(),
+        await page.locator('[data-capability=smtp] input[role=combobox]').isDisabled(),
         true,
       )
       coverage.push('relogin-resumes-daily-work-despite-later-degradation')
@@ -468,13 +469,16 @@ try {
     JSON.stringify({
       phase,
       result: 'failed',
+      networkCode: /net::ERR_[A-Z_]+/.exec(error?.message ?? '')?.[0],
       location: /(?:settings|authorization)-browser\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0],
       classification:
         error?.name === 'AssertionError'
           ? 'assertion'
           : error?.name === 'TimeoutError'
             ? 'timeout'
-            : 'browser',
+            : /strict mode violation/.test(error?.message ?? '')
+              ? 'ambiguous_locator'
+              : 'browser',
     }),
   )
   process.exitCode = 1

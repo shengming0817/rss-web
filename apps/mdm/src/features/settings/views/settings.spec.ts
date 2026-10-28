@@ -181,7 +181,7 @@ async function fixture(
       else if (o.path === '/api/v1/windows/wns' || o.path === '/api/v1/storage/connections')
         value = {
           revision: 0,
-          desiredRevision: null,
+          [o.path === '/api/v1/storage/connections' ? 'activeRevision' : 'desiredRevision']: null,
           versionCount: 0,
           current: null,
           latest: null,
@@ -381,7 +381,6 @@ it.each(['storage', 'smtp', 'wns'] as const)(
             profile: 'approved',
             state: 'pending',
             failureReason: null,
-            selected: false,
             revoked: false,
             qualifiedAt: null,
             expiresAt: null,
@@ -414,7 +413,7 @@ it.each(['storage', 'smtp', 'wns'] as const)(
         ? { revision: 1, selectedRevision: null, versionCount: 0, current: null, latest: null }
         : {
             revision: 1,
-            desiredRevision: null,
+            [kind === 'storage' ? 'activeRevision' : 'desiredRevision']: null,
             versionCount: 0,
             current: null,
             latest: null,
@@ -658,7 +657,7 @@ it('requires reading the conflicting version and a separate explicit edit decisi
     if (o.method === 'POST') throw decodeMdmError(409, { code: 'operation_conflict' })
     return {
       revision: 2,
-      desiredRevision: null,
+      activeRevision: null,
       versionCount: 0,
       current: null,
       latest: null,
@@ -2248,4 +2247,65 @@ it('returns focus to the configuration button after closing a material dialog', 
   ;(close.element as HTMLButtonElement).focus()
   await close.trigger('click')
   await vi.waitFor(() => expect(document.activeElement).toBe(opener.element))
+})
+
+it('shows storage candidate, active binding and unknown runtime observation separately', async () => {
+  const f = await fixture(ProviderPanel, { kind: 'storage' })
+  const current = {
+    operationId: id,
+    revision: 1,
+    profile: 'source',
+    state: 'qualified',
+    failureReason: null,
+    revoked: false,
+    qualifiedAt: 1,
+    expiresAt: null,
+  }
+  f.setHandler(() => ({
+    revision: 2,
+    activeRevision: 1,
+    versionCount: 2,
+    current,
+    latest: { ...current, revision: 2, profile: 'candidate' },
+    applied: null,
+  }))
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  const summary = f.wrapper.get('.settings-version-summary').text()
+  expect(summary).toMatch(/保存版本\s*2/)
+  expect(summary).toMatch(/活动连接版本\s*1/)
+  expect(summary).toMatch(/实际观察版本\s*—/)
+  expect(summary).not.toContain('请求应用版本')
+  expect(f.wrapper.text()).toContain('资格通过不代表已经切换存储')
+  expect(f.calls.filter((o) => o.method !== 'GET')).toHaveLength(0)
+})
+
+it('labels the storage catalog binding as active in overview evidence', async () => {
+  const f = await fixture(SettingsView, {}, 'tenant', 'settings-overview')
+  f.setHandler(() => ({
+    items: [
+      {
+        id: 'storage',
+        scope: 'tenant',
+        owner: 'software',
+        custody: 'storage_provider',
+        lifecycle: 'provider_credential',
+        status: 'configured',
+        revision: 2,
+        desiredRevision: 1,
+        appliedRevision: null,
+        configuredCount: 2,
+        reason: null,
+        actions: [],
+      },
+    ],
+    domains: [],
+  }))
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  const row = f.wrapper.get('[data-setting=storage]')
+  await row.get('.v-expansion-panel-title').trigger('click')
+  await flushPromises()
+  expect(row.text()).toMatch(/活动连接版本\s*1/)
+  expect(row.text()).not.toContain('请求应用版本')
 })

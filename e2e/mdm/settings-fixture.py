@@ -157,7 +157,9 @@ def compose_browser(candidate):
             until(lambda:api.call('GET','/readyz')[0]==200)
             owner.product('configure-host','/var/lib/rss-mdm/configure-browser.json')
             owner.product('prepare-hosts')
-            owner.script("from pathlib import Path;p=Path('/var/lib/rss-mdm/runtime/gateway/nginx.conf');s=p.read_text();p.write_text(s.replace('listen 8443;', 'listen 443; listen 8443;'))")
+            # The current gateway terminates TLS on 8443. Keep the published host
+            # listener and expose the same TLS virtual hosts on the browser network's 443.
+            owner.script("from pathlib import Path;import re;p=Path('/var/lib/rss-mdm/runtime/gateway/nginx.conf');s=p.read_text();s,n=re.subn(r'listen 8443 ssl([^;]*);',r'listen 443 ssl\\1; listen 8443 ssl\\1;',s);assert n>0,'missing TLS gateway listener';p.write_text(s)")
             owner.compose('exec','-T','gateway','nginx','-s','reload','-c','/run/gateway/nginx.conf')
             api.login(seeded['tenantId'],'administrator',(inputs/'administrator-password').read_text().strip())
             reader_password=private(root/'reader-password','First-use-browser-reader-2026!')
