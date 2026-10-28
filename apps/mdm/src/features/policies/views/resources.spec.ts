@@ -519,7 +519,14 @@ it('edits Resource presentation through the current client without dropping unkn
         String(options.pathParams![key]!),
       )
       const reply = resources.handle(httpRequest(path, options.body), 'normal')!
-      if (reply.status !== options.successStatus) throw new Error('HTTP failure')
+      if (
+        !(
+          (Array.isArray(options.successStatus)
+            ? options.successStatus
+            : [options.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
+        throw new Error('HTTP failure')
       return options.decode(reply.body)
     },
   } as import('@rss/api/mdm').HttpTransport)

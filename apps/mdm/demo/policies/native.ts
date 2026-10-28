@@ -133,8 +133,8 @@ export function createNativeDemo(
                 observationScope:
                   d.summary.platform === 'windows' ? 'native_objects' : 'native_command',
                 receipts: [],
-                progress: 'unknown',
-                effect: 'unverified',
+                progress: 'queued',
+                effect: d.summary.platform === 'windows' ? 'waiting' : 'unverified',
               },
             },
             id,

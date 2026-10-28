@@ -28,8 +28,8 @@ it('binds administrator recovery to exact original registration/issuance and kee
   })
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/agent-registrations/{registration}/recovery',
-    pathParams: { registration },
+    path: '/api/v1/agent-registrations/{id}/recovery',
+    pathParams: { id: registration },
     body: input,
   })
   reply = {
@@ -45,8 +45,8 @@ it('binds administrator recovery to exact original registration/issuance and kee
   })
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/agent-issuances/{issuance}/recover',
-    pathParams: { issuance },
+    path: '/api/v1/agent-issuances/{id}/recover',
+    pathParams: { id: issuance },
     body: { wireVersion: 1, operationId: operation, certificateChain: ['YQ=='] },
   })
   expect(() => issuanceCandidate(reply, registration)).toThrow()
@@ -89,8 +89,8 @@ it('queries the original administrative operation without confusing its locator 
   expect(await client.operation(issuance, operation)).toBeNull()
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/agent-issuances/{issuance}/recovery-operations/{operation}',
-    pathParams: { issuance, operation },
+    path: '/api/v1/agent-issuances/{id}/recovery-operations/{operation}',
+    pathParams: { id: issuance, operation },
   })
   reply = {
     wireVersion: 1,

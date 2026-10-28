@@ -75,7 +75,14 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
             .map(([k, v]) => [k, String(v)]),
         )
       const reply = await scenario.handle(options.method, path + '?' + query, options.body, headers)
-      if (reply.status !== options.successStatus) throw decodeMdmError(reply.status, reply.body)
+      if (
+        !(
+          (Array.isArray(options.successStatus)
+            ? options.successStatus
+            : [options.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
+        throw decodeMdmError(reply.status, reply.body)
       return options.decode(reply.body)
     },
   } as HttpTransport

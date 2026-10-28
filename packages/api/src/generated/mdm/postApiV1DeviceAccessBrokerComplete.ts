@@ -13,10 +13,7 @@ export type Input = {
 export type Output = s3ebe630f953853917e4a.Root
 export type * as Body from './sc0717647ca270975a0e4'
 export type * as Response from './s3ebe630f953853917e4a'
-export const postApiV1DeviceAccessBrokerComplete = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1DeviceAccessBrokerComplete = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/device-access/broker/complete',
     method: 'POST',

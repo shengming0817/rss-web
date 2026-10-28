@@ -94,13 +94,27 @@ const memberFields = {
         throw new Error('Invalid event operation')
       const o = value,
         reference = operationReference(o['reference'])
+      if (
+        reference.kind === 'run' &&
+        !wireSchemas.getApiV1DevicesByDevicePolicyEventBatchesByBatchMembersResponse.validateRunState(
+          o.state,
+        )
+      )
+        throw new Error('Wrong run progress')
+      if (
+        reference.kind === 'retirement' &&
+        (!wireSchemas.getApiV1DevicesByDevicePolicyEventBatchesByBatchMembersResponse.validateRetirement(
+          o.state,
+        ) ||
+          o.state.id !== reference.id)
+      )
+        throw new Error('Wrong retirement progress')
       const actions = array(o['allowedActions'], identifier)
       // This management projection currently grants no controls; each original owner authorizes its own actions.
       if (actions.length) throw new Error('Unsupported batch control')
       return {
         reference,
-        state:
-          reference.kind === 'retirement' ? jsonValue(o['state'], 65536) : identifier(o['state']),
+        state: reference.kind === 'native' ? identifier(o['state']) : jsonValue(o['state'], 65536),
         allowedActions: actions,
         agentInstallation:
           'agentInstallation' in o ? jsonValue(o['agentInstallation'], 65536) : null,

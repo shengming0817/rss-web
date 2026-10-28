@@ -61,7 +61,13 @@ async function fixture() {
         Object.entries(options.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
       ),
     })
-    if (response.status !== options.successStatus)
+    if (
+      !(
+        (Array.isArray(options.successStatus)
+          ? options.successStatus
+          : [options.successStatus]) as readonly number[]
+      ).includes(response.status)
+    )
       throw Object.assign(new Error('Synthetic archive HTTP failure'), {
         status: response.status,
         code: (response.body as { code?: string })?.code,

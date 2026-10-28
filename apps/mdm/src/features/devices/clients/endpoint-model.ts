@@ -127,8 +127,8 @@ export function viewEndpoint(value: unknown) {
     ...endpointFields(v),
     assetState: v['assetState'],
     platform,
-    displayName: v['displayName'] === undefined ? undefined : resolvedField(v['displayName']),
-    serialNumber: v['serialNumber'] === undefined ? undefined : resolvedField(v['serialNumber']),
+    displayName: v['displayName'] == null ? undefined : resolvedField(v['displayName']),
+    serialNumber: v['serialNumber'] == null ? undefined : resolvedField(v['serialNumber']),
     registrationUser: owner
       ? {
           revision: count(owner['revision']),
@@ -209,10 +209,12 @@ export const endpointDirectoryFields = {
       }
     }),
 }
-function endpointFields(v: unknown) {
-  if (!wireSchemas.getApiV1DevicesResponse.validateProjection_Item(v))
-    throw new Error('Invalid endpoint projection')
-
+function endpointFields(
+  v:
+    | wireSchemas.getApiV1DevicesResponse.Projection_Item
+    | wireSchemas.getApiV1DevicesByDeviceResponse.Root
+    | wireSchemas.getApiV1DeviceViewsByKindByIdResponse.Endpoint,
+) {
   return {
     id: endpointDirectoryFields.id(v['id']),
     status: endpointDirectoryFields.status(v['status']),
@@ -248,8 +250,8 @@ export function endpointDetail(value: unknown, id: string) {
       const c = x,
         p = c['permission']
       return {
-        action: enumeration(c['action'], ['script', 'software', 'configuration'] as const),
-        channel: enumeration(c['channel'], channels),
+        action: c['action'],
+        channel: c['channel'],
         productSupport: support(c['productSupport']),
         devicePrerequisite: support(c['devicePrerequisite']),
         permission: {

@@ -12,10 +12,7 @@ export type Input = {
 export type Output = sf42cb4ece77f03b54db3.Root
 
 export type * as Response from './sf42cb4ece77f03b54db3'
-export const getApiV1UserAttributeOperationsById = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1UserAttributeOperationsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/user-attribute-operations/{id}',
     method: 'GET',

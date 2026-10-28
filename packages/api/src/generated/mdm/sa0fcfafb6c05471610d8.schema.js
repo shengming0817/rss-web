@@ -1,0 +1,7 @@
+export { default as validateRoot } from './sa0fcfafb6c05471610d8.validator.js'
+export { default as validatePerson } from './vnhbmdadjooajdafmhdjnahifhocclkebnpnomjghjopfcpajcmcaodiencfbifen.validator.js'
+export { default as validateProofKind } from './vddhfjjbpcejbilfkmgoaligheaplacaaeeffcgmifiaiblkgldchmpecdlkjoohe.validator.js'
+export { default as validatePublicKey } from './vjamhcoieigcbfgcnfblfknianpchhbnncfjdjhogecklmnomnjjipfikogbfiebn.validator.js'
+export { default as validateRelyingParty } from './vmjoefeegnbkkfmnmpjnbngfbpjllgadeddhmfhchgmchdfjoopkaldmbmdhjaloc.validator.js'
+export { default as validateSubject } from './vbaaffkphnhdeloebpombkkeppcccidlcfeimkhakklecjgoechebjiiifamjekhg.validator.js'
+export { default as validateWindowsSource } from './vbhompmaoikaoegbpheoakpgakghfmnffifnocbnhmedgegbcmphijcogphogmoco.validator.js'

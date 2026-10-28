@@ -15,10 +15,7 @@ export type Input = {
 export type Output = s752c1fc4beedb93a08a9.Root
 
 export type * as Response from './s752c1fc4beedb93a08a9'
-export const getApiV1DevicesByDeviceRegistrations = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1DevicesByDeviceRegistrations = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/devices/{device}/registrations',
     method: 'GET',

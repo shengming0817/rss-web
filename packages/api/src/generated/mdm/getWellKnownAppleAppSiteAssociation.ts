@@ -8,10 +8,7 @@ export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | und
 export type Output = s3f0de9e147663c666433.Root
 
 export type * as Response from './s3f0de9e147663c666433'
-export const getWellKnownAppleAppSiteAssociation = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getWellKnownAppleAppSiteAssociation = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/.well-known/apple-app-site-association',
     method: 'GET',

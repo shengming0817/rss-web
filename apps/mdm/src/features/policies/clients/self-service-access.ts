@@ -1,11 +1,15 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
+import { wireValue } from '../../../contracts/collection/check'
+import { source } from '../../operations/clients/authorization'
 import { array, unique } from '../../../services/decode'
 
 export const selectorKinds = ['user', 'idp_group', 'department', 'user_group'] as const
 /** Policy selector coordinates, independent of management grants and membership evaluation. */
-export function selfServiceSelector(value: unknown) {
+export function selfServiceSelector(input: unknown) {
+  const value = wireValue(input)
   if (!wireSchemas.getApiV1PoliciesByIdResponse.validateSelfServiceSelector(value))
     throw new Error('Invalid selector')
+  if ('source' in value) source(value.source)
   return value
 }
 export type SelfServiceSelector = ReturnType<typeof selfServiceSelector>

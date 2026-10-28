@@ -12,10 +12,7 @@ export type Input = {
 export type Output = s1d80535d61d96851c188.Root
 
 export type * as Response from './s1d80535d61d96851c188'
-export const getApiV1PoliciesByIdSoftwareRollout = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1PoliciesByIdSoftwareRollout = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/policies/{id}/software/rollout',
     method: 'GET',

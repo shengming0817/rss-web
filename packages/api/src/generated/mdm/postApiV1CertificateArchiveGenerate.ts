@@ -16,10 +16,7 @@ export type Input = {
 export type Output = s5d75b07cfdb05df673d3.Root
 export type * as Body from './scb5ec1ae693809b51261'
 export type * as Response from './s5d75b07cfdb05df673d3'
-export const postApiV1CertificateArchiveGenerate = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1CertificateArchiveGenerate = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/certificate-archive/generate',
     method: 'POST',

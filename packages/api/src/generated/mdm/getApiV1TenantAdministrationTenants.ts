@@ -13,10 +13,7 @@ export type Input = {
 export type Output = s165a90b552fbde957c87.Root
 
 export type * as Response from './s165a90b552fbde957c87'
-export const getApiV1TenantAdministrationTenants = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1TenantAdministrationTenants = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/tenant-administration/tenants',
     method: 'GET',

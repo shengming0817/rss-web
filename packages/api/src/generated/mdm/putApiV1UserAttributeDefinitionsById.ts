@@ -15,10 +15,7 @@ export type Input = {
 export type Output = sf42cb4ece77f03b54db3.Root
 export type * as Body from './s594d97b5630be0a288d3'
 export type * as Response from './sf42cb4ece77f03b54db3'
-export const putApiV1UserAttributeDefinitionsById = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const putApiV1UserAttributeDefinitionsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/user-attribute-definitions/{id}',
     method: 'PUT',

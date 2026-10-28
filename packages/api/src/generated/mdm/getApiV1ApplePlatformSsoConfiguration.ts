@@ -13,10 +13,7 @@ export type Input = {
 export type Output = se0f185df775bf078698c.Root
 
 export type * as Response from './se0f185df775bf078698c'
-export const getApiV1ApplePlatformSsoConfiguration = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1ApplePlatformSsoConfiguration = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/apple/platform-sso/configuration',
     method: 'GET',

@@ -15,10 +15,7 @@ export type Input = {
 export type Output = s6406bbb7e1aea3c52ee3.Root
 export type * as Body from './s2a14b4741b91ed7d9f59'
 export type * as Response from './s6406bbb7e1aea3c52ee3'
-export const postApiV1DevicesByDevicePolicyEvents = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1DevicesByDevicePolicyEvents = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/devices/{device}/policy-events',
     method: 'POST',

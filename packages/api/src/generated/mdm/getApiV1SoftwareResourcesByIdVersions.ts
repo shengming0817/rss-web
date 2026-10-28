@@ -15,10 +15,7 @@ export type Input = {
 export type Output = saca4d81f6cd52181d171.Root
 
 export type * as Response from './saca4d81f6cd52181d171'
-export const getApiV1SoftwareResourcesByIdVersions = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1SoftwareResourcesByIdVersions = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/software/resources/{id}/versions',
     method: 'GET',

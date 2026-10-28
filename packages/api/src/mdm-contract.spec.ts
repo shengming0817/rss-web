@@ -14,10 +14,35 @@ import {
 } from './generated/mdm'
 import { validateTaskAdmission, validatePolicyDefinition } from './generated/mdm/owner-validators'
 import { safeJson } from './mdm-contract-response'
+import * as schemas from './generated/mdm/schemas'
 import type { HttpTransport, RequestOptions, NoContentRequest } from './types'
 
 const id = '11111111-1111-4111-8111-111111111111'
 describe('fixed producer HTTP operations', () => {
+  it('validates composed records with shared and branch fields while rejecting unknown core keys', () => {
+    const record = {
+      id: 'rp:app',
+      kind: 'relying_party',
+      value: {
+        id: 'app',
+        revision: 1,
+        enabled: true,
+        callback: 'https://app.example/callback',
+        targetFingerprint: 'fixed',
+        capabilities: ['native_key'],
+      },
+    }
+    const validate = schemas.getApiV1DeviceAccessEnterpriseConfigurationResponse.validateRoot
+    expect(validate({ items: [record], nextCursor: null })).toBe(true)
+    expect(validate({ items: [{ ...record, unexpected: true }], nextCursor: null })).toBe(false)
+    expect(
+      validate({
+        items: [{ ...record, value: { ...record.value, unexpected: true } }],
+        nextCursor: null,
+      }),
+    ).toBe(false)
+    expect(validate({ items: [{ ...record, kind: 'subject' }], nextCursor: null })).toBe(false)
+  })
   it('sends declared range headers through the public and authenticated download executor', async () => {
     const instance = axios.create(),
       mock = new MockAdapter(instance)

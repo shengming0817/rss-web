@@ -127,7 +127,13 @@ function fixture() {
         { path, body: o.body, query, actor, headers: o.headers ?? {}, method: o.method },
         'normal',
       )!
-      if (reply.status !== o.successStatus)
+      if (
+        !(
+          (Array.isArray(o.successStatus)
+            ? o.successStatus
+            : [o.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
         throw Object.assign(new Error('Rejected'), { status: reply.status })
       return o.decode(reply.body)
     },

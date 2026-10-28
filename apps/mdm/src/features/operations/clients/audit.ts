@@ -32,6 +32,8 @@ export interface AuditQuery {
   cursor?: string
 }
 export function auditQuery(query: AuditQuery): AuditQuery {
+  if (!wireSchemas.getApiV1AuditEventsQuery.validateRoot(query))
+    throw new Error('Invalid audit query')
   for (const text of [query.targetId, query.targetType, query.device, query.actor, query.action])
     if (text !== undefined) identifier(text)
   if (query.operationId !== undefined) uuid(query.operationId)

@@ -18,9 +18,8 @@ export function subject(value: unknown) {
     throw new Error('Invalid contract value')
 
   const kind = value['kind']
-  if (kind === 'filevault' || kind === 'recovery_lock') {
-    return { kind }
-  }
+  if (kind === 'filevault') return { kind, custody: uuid(value.custody), epoch: count(value.epoch) }
+  if (kind === 'recovery_lock') return { kind }
   if (kind === 'bitlocker') {
     const v = value
     return { kind, volume: identifier(v['volume']), protector: uuid(v['protector']) }

@@ -12,10 +12,7 @@ export type Input = {
 export type Output = s4ac0a1e81bca77619c85.Root
 
 export type * as Response from './s4ac0a1e81bca77619c85'
-export const getApiV1AgentConnectionOperationsById = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1AgentConnectionOperationsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/agent-connection-operations/{id}',
     method: 'GET',

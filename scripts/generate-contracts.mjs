@@ -10,12 +10,13 @@ import Ajv2020 from 'ajv/dist/2020.js'
 import standaloneCode from 'ajv/dist/standalone/index.js'
 import { compile } from 'json-schema-to-typescript'
 import { build } from 'esbuild'
-import { format } from 'prettier'
+import { format, resolveConfig } from 'prettier'
 import { contractSource } from './contract-source.mjs'
 
 const root = new URL('../', import.meta.url)
 const target = new URL('packages/api/src/generated/mdm/', root)
 const checking = process.argv.includes('--check')
+const formatting = await resolveConfig(fileURLToPath(new URL('package.json', root)))
 const { document, source } = await contractSource(root)
 const outputFiles = new Set()
 const digest = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -91,7 +92,15 @@ const schemaChildren = new Set([
   'else',
 ])
 // Visit only schema positions. A const/enum/example containing JSON Schema is ordinary data.
-function transform(schema, mode) {
+function objectShape(schema) {
+  return (
+    typeof schema === 'object' &&
+    (schema.type === 'object' ||
+      schema.properties ||
+      ['allOf', 'anyOf', 'oneOf'].some((key) => schema[key]?.some(objectShape)))
+  )
+}
+function transform(schema, mode, composed = false) {
   if (typeof schema === 'boolean') return schema
   const result = {}
   for (const [key, value] of Object.entries(schema)) {
@@ -100,20 +109,31 @@ function transform(schema, mode) {
     result[key] = schemaMaps.has(key)
       ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, transform(v, mode)]))
       : schemaLists.has(key)
-        ? value.map((v) => transform(v, mode))
+        ? value.map((v) => transform(v, mode, key !== 'prefixItems'))
         : schemaChildren.has(key)
-          ? transform(value, mode)
+          ? transform(value, mode, ['contains', 'not', 'if', 'then', 'else'].includes(key))
           : value
   }
-  // Consumer core records are closed; only the producer's explicit extension positions remain open.
+  // Close the complete record after composition. Closing individual union arms
+  // rejects fields owned by the shared record or another composed subschema.
   if (
-    result.properties &&
+    !composed &&
+    objectShape(schema) &&
     result.additionalProperties === undefined &&
-    !schema['x-rss-extension'] &&
-    !result.allOf &&
-    !result['$ref']
-  )
-    result.additionalProperties = false
+    !schema['x-rss-extension']
+  ) {
+    if (
+      result.allOf ||
+      result.anyOf ||
+      result.oneOf ||
+      result.if ||
+      result.then ||
+      result.else ||
+      result.$ref
+    ) {
+      if (mode === 'validation') result.unevaluatedProperties = false
+    } else if (result.properties) result.additionalProperties = false
+  }
   // Rust integers must remain exact in JavaScript; floating point fields keep their wire range.
   if (
     result.type === 'integer' ||
@@ -168,7 +188,7 @@ const ajv = new Ajv2020({
 if (!checking) await mkdir(target, { recursive: true })
 async function output(name, code, parser = 'typescript') {
   outputFiles.add(name)
-  const value = await format(code, { parser, singleQuote: true, semi: false, printWidth: 96 })
+  const value = await format(code, { ...formatting, parser })
   const path = new URL(name, target)
   if (checking) {
     if ((await readFile(path, 'utf8').catch(() => '')) !== value)
@@ -344,13 +364,14 @@ await output('owners.ts', ownerTypes)
 // Scoped named definitions are available to consumers that also validate editor/demo input.
 // Share identical resolved validation graphs, while recursive graphs retain their source scope.
 for (const id of [...needed].sort()) {
-  let code = `export type * from './${short(id)}'\nexport {default as validateRoot} from './${short(id)}.validator.js'\n`
+  let code = `export {default as validateRoot} from './${short(id)}.validator.js'\n`
   for (const name of Object.keys(schemas[id].$defs ?? {}).sort()) {
     const validator = 'v' + typeName(id, '/$defs/' + name).slice(1)
     exports[validator] ??= `${id}#/$defs/${name}`
     code += `export {default as validate${name}} from './${validator}.validator.js'\n`
   }
-  await output(short(id) + '.schema.ts', code)
+  await output(short(id) + '.schema.js', code, 'babel')
+  await output(short(id) + '.schema.d.ts', `export type * from './${short(id)}'\n` + code)
 }
 for (const [name, ref] of Object.entries(exports)) {
   const bundled = await build({
@@ -581,14 +602,16 @@ for (const e of endpoints) {
   )
   index += `export { ${name} } from './${name}'\n`
   index += `export type * as ${name}Contract from './${name}'\n`
+  if (e.request.query)
+    schemaIndex += `export * as ${name}Query from './${rootFor(e.request.query)}.schema.js'\n`
   if (e.request.body)
-    schemaIndex += `export * as ${name}Body from './${rootFor(e.request.body.schema)}.schema'\n`
+    schemaIndex += `export * as ${name}Body from './${rootFor(e.request.body.schema)}.schema.js'\n`
   if (success.length === 1 && success[0].body)
-    schemaIndex += `export * as ${name}Response from './${rootFor(success[0].body.schema)}.schema'\n`
+    schemaIndex += `export * as ${name}Response from './${rootFor(success[0].body.schema)}.schema.js'\n`
   else
     for (const response of success)
       if (response.body)
-        schemaIndex += `export * as ${name}Response${response.status} from './${rootFor(response.body.schema)}.schema'\n`
+        schemaIndex += `export * as ${name}Response${response.status} from './${rootFor(response.body.schema)}.schema.js'\n`
 }
 await output('index.ts', index)
 await output('schemas.ts', schemaIndex)

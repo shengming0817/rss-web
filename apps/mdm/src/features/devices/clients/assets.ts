@@ -212,7 +212,10 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         {
           pathParams: { field },
           query: {
-            ...checked(validateFieldReferenceQuery, { cursor: cursor ?? null, limit: 64 }),
+            ...checked(validateFieldReferenceQuery, {
+              ...(cursor === undefined ? {} : { cursor }),
+              limit: 64,
+            }),
             cursor,
           },
         },

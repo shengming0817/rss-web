@@ -15,8 +15,7 @@ export type * as Response from './s780d786ce8e55d9d7626'
 export const getApiV1DevicesByDeviceDeviceAccessOperationsByIdOffboarding =
   /* @__PURE__ */ defineEndpoint<Input, Output>({
     ...{
-      operationId:
-        'browser:GET:/api/v1/devices/{device}/device-access/operations/{id}/offboarding',
+      operationId: 'browser:GET:/api/v1/devices/{device}/device-access/operations/{id}/offboarding',
       method: 'GET',
       path: '/api/v1/devices/{device}/device-access/operations/{id}/offboarding',
       captures: ['device', 'id'],

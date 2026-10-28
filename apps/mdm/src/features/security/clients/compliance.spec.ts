@@ -33,7 +33,7 @@ const assessment = {
   reason: 'facts_unknown',
   condition: 'unknown',
   applicability: { platform: 'all', platformDecision: 'match', sources: [], groups: [] },
-  explanations: [{ path: [0], outcome: 'missing' }],
+  explanations: [{ context: 'device', path: [0], outcome: 'missing' }],
   evidence: [],
 }
 it('keeps native pagination, versions, CAS receipts and explicit history filters on their exact routes', async () => {
@@ -47,7 +47,7 @@ it('keeps native pagination, versions, CAS receipts and explicit history filters
   })
   reply = { id, revision: 2, definition }
   expect(await client.version(id, 2)).toEqual(reply)
-  expect(request.mock.lastCall![0]).toMatchObject({ pathParams: { id, revision: '2' } })
+  expect(request.mock.lastCall![0]).toMatchObject({ pathParams: { id, revision: 2 } })
   await expect(client.version(id, 1)).rejects.toThrow()
   reply = { id, revision: 2, task }
   const body = operation(definition, 1)
@@ -60,8 +60,8 @@ it('keeps native pagination, versions, CAS receipts and explicit history filters
   reply = { items: [{ ...assessment, task, disposition: 'published' }], nextCursor: 'opaque-token' }
   await client.history('device-01', { cursor: 'previous-token', from: 100, until: 200, limit: 10 })
   expect(request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v1/devices/{device}/compliance/history',
-    pathParams: { device: 'device-01' },
+    path: '/api/v1/devices/{id}/compliance/history',
+    pathParams: { id: 'device-01' },
     query: { cursor: 'previous-token', from: 100, until: 200, limit: 10 },
   })
 })

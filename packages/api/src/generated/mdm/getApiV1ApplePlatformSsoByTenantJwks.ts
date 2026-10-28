@@ -12,10 +12,7 @@ export type Input = {
 export type Output = s6aaab9feab65eb61f910.Root
 
 export type * as Response from './s6aaab9feab65eb61f910'
-export const getApiV1ApplePlatformSsoByTenantJwks = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1ApplePlatformSsoByTenantJwks = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/apple/platform-sso/{tenant}/jwks',
     method: 'GET',

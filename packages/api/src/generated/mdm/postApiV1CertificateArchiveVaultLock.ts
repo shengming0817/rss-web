@@ -8,10 +8,7 @@ export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | und
 export type Output = s07461862b87497333920.Root
 
 export type * as Response from './s07461862b87497333920'
-export const postApiV1CertificateArchiveVaultLock = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1CertificateArchiveVaultLock = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/certificate-archive/vault/lock',
     method: 'POST',

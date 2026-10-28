@@ -11,6 +11,7 @@ export function retirement(value: unknown, id: string) {
   if (v['id'] !== id) throw new Error('Wrong retirement')
   return {
     id: uuid(v['id']),
+    origin: v.origin,
     policy: uuid(v['policy']),
     version: uuid(v['version']),
     target: deviceObject(v['target']),

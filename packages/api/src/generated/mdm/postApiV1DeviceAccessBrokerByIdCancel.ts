@@ -12,10 +12,7 @@ export type Input = {
 export type Output = sd71ef25b47b06f41b968.Root
 
 export type * as Response from './sd71ef25b47b06f41b968'
-export const postApiV1DeviceAccessBrokerByIdCancel = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1DeviceAccessBrokerByIdCancel = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/device-access/broker/{id}/cancel',
     method: 'POST',

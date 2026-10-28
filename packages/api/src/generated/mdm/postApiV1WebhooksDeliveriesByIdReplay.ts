@@ -15,10 +15,7 @@ export type Input = {
 export type Output = sf7b25be9c8bc89520d3b.Root
 export type * as Body from './sd8e4206e4e41f07159f2'
 export type * as Response from './sf7b25be9c8bc89520d3b'
-export const postApiV1WebhooksDeliveriesByIdReplay = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1WebhooksDeliveriesByIdReplay = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/webhooks/deliveries/{id}/replay',
     method: 'POST',

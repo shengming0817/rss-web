@@ -26,7 +26,14 @@ export async function setupGroups(loginName: 'demo' | 'reviewer' = 'demo') {
             .map(([k, v]) => [k, String(v)]),
         )
       const reply = await scenario.handle(o.method, `${path}?${query}`, o.body, headers)
-      if (reply.status !== o.successStatus) throw decodeMdmError(reply.status, reply.body)
+      if (
+        !(
+          (Array.isArray(o.successStatus)
+            ? o.successStatus
+            : [o.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
+        throw decodeMdmError(reply.status, reply.body)
       return o.decode(reply.body)
     },
   } as HttpTransport

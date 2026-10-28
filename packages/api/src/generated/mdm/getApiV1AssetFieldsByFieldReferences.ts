@@ -15,10 +15,7 @@ export type Input = {
 }
 export type Output = s271d385f77f8ed16b86e.Root | sa26868c9f00beb721704.Root
 
-export const getApiV1AssetFieldsByFieldReferences = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1AssetFieldsByFieldReferences = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/asset-fields/{field}/references',
     method: 'GET',

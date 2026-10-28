@@ -68,7 +68,17 @@ export function createUploadsClient(transport: HttpTransport) {
     begin: (id: string, upload: string, target: UploadTarget, signal?: AbortSignal) =>
       api.postApiV1ResourcesByIdUploadsByUpload(
         transport,
-        { pathParams: { id, upload }, query: { ...target }, ...(signal ? { signal } : {}) },
+        {
+          pathParams: { id, upload },
+          query: {
+            version: target.version,
+            variant: target.variant,
+            platform: target.platform,
+            architecture: target.architecture,
+            ...(target.artifact === undefined ? {} : { artifact: target.artifact }),
+          },
+          ...(signal ? { signal } : {}),
+        },
         (v) => {
           const value = decodeUpload(v, id, upload),
             b = value.binding

@@ -7,7 +7,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 import process from 'node:process'
-import { assertSoftwareOption } from './vuetify-software-controls.mjs'
+import { assertSoftwareOption, chooseSoftwareOption } from './vuetify-software-controls.mjs'
 let browser,
   phase = 'setup',
   result = 'failed'
@@ -105,8 +105,12 @@ try {
   await ready()
   const materials = page.locator('[data-panel="recovery-credentials"]')
   phase = 'credential-action'
-  await materials.getByRole('combobox', { name: '操作类型', exact: true }).click()
-  await page.getByRole('option', { name: '设置或清除 Recovery Lock', exact: true }).click()
+  await chooseSoftwareOption(
+    page,
+    materials.getByRole('combobox', { name: '操作类型', exact: true }),
+    '设置或清除 Recovery Lock',
+  )
+  phase = 'credential-confirmation'
   await materials.getByLabel('确认对当前目标执行此操作', { exact: true }).check()
   const accepted = page.waitForResponse(
     (r) => r.request().method() === 'POST' && r.url().endsWith('/recovery-credentials/operations'),
@@ -477,7 +481,7 @@ try {
   })
   // Exercise the mounted application's injected clients and its existing session/executor.
   // Vue records the mounted app on its container; no production test hook or second session.
-  await page.goto(at('policies/assignments') + '?id=' + windowPolicy)
+  await page.goto(at('policies') + '?id=' + windowPolicy)
   await ready()
   async function consume(kind, input) {
     return page.evaluate(
@@ -560,7 +564,7 @@ try {
         windowPolicy,
         '0',
       ],
-      { timeout: 45000, stdio: 'pipe' },
+      { timeout: 45000, stdio: ['ignore', 'inherit', 'pipe'] },
     )
     assert.equal(claimed.status, 0, 'actual Agent mTLS claim')
   }
@@ -583,7 +587,7 @@ try {
     },
     1,
   )
-  await page.goto(at('policies/assignments') + '?id=' + windowPolicy)
+  await page.goto(at('policies') + '?id=' + windowPolicy)
   await ready()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
   await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
@@ -681,7 +685,7 @@ try {
   await ready()
   await page.getByText('观察时间 · UTC', { exact: false }).waitFor()
   // Withdraw through the same current Policy editor. Original batch facts remain frozen.
-  await page.goto(at('policies/assignments') + '?id=' + windowPolicy)
+  await page.goto(at('policies') + '?id=' + windowPolicy)
   await ready()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
   await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
@@ -915,6 +919,7 @@ try {
       phase,
       result: 'failed',
       classification: error.name,
+      location: /console-browser\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0],
       ...(typeof error.actual === 'number'
         ? { actual: error.actual, expected: error.expected }
         : {}),

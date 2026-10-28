@@ -15,10 +15,7 @@ export type Input = {
 export type Output = s421f37c1599926d75725.Root
 export type * as Body from './see297009d4ac604a51ac'
 export type * as Response from './s421f37c1599926d75725'
-export const postApiV1ComplianceRulesByIdRecompute = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1ComplianceRulesByIdRecompute = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/compliance-rules/{id}/recompute',
     method: 'POST',

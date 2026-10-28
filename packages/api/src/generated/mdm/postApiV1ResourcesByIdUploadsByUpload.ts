@@ -15,10 +15,7 @@ export type Input = {
 export type Output = s0b6b2575915556b12cf6.Root
 
 export type * as Response from './s0b6b2575915556b12cf6'
-export const postApiV1ResourcesByIdUploadsByUpload = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1ResourcesByIdUploadsByUpload = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/resources/{id}/uploads/{upload}',
     method: 'POST',

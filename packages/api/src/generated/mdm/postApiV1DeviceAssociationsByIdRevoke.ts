@@ -15,10 +15,7 @@ export type Input = {
 export type Output = s4ed73360eae9ce3097ee.Root
 export type * as Body from './s5d198ab1146d0f26417d'
 export type * as Response from './s4ed73360eae9ce3097ee'
-export const postApiV1DeviceAssociationsByIdRevoke = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1DeviceAssociationsByIdRevoke = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/device-associations/{id}/revoke',
     method: 'POST',

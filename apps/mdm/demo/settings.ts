@@ -247,7 +247,8 @@ export function createSettingsDemo(options: { seedDownloads?: boolean } = {}) {
         return ok({
           revision: 0,
           desiredRevision: null,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         })

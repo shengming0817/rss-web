@@ -176,6 +176,7 @@ function result(value: unknown, detail: boolean) {
     const process = step['process'],
       pk = process.kind
     return {
+      stepId: digest(step.stepId),
       index: count(step['index']),
       stepDigest: digest(step['stepDigest']),
       target:
@@ -316,13 +317,16 @@ export function policyRun(value: unknown, detail: boolean) {
     deadline = integer(v['deadline'])
   if (
     'attemptId' in v &&
+    v.attemptId !== null &&
     (state.delivery.kind === 'queued' || uuid(v['attemptId']) !== state.delivery.attempt)
   )
     throw new Error('Inconsistent run attempt')
   if (state.deadline !== deadline) throw new Error('Inconsistent run deadline')
   return {
-    ...('attemptId' in v ? { attemptId: uuid(v['attemptId']) } : {}),
-    ...('authorization' in v ? { authorization: scriptAuthorization(v['authorization']) } : {}),
+    ...('attemptId' in v && v.attemptId !== null ? { attemptId: uuid(v['attemptId']) } : {}),
+    ...('authorization' in v && v.authorization !== null
+      ? { authorization: scriptAuthorization(v['authorization']) }
+      : {}),
     taskId: uuid(v['taskId']),
     device: identifier(v['device']),
     registrationId: uuid(v['registrationId']),
@@ -344,8 +348,10 @@ export function policyRun(value: unknown, detail: boolean) {
     result: nullable(v['result'], (v) => result(v, detail)),
     ...(detail
       ? {
-          ...('policyId' in v ? { policyId: uuid(v['policyId']) } : {}),
-          ...('operationId' in v ? { operationId: uuid(v['operationId']) } : {}),
+          ...('policyId' in v && v.policyId !== null ? { policyId: uuid(v['policyId']) } : {}),
+          ...('operationId' in v && v.operationId !== null
+            ? { operationId: uuid(v['operationId']) }
+            : {}),
         }
       : { occurrence: 'occurrence' in v ? string(v.occurrence) : '' }),
   }

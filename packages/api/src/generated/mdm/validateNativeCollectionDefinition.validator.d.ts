@@ -1,4 +1,2 @@
-declare function validate(
-  value: unknown,
-): value is import('./owners').NativeCollectionDefinition
+declare function validate(value: unknown): value is import('./owners').NativeCollectionDefinition
 export default validate

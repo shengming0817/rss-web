@@ -166,7 +166,8 @@ async function fixture(
         value = {
           revision: 0,
           desiredRevision: null,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         }
@@ -308,7 +309,8 @@ it('clears imported private keys immediately, keeps unknown writes across remoun
     return {
       revision: 0,
       desiredRevision: null,
-      versions: [],
+      versionCount: 0,
+      materials: {},
       runtimeObservation: 'separate',
       accountBindings: {},
     }
@@ -340,7 +342,8 @@ it('clears imported private keys immediately, keeps unknown writes across remoun
       : {
           revision: 1,
           desiredRevision: null,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         },
@@ -790,7 +793,8 @@ it('clears an unused imported Apple key when submitting a different material act
       : {
           revision: 1,
           desiredRevision: 1,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         },
@@ -1835,7 +1839,7 @@ it('presents recovered Agent candidates with original signing identity while kee
   expect(f.wrapper.text()).toContain('仍需设备通过实际候选 mTLS 激活')
   expect(f.wrapper.text()).toContain(tenant)
   expect(f.calls.filter((o) => o.method === 'POST').map((o) => o.path)).toEqual([
-    '/api/v1/agent-issuances/{issuance}/recover',
+    '/api/v1/agent-issuances/{id}/recover',
   ])
 })
 

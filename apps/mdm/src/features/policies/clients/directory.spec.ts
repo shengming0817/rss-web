@@ -129,14 +129,31 @@ it('separates redacted collection summaries from authorized native detail eviden
     queries: { updates: { rowCount: 1, enumerationComplete: true } },
   })
   expect(summary.result).not.toHaveProperty('native')
-  const native = { queries: { updates: { rows: [{ owner: 'private-user' }] } } }
-  const detail = policyRun({ ...common, policyId: id, result: { ...projection, native } }, true)
+  const native = {
+    planDigest: projection.planDigest,
+    collectedAt: 2,
+    queries: {
+      updates: {
+        ...projection.queries.updates,
+        scan: null,
+        users: null,
+        rows: [{ owner: 'private-user' }],
+      },
+    },
+  }
+  const detail = policyRun(
+    { ...common, nodes: [], policyId: id, result: { ...projection, native } },
+    true,
+  )
   expect(detail.result).toMatchObject({ kind: 'collection', native })
   expect(() =>
     policyRun({ ...common, occurrence: 'collection', result: { ...projection, native } }, false),
   ).toThrow()
   expect(() =>
-    policyRun({ ...common, policyId: id, result: { ...projection, native, unknown: true } }, true),
+    policyRun(
+      { ...common, nodes: [], policyId: id, result: { ...projection, native, unknown: true } },
+      true,
+    ),
   ).toThrow()
 })
 
@@ -146,7 +163,7 @@ it('decodes the HTTP native observation and rejects incomplete evidence', async 
     observationScope: 'native_objects',
     receipts: [],
     progress: 'received',
-    effect: 'unverified',
+    effect: 'waiting',
   }
   let evidence: unknown = { commandStatus: 'received', dispatchFailure: null, observation }
   const request = vi.fn(async (options: RequestOptions<unknown>) =>

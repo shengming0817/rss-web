@@ -10,14 +10,25 @@ function endpoint() {
   return {
     id: 'pc',
     status: 'active',
+    primaryMdmRegistration: null,
+    enrollments: [],
+    assetState: 'active',
     platform: { state: 'known', values: ['windows'] },
-    displayName: { state: { kind: 'known', value: { kind: 'string', value: 'Office PC' } } },
+    displayName: {
+      field: 'device.name',
+      sources: [],
+      state: { kind: 'known', value: { kind: 'string', value: 'Office PC' } },
+    },
     channels: [
       {
         registrationId: id,
         generation: 2,
         status: 'active',
         channel: 'agent',
+        source: 'agent.builtin',
+        platform: 'windows',
+        children: [],
+        userContext: null,
         lastCommunicationReceivedAt: 100,
       },
     ],
@@ -26,13 +37,28 @@ function endpoint() {
 function binding() {
   return {
     id,
+    operationId: id,
+    registration: other,
+    registrationGeneration: 2,
+    accountDisposition: 'keep',
+    accountIntent: { kind: 'create', platform: 'windows', name: 'rss' },
+    createdByRss: true,
+    policy: id,
+    policyVersion: other,
+    desired: {
+      enabled: true,
+      selfEnrollment: true,
+      role: null,
+      mac: null,
+      windows: { kind: 'rss_factor', accounts: ['local'] },
+    },
     device: 'pc',
     revision: 2,
     principal: id,
     instance: other,
     bindingGeneration: 1,
     factorGeneration: 2,
-    account: { platform: 'windows', sid: 'S-1-5-21-1' },
+    account: { platform: 'windows', sid: 'S-1-5-21-1', authority: { kind: 'local' } },
     receivedRevision: 2,
     appliedRevision: 1,
     serverState: 'active',
@@ -87,7 +113,7 @@ describe('native public DA adapters', () => {
         { key: 'endpoint:pc', reference: { kind: 'endpoint', id: 'pc' }, endpoints: [endpoint()] },
         {
           key: 'association:a',
-          reference: { kind: 'association', id: 'a' },
+          reference: { kind: 'association', id },
           endpoints: [endpoint()],
         },
       ],
@@ -98,9 +124,23 @@ describe('native public DA adapters', () => {
     expect(p.items[0]?.name).toBe('Office PC')
     expect(p.nextCursor).toBe('next')
     expect(f.requests[0]?.query?.['fields']).toBe('key,reference,endpoints')
-    f.replies.push({ reference: { kind: 'endpoint', id: 'pc' }, endpoints: [endpoint()] })
+    f.replies.push({
+      reference: { kind: 'endpoint', id: 'pc' },
+      endpoints: [endpoint()],
+      association: null,
+      fields: {},
+      lists: {},
+      inventorySources: [],
+    })
     expect((await f.client.computer('pc', signal)).id).toBe('pc')
-    f.replies.push({ reference: { kind: 'association', id: 'pc' }, endpoints: [endpoint()] })
+    f.replies.push({
+      reference: { kind: 'association', id },
+      endpoints: [endpoint()],
+      association: null,
+      fields: {},
+      lists: {},
+      inventorySources: [],
+    })
     await expect(f.client.computer('pc', signal)).rejects.toThrow('Mismatched')
   })
   it('never infers platform or application success from partial observations', () => {
@@ -137,6 +177,7 @@ describe('native public DA adapters', () => {
         account: { platform: 'macos', generatedUid: id },
         effect: {
           state: 'applied',
+          account: { platform: 'macos', generatedUid: id },
           role: 'standard',
           mac: {
             secureToken: 'present',
@@ -146,6 +187,8 @@ describe('native public DA adapters', () => {
               configuration: 'present',
               deviceRegistered: 'present',
               userRegistered: 'absent',
+              userSourceId: id,
+              userSourceVersion: 1,
             },
           },
           windows: null,
@@ -164,7 +207,13 @@ describe('native public DA adapters', () => {
       nativeBinding(
         {
           ...binding(),
-          effect: { state: 'applied', role: 'administrator', mac: null, windows: {} },
+          effect: {
+            state: 'applied',
+            account: binding().account,
+            role: 'administrator',
+            mac: null,
+            windows: null,
+          },
         },
         'pc',
       ).observations,
@@ -200,7 +249,10 @@ describe('native public DA adapters', () => {
     expect(() => nativeMaterial(material(), 'other')).toThrow()
     expect(
       nativeMaterial(
-        { ...material(), binding: { ...material().binding, subject: { kind: 'filevault' } } },
+        {
+          ...material(),
+          binding: { ...material().binding, subject: { kind: 'filevault', custody: id, epoch: 1 } },
+        },
         'pc',
       ).subject.binding,
     ).toBeNull()
@@ -251,8 +303,29 @@ describe('native public DA adapters', () => {
       input = { ...rp(), operationId: id, expectedRevision: 1 }
     f.replies.push(
       { items: [{ id: 'rp:app', kind: 'relying_party', value: rp() }], nextCursor: null },
-      { id, options: {}, expires_at: 9999999999 },
-      { id, options: {} },
+      {
+        id,
+        options: {
+          publicKey: {
+            challenge: 'YQ',
+            rpId: 'example.test',
+            allowCredentials: [],
+            userVerification: 'required',
+          },
+        },
+        expires_at: 9999999999,
+      },
+      {
+        id,
+        options: {
+          publicKey: {
+            challenge: 'YQ',
+            rpId: 'example.test',
+            allowCredentials: [],
+            userVerification: 'required',
+          },
+        },
+      },
     )
     expect((await f.client.applications(null, signal)).items[0]?.id).toBe('app')
     await expect(f.client.application(input, signal)).rejects.toBeInstanceOf(CapabilityUnavailable)
@@ -275,11 +348,46 @@ describe('native public DA adapters', () => {
   it('uses native operation and redacted audit facts without guessing terminal effect', async () => {
     const f = setup()
     f.replies.push(
-      { operationId: id, commandStatus: 'completed' },
+      {
+        operationId: id,
+        commandId: id,
+        revision: 1,
+        task: { platform: 'windows', kind: 'sync_ml', name: 'sync', objects: [] },
+        target: { kind: 'device' },
+        inputVersion: 'v1',
+        deadline: 100,
+        dispatchFailure: null,
+        authorization: { state: 'authorized' },
+        reauthorization: { state: 'not_applicable' },
+        commandStatus: 'applied',
+        agentInstallation: null,
+        observation: {
+          protocol: 'syncml',
+          observationScope: 'native_objects',
+          receipts: [],
+          progress: 'applied',
+          effect: 'waiting',
+        },
+      },
       {
         items: [
           {
             eventId: id,
+            source: 'mdm.business',
+            position: 1,
+            actorKind: 'user',
+            observedAt: 11,
+            target: { type: 'device', id: 'pc' },
+            operationId: null,
+            relatedOperationIds: [],
+            requestId: null,
+            registrationId: null,
+            registrationRequestId: null,
+            instanceId: null,
+            executionState: null,
+            effect: 'unverified',
+            requestWriteOutcome: null,
+            supported: true,
             recordedAt: 10,
             actor: 'user',
             action: 'read',
@@ -295,7 +403,7 @@ describe('native public DA adapters', () => {
     )
     expect(await f.client.operation('pc', id, signal)).toMatchObject({
       state: 'pending',
-      observations: [{ value: 'completed' }],
+      observations: [{ value: 'applied' }],
     })
     expect((await f.client.audit('pc', null, signal)).items[0]?.device).toBe('pc')
     await f.client.audit(null, 'cursor', signal)

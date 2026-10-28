@@ -228,7 +228,7 @@ export function editableField<T extends { kind: string }>(
 }
 export type FieldDefinition = ReturnType<typeof fieldDefinition>
 export function criteria(value: unknown, depth = 0): Criteria {
-  if (!wireSchemas.getApiV1ComplianceRulesByIdResponse.validateCriteria(value))
+  if (!wireSchemas.putApiV1ComplianceRulesByIdBody.validateCriteria(value))
     throw new Error('Invalid contract value')
 
   if (depth > 16) throw new Error('Condition nesting too deep')
@@ -525,7 +525,7 @@ export function conditionContext(value: unknown): ConditionContext {
   return { selector, quantifier }
 }
 export function inventoryCondition(value: unknown): InventoryCondition {
-  if (!wireSchemas.getApiV1ComplianceRulesByIdResponse.validateInventoryCondition(value))
+  if (!wireSchemas.putApiV1ComplianceRulesByIdBody.validateInventoryCondition(value))
     throw new Error('Invalid contract value')
 
   const v = value

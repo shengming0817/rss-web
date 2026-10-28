@@ -7,10 +7,7 @@ export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | und
 export type Output = BinaryResponse
 
 export type * as Response from './s41c2f544d259dd11d912'
-export const getApiV1AgentConnectionsConfiguration = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1AgentConnectionsConfiguration = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/agent-connections/configuration',
     method: 'GET',

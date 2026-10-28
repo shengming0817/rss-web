@@ -15,10 +15,7 @@ export type Input = {
 export type Output = sb2bd5b2d0e682bdff2d0.Root
 export type * as Body from './se9d5bbdc00c0640be207'
 export type * as Response from './sb2bd5b2d0e682bdff2d0'
-export const putApiV1AuthorizationUserGroupsById = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const putApiV1AuthorizationUserGroupsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:PUT:/api/v1/authorization/user-groups/{id}',
     method: 'PUT',

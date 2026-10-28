@@ -139,6 +139,10 @@ export function defineEndpoint<Input extends object, Output>(description: Endpoi
       decode(value: unknown) {
         if (!description.binary) {
           safeJson(value)
+          if (empty) {
+            if (value !== undefined && value !== null && value !== '') throw protocolError()
+            return undefined as View
+          }
           if (!success.some((r) => r.validate?.(value))) throw protocolError()
         }
         return project ? project(value as Output) : (value as View)

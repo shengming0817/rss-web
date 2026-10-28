@@ -15,10 +15,7 @@ export type Input = {
 export type Output = se6fc33b671c8675dec38.Root
 export type * as Body from './s1cbb519b9541aa95e884'
 export type * as Response from './se6fc33b671c8675dec38'
-export const postApiV1AgentRequestsByIdAuthorize = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1AgentRequestsByIdAuthorize = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/agent-requests/{id}/authorize',
     method: 'POST',

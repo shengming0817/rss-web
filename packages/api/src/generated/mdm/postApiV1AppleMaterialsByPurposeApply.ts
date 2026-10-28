@@ -18,10 +18,7 @@ export type Input = {
 export type Output = s7484bd9f4bfe320bfadd.Root
 export type * as Body from './s0f36e8c4d5aab52e9951'
 export type * as Response from './s7484bd9f4bfe320bfadd'
-export const postApiV1AppleMaterialsByPurposeApply = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1AppleMaterialsByPurposeApply = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/apple/materials/{purpose}/apply',
     method: 'POST',

@@ -12,10 +12,7 @@ export type Input = {
 export type Output = sc06ba848c6265dc14e17.Root
 
 export type * as Response from './sc06ba848c6265dc14e17'
-export const getApiV1AuthorizationUserGroupsById = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1AuthorizationUserGroupsById = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/authorization/user-groups/{id}',
     method: 'GET',

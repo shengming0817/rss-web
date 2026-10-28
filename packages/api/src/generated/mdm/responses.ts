@@ -938,10 +938,7 @@ export const r47c9a9c72fe2bd2fbf9b = {
   status: 416,
   media: 'application/json',
   validate: s40d525d844c96ee6a515,
-  headers: {
-    'content-disposition': s93ddaf583a2133fb6a6f,
-    'content-range': s93ddaf583a2133fb6a6f,
-  },
+  headers: { 'content-disposition': s93ddaf583a2133fb6a6f, 'content-range': s93ddaf583a2133fb6a6f },
 }
 export const rdbbe5ee5d8fb09a1cfdf = {
   status: 200,
@@ -1148,10 +1145,7 @@ export const rf3040a2cb2d89dd6d7b3 = {
   status: 200,
   media: 'application/x-pem-file',
   validate: s2db098654a77dbd75ff3,
-  headers: {
-    'cache-control': s8e034f7a999e51a85d3d,
-    'content-disposition': s3a290cb1dd9e5647abf5,
-  },
+  headers: { 'cache-control': s8e034f7a999e51a85d3d, 'content-disposition': s3a290cb1dd9e5647abf5 },
 }
 export const r3e436a360f667da68991 = {
   status: 200,
@@ -2231,10 +2225,7 @@ export const r11174d77e06c7dfd7023 = {
   status: 200,
   media: 'application/x-apple-aspen-config',
   validate: s2db098654a77dbd75ff3,
-  headers: {
-    'cache-control': s8e034f7a999e51a85d3d,
-    'content-disposition': s5a76f13b3b1a19dea00a,
-  },
+  headers: { 'cache-control': s8e034f7a999e51a85d3d, 'content-disposition': s5a76f13b3b1a19dea00a },
 }
 export const r5bb7781cad6afe8b1582 = {
   status: 200,

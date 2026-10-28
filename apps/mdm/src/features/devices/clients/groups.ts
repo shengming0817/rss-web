@@ -39,7 +39,7 @@ export interface GroupCondition extends ConditionContext {
   criteria: GroupCriteria
 }
 export function groupCriteria(value: unknown, depth = 0): GroupCriteria {
-  if (!wireSchemas.getApiV1GroupsByIdResponse200.validateCriteria(value))
+  if (!wireSchemas.postApiV1GroupsByIdBody.validateCriteria(value))
     throw new Error('Invalid contract value')
 
   if (depth > 16) throw new Error('Group condition too deep')
@@ -61,7 +61,7 @@ export function groupCriteria(value: unknown, depth = 0): GroupCriteria {
   return predicate
 }
 export function groupCondition(value: unknown): GroupCondition {
-  if (!wireSchemas.getApiV1GroupsByIdResponse200.validateInventoryCondition(value))
+  if (!wireSchemas.postApiV1GroupsByIdBody.validateInventoryCondition(value))
     throw new Error('Invalid contract value')
 
   const v = value
@@ -195,6 +195,7 @@ function decision(value: unknown) {
     explanations: array(v['explanations'], (value) => {
       const e = value
       return {
+        context: string(e.context),
         path: array(e['path'], count),
         outcome: enumeration(e['outcome'], [
           'match',
@@ -210,6 +211,7 @@ function decision(value: unknown) {
     provenance: array(v['provenance'], (value) => {
       const e = value
       return {
+        context: string(e.context),
         field: fieldKey(e['field']),
         source: enumeration(e['source'], sourceIds),
         snapshot_id: identifier(e['snapshot_id']),

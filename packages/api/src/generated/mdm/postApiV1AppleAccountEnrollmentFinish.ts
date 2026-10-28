@@ -12,10 +12,7 @@ export type Input = {
 export type Output = void
 export type * as Body from './s00f36fe53926740ce43d'
 
-export const postApiV1AppleAccountEnrollmentFinish = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1AppleAccountEnrollmentFinish = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/apple/account-enrollment/finish',
     method: 'POST',

@@ -10,7 +10,7 @@ import {
   unique,
   uuid,
 } from '../../../services/decode'
-import { inventoryCondition, evidence } from '../../devices/clients/asset-model'
+import { inventoryCondition } from '../../devices/clients/asset-model'
 
 export const complianceStatuses = [
   'compliant',
@@ -33,7 +33,7 @@ export function boundedText(value: unknown, maximum = 256) {
   return v
 }
 export function complianceDefinition(value: unknown) {
-  if (!wireSchemas.getApiV1ComplianceRulesByIdResponse.validateDefinition(value))
+  if (!wireSchemas.putApiV1ComplianceRulesByIdBody.validateDefinition(value))
     throw new Error('Invalid contract value')
 
   const v = value
@@ -121,6 +121,7 @@ export function complianceAssessment(value: unknown) {
     explanations: rawExplanations.map((value) => {
       const e = value
       return {
+        context: string(e.context),
         path: array(e['path'], count),
         outcome: e['outcome'],
       }
@@ -128,11 +129,14 @@ export function complianceAssessment(value: unknown) {
     evidence: unique(
       array(v['evidence'], (value) => {
         const e = value
-        const sources = unique(array(e['sources'], evidence), (s) => s.source)
+        const sources = unique(
+          array(e['sources'], (s) => ({ ...s })),
+          (s) => s.source,
+        )
         if (sources.length > 2) throw new Error('Invalid fact references')
-        return { field: identifier(e['field']), sources }
+        return { context: string(e.context), field: identifier(e['field']), sources }
       }),
-      (e) => e.field,
+      (e) => JSON.stringify([e.context, e.field]),
     ),
   }
   const reasons: Record<typeof result.status, readonly string[]> = {

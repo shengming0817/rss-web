@@ -13,10 +13,7 @@ export type Input = {
 }
 export type Output = void
 
-export const postApiV1ResourcesByIdContentMirror = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1ResourcesByIdContentMirror = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/resources/{id}/content/mirror',
     method: 'POST',

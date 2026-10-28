@@ -6,7 +6,6 @@ import {
   array,
   boolean,
   count,
-  enumeration,
   identifier,
   nullable,
   string,
@@ -14,12 +13,6 @@ import {
   uuid,
 } from '../../../services/decode'
 import { jsonObject } from '../../../services/json'
-export const eventTypes = [
-  'device.registered',
-  'device.retired',
-  'policy.execution.terminal',
-  'compliance.status.changed',
-] as const
 export function webhookSettings(value: unknown) {
   if (!wireSchemas.getApiV1WebhooksSubscriptionsResponse.validateSettings(value))
     throw new Error('Invalid contract value')
@@ -38,7 +31,7 @@ export function webhookSettings(value: unknown) {
     presentation,
     endpoint,
     eventTypes: unique(
-      array(v['eventTypes'], (x) => enumeration(x, eventTypes)),
+      array(v['eventTypes'], (x) => x),
       (x) => x,
     ),
     selection:
@@ -112,7 +105,7 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
       api.getApiV1WebhooksEventTypes(transport, {}, (value) => {
         const v = value
         if (v['version'] !== 1) throw new Error('Invalid event contract')
-        return array(v['items'], (x) => enumeration(x, eventTypes))
+        return array(v['items'], (x) => x)
       }),
     list: (query: DirectoryQuery = {}) =>
       api.getApiV1WebhooksSubscriptions(

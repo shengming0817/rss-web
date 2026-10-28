@@ -1,4 +1,3 @@
-import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { decodeCapability, decodeSelector, toolName, type CapabilitySelector } from './addressing'
 import {
@@ -49,8 +48,9 @@ export interface PreviewInput {
 function baseTargetFacts(
   v: Pick<
     api.postApiV1PoliciesPreviewsContract.Response.PreviewTarget,
-    'object' | 'channel' | 'availability' | 'reason' | 'target' | 'taskAdmission'
-  >,
+    'object' | 'channel' | 'availability' | 'reason' | 'target'
+  > &
+    Partial<Pick<api.postApiV1PoliciesPreviewsContract.Response.PreviewTarget, 'taskAdmission'>>,
 ) {
   return {
     object: objectRef(v['object']),
@@ -58,7 +58,7 @@ function baseTargetFacts(
     availability: v['availability'],
     reason: nullable(v['reason'], string),
     target: nullable(v['target'], primaryRegistration),
-    taskAdmission: nullable(v['taskAdmission'], taskAdmission),
+    taskAdmission: v.taskAdmission == null ? null : taskAdmission(v.taskAdmission),
   }
 }
 export function createPoliciesClient(transport: HttpTransport) {
@@ -113,16 +113,21 @@ export function createPoliciesClient(transport: HttpTransport) {
           return {
             action,
             scopeResult: result,
-            items: array(v['items'], (value) => {
-              if (!wireSchemas.postApiV1PoliciesPreviewsResponse.validatePreviewTarget(value))
-                throw new Error('Invalid preview target')
-              const d = value
+            items: v.items.map((d) => {
               if (
                 action.kind === 'unmanage_device' &&
-                (d['channel'] !== null || d['target'] !== null || d['taskAdmission'] !== null)
+                (d['channel'] !== null ||
+                  d['target'] !== null ||
+                  ('taskAdmission' in d && d.taskAdmission !== null))
               )
                 throw new Error('Invalid lifecycle target')
-              return { ...baseTargetFacts(d), eligibility: eligibility(d['eligibility']) }
+              return {
+                ...baseTargetFacts(d),
+                eligibility: eligibility(d['eligibility']),
+                ...('collectionSupported' in d
+                  ? { collectionSupported: d.collectionSupported }
+                  : {}),
+              }
             }),
             nextCursor: nextCursor(v['nextCursor']),
           }

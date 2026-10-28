@@ -16,10 +16,7 @@ export type Input = {
 export type Output = sc77c5d5a32484f598813.Root
 export type * as Body from './s4ac1141d30f390ee5432'
 export type * as Response from './sc77c5d5a32484f598813'
-export const postApiV1WebhooksMaterialsTransitions = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const postApiV1WebhooksMaterialsTransitions = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/webhooks/materials/transitions',
     method: 'POST',

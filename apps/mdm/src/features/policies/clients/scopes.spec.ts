@@ -101,14 +101,14 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
     path: '/api/v1/scopes/{id}',
     pathParams: { id },
     body,
-    successStatus: 200,
+    successStatus: [200, 202],
   })
   reply = { ...resolution, id, revision: 2, definition }
   await client.read(id)
   expect(request.mock.calls[1]![0]).toMatchObject({
     method: 'GET',
     path: '/api/v1/scopes/{id}',
-    successStatus: 200,
+    successStatus: [200, 202],
   })
   reply = {
     task: result,
@@ -124,8 +124,8 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
   await client.status(id, result)
   expect(request.mock.calls[2]![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/scopes/{id}/tasks/{task}',
-    pathParams: { id, task: result },
+    path: '/api/v1/scopes/{scope}/tasks/{task}',
+    pathParams: { scope: id, task: result },
   })
   reply = {
     result,
@@ -138,8 +138,8 @@ it('uses exact Scope paths and CAS bodies without manufacturing a list or previe
   await client.page(id, result, 'members', 'agent', 'opaque-tail')
   expect(request.mock.calls[3]![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/scopes/{id}/results/{result}/{projection}',
-    pathParams: { id, result, projection: 'members' },
+    path: '/api/v1/scopes/{scope}/results/{result}/{kind}',
+    pathParams: { scope: id, result, kind: 'members' },
     query: { cursor: 'opaque-tail' },
   })
 })

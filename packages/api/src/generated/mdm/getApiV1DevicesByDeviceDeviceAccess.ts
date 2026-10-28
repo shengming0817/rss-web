@@ -15,10 +15,7 @@ export type Input = {
 export type Output = s4a3457345057f2f5536c.Root
 
 export type * as Response from './s4a3457345057f2f5536c'
-export const getApiV1DevicesByDeviceDeviceAccess = /* @__PURE__ */ defineEndpoint<
-  Input,
-  Output
->({
+export const getApiV1DevicesByDeviceDeviceAccess = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/devices/{device}/device-access',
     method: 'GET',
@@ -41,13 +38,7 @@ export const getApiV1DevicesByDeviceDeviceAccess = /* @__PURE__ */ defineEndpoin
           },
           { filter: true, kind: 'Uuid', name: 'principal', output: true, sort: true },
           { filter: true, kind: 'Uuid', name: 'policy', output: true, sort: true },
-          {
-            filter: true,
-            kind: 'Integer',
-            name: 'bindingGeneration',
-            output: true,
-            sort: true,
-          },
+          { filter: true, kind: 'Integer', name: 'bindingGeneration', output: true, sort: true },
           { filter: false, kind: 'Object', name: 'operationId', output: true, sort: false },
           { filter: false, kind: 'Object', name: 'device', output: true, sort: false },
           { filter: false, kind: 'Object', name: 'registration', output: true, sort: false },
@@ -59,32 +50,14 @@ export const getApiV1DevicesByDeviceDeviceAccess = /* @__PURE__ */ defineEndpoin
             sort: false,
           },
           { filter: false, kind: 'Object', name: 'instance', output: true, sort: false },
-          {
-            filter: false,
-            kind: 'Object',
-            name: 'factorGeneration',
-            output: true,
-            sort: false,
-          },
-          {
-            filter: false,
-            kind: 'Object',
-            name: 'accountDisposition',
-            output: true,
-            sort: false,
-          },
+          { filter: false, kind: 'Object', name: 'factorGeneration', output: true, sort: false },
+          { filter: false, kind: 'Object', name: 'accountDisposition', output: true, sort: false },
           { filter: false, kind: 'Object', name: 'account', output: true, sort: false },
           { filter: false, kind: 'Object', name: 'accountIntent', output: true, sort: false },
           { filter: false, kind: 'Object', name: 'createdByRss', output: true, sort: false },
           { filter: false, kind: 'Object', name: 'policyVersion', output: true, sort: false },
           { filter: false, kind: 'Object', name: 'desired', output: true, sort: false },
-          {
-            filter: false,
-            kind: 'Object',
-            name: 'receivedRevision',
-            output: true,
-            sort: false,
-          },
+          { filter: false, kind: 'Object', name: 'receivedRevision', output: true, sort: false },
           { filter: false, kind: 'Object', name: 'appliedRevision', output: true, sort: false },
           { filter: false, kind: 'Object', name: 'effect', output: true, sort: false },
         ],
