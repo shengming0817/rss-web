@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --configLoader runner --host 127.0.0.1",
-    "build": "vue-tsc --noEmit && vite build --configLoader runner",
-    "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage --maxWorkers=2",
-    "demo": "vite --configLoader runner --mode demo --host 127.0.0.1"
+    "dev": "node ../../scripts/ensure-contracts.mjs && vite --configLoader runner --host 127.0.0.1",
+    "build": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vite build --configLoader runner",
+    "typecheck": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
+    "test": "node ../../scripts/ensure-contracts.mjs && vitest run",
+    "test:coverage": "node ../../scripts/ensure-contracts.mjs && vitest run --coverage --maxWorkers=2",
+    "demo": "node ../../scripts/ensure-contracts.mjs && vite --configLoader runner --mode demo --host 127.0.0.1"
   },
   "dependencies": {
     "@noble/hashes": "catalog:",

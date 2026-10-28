@@ -1,24 +1,35 @@
+import { Buffer } from 'node:buffer'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { contractSource } from './contract-source.mjs'
+
 const current = JSON.parse(
   await readFile(new URL('../contracts/mdm/source.json', import.meta.url), 'utf8'),
 )
-async function withPin(pin, work) {
+const snapshot = await readFile(new URL('../contracts/mdm/http-v1.json', import.meta.url))
+async function withSnapshot(bytes, changes, work) {
   const temporary = await mkdtemp(join(tmpdir(), 'rss-contract-source-'))
   try {
     await mkdir(join(temporary, 'contracts/mdm'), { recursive: true })
-    await writeFile(join(temporary, 'contracts/mdm/source.json'), JSON.stringify(pin))
+    const source = {
+      ...current,
+      blob: createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      ...changes,
+    }
+    await writeFile(join(temporary, 'contracts/mdm/source.json'), JSON.stringify(source))
+    await writeFile(join(temporary, 'contracts/mdm/http-v1.json'), bytes)
     await work(pathToFileURL(temporary + '/'))
   } finally {
     await rm(temporary, { recursive: true, force: true })
   }
 }
-test('verifies the actual pinned Git artifact', async () => {
+test('reads the committed contract without a backend checkout or Git object store', async () => {
   const { document, source } = await contractSource()
   assert.equal(source.revision, current.revision)
   assert.equal(document.formatVersion, 1)
@@ -26,27 +37,38 @@ test('verifies the actual pinned Git artifact', async () => {
     document.endpoints.some((e) => e.operationId === 'browser:POST:/api/v1/policies/previews'),
   )
 })
-test('source identity cannot be replaced with a branch, a different repository, or a self-reported digest', async () => {
+test('rejects invalid provenance or a snapshot that differs from its pin', async () => {
   for (const replacement of [
     { revision: 'develop' },
     { repository: 'https://untrusted.invalid/mdm' },
+    { path: '../different.json' },
     { sha256: '0'.repeat(64) },
     { blob: '0'.repeat(40) },
   ])
-    await withPin({ ...current, ...replacement }, (root) => assert.rejects(contractSource(root)))
+    await withSnapshot(snapshot, replacement, (root) => assert.rejects(contractSource(root)))
+  await withSnapshot(snapshot, {}, async (root) => {
+    await writeFile(
+      new URL('contracts/mdm/http-v1.json', root),
+      Buffer.concat([snapshot, Buffer.from('\n')]),
+    )
+    await assert.rejects(contractSource(root), /differs from its pin/)
+    await rm(new URL('contracts/mdm/http-v1.json', root))
+    await assert.rejects(contractSource(root), { code: 'ENOENT' })
+  })
 })
-test('an older fixed consumer remains readable after the producer advances', async () => {
-  await withPin(
-    {
-      ...current,
-      revision: '2c6fa81a9497e9777fc45bc6bc2eee8bfa3f7aff',
-      blob: '23e5e51094c8d0763695238d9c8d7f88e5ba3cb2',
-      sha256: 'f2f2093882ca08852fb350b330dcf1d9c004106b19c4788b4e10c2e1adc4bb12',
-    },
-    async (root) => {
-      const { source, document } = await contractSource(root)
-      assert.equal(source.revision, '2c6fa81a9497e9777fc45bc6bc2eee8bfa3f7aff')
-      assert.equal(document.formatVersion, 1)
-    },
+test('rejects malformed JSON and unsupported contract formats even with matching pins', async () => {
+  await withSnapshot(Buffer.from('{'), {}, (root) =>
+    assert.rejects(contractSource(root), SyntaxError),
   )
+  for (const replacement of [
+    { formatVersion: 2 },
+    { schemaDialect: 'https://json-schema.org/draft-07/schema' },
+    { endpoints: [] },
+    { schemas: {} },
+  ]) {
+    const document = { ...JSON.parse(snapshot), ...replacement }
+    await withSnapshot(Buffer.from(JSON.stringify(document)), {}, (root) =>
+      assert.rejects(contractSource(root), /Unsupported MDM HTTP contract format/),
+    )
+  }
 })

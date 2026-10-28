@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "vue-tsc --noEmit",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "typecheck": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit",
+    "test": "node ../../scripts/ensure-contracts.mjs && vitest run",
+    "test:coverage": "node ../../scripts/ensure-contracts.mjs && vitest run --coverage"
   },
   "dependencies": {
     "vue": "catalog:",

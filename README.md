@@ -86,8 +86,10 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 
 ## 固定 MDM HTTP 契约
 
-`contracts/mdm/source.json` 是唯一 producer pin。`pnpm generate:contracts` 从指定 Git 对象生成静态端点、类型和校验器；`pnpm check:contracts` 同时核对 Git 来源与生成漂移，已进入 `make ci`。常规生产构建消费已提交生成物，不访问后端。
+`contracts/mdm/http-v1.json` 是提交在仓内的固定契约输入，`source.json` 记录其后端 revision、blob 和 SHA-256。普通安装、开发、测试和构建只读取这两个本地文件，不访问后端或执行后端 Python 工具。
 
-Git 对象缓存位于 `~/.cache/rss-web/rss-mdm.git`，缺失时只获取 pin 指定的完整提交；可用 `RSS_MDM_CONTRACT_GIT=/absolute/git-store` 复用已有对象库。无需相邻 checkout、干净 HEAD 或重建 Rust。Git 使用已有凭据；CI 冷缓存访问私有 Azure 源时使用只读 secret `RSS_MDM_GIT_TOKEN`，token 只通过子进程环境传给 Git，不写入缓存或日志。无法取得指定对象时检查明确失败。
+`pnpm install --frozen-lockfile` 安装后自动生成静态端点、类型和 CSP 安全的校验器，供编辑器使用；根命令及依赖 API 的包级 `dev`、`demo`、`typecheck`、`test`、`test:coverage`、`build` 也会先确保生成完成。生成输入未变化时直接复用本地结果；删除生成目录后，下次命令会重建。安装时若使用 `--ignore-scripts`，可执行 `pnpm generate:contracts` 初始化编辑器类型。
 
-升级时显式更新 pin 的 revision、blob、SHA-256，重新生成并迁移实际消费者；不会追随远端 develop。生产 HTTP 调用使用 `@rss/api/mdm-operations`；作者模型和 canonical 编码复用 `@rss/api/mdm-types`、`@rss/api/mdm-validators`；其它领域投影和未知编辑输入使用 `@rss/api/mdm-schemas` 自动导出的 scoped 类型与静态校验器，不维护第二套 wire 定义。整数按 JavaScript 精确范围校验，浮点字段保留 producer 的数值语义。Identity 与宿主静态配置继续使用原有边界。
+`packages/api/src/generated/` 是忽略的本地产物，不提交 Git。`pnpm generate:contracts` 强制重新生成；`pnpm check:contracts` 确保生成目录存在后核对本地输入与生成结果，已进入 `make ci`。并发包命令共用生成锁，失败会阻止后续命令。
+
+升级时从选定的后端 commit 取得 `contracts/http-v1.json` 原始文件，保存为本仓 `contracts/mdm/http-v1.json`，同时更新 pin 的 revision、blob、SHA-256，运行 `pnpm generate:contracts` 并迁移实际消费者；PR 提交契约输入与 pin，不提交生成目录。不会追随远端 develop。生产 HTTP 调用使用 `@rss/api/mdm-operations`；作者模型和 canonical 编码复用 `@rss/api/mdm-types`、`@rss/api/mdm-validators`；其它领域投影和未知编辑输入使用 `@rss/api/mdm-schemas` 自动导出的 scoped 类型与静态校验器，不维护第二套 wire 定义。整数按 JavaScript 精确范围校验，浮点字段保留 producer 的数值语义。Identity 与宿主静态配置继续使用原有边界。
