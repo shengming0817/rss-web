@@ -13,7 +13,7 @@ import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-uti
 import { createRouter, createMemoryHistory } from 'vue-router'
 import type { IdentitySession } from '@rss/auth'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
-import { decodeMdmError, decodeAgentError } from '@rss/api/mdm'
+import { decodeMdmError } from '@rss/api/mdm'
 import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { useSettingsAction } from '../useSettingsAction'
@@ -166,7 +166,8 @@ async function fixture(
         value = {
           revision: 0,
           desiredRevision: null,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         }
@@ -308,7 +309,8 @@ it('clears imported private keys immediately, keeps unknown writes across remoun
     return {
       revision: 0,
       desiredRevision: null,
-      versions: [],
+      versionCount: 0,
+      materials: {},
       runtimeObservation: 'separate',
       accountBindings: {},
     }
@@ -340,7 +342,8 @@ it('clears imported private keys immediately, keeps unknown writes across remoun
       : {
           revision: 1,
           desiredRevision: null,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         },
@@ -789,7 +792,8 @@ it('clears an unused imported Apple key when submitting a different material act
       : {
           revision: 1,
           desiredRevision: 1,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         },
@@ -1798,7 +1802,7 @@ it('clears recovery secrets on submission and preserves exact Agent issuance unk
   await f.wrapper.get('#agent-recovery-secret').setValue('A'.repeat(43))
   await f.wrapper.get('#agent-recovery-csr').setValue('YQ==')
   f.setHandler(() => {
-    throw decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal })
+    throw decodeMdmError(503, { code: 'issuance_unknown', issuanceId: principal })
   })
   await button(f.wrapper, '核对并继续').trigger('click')
   await flushPromises()
@@ -1834,7 +1838,7 @@ it('presents recovered Agent candidates with original signing identity while kee
   expect(f.wrapper.text()).toContain('仍需设备通过实际候选 mTLS 激活')
   expect(f.wrapper.text()).toContain(tenant)
   expect(f.calls.filter((o) => o.method === 'POST').map((o) => o.path)).toEqual([
-    '/api/v1/agent-issuances/{issuance}/recover',
+    '/api/v1/agent-issuances/{id}/recover',
   ])
 })
 
@@ -1856,7 +1860,7 @@ it('discards a late Agent recovery error locator after a session changes during 
   await button(f.wrapper, '核验并继续原恢复').trigger('click')
   await flushPromises()
   f.state.value = { ...f.state.value, session: { id: principal } }
-  reject(decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal }))
+  reject(decodeMdmError(503, { code: 'issuance_unknown', issuanceId: principal }))
   await flushPromises()
   expect(f.wrapper.text()).not.toContain(principal)
   expect(f.settings.operations.records.size).toBe(0)
@@ -1868,7 +1872,7 @@ it('offers controlled handoff for recovery conflicts without exposing a nonfunct
   await f.wrapper.get('#agent-recovery-secret').setValue('A'.repeat(43))
   await f.wrapper.get('#agent-recovery-csr').setValue('YQ==')
   f.setHandler(() => {
-    throw decodeAgentError(409, { code: 'operation_conflict', issuanceId: null })
+    throw decodeMdmError(409, { code: 'operation_conflict', issuanceId: null })
   })
   await button(f.wrapper, '核对并继续').trigger('click')
   await flushPromises()
@@ -1959,7 +1963,7 @@ it('shows authoritative deployment and retirement reasons, clears forbidden fact
   const f = await fixture(ConnectionsPanel)
   f.setHandler((o) => {
     if (o.method === 'POST')
-      throw decodeAgentError(409, { code: 'connection_retirement_blocked', issuanceId: null })
+      throw decodeMdmError(409, { code: 'connection_retirement_blocked', issuanceId: null })
     return connectionValue(2)
   })
   await button(f.wrapper, '重新读取').trigger('click')
@@ -1972,7 +1976,7 @@ it('shows authoritative deployment and retirement reasons, clears forbidden fact
   await flushPromises()
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
   f.setHandler(() => {
-    throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
+    throw decodeMdmError(403, { code: 'permission_denied', issuanceId: null })
   })
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
@@ -2022,7 +2026,7 @@ it('keeps issuance recovery unknown after null query and retries only the origin
   let lose = true
   f.setHandler((o) => {
     if (o.method === 'GET') return null
-    if (lose) throw decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal })
+    if (lose) throw decodeMdmError(503, { code: 'issuance_unknown', issuanceId: principal })
     return {
       wireVersion: 1,
       issuanceId: principal,
@@ -2122,7 +2126,7 @@ it('clears a previously queried issuance candidate when the same session loses C
   expect(f.wrapper.get('table').text()).toContain(principal)
   expect(f.wrapper.get('table').text()).toContain(tenant)
   f.setHandler(() => {
-    throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
+    throw decodeMdmError(403, { code: 'permission_denied', issuanceId: null })
   })
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()

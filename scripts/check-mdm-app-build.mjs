@@ -13,6 +13,8 @@ function scan(dir) {
     }
     if (entry.name.endsWith('.map')) throw new Error('Unexpected sourcemap')
     const text = readFileSync(file, 'utf8')
+    if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(text))
+      throw new Error('Runtime code compilation in production build')
     if (/(?:reka-ui|data-reka-|--reka-|UiDialog\.vue|UiTabs\.vue)/.test(text))
       throw new Error('Retired UI in production build')
     if (

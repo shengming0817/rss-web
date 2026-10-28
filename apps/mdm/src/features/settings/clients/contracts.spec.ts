@@ -225,8 +225,9 @@ it('distinguishes every Apple receipt and rejects secret or wrong-operation resp
   const directory = {
     revision: 2,
     desiredRevision: 2,
-    versions: [
-      {
+    versionCount: 1,
+    materials: {
+      '1': {
         revision: 1,
         keyId: b,
         publicKeyDigest: digest,
@@ -237,7 +238,7 @@ it('distinguishes every Apple receipt and rejects secret or wrong-operation resp
         expiresAt: null,
         revoked: false,
       },
-    ],
+    },
     runtimeObservation: 'separate',
     accountBindings: { renewal: 1 },
   }

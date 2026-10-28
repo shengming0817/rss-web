@@ -1,3 +1,5 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedRow,
@@ -6,24 +8,17 @@ import {
 } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { profileJson, type ProfileJson } from '@rss/auth/profile-json'
-import {
-  closed,
-  string,
-  uuid,
-  count,
-  boolean,
-  enumeration,
-  nullable,
-  array,
-} from '../../../services/decode'
+import { string, uuid, count, boolean, nullable, array } from '../../../services/decode'
 export type ProfileSource = { kind: 'identity_local' } | { kind: 'idp'; provider: string }
 export function source(value: unknown): ProfileSource {
+  if (!wireSchemas.getApiV1UserProfilesMeResponse.validateProfileSource(value))
+    throw new Error('Invalid contract value')
+
   const raw = value as Record<string, unknown>
   if (raw?.['kind'] === 'identity_local') {
-    closed(value, ['kind'])
     return { kind: 'identity_local' }
   }
-  const v = closed(value, ['kind', 'provider'])
+  const v = value
   if (v['kind'] !== 'idp') throw new Error('Invalid profile source')
   return { kind: 'idp', provider: uuid(v['provider']) }
 }
@@ -40,44 +35,34 @@ function finite(value: unknown) {
   return value
 }
 export function definitionValue(value: unknown) {
-  const v = closed(value, [
-    'key',
-    'displayName',
-    'source',
-    'pointer',
-    'valueType',
-    'maxLength',
-    'maxItems',
-    'minimum',
-    'maximum',
-    'enabled',
-    'sensitive',
-    'visibility',
-    'displayUse',
-    'required',
-    'useExistingObservation',
-  ])
+  if (!wireSchemas.getApiV1UserAttributeDefinitionsResponse.validateDefinitionValue(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     key: string(v['key']),
     displayName: string(v['displayName']),
     source: source(v['source']),
     pointer: string(v['pointer']),
-    valueType: enumeration(v['valueType'], types),
+    valueType: v['valueType'],
     maxLength: nullable(v['maxLength'], count),
     maxItems: nullable(v['maxItems'], count),
     minimum: nullable(v['minimum'], finite),
     maximum: nullable(v['maximum'], finite),
-    enabled: boolean(v['enabled']),
-    sensitive: boolean(v['sensitive']),
-    visibility: enumeration(v['visibility'], visibility),
-    displayUse: enumeration(v['displayUse'], uses),
-    required: boolean(v['required']),
-    useExistingObservation: boolean(v['useExistingObservation']),
+    enabled: v['enabled'],
+    sensitive: v['sensitive'],
+    visibility: v['visibility'],
+    displayUse: v['displayUse'],
+    required: v['required'],
+    useExistingObservation: v['useExistingObservation'],
   }
 }
 export type DefinitionValue = ReturnType<typeof definitionValue>
 export function definition(value: unknown) {
-  const v = closed(value, ['fieldId', 'revision', 'collectedAfterMicros', 'value'])
+  if (!wireSchemas.getApiV1UserAttributeDefinitionsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (count(v['revision']) === 0) throw new Error('Invalid definition revision')
   return {
     fieldId: uuid(v['fieldId']),
@@ -88,36 +73,34 @@ export function definition(value: unknown) {
 }
 export type Definition = ReturnType<typeof definition>
 export function definitionReceipt(value: unknown, operationId: string, fieldId?: string) {
-  const v = closed(value, ['operationId', 'definition'])
+  if (!wireSchemas.getApiV1UserAttributeOperationsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const d = definition(v['definition'])
   if (uuid(v['operationId']) !== operationId || (fieldId !== undefined && d.fieldId !== fieldId))
     throw new Error('Wrong operation receipt')
   return { operationId, definition: d }
 }
-const states = [
-  'available',
-  'missing',
-  'invalid',
-  'not_configured',
-  'expired',
-  'unavailable',
-  'pending_login',
-  'redacted',
-] as const
+
 export type Attribute<T> =
   | { status: 'available'; value: T }
-  | { status: 'missing' | 'invalid' | 'not_configured' }
-function attribute<T>(value: unknown, decode: (v: unknown) => T): Attribute<T> {
-  const raw = value as Record<string, unknown>
-  if (raw?.['status'] === 'available') {
-    const v = closed(value, ['status', 'value'])
-    return { status: 'available', value: decode(v['value']) }
-  }
-  const v = closed(value, ['status'])
-  return { status: enumeration(v['status'], ['missing', 'invalid', 'not_configured'] as const) }
+  | Exclude<wireSchemas.getApiV1UserProfilesMeResponse.Attribute, { status: 'available' }>
+function attribute<T>(
+  value:
+    | wireSchemas.getApiV1UserProfilesMeResponse.Attribute
+    | wireSchemas.getApiV1UserProfilesMeResponse.Attribute2,
+  decode: (v: unknown) => T,
+): Attribute<T> {
+  return value.status === 'available'
+    ? { status: value.status, value: decode(value.value) }
+    : { status: value.status }
 }
 function fixed(value: unknown) {
-  const v = closed(value, ['displayName', 'username', 'email', 'emailVerified'])
+  if (!wireSchemas.getApiV1UserProfilesMeResponse.validateFixed(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     displayName: attribute(v['displayName'], string),
     username: attribute(v['username'], string),
@@ -126,8 +109,11 @@ function fixed(value: unknown) {
   }
 }
 export function profile(value: unknown) {
-  const v = closed(value, ['principalId', 'view', 'profiles', 'fields', 'completeness'])
-  const c = closed(v['completeness'], ['required', 'complete', 'missing'])
+  if (!wireSchemas.getApiV1UserProfilesMeResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+  const c = v['completeness']
   const completeness = {
     required: count(c['required']),
     complete: count(c['complete']),
@@ -137,30 +123,15 @@ export function profile(value: unknown) {
     throw new Error('Invalid completeness')
   return {
     principalId: uuid(v['principalId']),
-    view: enumeration(v['view'], ['current', 'latest'] as const),
+    view: v['view'],
     completeness,
     profiles: array(v['profiles'], (item) => {
-      const p = closed(item, [
-        'source',
-        'status',
-        'snapshotId',
-        'providerConfigVersion',
-        'sourceRevision',
-        'observedAt',
-        'collectedAtMicros',
-        'expiresAt',
-        'fixed',
-      ])
+      const p = item
       if (p['status'] !== 'available' && p['fixed'] !== null)
         throw new Error('Unavailable profile contains values')
       return {
         source: nullable(p['source'], source),
-        status: enumeration(p['status'], [
-          'available',
-          'missing',
-          'expired',
-          'unavailable',
-        ] as const),
+        status: p['status'],
         snapshotId: nullable(p['snapshotId'], uuid),
         providerConfigVersion: nullable(p['providerConfigVersion'], count),
         sourceRevision: nullable(p['sourceRevision'], count),
@@ -171,19 +142,7 @@ export function profile(value: unknown) {
       }
     }),
     fields: array(v['fields'], (item) => {
-      const f = closed(item, [
-        'fieldId',
-        'revision',
-        'key',
-        'displayName',
-        'source',
-        'valueType',
-        'sensitive',
-        'displayUse',
-        'required',
-        'status',
-        'value',
-      ])
+      const f = item
       if ((f['status'] === 'available') === (f['value'] === null))
         throw new Error('Profile value contradicts status')
       return {
@@ -192,11 +151,11 @@ export function profile(value: unknown) {
         key: string(f['key']),
         displayName: string(f['displayName']),
         source: source(f['source']),
-        valueType: enumeration(f['valueType'], types),
-        sensitive: boolean(f['sensitive']),
-        displayUse: enumeration(f['displayUse'], uses),
-        required: boolean(f['required']),
-        status: enumeration(f['status'], states),
+        valueType: f['valueType'],
+        sensitive: f['sensitive'],
+        displayUse: f['displayUse'],
+        required: f['required'],
+        status: f['status'],
         value: profileJson(f['value']),
       }
     }),
@@ -224,27 +183,22 @@ export function createProfilesClient(transport: HttpTransport) {
     definitions: <F extends keyof typeof definitionFields = keyof typeof definitionFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/user-attribute-definitions',
-        query: queryParameters({
-          limit: 20,
-          ...query,
-          fields: query.fields ?? Object.keys(definitionFields),
-        }),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor', 'sources'])
+      api.getApiV1UserAttributeDefinitions(
+        transport,
+        {
+          query: queryParameters({
+            limit: 20,
+            ...query,
+            fields: query.fields ?? Object.keys(definitionFields),
+          }),
+        },
+        (value) => {
+          const v = value
           return {
             items: array(v['items'], (row) => projectedRow(row, definitionFields, query.fields)),
             nextCursor: nextCursor(v['nextCursor']),
             sources: array(v['sources'], (item) => {
-              const s = closed(item, [
-                'source',
-                'providerConfigVersion',
-                'extensionsRoot',
-                'maxAgeSeconds',
-              ])
+              const s = item
               return {
                 source: source(s['source']),
                 providerConfigVersion: nullable(s['providerConfigVersion'], count),
@@ -254,46 +208,39 @@ export function createProfilesClient(transport: HttpTransport) {
             }),
           }
         },
-      }),
+      ),
     definition: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/user-attribute-definitions/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: definition,
-      }),
+      api.getApiV1UserAttributeDefinitionsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        definition,
+      ),
     save: (
       id: string,
       operationId: string,
       expectedRevision: number,
       value: DefinitionValue | null,
     ) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/user-attribute-definitions/{id}',
-        pathParams: { id: uuid(id) },
-        body: { operationId: uuid(operationId), expectedRevision, value },
-        successStatus: 200,
-        decode: (v) => definitionReceipt(v, operationId, id),
-      }),
+      api.putApiV1UserAttributeDefinitionsById(
+        transport,
+        {
+          pathParams: { id: uuid(id) },
+          body: { operationId: uuid(operationId), expectedRevision, value },
+        },
+        (v) => definitionReceipt(v, operationId, id),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/user-attribute-operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: (v) => definitionReceipt(v, id),
-      }),
+      api.getApiV1UserAttributeOperationsById(transport, { pathParams: { id: uuid(id) } }, (v) =>
+        definitionReceipt(v, id),
+      ),
     read: (principal: string | null, view: 'current' | 'latest' = 'current', preview = false) =>
-      transport.request({
-        method: 'GET',
-        path: principal ? '/api/v1/user-profiles/{id}' : '/api/v1/user-profiles/me',
-        ...(principal ? { pathParams: { id: uuid(principal) } } : {}),
-        query: { view, preview: String(preview) },
-        successStatus: 200,
-        decode: profile,
-      }),
+      principal
+        ? api.getApiV1UserProfilesById(
+            transport,
+            { pathParams: { id: uuid(principal) }, query: { view, preview } },
+            profile,
+          )
+        : api.getApiV1UserProfilesMe(transport, { query: { view, preview } }, profile),
   }
 }
 export function sourceKey(value: ProfileSource) {

@@ -19,9 +19,11 @@ export function enumeration<const T extends readonly string[]>(
   if (typeof value !== 'string' || !values.includes(value)) throw new Error('Invalid enum')
   return value as T[number]
 }
-export function array<T>(value: unknown, decode: (item: unknown) => T): T[] {
+export function array<V, T>(value: readonly V[], decode: (item: V) => T): T[]
+export function array<T>(value: unknown, decode: (item: unknown) => T): T[]
+export function array<T>(value: unknown, decode: (item: never) => T): T[] {
   if (!Array.isArray(value) || value.length > 1000) throw new Error('Invalid list')
-  return value.map(decode)
+  return value.map((item: unknown) => decode(item as never))
 }
 export function uuid(value: unknown): string {
   const result = string(value)
@@ -54,8 +56,9 @@ export function boolean(value: unknown): boolean {
   if (typeof value !== 'boolean') throw new Error('Invalid boolean')
   return value
 }
-export function nullable<T>(value: unknown, decode: (v: unknown) => T): T | null {
-  return value === null ? null : decode(value)
+export function nullable<V, T>(value: V, decode: (v: Exclude<V, null>) => T): T | null
+export function nullable<T>(value: unknown, decode: (v: never) => T): T | null {
+  return value === null ? null : decode(value as never)
 }
 export function identifier(value: unknown): string {
   const v = string(value)

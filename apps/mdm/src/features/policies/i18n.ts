@@ -3,7 +3,8 @@ export const policiesZh = {
   configurationContentHint:
     '上传受支持的原生配置 JSON，声明目标、应用动作及可选撤回动作。平台内容支持 macOS Profile / DDM 与 Windows CSP。',
   publishedSoftware: '已发布软件',
-  publicationHint: '仅显示已发布且未撤回的确切软件资源版本。发布不代表设备已安装，分配由策略控制。',
+  publicationHint:
+    '显示当前目录页中已发布且未撤回的确切软件资源版本，可继续读取下一页。发布不代表设备已安装，分配由策略控制。',
   softwarePublished: '已发布',
   scopeEditor: {
     manage: '配置设备组与目标范围',
@@ -637,7 +638,7 @@ export const policiesEn: typeof policiesZh = {
     'Upload a supported native configuration JSON document with its target, apply action and optional removal action. Platform content supports macOS profiles, DDM and Windows CSP.',
   publishedSoftware: 'Published software',
   publicationHint:
-    'Shows exact software versions that are published and not withdrawn. Publication is separate from device installation; policies control assignment.',
+    'Shows published software versions that are not withdrawn on the current directory page. Continue to the next page for more. Publication is separate from device installation; policies control assignment.',
   softwarePublished: 'Published',
   scopeEditor: {
     manage: 'Configure device groups and targeting',

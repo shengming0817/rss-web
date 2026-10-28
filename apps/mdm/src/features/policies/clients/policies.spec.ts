@@ -71,8 +71,12 @@ it('accepts only the closed formal Policy and rejects the retired candidate DTO'
       presentation: { ...metadata.presentation, vendorHelp: { text: 'support' } },
     }).presentation,
   ).toMatchObject({ vendorHelp: { text: 'support' } })
+  expect(selfService({ ...metadata, riskLevel: null, allowAi: null })).toMatchObject({
+    riskLevel: null,
+    allowAi: null,
+  })
   expect(() => selfService({ ...metadata, displayName: 'retired flat metadata' })).toThrow()
-  for (const riskLevel of [0, 3, '2', null])
+  for (const riskLevel of [0, 3, '2'])
     expect(() => selfService({ ...metadata, riskLevel })).toThrow()
   expect(() =>
     policyDefinition({

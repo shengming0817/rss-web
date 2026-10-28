@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decodeWorkspace, decodeMdmConfig } from './workspace'
+import { decodeDemoWorkspace } from '../../demo/workspace'
 describe('MDM app configuration and navigation', () => {
   it('fails closed for origin mismatch and unrecognized module source', () => {
     expect(() =>
@@ -11,8 +12,8 @@ describe('MDM app configuration and navigation', () => {
   })
   it('keeps unknown navigation distinct from a denied entry', () => {
     expect(
-      decodeWorkspace({ modules: [{ id: 'devices', source: 'real', available: null }] }).modules[0]
-        ?.available,
+      decodeDemoWorkspace({ modules: [{ id: 'devices', source: 'mock', available: null }] })
+        .modules[0]?.available,
     ).toBeNull()
     expect(
       decodeWorkspace({ modules: [{ id: 'devices', source: 'real', available: false }] }).modules[0]
@@ -30,9 +31,8 @@ it('rejects mock data in production and never calls a fallback', async () => {
       return options.decode({ modules: [{ id: 'devices', source: 'mock', available: true }] })
     },
   } as import('@rss/api/mdm').HttpTransport
-  await expect(createWorkspaceClient(transport, false).read()).rejects.toThrow()
+  await expect(createWorkspaceClient(transport).read()).rejects.toThrow()
   expect(calls).toBe(1)
-  expect((await createWorkspaceClient(transport, true).read()).modules[0]?.source).toBe('mock')
 })
 
 it('validates the static host identity and closed module data', () => {

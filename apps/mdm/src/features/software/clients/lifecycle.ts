@@ -1,3 +1,5 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -7,27 +9,22 @@ import type { HttpTransport } from '@rss/api/mdm'
 import { jsonObject } from '../../../services/json'
 import type { Operation } from '../../../services/useOperation'
 import {
-  closed,
   count,
   digest,
-  enumeration,
   identifier,
   integer,
   nullable,
-  record,
   string,
   uuid,
 } from '../../../services/decode'
 import { softwareSource } from '../../policies/clients/software-definition'
 export function sourceDefinition(value: unknown) {
-  const v = closed(value, ['id', 'revision', 'protocol']),
-    raw = record(v['protocol']),
-    kind = enumeration(raw['kind'], [
-      'private',
-      'winget_rest',
-      'winget_community',
-      'brew_tap',
-    ] as const)
+  if (!wireSchemas.getApiV1SoftwareSourcesResponse.validateSourceDefinition(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    raw = v['protocol'],
+    kind = raw['kind']
   function url(value: unknown) {
     const text = string(value),
       u = new URL(text)
@@ -49,16 +46,12 @@ export function sourceDefinition(value: unknown) {
   }
   let protocol
   if (kind === 'private') {
-    closed(raw, ['kind'])
     protocol = { kind }
   } else if (kind === 'winget_rest') {
-    closed(raw, ['kind', 'location', 'identifier'])
     protocol = { kind, location: url(raw['location']), identifier: identifier(raw['identifier']) }
   } else if (kind === 'winget_community') {
-    closed(raw, ['kind', 'repository', 'commit'])
     protocol = { kind, repository: url(raw['repository']), commit: commit(raw['commit']) }
   } else {
-    closed(raw, ['kind', 'repository', 'tap', 'commit'])
     const tap = string(raw['tap'])
     if (
       !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(tap) ||
@@ -71,10 +64,13 @@ export function sourceDefinition(value: unknown) {
 }
 export type SourceDefinition = ReturnType<typeof sourceDefinition>
 export function lifecycle(value: unknown) {
-  const v = closed(value, ['revision', 'state', 'operation', 'actor', 'at', 'digest'])
+  if (!wireSchemas.getApiV1SoftwareSourcesResponse.validateLifecycle(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     revision: count(v['revision']),
-    state: enumeration(v['state'], ['enabled', 'disabled', 'withdrawn'] as const),
+    state: v['state'],
     operation: uuid(v['operation']),
     actor: identifier(v['actor']),
     at: integer(v['at']),
@@ -86,7 +82,10 @@ export type SourceChange =
   | { action: 'register'; definition: SourceDefinition }
   | { action: 'enable' | 'disable' }
 export function sourceRead(value: unknown, id: string, revision: string) {
-  const v = closed(value, ['source', 'snapshot', 'lifecycle']),
+  if (!wireSchemas.getApiV1AgentPackagesOperationsByIdResponse.validateSourceView(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     source = sourceDefinition(v['source']),
     snapshot = softwareSource(v['snapshot'])
   if (
@@ -99,7 +98,10 @@ export function sourceRead(value: unknown, id: string, revision: string) {
   return { source, snapshot, lifecycle: lifecycle(v['lifecycle']) }
 }
 function versionReceipt(value: unknown, id: string, version: string) {
-  const v = closed(value, ['resource', 'version', 'lifecycle'])
+  if (!wireSchemas.getApiV1AgentPackagesOperationsByIdResponse.validateVersionReceipt(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (v['resource'] !== id || v['version'] !== version) throw new Error('Wrong software version')
   return { resource: id, version, lifecycle: lifecycle(v['lifecycle']) }
 }
@@ -116,16 +118,16 @@ export function createLifecycleClient(transport: HttpTransport) {
     sources: <F extends keyof typeof sourceFields = keyof typeof sourceFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/sources',
-        query: queryParameters({
-          limit: 20,
-          ...query,
-          fields: query.fields ?? Object.keys(sourceFields),
-        }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1SoftwareSources(
+        transport,
+        {
+          query: queryParameters({
+            limit: 20,
+            ...query,
+            fields: query.fields ?? Object.keys(sourceFields),
+          }),
+        },
+        (value) => {
           const page = projectedPage(value, sourceFields, query.fields)
           if (!query.fields)
             page.items.forEach((item) => {
@@ -136,39 +138,25 @@ export function createLifecycleClient(transport: HttpTransport) {
             })
           return page
         },
-      }),
+      ),
     source: (id: string, revision: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/sources/{id}/revisions/{revision}',
-        pathParams: { id, revision },
-        successStatus: 200,
-        decode: (v) => sourceRead(v, id, revision),
-      }),
+      api.getApiV1SoftwareSourcesByIdRevisionsByRevision(
+        transport,
+        { pathParams: { id, revision } },
+        (v) => sourceRead(v, id, revision),
+      ),
     changeSource: (id: string, revision: string, body: Operation<SourceChange>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/software/sources/{id}/revisions/{revision}',
-        pathParams: { id, revision },
-        body,
-        successStatus: 200,
-        decode: (v) => mutationReceipt(sourceRead(v, id, revision), body.operationId),
-      }),
+      api.postApiV1SoftwareSourcesByIdRevisionsByRevision(
+        transport,
+        { pathParams: { id, revision }, body },
+        (v) => mutationReceipt(sourceRead(v, id, revision), body.operationId),
+      ),
     version: (id: string, version: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/resources/{id}/versions/{version}',
-        pathParams: { id, version },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, [
-            'resource',
-            'version',
-            'resourceDigest',
-            'resourceRevision',
-            'presentation',
-            'lifecycle',
-          ])
+      api.getApiV1SoftwareResourcesByIdVersionsByVersion(
+        transport,
+        { pathParams: { id, version } },
+        (value) => {
+          const v = value
           if (v['resource'] !== id || v['version'] !== version)
             throw new Error('Wrong software version')
           return {
@@ -180,15 +168,12 @@ export function createLifecycleClient(transport: HttpTransport) {
             lifecycle: nullable(v['lifecycle'], lifecycle),
           }
         },
-      }),
+      ),
     changeVersion: (id: string, version: string, body: Operation<VersionChange>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/software/resources/{id}/versions/{version}',
-        pathParams: { id, version },
-        body,
-        successStatus: 200,
-        decode: (v) => mutationReceipt(versionReceipt(v, id, version), body.operationId),
-      }),
+      api.postApiV1SoftwareResourcesByIdVersionsByVersion(
+        transport,
+        { pathParams: { id, version }, body },
+        (v) => mutationReceipt(versionReceipt(v, id, version), body.operationId),
+      ),
   }
 }

@@ -1,3 +1,5 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   windowPage,
@@ -8,12 +10,10 @@ import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   boolean,
-  closed,
   count,
   enumeration,
   identifier,
   nullable,
-  record,
   unique,
   uuid,
 } from '../../../services/decode'
@@ -68,55 +68,37 @@ function account(value: unknown) {
   return v
 }
 export function adeStatus(value: unknown, id: string) {
-  const v = closed(value, [
-    'organizationId',
-    'revision',
-    'enabled',
-    'serverUuid',
-    'orgId',
-    'keyId',
-    'tokenRevision',
-    'tokenExpiresAt',
-    'tokenState',
-    'syncedAt',
-    'externalDeviceVerification',
-  ])
+  if (!wireSchemas.getApiV1AppleOrganizationsResponse.validateAde(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (uuid(v['organizationId']) !== id || v['externalDeviceVerification'] !== 'not_observed')
     throw new Error('Wrong organization')
   return {
     organizationId: id,
     revision: count(v['revision']),
-    enabled: boolean(v['enabled']),
+    enabled: v['enabled'],
     serverUuid: uuid(v['serverUuid']),
     orgId: bounded(v['orgId'], 256),
     keyId: uuid(v['keyId']),
     tokenRevision: count(v['tokenRevision']),
     tokenExpiresAt: nullable(v['tokenExpiresAt'], count),
-    tokenState: enumeration(v['tokenState'], [
-      'missing',
-      'expired',
-      'invalid',
-      'verified',
-      'unverified',
-    ] as const),
+    tokenState: v['tokenState'],
     syncedAt: nullable(v['syncedAt'], count),
     externalDeviceVerification: 'not_observed' as const,
   }
 }
 export function appleOrganizations(value: unknown) {
+  if (!wireSchemas.getApiV1AppleOrganizationsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
   return windowPage(value, (value) => {
-    const v = closed(value, ['id', 'accountEnrollment', 'ade']),
+    const v = value,
       id = uuid(v['id'])
     const accountEnrollment = nullable(v['accountEnrollment'], (value) => {
-      const a = closed(value, [
-        'domain',
-        'serverUuid',
-        'signingKey',
-        'enabled',
-        'revision',
-        'signingKeyConfigured',
-        'externalOrganizationVerification',
-      ])
+      if (!wireSchemas.getApiV1AppleOrganizationsResponse.validateAccountConfiguration(value))
+        throw new Error('Invalid account configuration')
+      const a = value
       if (a['externalOrganizationVerification'] !== 'not_observed')
         throw new Error('Invalid verification')
       const d = domain(a['domain'])
@@ -124,9 +106,9 @@ export function appleOrganizations(value: unknown) {
         domain: d,
         serverUuid: uuid(a['serverUuid']),
         signingKey: bounded(a['signingKey'], 128),
-        enabled: boolean(a['enabled']),
+        enabled: a['enabled'],
         revision: count(a['revision']),
-        signingKeyConfigured: boolean(a['signingKeyConfigured']),
+        signingKeyConfigured: a['signingKeyConfigured'],
         externalOrganizationVerification: 'not_observed' as const,
       }
     })
@@ -134,9 +116,12 @@ export function appleOrganizations(value: unknown) {
   })
 }
 export function setup(value: unknown) {
-  const v = closed(value, ['name', 'mandatory', 'removable', 'skip']),
-    mandatory = boolean(v['mandatory']),
-    removable = boolean(v['removable'])
+  if (!wireSchemas.getApiV1AppleOrganizationsByIdAdeProfilesResponse.validateSetup(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    mandatory = v['mandatory'],
+    removable = v['removable']
   if (!mandatory && !removable) throw new Error('Locked profile must be mandatory')
   return {
     name: bounded(v['name'], 128),
@@ -148,96 +133,28 @@ export function setup(value: unknown) {
     ),
   }
 }
-const reasons = [
-  'interrupted_external_effect',
-  'authority_changed',
-  'cursor_reset',
-  'token_invalid',
-  'throttled',
-  'external_outcome_unknown',
-  'invalid_response',
-  'invalid_cursor',
-  'invalid_page',
-  'missing_profile_receipt',
-  'profile_changed',
-  'missing_device_observation',
-  'incomplete_device_observation',
-  'invalid_device_observation',
-  'effect_confirmed',
-  'effect_not_confirmed',
-  'profile_mismatch',
-  'cursor_no_progress',
-] as const
-function operationResult(value: unknown): Record<string, unknown> {
-  const v = record(value),
-    keys = Object.keys(v).sort().join()
-  if (keys === 'reason') return { reason: enumeration(v['reason'], reasons) }
-  if (keys === 'remoteProfile' || keys === 'recoveredBy,remoteProfile')
-    return {
-      remoteProfile: uuid(v['remoteProfile']),
-      ...(v['recoveredBy'] === undefined ? {} : { recoveredBy: uuid(v['recoveredBy']) }),
-    }
-  if (keys === 'reason,recoveredBy,registration') {
-    if (v['registration'] !== 'not_implied') throw new Error('Invented registration')
-    return {
-      reason: enumeration(v['reason'], ['effect_confirmed', 'effect_not_confirmed'] as const),
-      recoveredBy: uuid(v['recoveredBy']),
-      registration: 'not_implied',
-    }
-  }
-  if (keys === 'moreToFollow,pageDevices,registration') {
-    if (v['registration'] !== 'not_implied') throw new Error('Invented registration')
-    return {
-      moreToFollow: boolean(v['moreToFollow']),
-      pageDevices: count(v['pageDevices']),
-      registration: 'not_implied',
-    }
-  }
-  if (keys === 'devices,registration,retryAfterSeconds') {
-    if (v['registration'] !== 'not_implied') throw new Error('Invented registration')
-    const devices = Object.entries(record(v['devices']))
-    if (devices.length > 1000) throw new Error('Too many outcomes')
-    return {
-      devices: Object.fromEntries(
-        devices.map(([serial, outcome]) => [
-          bounded(serial, 128),
-          enumeration(outcome, [
-            'SUCCESS',
-            'FAILED',
-            'UNKNOWN',
-            'THROTTLED',
-            'NOT_ACCESSIBLE',
-          ] as const),
-        ]),
-      ),
-      retryAfterSeconds: nullable(v['retryAfterSeconds'], count),
-      registration: 'not_implied',
-    }
-  }
-  if (keys === 'operationId,state' || keys === 'operationId,revision,state')
-    return {
-      operationId: uuid(v['operationId']),
-      state: enumeration(v['state'], ['pending', 'succeeded'] as const),
-      ...(v['revision'] === undefined ? {} : { revision: count(v['revision']) }),
-    }
-  throw new Error('Invalid ADE result')
+
+function operationResult(value: unknown) {
+  if (
+    !wireSchemas.getApiV1AppleOrganizationsByIdAdeOperationsByOperationResponse.validateOperationResult(
+      value,
+    )
+  )
+    throw new Error('Invalid operation result')
+  return { ...value }
 }
 export function adeOperation(value: unknown, id: string) {
-  const v = closed(value, ['operationId', 'kind', 'state', 'result'])
+  if (
+    !wireSchemas.getApiV1AppleOrganizationsByIdAdeOperationsByOperationResponse.validateRoot(value)
+  )
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (uuid(v['operationId']) !== id) throw new Error('Wrong operation')
   return {
     operationId: id,
-    kind: enumeration(v['kind'], [
-      'configuration',
-      'token',
-      'sync',
-      'profile',
-      'assign',
-      'clear',
-      'reconcile',
-      'resolve',
-    ] as const),
-    state: enumeration(v['state'], adeStates),
+    kind: v['kind'],
+    state: v['state'],
     result: nullable(v['result'], operationResult),
   }
 }
@@ -277,30 +194,35 @@ export type AdeCommand =
 export function createAppleClient(transport: HttpTransport) {
   const params = (id: string) => ({ id: uuid(id) })
   function revision(value: unknown, expected: number) {
-    const v = closed(value, ['revision']),
+    if (!wireSchemas.putApiV1AppleOrganizationsByIdAccountEnrollmentResponse.validateRoot(value))
+      throw new Error('Invalid contract value')
+
+    const v = value,
       result = count(v['revision'])
     if (result !== expected + 1) throw new Error('Wrong revision')
     return result
   }
   return {
     organizations: (query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations',
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode: appleOrganizations,
-      }),
+      api.getApiV1AppleOrganizations(
+        transport,
+        { query: queryParameters({ limit: 100, ...query }) },
+        appleOrganizations,
+      ),
     accounts: (id: string, query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/account-enrollment/accounts',
-        pathParams: params(id),
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode: (v) =>
+      api.getApiV1AppleOrganizationsByIdAccountEnrollmentAccounts(
+        transport,
+        { pathParams: params(id), query: queryParameters({ limit: 100, ...query }) },
+        (v) =>
           windowPage(v, (value) => {
-            const a = closed(value, ['account', 'principalId', 'instanceId', 'revision', 'enabled'])
+            if (
+              !wireSchemas.getApiV1AppleOrganizationsByIdAccountEnrollmentAccountsResponse.validateProjection_Account(
+                value,
+              )
+            )
+              throw new Error('Invalid contract value')
+
+            const a = value
             return {
               account: account(a['account']),
               principalId: uuid(a['principalId']),
@@ -309,45 +231,33 @@ export function createAppleClient(transport: HttpTransport) {
               enabled: boolean(a['enabled']),
             }
           }),
-      }),
+      ),
     accountOrganization: (id: string, operation: string, body: AccountOrganization) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/apple/organizations/{id}/account-enrollment',
-        pathParams: params(id),
-        headers: { 'Idempotency-Key': uuid(operation) },
-        body,
-        successStatus: 200,
-        decode: (v) => revision(v, body.expectedRevision),
-      }),
+      api.putApiV1AppleOrganizationsByIdAccountEnrollment(
+        transport,
+        { pathParams: params(id), headers: { 'Idempotency-Key': uuid(operation) }, body },
+        (v) => revision(v, body.expectedRevision),
+      ),
     accountMapping: (id: string, name: string, operation: string, body: AccountMapping) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/apple/organizations/{id}/account-enrollment/accounts/{account}',
-        pathParams: { ...params(id), account: account(name) },
-        headers: { 'Idempotency-Key': uuid(operation) },
-        body,
-        successStatus: 200,
-        decode: (v) => revision(v, body.expectedRevision),
-      }),
+      api.putApiV1AppleOrganizationsByIdAccountEnrollmentAccountsByAccount(
+        transport,
+        {
+          pathParams: { ...params(id), account: account(name) },
+          headers: { 'Idempotency-Key': uuid(operation) },
+          body,
+        },
+        (v) => revision(v, body.expectedRevision),
+      ),
     ade: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade',
-        pathParams: params(id),
-        successStatus: 200,
-        decode: (v) => adeStatus(v, id),
-      }),
+      api.getApiV1AppleOrganizationsByIdAde(transport, { pathParams: params(id) }, (v) =>
+        adeStatus(v, id),
+      ),
     configure: (id: string, operation: string, body: AdeConfiguration) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/apple/organizations/{id}/ade/configuration',
-        pathParams: params(id),
-        headers: { 'Idempotency-Key': uuid(operation) },
-        body,
-        successStatus: 200,
-        decode: (v) => {
-          const raw = closed(v, ['operationId', 'state', 'revision'])
+      api.putApiV1AppleOrganizationsByIdAdeConfiguration(
+        transport,
+        { pathParams: params(id), headers: { 'Idempotency-Key': uuid(operation) }, body },
+        (v) => {
+          const raw = v
           if (
             uuid(raw['operationId']) !== operation ||
             raw['state'] !== 'succeeded' ||
@@ -360,51 +270,37 @@ export function createAppleClient(transport: HttpTransport) {
             revision: count(raw['revision']),
           }
         },
-      }),
+      ),
     publicKey: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade/public-key',
-        pathParams: params(id),
-        responseType: 'arraybuffer',
-        successStatus: 200,
-        decode: (v) => attachment(v, 'application/x-pem-file', 'RSS-ADE-public.pem', 65_536),
-      }),
+      api.getApiV1AppleOrganizationsByIdAdePublicKey(transport, { pathParams: params(id) }, (v) =>
+        attachment(v, 'application/x-pem-file', 'RSS-ADE-public.pem', 65_536),
+      ),
     command: (id: string, operation: string, body: AdeCommand) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/apple/organizations/{id}/ade/operations',
-        pathParams: params(id),
-        headers: { 'Idempotency-Key': uuid(operation) },
-        body,
-        successStatus: 200,
-        decode: (v) => {
-          const raw = closed(v, ['operationId', 'state'])
+      api.postApiV1AppleOrganizationsByIdAdeOperations(
+        transport,
+        { pathParams: params(id), headers: { 'Idempotency-Key': uuid(operation) }, body },
+        (v) => {
+          const raw = v
           if (uuid(raw['operationId']) !== operation) throw new Error('Wrong operation receipt')
           return {
             operationId: operation,
             state: enumeration(raw['state'], ['pending', 'succeeded'] as const),
           }
         },
-      }),
+      ),
     operation: (id: string, operation: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade/operations/{operation}',
-        pathParams: { ...params(id), operation: uuid(operation) },
-        successStatus: 200,
-        decode: (v) => adeOperation(v, operation),
-      }),
+      api.getApiV1AppleOrganizationsByIdAdeOperationsByOperation(
+        transport,
+        { pathParams: { ...params(id), operation: uuid(operation) } },
+        (v) => adeOperation(v, operation),
+      ),
     profiles: (id: string, query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade/profiles',
-        pathParams: params(id),
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode: (v) =>
+      api.getApiV1AppleOrganizationsByIdAdeProfiles(
+        transport,
+        { pathParams: params(id), query: queryParameters({ limit: 100, ...query }) },
+        (v) =>
           windowPage(v, (item) => {
-            const p = closed(item, ['id', 'revision', 'configuration', 'remoteUuid'])
+            const p = item
             return {
               id: uuid(p['id']),
               revision: count(p['revision']),
@@ -412,26 +308,17 @@ export function createAppleClient(transport: HttpTransport) {
               remoteUuid: nullable(p['remoteUuid'], uuid),
             }
           }),
-      }),
+      ),
     devices: (id: string, query: DirectoryQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/apple/organizations/{id}/ade/devices',
-        pathParams: params(id),
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode: (v) => {
-          const p = closed(v, ['items', 'nextCursor'])
+      api.getApiV1AppleOrganizationsByIdAdeDevices(
+        transport,
+        { pathParams: params(id), query: queryParameters({ limit: 100, ...query }) },
+        (v) => {
+          const p = v
           return {
             items: unique(
               array(p['items'], (value) => {
-                const d = closed(value, [
-                  'serial',
-                  'deleted',
-                  'profileUuid',
-                  'observedAt',
-                  'registration',
-                ])
+                const d = value
                 if (d['registration'] !== 'not_implied') throw new Error('Invented registration')
                 return {
                   serial: bounded(d['serial'], 128),
@@ -446,7 +333,7 @@ export function createAppleClient(transport: HttpTransport) {
             nextCursor: nextCursor(p['nextCursor']),
           }
         },
-      }),
-    bridge: '/api/v1/apple/account-enrollment/authenticate',
+      ),
+    bridge: api.getApiV1AppleAccountEnrollmentAuthenticate.url({}),
   }
 }

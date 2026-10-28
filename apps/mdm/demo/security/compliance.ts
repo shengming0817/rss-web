@@ -179,11 +179,12 @@ export function createComplianceDemo(
         reason,
         condition: result.decision,
         applicability: { platform: d.platform, platformDecision, sources, groups },
-        explanations: result.explanations,
+        explanations: result.explanations.map((e) => ({ ...e, context: 'device' })),
         evidence: referencedFields(d.criteria.criteria).map((field) => ({
           field,
+          context: 'device',
           sources: (device.inventory.fields[field]?.sources ?? []).map((s) =>
-            structuredClone(s.evidence),
+            (({ scope: _scope, ...reference }) => reference)(structuredClone(s.evidence)),
           ),
         })),
       })

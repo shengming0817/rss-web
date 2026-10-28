@@ -2,6 +2,7 @@
   "name": "@rss/api",
   "version": "0.0.0",
   "private": true,
+  "sideEffects": false,
   "type": "module",
   "exports": {
     "./testing": "./src/testing.ts",
@@ -9,7 +10,12 @@
     "./mdm": "./src/mdm.ts",
     "./mdm-limits": "./src/mdm-limits.ts",
     "./device-access": "./src/device-access.ts",
-    "./device-access-demo": "./src/device-access-demo.ts"
+    "./device-access-demo": "./src/device-access-demo.ts",
+    "./mdm-operations": "./src/generated/mdm/index.ts",
+    "./mdm-types": "./src/generated/mdm/owners.ts",
+    "./mdm-validators": "./src/generated/mdm/owner-validators.ts",
+    "./mdm-schemas": "./src/generated/mdm/schemas.ts",
+    "./mdm-demo": "./src/mdm-demo.ts"
   },
   "files": [
     "src"

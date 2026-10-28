@@ -1,0 +1,4 @@
+export { default as validateRoot } from './sab09409be7ef39b326a9.validator.js'
+export { default as validateReference } from './vcgonmebjcfakhimfjajhkifiapabpckjngfflefgicmlmpakigjjjplhdcbnccfc.validator.js'
+export { default as validateScopeChange } from './vbdiempmpdgneaoapbbejpdldhifmlfedgcnmknikkajdlcpngnmnlfgegpbbdnhm.validator.js'
+export { default as validateScopeDefinition } from './vlnalaiopbhamcnpabepkhhenbfcihfcohjafpbhmbaonimcabckomkcckahbdmaa.validator.js'

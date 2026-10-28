@@ -44,7 +44,14 @@ beforeEach(() => {
         },
         'normal',
       )!
-      if (reply.status !== o.successStatus) throw decodeMdmError(reply.status, reply.body)
+      if (
+        !(
+          (Array.isArray(o.successStatus)
+            ? o.successStatus
+            : [o.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
+        throw decodeMdmError(reply.status, reply.body)
       if (typeof o.decode !== 'function') return undefined
       const binary =
         o.responseType === 'arraybuffer'
@@ -229,7 +236,7 @@ it('closes ADE status, result, Setup Assistant constraints and registration sema
     { remoteProfile: op },
     { remoteProfile: op, recoveredBy: op },
     { reason: 'effect_confirmed', recoveredBy: op, registration: 'not_implied' },
-    { pageDevices: 0, moreToFollow: false, registration: 'not_implied' },
+    { pageDevices: 0, moreToFollow: false, changed: false, registration: 'not_implied' },
     { devices: { SERIAL: 'SUCCESS' }, retryAfterSeconds: null, registration: 'not_implied' },
     { operationId: op, state: 'succeeded', revision: 1 },
   ])

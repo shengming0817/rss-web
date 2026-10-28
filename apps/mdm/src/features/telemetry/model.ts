@@ -1,13 +1,23 @@
+type SampleWire = wireSchemas.postApiV1TelemetryHistoryResponse.HistoryRow['sample']
+type DefinitionWire = SampleWire['series']['definition']
+type MetricWire = DefinitionWire['metric']
+type BucketWire = wireSchemas.postApiV1TelemetryAggregateResponse.Root['buckets'][number]
+type IntervalWire = BucketWire['window']
+type AggregateWire = BucketWire['value']
+type NumericWire = Extract<AggregateWire, { Number: unknown }>['Number']
+type SumWire = Extract<AggregateWire, { Sum: unknown }>['Sum']
+type StateValueWire = Extract<
+  AggregateWire,
+  { StateSegments: unknown }
+>['StateSegments'][number]['value']
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import {
   array,
-  boolean,
-  closed,
   count,
   enumeration,
   string,
   integer,
   nullable,
-  record,
   uuid,
   finite,
   positive,
@@ -31,44 +41,25 @@ export const aggregationNames = [
   'transitions',
   'coverage',
 ] as const
-export function interval(value: unknown) {
-  const v = closed(value, ['start', 'end']),
+export function interval(value: IntervalWire) {
+  const v = value,
     start = count(v['start']),
     end = count(v['end'])
   if (end < start) throw new Error('Invalid window')
   return { start, end }
 }
-function scope(value: unknown, tenant: string) {
-  const v = closed(value, ['tenant', 'namespace'])
+function scope(value: SampleWire['stream']['scope'], tenant: string) {
+  const v = value
   if (uuid(v['tenant']) !== tenant || v['namespace'] !== 'mdm.telemetry')
     throw new Error('Wrong telemetry tenant')
   return { tenant, namespace: 'mdm.telemetry' }
 }
-function metric(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['gauge', 'counter', 'bool', 'state'] as const)
-  if (kind === 'bool') {
-    closed(value, ['kind'])
-    return { kind }
-  }
-  if (kind === 'state') {
-    const v = closed(value, ['kind', 'members'])
-    return { kind, members: array(v['members'], telemetryId) }
-  }
-  const v = closed(value, kind === 'gauge' ? ['kind', 'number'] : ['kind', 'number', 'temporality'])
-  const number = enumeration(v['number'], ['i64', 'u64', 'f64'] as const)
-  return kind === 'gauge'
-    ? { kind, number }
-    : { kind, number, temporality: enumeration(v['temporality'], ['cumulative', 'delta'] as const) }
+function metric(value: MetricWire) {
+  return value
 }
-function definition(value: unknown, tenant: string) {
-  const v = closed(value, ['scope', 'key', 'version', 'unit', 'metric', 'dimensions'])
-  const d = closed(v['dimensions'], [
-    'allowed',
-    'required',
-    'maxCount',
-    'maxValueBytes',
-    'maxTotalBytes',
-  ])
+function definition(value: DefinitionWire, tenant: string) {
+  const v = value
+  const d = v['dimensions']
   return {
     scope: scope(v['scope'], tenant),
     key: telemetryId(v['key']),
@@ -84,9 +75,9 @@ function definition(value: unknown, tenant: string) {
     },
   }
 }
-export function numeric(value: unknown): number {
-  const v = closed(value, ['type', 'value']),
-    kind = enumeration(v['type'], ['i64', 'u64', 'f64'] as const)
+export function numeric(value: NumericWire): number {
+  const v = value,
+    kind = v['type']
   return kind === 'f64'
     ? finite(v['value'])
     : kind === 'u64'
@@ -96,20 +87,19 @@ export function numeric(value: unknown): number {
 export type Reading =
   | { quality: 'missing' | 'failed' }
   | { quality: 'valid'; value: number | boolean | string }
-function reading(value: unknown, expected: ReturnType<typeof metric>): Reading {
-  const quality = enumeration(record(value)['quality'], ['valid', 'missing', 'failed'] as const)
+function reading(value: SampleWire['reading'], expected: ReturnType<typeof metric>): Reading {
+  const quality = value['quality']
   if (quality !== 'valid') {
-    closed(value, ['quality'])
     return { quality }
   }
-  const v = closed(value, ['quality', 'value']),
-    item = closed(v['value'], ['type', 'value'])
-  const type = enumeration(item['type'], ['number', 'bool', 'state'] as const)
+  const v = value,
+    item = v['value']
+  const type = item['type']
   const result =
     type === 'number'
       ? numeric(item['value'])
       : type === 'bool'
-        ? boolean(item['value'])
+        ? item['value']
         : telemetryId(item['value'])
   if (
     expected.kind === 'bool'
@@ -117,29 +107,23 @@ function reading(value: unknown, expected: ReturnType<typeof metric>): Reading {
       : expected.kind === 'state'
         ? type !== 'state' || !expected.members.includes(String(result))
         : type !== 'number' ||
-          record(item['value'])['type'] !== expected.number ||
+          item['value']['type'] !== expected.number ||
           (expected.kind === 'counter' && Number(result) < 0)
   )
     throw new Error('Reading disagrees with definition')
   return { quality, value: result }
 }
 export function observation(value: unknown, tenant: string, mode: 'history' | 'latest') {
-  const v = closed(value, [
-    'sample',
-    'receivedAt',
-    ...(mode === 'history' ? ['liveSource'] : ['effectiveSource', 'sourceConflict']),
-  ])
-  const s = closed(v['sample'], [
-    'stream',
-    'series',
-    'id',
-    'sequence',
-    'observedAt',
-    'interval',
-    'reading',
-  ])
-  const stream = closed(s['stream'], ['scope', 'source', 'generation']),
-    series = closed(s['series'], ['definition', 'subject', 'resource', 'dimensions'])
+  if (mode === 'history') {
+    if (!wireSchemas.postApiV1TelemetryHistoryResponse.validateHistoryRow(value))
+      throw new Error('Invalid observation')
+  } else if (!wireSchemas.postApiV1TelemetryHistoryResponse.validateLatestRow(value))
+    throw new Error('Invalid observation')
+
+  const v = value
+  const s = v['sample']
+  const stream = s['stream'],
+    series = s['series']
   const source = telemetryId(stream['source']),
     colon = source.indexOf(':')
   const registration = uuid(source.slice(0, colon)),
@@ -162,10 +146,7 @@ export function observation(value: unknown, tenant: string, mode: 'history' | 'l
         subject: telemetryId(series['subject']),
         resource: telemetryId(series['resource']),
         dimensions: Object.fromEntries(
-          Object.entries(record(series['dimensions'])).map(([k, v]) => [
-            telemetryId(k),
-            telemetryId(v),
-          ]),
+          Object.entries(series['dimensions']).map(([k, v]) => [telemetryId(k), telemetryId(v)]),
         ),
       },
     },
@@ -173,34 +154,27 @@ export function observation(value: unknown, tenant: string, mode: 'history' | 'l
     source: origin,
     epoch: uuid(stream['generation']),
     receivedAt: count(v['receivedAt']),
-    liveSource: mode === 'history' ? boolean(v['liveSource']) : boolean(v['effectiveSource']),
-    sourceConflict: mode === 'latest' ? boolean(v['sourceConflict']) : false,
+    liveSource: 'liveSource' in v ? v.liveSource : v.effectiveSource,
+    sourceConflict: 'sourceConflict' in v ? v.sourceConflict : false,
   }
 }
 export type Observation = ReturnType<typeof observation>
 export function unavailable(value: unknown) {
   return array(value, (x) => {
-    const v = closed(x, ['selection', 'window', 'reason'])
-    return {
-      selection: record(v['selection']),
-      window: interval(v['window']),
-      reason: enumeration(v['reason'], ['deleted', 'pruned'] as const),
-    }
+    if (!wireSchemas.postApiV1TelemetryHistoryResponse.validateUnavailable(x))
+      throw new Error('Invalid unavailable interval')
+    return { selection: x.selection, window: interval(x.window), reason: x.reason }
   })
 }
-function sum(value: unknown) {
-  const v = record(value),
-    keys = Object.keys(v)
-  if (keys.length !== 1) throw new Error('Invalid sum')
-  const key = enumeration(keys[0], ['I128', 'U128', 'F64'] as const)
-  return key === 'F64' ? finite(v[key]) : key === 'U128' ? count(v[key]) : integer(v[key])
+function sum(value: SumWire) {
+  return 'F64' in value
+    ? finite(value.F64)
+    : 'U128' in value
+      ? count(value.U128)
+      : integer(value.I128)
 }
-function stateValue(value: unknown): boolean | string {
-  const v = record(value),
-    keys = Object.keys(v)
-  if (keys.length !== 1) throw new Error('Invalid state')
-  const key = enumeration(keys[0], ['Bool', 'State'] as const)
-  return key === 'Bool' ? boolean(v[key]) : telemetryId(v[key])
+function stateValue(value: StateValueWire): boolean | string {
+  return 'Bool' in value ? value.Bool : telemetryId(value.State)
 }
 export type Aggregate =
   | { kind: 'number'; value: number }
@@ -214,62 +188,45 @@ export type Aggregate =
       transitions: { at: number; from: boolean | string; to: boolean | string }[]
     }
   | { kind: 'coverage'; durations: { value: boolean | string; micros: number }[] }
-function aggregateValue(value: unknown): Aggregate {
+function aggregateValue(value: AggregateWire): Aggregate {
   if (value === 'Missing') return { kind: 'missing' }
-  const v = record(value),
-    keys = Object.keys(v)
-  if (keys.length !== 1) throw new Error('Invalid aggregate')
-  const kind = enumeration(keys[0], [
-    'Number',
-    'Sum',
-    'Count',
-    'Mean',
-    'Rate',
-    'StateSegments',
-    'Transitions',
-    'StateCoverage',
-  ] as const)
-  const inner = v[kind]
-  if (kind === 'Number') return { kind: 'number', value: numeric(inner) }
-  if (kind === 'Sum') return { kind: 'number', value: sum(inner) }
-  if (kind === 'Count') return { kind: 'number', value: count(inner) }
-  if (kind === 'Mean') {
-    const m = closed(inner, ['sum', 'count'])
-    return { kind: 'number', value: sum(m['sum']) / positive(m['count']) }
-  }
-  if (kind === 'Rate') {
-    const r = closed(inner, ['increase', 'duration_micros'])
+  if ('Number' in value) return { kind: 'number', value: numeric(value.Number) }
+  if ('Sum' in value) return { kind: 'number', value: sum(value.Sum) }
+  if ('Count' in value) return { kind: 'number', value: count(value.Count) }
+  if ('Mean' in value)
+    return { kind: 'number', value: sum(value.Mean.sum) / positive(value.Mean.count) }
+  if ('Rate' in value)
     return {
       kind: 'number',
-      value: sum(r['increase']) / (positive(r['duration_micros']) / 1_000_000),
+      value: sum(value.Rate.increase) / (positive(value.Rate.duration_micros) / 1_000_000),
     }
-  }
-  if (kind === 'StateSegments')
+  if ('StateSegments' in value)
     return {
       kind: 'timeline',
-      segments: array(inner, (x) => {
-        const s = closed(x, ['value', 'window'])
-        return { value: stateValue(s['value']), window: interval(s['window']) }
-      }),
+      segments: value.StateSegments.map((x) => ({
+        value: stateValue(x.value),
+        window: interval(x.window),
+      })),
     }
-  if (kind === 'Transitions')
+  if ('Transitions' in value)
     return {
       kind: 'transitions',
-      transitions: array(inner, (x) => {
-        const s = closed(x, ['at', 'from', 'to'])
-        return { at: count(s['at']), from: stateValue(s['from']), to: stateValue(s['to']) }
-      }),
+      transitions: value.Transitions.map((x) => ({
+        at: count(x.at),
+        from: stateValue(x.from),
+        to: stateValue(x.to),
+      })),
     }
   return {
     kind: 'coverage',
-    durations: array(inner, (x) => {
-      const s = closed(x, ['value', 'micros'])
-      return { value: stateValue(s['value']), micros: count(s['micros']) }
-    }),
+    durations: value.StateCoverage.map((x) => ({
+      value: stateValue(x.value),
+      micros: count(x.micros),
+    })),
   }
 }
-export function bucket(value: unknown) {
-  const v = closed(value, ['window', 'value', 'valid_samples', 'covered_micros', 'completeness'])
+export function bucket(value: BucketWire) {
+  const v = value
   const window = interval(v['window']),
     coveredMicros = count(v['covered_micros'])
   if (coveredMicros > window.end - window.start) throw new Error('Invalid coverage')
@@ -278,9 +235,7 @@ export function bucket(value: unknown) {
     value: aggregateValue(v['value']),
     validSamples: count(v['valid_samples']),
     coveredMicros,
-    completeness: array(v['completeness'], (x) =>
-      enumeration(x, ['Gaps', 'Overlap', 'ResetBoundary', 'Boundary'] as const),
-    ),
+    completeness: array(v['completeness'], (x) => x),
   }
 }
 export type Bucket = ReturnType<typeof bucket>
@@ -291,28 +246,15 @@ export function opaque(value: unknown): string | null {
   return value
 }
 export function health(value: unknown) {
-  const v = closed(value, [
-    'batches',
-    'batchesTruncated',
-    'retention',
-    'retentionTruncated',
-    'qualityOrder',
-    'retired',
-  ])
-  const order = array(v['qualityOrder'], (x) =>
-    enumeration(x, ['valid', 'missing', 'failed'] as const),
-  )
+  if (!wireSchemas.postApiV1TelemetryHealthResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+  const order = array(v['qualityOrder'], (x) => x)
   if (order.join() !== 'valid,missing,failed') throw new Error('Unknown quality counts')
   return {
     batches: array(v['batches'], (x) => {
-      const b = closed(x, [
-        'batchId',
-        'receivedAt',
-        'firstObserved',
-        'lastObserved',
-        'delivery',
-        'qualityCounts',
-      ])
+      const b = x
       const counts = array(b['qualityCounts'], count)
       if (counts.length !== 3) throw new Error('Invalid quality counts')
       return {
@@ -320,48 +262,41 @@ export function health(value: unknown) {
         receivedAt: count(b['receivedAt']),
         firstObserved: count(b['firstObserved']),
         lastObserved: count(b['lastObserved']),
-        delivery: enumeration(b['delivery'], [
-          'pending',
-          'published',
-          'unknown',
-          'blocked',
-        ] as const),
+        delivery: b['delivery'],
         qualityCounts: counts,
       }
     }),
-    batchesTruncated: boolean(v['batchesTruncated']),
-    retentionTruncated: boolean(v['retentionTruncated']),
-    retired: boolean(v['retired']),
+    batchesTruncated: v['batchesTruncated'],
+    retentionTruncated: v['retentionTruncated'],
+    retired: v['retired'],
     retention: array(v['retention'], (x) => {
-      const r = closed(x, ['resource', 'definitionVersion', 'dueAt', 'phase', 'progress'])
+      const r = x
       return {
         resource: telemetryId(r['resource']),
         definitionVersion: positive(r['definitionVersion']),
         dueAt: count(r['dueAt']),
         phase: count(r['phase']),
-        progress: r['progress'] === null ? null : record(r['progress']),
+        progress: r['progress'] === null ? null : r['progress'],
       }
     }),
   }
 }
 export function gapCursor(value: unknown) {
   if (value === null) return null
-  const v = closed(value, ['receivedAt', 'reportId'])
-  return { receivedAt: count(v['receivedAt']), reportId: uuid(v['reportId']) }
+  if (!wireSchemas.postApiV1TelemetryGapsQueryResponse.validateCursor(value))
+    throw new Error('Invalid cursor')
+  return value
 }
 export function gaps(value: unknown, device: string) {
-  const v = closed(value, ['reports', 'next'])
+  if (!wireSchemas.postApiV1TelemetryGapsQueryResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     next: gapCursor(v['next']),
     reports: array(v['reports'], (x) => {
-      const r = closed(x, ['report', 'receivedAt']),
-        report = closed(r['report'], [
-          'reportId',
-          'registrationId',
-          'generation',
-          'createdAt',
-          'gaps',
-        ])
+      const r = x,
+        report = r['report']
       return {
         device,
         receivedAt: count(r['receivedAt']),
@@ -370,20 +305,9 @@ export function gaps(value: unknown, device: string) {
         generation: positive(report['generation']),
         createdAt: count(report['createdAt']),
         gaps: array(report['gaps'], (x) => {
-          const g = closed(x, ['reason', 'count', 'first', 'last'])
+          const g = x
           return {
-            reason: enumeration(g['reason'], [
-              'expired',
-              'capacity',
-              'lease',
-              'power',
-              'suspended',
-              'clock',
-              'collection',
-              'rejected',
-              'registration',
-              'configuration',
-            ] as const),
+            reason: g['reason'],
             count: positive(g['count']),
             first: count(g['first']),
             last: count(g['last']),

@@ -8,7 +8,7 @@ import SelfServiceSelectors from './SelfServiceSelectors.vue'
 import type { SelfServiceAccess } from '../clients/self-service-access'
 import { useI18n } from 'vue-i18n'
 import { initialSelfService, type SelfService } from '../clients/model'
-const model = defineModel<SelfService | undefined>()
+const model = defineModel<SelfService | null | undefined>()
 const id = useId(),
   { t } = useI18n()
 const keywords = computed({

@@ -1,9 +1,9 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import { nextCursor } from '../../../services/directory-query'
 import { jsonObject } from '../../../services/json'
 import {
   array,
   boolean,
-  closed,
   count,
   enumeration,
   integer,
@@ -66,6 +66,9 @@ function fingerprint(value: unknown) {
   return v
 }
 export function metadata(value: unknown): Metadata {
+  if (!wireSchemas.postApiV1CertificateArchiveImportBody.validateCertificateMetadata(value))
+    throw new Error('Invalid contract value')
+
   const v = jsonObject(value, 16_384)
   function text(value: unknown, max: number, required = false): string {
     if (
@@ -94,17 +97,10 @@ export function metadata(value: unknown): Metadata {
 }
 
 export function certificate(value: unknown) {
-  const v = closed(value, [
-    'subject',
-    'issuer',
-    'sans',
-    'serial',
-    'fingerprint',
-    'algorithm',
-    'notBefore',
-    'notAfter',
-    'publicKey',
-  ])
+  if (!wireSchemas.getApiV1CertificateArchiveEntriesResponse.validateCertificateFacts(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = {
     subject: text(v['subject']),
     issuer: text(v['issuer']),
@@ -120,28 +116,23 @@ export function certificate(value: unknown) {
   return result
 }
 export function material(value: unknown) {
-  const v = closed(value, ['name', 'format', 'certificates', 'publicKeys', 'containsPrivateKey'])
+  if (!wireSchemas.getApiV1CertificateArchiveEntriesResponse.validateMaterialFacts(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     name: string(v['name']),
-    format: enumeration(v['format'], formats),
+    format: v['format'],
     certificates: array(v['certificates'], certificate),
     publicKeys: array(v['publicKeys'], fingerprint),
-    containsPrivateKey: boolean(v['containsPrivateKey']),
+    containsPrivateKey: v['containsPrivateKey'],
   }
 }
 export function version(value: unknown) {
-  const v = closed(value, [
-    'entryId',
-    'version',
-    'actor',
-    'instance',
-    'operationId',
-    'createdAt',
-    'metadata',
-    'facts',
-    'requestVersion',
-    'source',
-  ])
+  if (!wireSchemas.getApiV1CertificateArchiveEntriesResponse.validateVersion(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     entryId: uuid(v['entryId']),
     version: positive(v['version']),
@@ -152,7 +143,7 @@ export function version(value: unknown) {
     metadata: metadata(v['metadata']),
     facts: array(v['facts'], material),
     requestVersion: nullable(v['requestVersion'], (value): Reference => {
-      const r = closed(value, ['entryId', 'version'])
+      const r = value
       return { entryId: uuid(r['entryId']), version: positive(r['version']) }
     }),
     source: enumeration(v['source'], ['import', 'generate', 'metadata'] as const),
@@ -160,7 +151,10 @@ export function version(value: unknown) {
 }
 export type Version = ReturnType<typeof version>
 export function entry(value: unknown) {
-  const v = closed(value, ['id', 'revision', 'retired', 'recommendedVersion', 'latest']),
+  if (!wireSchemas.getApiV1CertificateArchiveEntriesResponse.validateProjection_Entry(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     result = {
       id: uuid(v['id']),
       revision: positive(v['revision']),
@@ -174,9 +168,12 @@ export function entry(value: unknown) {
 }
 export type Entry = ReturnType<typeof entry>
 export function vault(value: unknown) {
-  const v = closed(value, ['initialized', 'generation', 'unlockedUntil']),
+  if (!wireSchemas.getApiV1CertificateArchiveVaultResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     result = {
-      initialized: boolean(v['initialized']),
+      initialized: v['initialized'],
       generation: count(v['generation']),
       unlockedUntil: nullable(v['unlockedUntil'], count),
     }
@@ -189,8 +186,11 @@ export function vault(value: unknown) {
 }
 export type Vault = ReturnType<typeof vault>
 export function settings(value: unknown) {
-  const v = closed(value, ['revision', 'value']),
-    input = closed(v['value'], ['reminderDays', 'categories']),
+  if (!wireSchemas.getApiV1CertificateArchiveSettingsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    input = v['value'],
     reminderDays = count(input['reminderDays'])
   if (reminderDays > 3650) throw new Error('Invalid reminder window')
   return {
@@ -199,7 +199,10 @@ export function settings(value: unknown) {
   }
 }
 export function receipt(value: unknown, operation: string) {
-  const v = closed(value, ['operationId', 'action', 'entryId', 'version', 'revision']),
+  if (!wireSchemas.postApiV1CertificateArchiveImportResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     result = {
       operationId: uuid(v['operationId']),
       action: enumeration(v['action'], [
@@ -220,7 +223,10 @@ export function receipt(value: unknown, operation: string) {
   return result
 }
 function alerts(value: unknown) {
-  const v = closed(value, ['expired', 'expiring', 'notYetValid'])
+  if (!wireSchemas.getApiV1CertificateArchiveEntriesResponse.validateAlerts(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     expired: count(v['expired']),
     expiring: count(v['expiring']),
@@ -228,7 +234,10 @@ function alerts(value: unknown) {
   }
 }
 export function page(value: unknown, tenant: string) {
-  const v = closed(value, ['tenantId', 'items', 'nextCursor', 'asOf', 'reminderDays', 'alerts']),
+  if (!wireSchemas.getApiV1CertificateArchiveEntriesResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     result = {
       tenantId: uuid(v['tenantId']),
       items: unique(array(v['items'], entry), (v) => v.id),
@@ -247,13 +256,16 @@ export function page(value: unknown, tenant: string) {
   return result
 }
 export function exported(value: unknown, id: Reference) {
-  const v = closed(value, ['entryId', 'version', 'files']),
+  if (!wireSchemas.postApiV1CertificateArchiveExportResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     entryId = uuid(v['entryId']),
     revision = positive(v['version'])
   if (entryId !== id.entryId || revision !== id.version) throw new Error('Wrong exported version')
   const files = unique(
     array(v['files'], (value) => {
-      const f = closed(value, ['name', 'data']),
+      const f = value,
         name = string(f['name']),
         data = f['data']
       if (

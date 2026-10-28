@@ -15,7 +15,6 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.ts', 'src/**/*.vue'],
       exclude: [
-        'src/contracts/collection/generated/**',
         'src/**/*.spec.ts',
         'src/test-setup.ts',
         'src/main.ts',

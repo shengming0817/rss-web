@@ -1,4 +1,5 @@
-import { closed, count, enumeration, identifier, nullable, uuid } from '../../../services/decode'
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import { count, enumeration, identifier, nullable, uuid } from '../../../services/decode'
 /** Current Inventory task contract shared by Group and Scope calculations. */
 export function calculationTask(
   value: unknown,
@@ -6,17 +7,10 @@ export function calculationTask(
   target: string,
   task: string,
 ) {
-  const v = closed(value, [
-    'task',
-    'kind',
-    'target',
-    'status',
-    'processed',
-    'members',
-    'failure',
-    'failureDetail',
-    'replacementTask',
-  ])
+  if (!wireSchemas.getApiV1GroupsByGroupTasksByTaskResponse200.validateTaskRead(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (uuid(v['task']) !== task || v['kind'] !== kind || v['target'] !== target)
     throw new Error('Wrong calculation task')
   return {
@@ -33,18 +27,6 @@ export function calculationTask(
     members: count(v['members']),
     failure: nullable(v['failure'], identifier),
     replacementTask: nullable(v['replacementTask'], uuid),
-    failureDetail: nullable(v['failureDetail'], (value) => {
-      const f = closed(value, ['reason', 'device', 'stage'])
-      return {
-        reason: enumeration(f['reason'], [
-          'capability_unknown',
-          'platform_unsupported',
-          'stale_plan',
-          'owner_conflict',
-        ] as const),
-        device: nullable(f['device'], identifier),
-        stage: enumeration(f['stage'], ['preview', 'save', 'execute'] as const),
-      }
-    }),
+    failureDetail: v.failureDetail,
   }
 }

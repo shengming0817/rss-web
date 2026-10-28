@@ -274,8 +274,14 @@ try {
         tenantIds.includes('task-key') &&
         tenantIds.includes('storage'),
     )
-    await page.getByRole('link', { name: '配置引导', exact: true }).click()
-    await page.locator('input[value=windows_mdm]').waitFor()
+    await page
+      .locator('section.console-page')
+      .getByRole('link', { name: '配置引导', exact: true })
+      .click()
+    await page
+      .getByRole('checkbox', { name: /Windows/ })
+      .first()
+      .waitFor()
     coverage.push('business-directory-and-authoritative-guide-entry')
     phase = 'platform-scope'
     await page.goto(origin + '/platform')

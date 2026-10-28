@@ -1,15 +1,7 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  enumeration,
-  identifier,
-  integer,
-  nullable,
-  uuid,
-} from '../../../services/decode'
+import { array, count, identifier, integer, nullable, uuid } from '../../../services/decode'
 import {
   nextCursor,
   pageCursor,
@@ -32,23 +24,7 @@ export interface ActivityQuery extends WindowQuery {
 }
 function queryParameters(query: ActivityQuery) {
   const { limit, cursor, ...context } = query
-  closed(
-    context,
-    [],
-    [
-      'from',
-      'until',
-      'source',
-      'kind',
-      'status',
-      'policy',
-      'request',
-      'batch',
-      'task',
-      'operation',
-      'related',
-    ],
-  )
+
   const result: Record<string, string | number> = windowParameters({ limit, cursor }, 200)
   for (const [key, value] of Object.entries(context)) {
     if (value === undefined) continue
@@ -63,6 +39,9 @@ function queryParameters(query: ActivityQuery) {
   return result
 }
 function links(value: unknown) {
+  if (!wireSchemas.getApiV1DevicesByDeviceManagementActivitiesResponse.validateActivityLinks(value))
+    throw new Error('Invalid contract value')
+
   const ids = [
     'policy',
     'version',
@@ -74,7 +53,7 @@ function links(value: unknown) {
     'task',
     'attempt',
   ] as const
-  const v = closed(value, [...ids, 'steps', 'operations'])
+  const v = value
   const result = Object.fromEntries(ids.map((key) => [key, nullable(v[key], uuid)])) as Record<
     (typeof ids)[number],
     string | null
@@ -83,25 +62,16 @@ function links(value: unknown) {
   return { ...result, steps, operations: array(v['operations'], operationReference) }
 }
 export function managementActivity(value: unknown, device: string) {
-  const v = closed(value, [
-    'id',
-    'source',
-    'kind',
-    'phase',
-    'recordedAt',
-    'observedAt',
-    'origin',
-    'target',
-    'links',
-    'delivery',
-    'execution',
-    'effect',
-    'reporting',
-    'decision',
-    'auditOutcome',
-  ])
+  if (
+    !wireSchemas.getApiV1DevicesByDeviceManagementActivitiesResponse.validateManagementActivity(
+      value,
+    )
+  )
+    throw new Error('Invalid contract value')
+
+  const v = value
   const target = nullable(v['target'], (value) => {
-    const t = closed(value, ['device', 'registration', 'generation']),
+    const t = value,
       actual = identifier(t['device'])
     if (actual !== device) throw new Error('Wrong activity device')
     return {
@@ -113,81 +83,18 @@ export function managementActivity(value: unknown, device: string) {
   return {
     id: identifier(v['id']),
     source: identifier(v['source']),
-    kind: enumeration(v['kind'], [
-      'policy',
-      'assignment',
-      'batch',
-      'execution',
-      'configuration',
-    ] as const),
-    phase: enumeration(v['phase'], [
-      'changed',
-      'assigned',
-      'withdrawn',
-      'accepted',
-      'offered',
-      'dispatched',
-      'received',
-      'started',
-      'reporting',
-      'result',
-      'reconciled',
-      'cancelled',
-      'decided',
-    ] as const),
+    kind: v['kind'],
+    phase: v['phase'],
     recordedAt: integer(v['recordedAt']),
     observedAt: integer(v['observedAt']),
-    origin: enumeration(v['origin'], ['system', 'policy', 'human', 'ai'] as const),
+    origin: v['origin'],
     target,
     links: links(v['links']),
-    delivery: nullable(v['delivery'], (v) =>
-      enumeration(v, ['queued', 'offered', 'dispatched', 'received', 'unknown'] as const),
-    ),
-    execution: nullable(v['execution'], (v) =>
-      enumeration(v, [
-        'not_started',
-        'running',
-        'succeeded',
-        'failed',
-        'waiting_reboot',
-        'unknown',
-        'queued',
-        'published',
-        'received',
-        'applied',
-        'rejected',
-        'timed_out',
-        'superseded',
-        'cancelled',
-      ] as const),
-    ),
-    effect: nullable(v['effect'], (v) =>
-      enumeration(v, [
-        'verified',
-        'failed',
-        'unknown',
-        'waiting_reboot',
-        'diverged',
-        'waiting',
-        'unverifiable',
-      ] as const),
-    ),
-    reporting: nullable(v['reporting'], (v) =>
-      enumeration(v, ['partial', 'acknowledged'] as const),
-    ),
-    decision: nullable(v['decision'], (v) =>
-      enumeration(v, [
-        'pending',
-        'accepted',
-        'no_change',
-        'rejected',
-        'expired',
-        'cancelled',
-        'cancellation_requested',
-        'assigned',
-        'unavailable',
-      ] as const),
-    ),
+    delivery: nullable(v['delivery'], (v) => v),
+    execution: nullable(v['execution'], (v) => v),
+    effect: nullable(v['effect'], (v) => v),
+    reporting: nullable(v['reporting'], (v) => v),
+    decision: nullable(v['decision'], (v) => v),
     auditOutcome: identifier(v['auditOutcome']),
   }
 }
@@ -195,21 +102,11 @@ export type ManagementActivity = ReturnType<typeof managementActivity>
 export function createActivitiesClient(transport: HttpTransport) {
   return {
     list: (device: string, query: ActivityQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/management-activities',
-        pathParams: { device },
-        query: queryParameters(query),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, [
-            'items',
-            'nextCursor',
-            'syncCursor',
-            'asOf',
-            'coverage',
-            'retainedFrom',
-          ])
+      api.getApiV1DevicesByDeviceManagementActivities(
+        transport,
+        { pathParams: { device }, query: queryParameters(query) },
+        (value) => {
+          const v = value
           return {
             items: array(v['items'], (v) => managementActivity(v, device)),
             nextCursor: nextCursor(v['nextCursor']),
@@ -217,34 +114,24 @@ export function createActivitiesClient(transport: HttpTransport) {
             asOf: integer(v['asOf']),
             retainedFrom: nullable(v['retainedFrom'], integer),
             coverage: array(v['coverage'], (value) => {
-              const c = closed(value, ['source', 'complete', 'reasons'])
+              const c = value
               return {
                 source: identifier(c['source']),
-                complete: boolean(c['complete']),
+                complete: c['complete'],
                 reasons: array(c['reasons'], identifier),
               }
             }),
           }
         },
-      }),
+      ),
     read: (device: string, id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/management-activities/{id}',
-        pathParams: { device, id },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, [
-              'activity',
-              'personal',
-              'related',
-              'relatedCursor',
-              'missing',
-              'asOf',
-            ]),
+      api.getApiV1DevicesByDeviceManagementActivitiesById(
+        transport,
+        { pathParams: { device, id } },
+        (value) => {
+          const v = value,
             activity = managementActivity(v['activity'], device)
-          if (activity.id !== id || boolean(v['personal']))
-            throw new Error('Wrong management activity')
+          if (activity.id !== id || v['personal']) throw new Error('Wrong management activity')
           return {
             activity,
             related: array(v['related'], (v) => managementActivity(v, device)),
@@ -253,6 +140,6 @@ export function createActivitiesClient(transport: HttpTransport) {
             asOf: integer(v['asOf']),
           }
         },
-      }),
+      ),
   }
 }

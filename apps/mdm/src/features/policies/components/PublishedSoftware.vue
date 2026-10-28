@@ -12,7 +12,6 @@ import {
 import { useMdm } from '../../../context'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import { useOperation } from '../../../services/useOperation'
-import { allOf, comparison } from '../../../services/directory-query'
 const runtime = useMdm(),
   { t } = useI18n()
 const { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
@@ -20,16 +19,12 @@ const page = ref<Awaited<ReturnType<typeof runtime.software.publication.list>>>(
 function load(cursor?: string) {
   page.value = undefined
   void run(
-    () =>
-      runtime.software.publication.list({
-        cursor,
-        filter: allOf(
-          comparison('outcome', '==', 'published'),
-          comparison('withdrawn', '==', false),
-        ),
-      }),
+    () => runtime.software.publication.list({ cursor }),
     (result) => {
-      page.value = result
+      page.value = {
+        ...result,
+        items: result.items.filter((item) => item.outcome === 'published' && !item.withdrawn),
+      }
     },
   )
 }

@@ -1,14 +1,7 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  enumeration,
-  nullable,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, nullable, unique, uuid } from '../../../services/decode'
 import { base64url } from './packages'
 export function text(value: unknown, max: number, multiline = false) {
   if (
@@ -24,21 +17,17 @@ export function text(value: unknown, max: number, multiline = false) {
   return value
 }
 export function entraPolicy(value: unknown) {
-  const v = closed(value, [
-    'enabled',
-    'allUsers',
-    'users',
-    'termsVersion',
-    'termsText',
-    'allowBackground',
-  ])
+  if (!wireSchemas.putApiV1WindowsEntraPolicyBody.validatePolicy(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = {
-    enabled: boolean(v['enabled']),
-    allUsers: boolean(v['allUsers']),
+    enabled: v['enabled'],
+    allUsers: v['allUsers'],
     users: unique(array(v['users'], uuid), (v) => v),
     termsVersion: text(v['termsVersion'], 128),
     termsText: text(v['termsText'], 32768, true),
-    allowBackground: boolean(v['allowBackground']),
+    allowBackground: v['allowBackground'],
   }
   if (
     result.users.length > 256 ||
@@ -52,19 +41,15 @@ export function entraPolicy(value: unknown) {
   return result
 }
 export function termsContext(value: unknown) {
-  const v = closed(value, [
-    'termsText',
-    'termsVersion',
-    'mode',
-    'canDecline',
-    'csrfToken',
-    'expiresAt',
-  ])
+  if (!wireSchemas.getApiV1WindowsEntraTermsContextResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const result = {
     termsText: text(v['termsText'], 32768, true),
     termsVersion: text(v['termsVersion'], 128),
-    mode: nullable(v['mode'], (v) => enumeration(v, ['azureadjoin'] as const)),
-    canDecline: boolean(v['canDecline']),
+    mode: nullable(v['mode'], (v) => v),
+    canDecline: v['canDecline'],
     csrfToken: base64url(v['csrfToken'], 32),
     expiresAt: count(v['expiresAt']),
   }
@@ -80,33 +65,20 @@ export function termsContext(value: unknown) {
 export function createEntraClient(transport: HttpTransport, publicTransport: HttpTransport) {
   return {
     policy: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/windows/entra-policy',
-        successStatus: 200,
-        decode: (v) => {
-          const raw = closed(v, ['revision', 'policy'])
-          return { revision: count(raw['revision']), policy: entraPolicy(raw['policy']) }
-        },
+      api.getApiV1WindowsEntraPolicy(transport, {}, (v) => {
+        const raw = v
+        return { revision: count(raw['revision']), policy: entraPolicy(raw['policy']) }
       }),
     save: (expectedRevision: number, operationId: string, policy: ReturnType<typeof entraPolicy>) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/windows/entra-policy',
-        body: { expectedRevision, operationId: uuid(operationId), policy: entraPolicy(policy) },
-        successStatus: 200,
-        decode: (v) => {
-          const revision = count(closed(v, ['revision'])['revision'])
+      api.putApiV1WindowsEntraPolicy(
+        transport,
+        { body: { expectedRevision, operationId: uuid(operationId), policy: entraPolicy(policy) } },
+        (v) => {
+          const revision = count(v['revision'])
           if (revision !== expectedRevision + 1) throw new Error('Wrong revision')
           return revision
         },
-      }),
-    context: () =>
-      publicTransport.request({
-        method: 'GET',
-        path: '/api/v1/windows/entra/terms/context',
-        successStatus: 200,
-        decode: termsContext,
-      }),
+      ),
+    context: () => api.getApiV1WindowsEntraTermsContext(publicTransport, {}, termsContext),
   }
 }

@@ -8,10 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import type { ResourceRead, ResourceChange, Variant, UploadTarget } from '../clients/resources'
-import type {
-  ValueMapping,
-  Declaration,
-} from '../../../contracts/collection/generated/ResourceWrite'
+import type { ValueMapping, Declaration } from '@rss/api/mdm-types'
 import { wireValue } from '../../../contracts/collection/check'
 import { agentBytes, nativeBytes } from '../../../contracts/collection/canonical'
 import CollectionMappings from './CollectionMappings.vue'

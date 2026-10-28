@@ -1,8 +1,9 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   boolean,
-  closed,
   count,
   enumeration,
   nullable,
@@ -50,27 +51,23 @@ function run(value: unknown) {
   }
 }
 export function runtimeSnapshot(value: unknown) {
-  const v = closed(value, ['alive', 'ready', 'components', 'channels'])
+  if (!wireSchemas.getApiV1RuntimeDiagnosticsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
-    alive: boolean(v['alive']),
-    ready: boolean(v['ready']),
+    alive: v['alive'],
+    ready: v['ready'],
     channels: unique(
       array(v['channels'], (value) => {
-        const c = closed(value, ['name', 'state', 'reasons', 'mounted', 'loadedMaterials'])
+        const c = value
         return {
-          name: enumeration(c['name'], [
-            'apple',
-            'windows',
-            'agent',
-            'windows_push',
-            'agent_bootstrap',
-            'signing',
-          ] as const),
-          state: enumeration(c['state'], ['disabled', 'waiting', 'ready', 'degraded'] as const),
+          name: c['name'],
+          state: c['state'],
           reasons: array(c['reasons'], reason),
-          mounted: boolean(c['mounted']),
+          mounted: c['mounted'],
           loadedMaterials: Object.fromEntries(
-            Object.entries(record(c['loadedMaterials'])).map(([key, value]) => [key, count(value)]),
+            Object.entries(c['loadedMaterials']).map(([key, value]) => [key, count(value)]),
           ),
         }
       }),
@@ -78,41 +75,12 @@ export function runtimeSnapshot(value: unknown) {
     ),
     components: unique(
       array(v['components'], (value) => {
-        const c = record(value)
-        if (
-          Object.keys(c).some(
-            (k) =>
-              ![
-                'name',
-                'readiness',
-                'health',
-                'reasons',
-                'task',
-                'dependencies',
-                'queues',
-                'progress',
-                'bridge',
-                'runner',
-                'dispatch',
-              ].includes(k),
-          )
-        )
-          throw new Error('Invalid runtime component')
+        const c = value
+
         return {
-          name: enumeration(c['name'], [
-            'initialization',
-            'telemetry',
-            'inventory',
-            'automation',
-            'execution_recovery',
-          ] as const),
-          readiness: enumeration(c['readiness'], ['ready', 'not_ready', 'not_applicable'] as const),
-          health: enumeration(c['health'], [
-            'healthy',
-            'degraded',
-            'unknown',
-            'not_applicable',
-          ] as const),
+          name: c['name'],
+          readiness: c['readiness'],
+          health: c['health'],
           reasons: array(c['reasons'], reason),
           task:
             c['task'] === undefined
@@ -129,17 +97,11 @@ export function runtimeSnapshot(value: unknown) {
             c['dependencies'] === undefined
               ? []
               : array(c['dependencies'], (value) => {
-                  const d = record(value)
-                  if (Object.keys(d).some((k) => !['name', 'state', 'reason'].includes(k)))
-                    throw new Error('Invalid runtime dependency')
+                  const d = value
+
                   return {
-                    name: enumeration(d['name'], [
-                      'telemetry_storage',
-                      'inventory_delivery',
-                      'observation_journal',
-                      'flow_storage',
-                    ] as const),
-                    state: enumeration(d['state'], ['available', 'unavailable'] as const),
+                    name: d['name'],
+                    state: d['state'],
                     reason: d['reason'] === undefined ? null : reason(d['reason']),
                   }
                 }),
@@ -147,22 +109,9 @@ export function runtimeSnapshot(value: unknown) {
             c['queues'] === undefined
               ? []
               : array(c['queues'], (value) => {
-                  const q = closed(value, ['name', 'count', 'truncated'])
+                  const q = value
                   return {
-                    name: enumeration(q['name'], [
-                      'initialization_assets_pending',
-                      'initialization_telemetry_pending',
-                      'delivery_unknown',
-                      'delivery_blocked',
-                      'maintenance_pending',
-                      'delivery_pending',
-                      'pending',
-                      'running',
-                      'completed',
-                      'failed',
-                      'superseded',
-                      'asset_changes_pending',
-                    ] as const),
+                    name: q['name'],
                     count: nullable(q['count'], count),
                     truncated: nullable(q['truncated'], boolean),
                   }
@@ -171,26 +120,13 @@ export function runtimeSnapshot(value: unknown) {
             c['progress'] === undefined
               ? null
               : (() => {
-                  const p = closed(c['progress'], [
-                    'state',
-                    'confirmedPosition',
-                    'sourceHead',
-                    'lagging',
-                    'invocationAgeMs',
-                    'completedPassAgeMs',
-                    'sourceObservationAgeMs',
-                    'applied',
-                  ])
+                  if (
+                    !wireSchemas.getApiV1RuntimeDiagnosticsResponse.validateProgress(c['progress'])
+                  )
+                    throw new Error('Invalid runtime observation')
+                  const p = c['progress']
                   return {
-                    state: enumeration(p['state'], [
-                      'unobserved',
-                      'pending',
-                      'running',
-                      'caught_up',
-                      'limited',
-                      'failed',
-                      'unavailable',
-                    ] as const),
+                    state: p['state'],
                     confirmedPosition: nullable(p['confirmedPosition'], count),
                     sourceHead: nullable(p['sourceHead'], count),
                     lagging: nullable(p['lagging'], boolean),
@@ -205,25 +141,23 @@ export function runtimeSnapshot(value: unknown) {
             c['runner'] === undefined
               ? null
               : (() => {
-                  const r = closed(c['runner'], [
-                    'scan',
-                    'unresolvedAttempts',
-                    'truncated',
-                    'latestFailure',
-                  ])
+                  if (!wireSchemas.getApiV1RuntimeDiagnosticsResponse.validateRunner(c['runner']))
+                    throw new Error('Invalid runtime observation')
+                  const r = c['runner']
                   return {
                     scan: nullable(r['scan'], run),
                     unresolvedAttempts: count(r['unresolvedAttempts']),
-                    truncated: boolean(r['truncated']),
+                    truncated: r['truncated'],
                     latestFailure: nullable(r['latestFailure'], (value) => {
-                      const f = closed(value, ['stage', 'reason', 'observedAt'])
+                      if (
+                        !wireSchemas.getApiV1RuntimeDiagnosticsResponse.validateAttemptFailure(
+                          value,
+                        )
+                      )
+                        throw new Error('Invalid runtime attempt')
+                      const f = value
                       return {
-                        stage: enumeration(f['stage'], [
-                          'observe',
-                          'apply',
-                          'renew',
-                          'finish',
-                        ] as const),
+                        stage: f['stage'],
                         reason: reason(f['reason']),
                         observedAt: nullable(f['observedAt'], count),
                       }
@@ -234,7 +168,11 @@ export function runtimeSnapshot(value: unknown) {
             c['dispatch'] === undefined
               ? null
               : (() => {
-                  const d = closed(c['dispatch'], ['consumed', 'watermark'])
+                  if (
+                    !wireSchemas.getApiV1RuntimeDiagnosticsResponse.validateDispatch(c['dispatch'])
+                  )
+                    throw new Error('Invalid runtime observation')
+                  const d = c['dispatch']
                   return { consumed: count(d['consumed']), watermark: count(d['watermark']) }
                 })(),
         }
@@ -245,12 +183,6 @@ export function runtimeSnapshot(value: unknown) {
 }
 export function createRuntimeDiagnostics(transport: HttpTransport) {
   return {
-    read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/runtime/diagnostics',
-        successStatus: 200,
-        decode: runtimeSnapshot,
-      }),
+    read: () => api.getApiV1RuntimeDiagnostics(transport, {}, runtimeSnapshot),
   }
 }

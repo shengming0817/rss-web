@@ -9,13 +9,14 @@ import { mdmI18n } from '../../../i18n'
 import { mdmKey } from '../../../context'
 import ValueMappingEditor from './ValueMappingEditor.vue'
 import CollectionMappings from './CollectionMappings.vue'
+import ScriptDefinitionEditor from './ScriptDefinitionEditor.vue'
 import CollectionVersionEditor from './CollectionVersionEditor.vue'
 import FieldTypeEditor from '../../telemetry/components/FieldTypeEditor.vue'
 import { identityMapping } from '../collection-draft'
-import { decodeResource } from '../clients/resources'
+import { decodeResource, decodeScriptSpec, type ScriptSpec } from '../clients/resources'
 import { fieldDefinition } from '../../devices/clients/assets'
 import blueprints from '../../../../demo/policies/blueprints.json'
-import type { ValueMapping } from '../../../contracts/collection/generated/ResourceWrite'
+import type { ValueMapping } from '@rss/api/mdm-types'
 const wrappers: VueWrapper[] = []
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount())
@@ -123,6 +124,15 @@ it('edits declared conversions, safe integer ratios, exact codes and nested colu
     .trigger('click')
   expect(wrapper.props('modelValue').columns.name!.pointer).toBe('/name')
   expect(wrapper.findAllComponents(ValueMappingEditor)).toHaveLength(1)
+  await wrapper
+    .get('[data-testid=value-mapping] [data-testid=value-mapping] input')
+    .setValue('/display_name')
+  expect(wrapper.props('modelValue').columns.name!.pointer).toBe('/display_name')
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === '移除字段映射')!
+    .trigger('click')
+  expect(wrapper.props('modelValue')).toMatchObject({ pointer: '', columns: {} })
 })
 it('authors scalar and structured list field types using controls', async () => {
   const wrapper = mount(FieldTypeEditor, {
@@ -361,4 +371,82 @@ it.each([
         ),
       ).size,
   )
+})
+
+it('authors a script, switches to osquery collection and preserves edited catalog mappings in the generated contract', async () => {
+  const c = await context()
+  c.catalog.mockResolvedValue({
+    fields: [{ ...field('custom.osquery.version'), sources: { 'agent.osquery': 0 } }],
+  })
+  const model: ScriptSpec = {
+    profile: 'power_shell7',
+    sql: null,
+    runAs: 'system',
+    encoding: 'utf8',
+    parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    bindings: {},
+    output: { type: 'object', properties: {}, additionalProperties: false },
+    purpose: { kind: 'action' },
+    timeoutSeconds: 60,
+    outputBytes: 16384,
+    maxRows: 1,
+  }
+  const wrapper = mount(ScriptDefinitionEditor, {
+    attachTo: document.body,
+    props: {
+      modelValue: model,
+      'onUpdate:modelValue': (value) => {
+        void wrapper.setProps({ modelValue: value })
+      },
+    },
+    global: c.global,
+  })
+  wrappers.push(wrapper)
+  await selectControl(wrapper, '[id$="-profile"]').setValue('bash')
+  await selectControl(wrapper, '[id$="-run-as"]').setValue('logged_in_user')
+  await wrapper.get('input[id$="-timeout"]').setValue(90)
+  await wrapper.get('input[id$="-bytes"]').setValue(32768)
+  await wrapper.get('input[id$="-rows"]').setValue(2)
+  await wrapper
+    .get('textarea[id$="-output"]')
+    .setValue(JSON.stringify({ type: 'string', maxLength: 64 }))
+  await wrapper.get('textarea[id$="-bindings"]').setValue('{}')
+  expect(decodeScriptSpec(wrapper.props('modelValue'))).toMatchObject({
+    profile: 'bash',
+    sql: null,
+    runAs: 'logged_in_user',
+    timeoutSeconds: 90,
+    outputBytes: 32768,
+    maxRows: 2,
+    output: { type: 'string', maxLength: 64 },
+  })
+  await selectControl(wrapper, '[id$="-profile"]').setValue('osquery')
+  await flushPromises()
+  expect(c.catalog).toHaveBeenCalled()
+  expect(wrapper.props('modelValue')).toMatchObject({
+    profile: 'osquery',
+    sql: 'SELECT version FROM osquery_info',
+    runAs: 'system',
+    purpose: {
+      kind: 'collection',
+      mappings: { 'custom.osquery.version': identityMapping('/0/version') },
+    },
+  })
+  await wrapper.get('[data-testid=value-mapping] input').setValue('/0/reported_version')
+  const definition = decodeScriptSpec(wrapper.props('modelValue'))
+  expect(definition.purpose).toMatchObject({
+    kind: 'collection',
+    mappings: { 'custom.osquery.version': identityMapping('/0/reported_version') },
+  })
+  await wrapper
+    .findComponent(CollectionMappings)
+    .findAll('button')
+    .find((b) => b.text() === '移除字段映射')!
+    .trigger('click')
+  expect(wrapper.props('modelValue').purpose).toMatchObject({ kind: 'collection', mappings: {} })
+  await wrapper.get('input[type=checkbox]').setValue(false)
+  expect(wrapper.props('modelValue').purpose).toEqual({ kind: 'action' })
+  expect(wrapper.find('[data-testid=collection-mappings]').exists()).toBe(false)
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  expect(wrapper.props('modelValue').purpose).toMatchObject({ kind: 'collection', mappings: {} })
 })

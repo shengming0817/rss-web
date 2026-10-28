@@ -29,8 +29,8 @@ const read = {
     protocol: 'syncml',
     observationScope: 'native_objects',
     receipts: [],
-    progress: 'unknown',
-    effect: 'unverified',
+    progress: 'queued',
+    effect: 'waiting',
   },
 }
 it('decodes current command facts without accepting retired authorization or task DTOs', () => {
@@ -83,7 +83,7 @@ it('uses exact control and reauthorization routes with original CAS and never re
   }
   await client.reauthorize('d', id, body)
   expect(request.mock.calls[1]?.[0]).toMatchObject({
-    path: '/api/v1/devices/{device}/operations/{operation}/reauthorize',
+    path: '/api/v1/devices/{device}/operations/{id}/reauthorize',
     body,
   })
   request.mockRejectedValueOnce(new Error('lost'))

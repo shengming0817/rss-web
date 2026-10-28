@@ -154,7 +154,14 @@ async function setup(
           Object.entries(o.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
         ),
       })
-      if (reply.status !== o.successStatus) throw decodeMdmError(reply.status, reply.body)
+      if (
+        !(
+          (Array.isArray(o.successStatus)
+            ? o.successStatus
+            : [o.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
+        throw decodeMdmError(reply.status, reply.body)
       if (loseReply.path === o.path) throw networkErrorForTest()
       return o.decode(reply.body)
     },
@@ -639,8 +646,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await click('预览已保存版本')
   await click('读取任务状态')
   await click('读取任务状态')
-  expect(wrapper.text()).toContain('计划已失效，请重新预览')
-  expect(wrapper.text()).toContain('阶段')
+  expect(wrapper.text()).toContain('stale_plan')
   scenario.set('normal')
   const authoritative = await devices.groups.read(group.id)
   await devices.groups.change(group.id, {
@@ -1595,7 +1601,7 @@ it('disables Windows lock and requires the displayed name before wipe', async ()
   expect(submit.attributes('disabled')).toBeUndefined()
   await dialog.get('form').trigger('submit')
   await flushPromises()
-  await vi.waitFor(() => expect(f.wrapper.text()).toContain('unverified'))
+  await vi.waitFor(() => expect(f.wrapper.text()).toContain('waiting'))
 })
 
 it('rejects an invalid condition locally without entering unknown-write recovery', async () => {

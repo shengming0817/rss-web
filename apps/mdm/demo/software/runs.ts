@@ -60,6 +60,10 @@ export function createPolicyRuns(allowed: (run: RunRecord) => boolean) {
         executedAt: value.result.diagnostics.executedAt,
         failure: value.result.diagnostics.failure,
       }
+    if (result && value.result?.kind === 'software') {
+      result['effectReceivedAt'] = r.createdAt
+      result['receivedAt'] = r.createdAt
+    }
     if (result && !detail && value.result?.kind === 'software')
       result['evidence'] = {
         ...value.result.evidence,
@@ -81,11 +85,15 @@ export function createPolicyRuns(allowed: (run: RunRecord) => boolean) {
       generation: value.generation,
       availableAt: value.availableAt,
       deadline: value.deadline,
-      state: value.state,
+      state: {
+        ...value.state,
+        delivery:
+          value.state.delivery.kind === 'queued' ? { kind: 'queued' } : value.state.delivery,
+      },
       effect: value.effect,
       result,
       userAction: userAction(r, now),
-      ...(detail ? { policyId: r.policy.id } : { occurrence: r.occurrence }),
+      ...(detail ? { policyId: r.policy.id, nodes: [] } : { occurrence: r.occurrence }),
     }
   }
   function cancel(r: RunRecord) {
@@ -125,6 +133,7 @@ export function createPolicyRuns(allowed: (run: RunRecord) => boolean) {
           {
             index: 0,
             stepDigest: r.definitionDigest,
+            stepId: r.definitionDigest,
             target: { kind: 'device' },
             package: r.policy.definition.action.resource.id,
             identity: { kind: 'controlled_detector', entry: 'detect' },

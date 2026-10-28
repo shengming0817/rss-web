@@ -27,7 +27,7 @@ import DeviceActivity from './components/DeviceActivity.vue'
 import { fieldDefinition, fieldInput } from '../devices/clients/assets'
 import { bucket, numeric, health, gaps } from './model'
 import { checked } from '../../contracts/collection/check'
-import { validateValueMapping } from '../../contracts/collection/generated/validators'
+import { validateValueMapping } from '@rss/api/mdm-validators'
 import { telemetryProfile } from '../policies/clients/telemetry-profile'
 const wrappers: VueWrapper[] = []
 const cleanups: (() => void)[] = []
@@ -75,7 +75,14 @@ async function setup(name = 'perf', query: Record<string, string> = {}) {
             .map(([k, v]) => [k, String(v)]),
         )
       const reply = await scenario.handle(options.method, path + '?' + query, options.body, headers)
-      if (reply.status !== options.successStatus) throw decodeMdmError(reply.status, reply.body)
+      if (
+        !(
+          (Array.isArray(options.successStatus)
+            ? options.successStatus
+            : [options.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
+        throw decodeMdmError(reply.status, reply.body)
       return options.decode(reply.body)
     },
   } as HttpTransport
@@ -539,7 +546,7 @@ it('validates mappings from the producer schema and rejects retired shapes, unkn
   ).toMatchObject({ conversion: { kind: 'array_member' } })
 })
 it('normalizes server sufficient statistics and discrete aggregates without deriving samples', () => {
-  const b = (value: unknown) =>
+  const b = (value: Parameters<typeof bucket>[0]['value']) =>
     bucket({
       window: { start: 100, end: 200 },
       value,
@@ -567,7 +574,7 @@ it('normalizes server sufficient statistics and discrete aggregates without deri
   })
   expect(() => b({ Mean: { sum: { F64: 2 }, count: 0 } })).toThrow()
   expect(() => numeric({ type: 'u64', value: Number.MAX_SAFE_INTEGER + 1 })).toThrow()
-  expect(() => b({ Unknown: 1 })).toThrow()
+  expect(() => b({ Unknown: 1 } as never)).toThrow()
 })
 it('rejects malformed health and gap contracts rather than treating diagnostics as metric coverage', () => {
   expect(() =>

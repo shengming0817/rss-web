@@ -87,7 +87,11 @@ const at = (seconds: number) =>
         /></v-list>
         <h3 class="text-subtitle-1">{{ t('security.factReferences') }}</h3>
         <p class="text-body-2 mb-3">{{ t('security.evidenceHint') }}</p>
-        <section v-for="field in assessment.evidence" :key="field.field" class="mb-4">
+        <section
+          v-for="field in assessment.evidence"
+          :key="JSON.stringify([field.context, field.field])"
+          class="mb-4"
+        >
           <h4 class="text-subtitle-2">{{ field.field }}</h4>
           <v-table v-for="source in field.sources" :key="source.source"
             ><tbody>

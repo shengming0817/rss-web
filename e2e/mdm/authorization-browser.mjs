@@ -1,5 +1,6 @@
 // Extends the existing settings HTTPS journey; all mutations reach the actual backend.
 import assert from 'node:assert/strict'
+import { chooseSoftwareOption } from './vuetify-software-controls.mjs'
 import { readFileSync, statSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 export async function authorizationJourney({
@@ -79,9 +80,18 @@ export async function authorizationJourney({
   await page.getByRole('button', { name: '上一页', exact: true }).click()
   await page.getByText('当前页 1', { exact: true }).waitFor()
   await page.getByRole('button', { name: '添加授权规则', exact: true }).click()
+  const accounts = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === `/api/v1/identity/tenants/${f.managementTenant}/accounts`,
+  )
   await dialog().getByRole('button', { name: '读取已有管理账户', exact: true }).click()
-  await dialog().locator('#authorization-principal').click()
-  await page.getByRole('option', { name: target.login, exact: true }).click()
+  assert.equal((await accounts).status(), 200)
+  await page.waitForFunction(() => {
+    const field = document.querySelector('#authorization-principal')
+    return field && !field.closest('fieldset')?.disabled
+  })
+  await chooseSoftwareOption(page, dialog().locator('#authorization-principal'), target.login)
   assert.equal(await dialog().locator('.authorization-permissions input[type=checkbox]').count(), 8)
   await dialog().getByRole('checkbox', { name: '查看租户', exact: true }).check()
   await review()

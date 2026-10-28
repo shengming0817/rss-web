@@ -1,3 +1,5 @@
+import type { TaskAdmissionState } from '@rss/api/mdm-types'
+type AdmissionLabels = Record<`admission_${TaskAdmissionState}`, string>
 export const softwareZh = {
   catalogHint:
     '用于分发的企业软件资源。发布可用版本后，通过策略分配给设备组。实际采集的安装资产具有独立身份，不按名称自动关联到资源库。',
@@ -74,6 +76,11 @@ export const softwareZh = {
   thresholdNotMet: '上一批成功率未达门槛',
 
   publicationUnknown: '结果未知。先核实当前事实，或明确确认后按原标识与完整正文幂等重放原操作。',
+  admission_mdm_software_disabled: '原生软件分发未启用',
+  admission_projection_pending: '等待设备事实投影',
+  admission_installation_pending: '安装处理中',
+  admission_recovery_observation_pending: '等待新的恢复观察',
+  admission_recovery_retry_exhausted: '恢复尝试次数已耗尽',
   admission_paused: '策略暂停',
   admission_outside_window: '不在计划有效期',
   admission_outside_scope: '不在总范围',
@@ -258,7 +265,7 @@ export const softwareZh = {
   invalid: '软件定义无效，请检查必填项及 JSON。',
   contentArtifact: '要上传的文件引用（留空表示主安装包）',
   sourceHint: '来源摘要从已启用的企业来源读取；版本生命周期独立维护。',
-}
+} satisfies AdmissionLabels & Record<string, unknown>
 export const softwareEn: typeof softwareZh = {
   catalogHint:
     'Distributable enterprise software resources. Publish an available version, then assign it to device groups through a policy. Observed installations have a separate identity and are never matched to resources by display name.',
@@ -344,6 +351,11 @@ export const softwareEn: typeof softwareZh = {
 
   publicationUnknown:
     'Outcome unknown. Inspect current facts, or explicitly confirm replay of the exact original operation.',
+  admission_mdm_software_disabled: 'Native software distribution disabled',
+  admission_projection_pending: 'Waiting for device facts',
+  admission_installation_pending: 'Installation pending',
+  admission_recovery_observation_pending: 'Waiting for a new recovery observation',
+  admission_recovery_retry_exhausted: 'Recovery attempts exhausted',
   admission_paused: 'Policy paused',
   admission_outside_window: 'Outside policy lifetime',
   admission_outside_scope: 'Outside root scope',

@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -5,7 +6,7 @@ import {
 } from '../../../services/directory-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
-import { array, closed, nullable, string, unique, uuid } from '../../../services/decode'
+import { array, nullable, string, unique, uuid } from '../../../services/decode'
 import {
   complianceHistory,
   complianceDefinition,
@@ -23,88 +24,59 @@ export function createComplianceClient(transport: HttpTransport) {
     list: <F extends keyof typeof ruleFields = keyof typeof ruleFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/compliance-rules',
-        query: queryParameters({
-          limit: 20,
-          ...query,
-          fields: query.fields ?? Object.keys(ruleFields),
-        }),
-        successStatus: 200,
-        decode: (value) => projectedPage(value, ruleFields, query.fields, ['id']),
-      }),
-    read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/compliance-rules/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => complianceRule(v, id),
-      }),
-    version: (id: string, revision: number) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/compliance-rules/{id}/versions/{revision}',
-        pathParams: { id, revision: String(revision) },
-        successStatus: 200,
-        decode: (v) => complianceRule(v, id, revision),
-      }),
-    put: (id: string, body: Operation<ComplianceDefinition>) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/compliance-rules/{id}',
-        pathParams: { id },
-        body,
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['id', 'revision', 'task'])
-          if (uuid(v['id']) !== id || positive(v['revision']) !== body.expectedRevision + 1)
-            throw new Error('Wrong compliance write')
-          const task = nullable(v['task'], uuid)
-          if (body.input.enabled !== (task !== null)) throw new Error('Wrong compliance evaluation')
-          return { id, revision: body.expectedRevision + 1, task }
+      api.getApiV1ComplianceRules(
+        transport,
+        {
+          query: queryParameters({
+            limit: 20,
+            ...query,
+            fields: query.fields ?? Object.keys(ruleFields),
+          }),
         },
+        (value) => projectedPage(value, ruleFields, query.fields, ['id']),
+      ),
+    read: (id: string) =>
+      api.getApiV1ComplianceRulesById(transport, { pathParams: { id } }, (v) =>
+        complianceRule(v, id),
+      ),
+    version: (id: string, revision: number) =>
+      api.getApiV1ComplianceRulesByIdVersionsByRevision(
+        transport,
+        { pathParams: { id, revision } },
+        (v) => complianceRule(v, id, revision),
+      ),
+    put: (id: string, body: Operation<ComplianceDefinition>) =>
+      api.putApiV1ComplianceRulesById(transport, { pathParams: { id }, body }, (value) => {
+        const v = value
+        if (uuid(v['id']) !== id || positive(v['revision']) !== body.expectedRevision + 1)
+          throw new Error('Wrong compliance write')
+        const task = nullable(v['task'], uuid)
+        if (body.input.enabled !== (task !== null)) throw new Error('Wrong compliance evaluation')
+        return { id, revision: body.expectedRevision + 1, task }
       }),
     recompute: (id: string, body: Operation<Record<string, never>>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/compliance-rules/{id}/recompute',
-        pathParams: { id },
-        body,
-        successStatus: 200,
-        decode: (v) => ({ task: uuid(closed(v, ['task'])['task']) }),
-      }),
+      api.postApiV1ComplianceRulesByIdRecompute(transport, { pathParams: { id }, body }, (v) => ({
+        task: uuid(v['task']),
+      })),
     task: (id: string, task: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/compliance-rules/{id}/tasks/{task}',
-        pathParams: { id, task },
-        successStatus: 200,
-        decode: (v) => complianceTask(v, id, task),
-      }),
+      api.getApiV1ComplianceRulesByIdTasksByTask(transport, { pathParams: { id, task } }, (v) =>
+        complianceTask(v, id, task),
+      ),
     current: (device: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/compliance',
-        pathParams: { device },
-        successStatus: 200,
-        decode: (v) => currentCompliance(v, device),
-      }),
+      api.getApiV1DevicesByIdCompliance(transport, { pathParams: { id: device } }, (v) =>
+        currentCompliance(v, device),
+      ),
     history: (device: string, query: HistoryFilter = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/compliance/history',
-        pathParams: { device },
-        query,
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'nextCursor'])
+      api.getApiV1DevicesByIdComplianceHistory(
+        transport,
+        { pathParams: { id: device }, query },
+        (value) => {
+          const v = value
           return {
             items: unique(array(v['items'], complianceHistory), (v) => v.task),
             nextCursor: nullable(v['nextCursor'], string),
           }
         },
-      }),
+      ),
   }
 }

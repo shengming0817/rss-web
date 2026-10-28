@@ -5,6 +5,7 @@ const id = '11111111-1111-4111-8111-111111111111',
   task = '22222222-2222-4222-8222-222222222222'
 const digest = Array<number>(32).fill(1)
 const run = {
+  nodes: [],
   taskId: task,
   policyId: id,
   device: 'device-01',
@@ -26,6 +27,8 @@ const run = {
     definitionDigest: digest,
     effect: 'waiting_reboot',
     effectObservedAt: 12000000,
+    effectReceivedAt: 12000001,
+    receivedAt: 12000001,
     evidence: {
       intent: 'install',
       definitionDigest: digest,
@@ -33,6 +36,7 @@ const run = {
         {
           index: 0,
           stepDigest: digest,
+          stepId: digest,
           target: { kind: 'device' },
           package: 'Example.App',
           identity: { kind: 'controlled_detector', entry: 'detect' },
@@ -140,6 +144,7 @@ it('decodes software evidence without conflating a zero exit with verified effec
 it('keeps summary diagnostics redacted and uses the opaque run continuation', async () => {
   const summary: Record<string, unknown> = { ...run }
   delete summary['policyId']
+  delete summary['nodes']
   const diagnostics: Record<string, unknown> = { ...run.result.evidence.steps[0]!.diagnostics }
   delete diagnostics['stdout']
   delete diagnostics['stderr']
@@ -207,7 +212,7 @@ it('decodes the current attempt and all authorization branches and rejects malfo
   const remote: Record<string, unknown> = { ...run }
   delete remote['policyId']
   expect(policyRun({ ...remote, operationId: id }, true)).toMatchObject({ operationId: id })
-  expect(() => policyRun({ ...run, attemptId: null }, true)).toThrow()
+  expect(policyRun({ ...run, attemptId: null }, true)).not.toHaveProperty('attemptId')
 })
 
 it('consumes current script evidence, redacts summaries and rejects obsolete or malformed envelopes', async () => {
@@ -236,6 +241,7 @@ it('consumes current script evidence, redacts summaries and rejects obsolete or 
   delete diagnostics['stderr']
   const summaryRun: Record<string, unknown> = { ...run }
   delete summaryRun['policyId']
+  delete summaryRun['nodes']
   const request = vi.fn(async (o: RequestOptions<unknown>) =>
     o.decode({
       items: [{ ...summaryRun, occurrence: 'script:1', result: { ...summaryResult, diagnostics } }],
