@@ -1,0 +1,5 @@
+export { default as validateRoot } from './sd350455d06ad459d6726.validator.js'
+export { default as validateInstallerFormat } from './vkjnkgcimjgjeobcohpeegephpknidkcmlbldoidccipemdafifmegcepffmnkieh.validator.js'
+export { default as validateTarget } from './vgcnifmgjaohkbkljhlnelegoieddkkeciemgpigdlkpmdpcchcoekibdpiemghke.validator.js'
+export { default as validateTaskArchitecture } from './voihdoopckleahnpfgfabiepmcfdinlkjbcojphpfflfjfbijpmbieffahogghglh.validator.js'
+export { default as validateTaskPlatform } from './vjkffmdfdnbkpnkgnghogfndonilphiekjnofejmphmniljkmjmbmljpeeplbeppd.validator.js'

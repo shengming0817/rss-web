@@ -1,16 +1,7 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  enumeration,
-  nullable,
-  record,
-  string,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, enumeration, nullable, string, unique, uuid } from '../../../services/decode'
 import { decodeCatalog } from './catalog'
 import { operationReceipt, positive } from './value'
 
@@ -43,22 +34,24 @@ const capabilityChannel: Partial<Record<Capability, Channel>> = {
   apple_account: 'macos_mdm',
 }
 export function decodeIntent(value: unknown): FirstUseIntent {
-  const v = closed(value, ['channels', 'capabilities', 'completionRequested'])
+  if (!wireSchemas.putApiV1SettingsFirstUseBody.validateIntent(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const selected = unique(
-    array(v['channels'], (x) => enumeration(x, channels)),
+    array(v['channels'], (x) => x),
     (x) => x,
   )
   const decisions: FirstUseIntent['capabilities'] = {}
-  for (const [name, value] of Object.entries(record(v['capabilities']))) {
+  for (const [name, value] of Object.entries(v['capabilities'])) {
     const key = enumeration(name, capabilities),
-      kind = enumeration(record(value)['kind'], ['configure', 'skip'] as const)
+      kind = value['kind']
     if (kind === 'configure') {
-      closed(value, ['kind'])
       if (capabilityChannel[key] && !selected.includes(capabilityChannel[key]))
         throw new Error('Capability requires its channel')
       decisions[key] = { kind }
     } else {
-      const d = closed(value, ['kind', 'reason']),
+      const d = value,
         reason = string(d['reason'])
       if (!reason.trim() || new TextEncoder().encode(reason).length > 1024)
         throw new Error('Invalid skip reason')
@@ -68,22 +61,28 @@ export function decodeIntent(value: unknown): FirstUseIntent {
   return {
     channels: selected,
     capabilities: decisions,
-    completionRequested: boolean(v['completionRequested']),
+    completionRequested: v['completionRequested'],
   }
 }
 function saved(value: unknown) {
-  const v = closed(value, ['revision', 'intent'])
+  if (!wireSchemas.getApiV1SettingsFirstUseResponse.validateSaved(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return { revision: count(v['revision']), intent: decodeIntent(v['intent']) }
 }
 export function decodeFirstUse(value: unknown, tenant: string) {
-  const v = closed(value, ['tenantId', 'saved', 'steps', 'canComplete', 'complete'])
+  if (!wireSchemas.getApiV1SettingsFirstUseResponse.validateProgress(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (uuid(v['tenantId']) !== tenant) throw new Error('Wrong first-use tenant')
   return {
     tenantId: tenant,
     saved: saved(v['saved']),
     steps: unique(
       array(v['steps'], (value) => {
-        const s = closed(value, ['id', 'status', 'reason', 'evidence'])
+        const s = value
         return {
           id: enumeration(s['id'], [
             ...channels,
@@ -91,62 +90,45 @@ export function decodeFirstUse(value: unknown, tenant: string) {
             'apple_materials',
             ...capabilities,
           ] as const),
-          status: enumeration(s['status'], [
-            'ready',
-            'unconfigured',
-            'pending',
-            'unknown',
-            'unavailable',
-            'forbidden',
-            'skipped',
-          ] as const),
+          status: s['status'],
           reason: nullable(s['reason'], string),
           evidence: decodeCatalog({ items: s['evidence'], domains: [] }, 'tenant').items,
         }
       }),
       (s) => s.id,
     ),
-    canComplete: boolean(v['canComplete']),
-    complete: boolean(v['complete']),
+    canComplete: v['canComplete'],
+    complete: v['complete'],
   }
 }
 export type FirstUseProgress = ReturnType<typeof decodeFirstUse>
 function receipt(value: unknown) {
-  const v = closed(value, ['operationId', 'saved']),
+  if (!wireSchemas.getApiV1SettingsFirstUseOperationsByIdResponse.validateReceipt(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
     result = saved(v['saved'])
   positive(result.revision)
   return { operationId: uuid(v['operationId']), saved: result }
 }
 export function createFirstUseClient(transport: HttpTransport, tenant: string) {
-  const path = '/api/v1/settings/first-use'
   return {
-    read: () =>
-      transport.request({
-        method: 'GET',
-        path,
-        successStatus: 200,
-        decode: (v) => decodeFirstUse(v, tenant),
-      }),
+    read: () => api.getApiV1SettingsFirstUse(transport, {}, (v) => decodeFirstUse(v, tenant)),
     update: (id: string, expectedRevision: number, intent: FirstUseIntent) => {
       const body = { expectedRevision: count(expectedRevision), intent: decodeIntent(intent) }
       if (new TextEncoder().encode(JSON.stringify(body)).length > 16384)
         throw new Error('First-use input too large')
-      return transport.request({
-        method: 'PUT',
-        path,
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 200,
-        decode: operationReceipt(id, receipt),
-      })
+      return api.putApiV1SettingsFirstUse(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        operationReceipt(id, receipt),
+      )
     },
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: path + '/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, receipt),
-      }),
+      api.getApiV1SettingsFirstUseOperationsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        operationReceipt(id, receipt),
+      ),
   }
 }

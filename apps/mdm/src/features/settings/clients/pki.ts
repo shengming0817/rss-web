@@ -1,13 +1,7 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  closed,
-  enumeration,
-  identifier,
-  string,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, identifier, string, unique, uuid } from '../../../services/decode'
 import { origin, positive, publicText, sha256 } from './value'
 import { installationObservation } from './trust'
 export const pkiPurposes = ['windows', 'apple', 'agent'] as const
@@ -19,15 +13,10 @@ export function encoded(value: unknown, max = 24 * 1024 * 1024) {
   return s
 }
 export function pkiTrust(value: unknown, tenant: string, purpose: PkiPurpose, service?: string) {
-  const v = closed(value, [
-    'version',
-    'service_id',
-    'origin',
-    'tenant',
-    'purpose',
-    'revision',
-    'issuers',
-  ])
+  if (!wireSchemas.postApiV1PkiRotationsBody.validateTrust(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (
     v['version'] !== 1 ||
     v['tenant'] !== tenant ||
@@ -37,19 +26,10 @@ export function pkiTrust(value: unknown, tenant: string, purpose: PkiPurpose, se
     throw new Error('Wrong PKI trust binding')
   const issuers = unique(
     array(v['issuers'], (value) => {
-      const i = closed(value, [
-        'digest',
-        'mode',
-        'certificate',
-        'root',
-        'crl',
-        'root_crl',
-        'provisioner',
-        'kid',
-      ])
+      const i = value
       return {
         digest: sha256(i['digest']),
-        mode: enumeration(i['mode'], ['prepared', 'active', 'verify_only'] as const),
+        mode: i['mode'],
         certificate: encoded(i['certificate'], 45000),
         root: encoded(i['root'], 45000),
         crl: encoded(i['crl']),
@@ -78,11 +58,14 @@ export function pkiTrust(value: unknown, tenant: string, purpose: PkiPurpose, se
 }
 export type PkiTrust = ReturnType<typeof pkiTrust>
 export function pkiReceipt(value: unknown) {
-  const v = closed(value, ['operation', 'revision', 'state'])
+  if (!wireSchemas.postApiV1PkiRotationsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     operation: uuid(v['operation']),
     revision: positive(v['revision']),
-    state: enumeration(v['state'], ['distributing', 'activated', 'retired'] as const),
+    state: v['state'],
   }
 }
 export interface Publication {
@@ -93,7 +76,10 @@ export interface Publication {
 export function pkiPublications(value: unknown): Publication[] {
   const items = unique(
     array(value, (value) => {
-      const v = closed(value, ['issuer', 'crl', 'root_crl'])
+      if (!wireSchemas.postApiV1PkiCrlsBody.validatePublication(value))
+        throw new Error('Invalid contract value')
+
+      const v = value
       return {
         issuer: sha256(v['issuer']),
         crl: encoded(v['crl']),
@@ -108,44 +94,40 @@ export function pkiPublications(value: unknown): Publication[] {
 export function createPkiClient(transport: HttpTransport, tenant: string, service: string) {
   return {
     read: (purpose: PkiPurpose) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/pki/{purpose}/trust',
-        pathParams: { purpose: enumeration(purpose, pkiPurposes) },
-        successStatus: 200,
-        decode: (v) => pkiTrust(v, tenant, purpose, service),
-      }),
+      api.getApiV1PkiByPurposeTrust(transport, { pathParams: { purpose: purpose } }, (v) =>
+        pkiTrust(v, tenant, purpose, service),
+      ),
     prepare: (id: string, purpose: PkiPurpose, expectedRevision: number, candidate: PkiTrust) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/pki/rotations',
-        body: {
-          id: uuid(id),
-          purpose: enumeration(purpose, pkiPurposes),
-          expected_revision: positive(expectedRevision),
-          candidate: pkiTrust(candidate, tenant, purpose, service),
+      api.postApiV1PkiRotations(
+        transport,
+        {
+          body: {
+            id: uuid(id),
+            purpose: purpose,
+            expected_revision: positive(expectedRevision),
+            candidate: pkiTrust(candidate, tenant, purpose, service),
+          },
         },
-        successStatus: 200,
-        decode(value) {
+        (value) => {
           const result = pkiReceipt(value)
           if (result.operation !== id || result.state !== 'distributing')
             throw new Error('Wrong original rotation')
           return result
         },
-      }),
+      ),
     transition: (
       id: string,
       purpose: PkiPurpose,
       expectedRevision: number,
       action: 'activate' | 'retire',
     ) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/pki/{purpose}/rotations',
-        pathParams: { purpose: enumeration(purpose, pkiPurposes) },
-        body: { id: uuid(id), expected_revision: positive(expectedRevision), action },
-        successStatus: 200,
-        decode(value) {
+      api.postApiV1PkiByPurposeRotations(
+        transport,
+        {
+          pathParams: { purpose: purpose },
+          body: { id: uuid(id), expected_revision: positive(expectedRevision), action },
+        },
+        (value) => {
           const result = pkiReceipt(value)
           if (
             result.operation !== id ||
@@ -154,41 +136,36 @@ export function createPkiClient(transport: HttpTransport, tenant: string, servic
             throw new Error('Wrong original rotation')
           return result
         },
-      }),
+      ),
     publish: (id: string, purpose: PkiPurpose, publications: Publication[]) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/pki/crls',
+      api.postApiV1PkiCrls(transport, {
         body: {
           operation: uuid(id),
           purpose,
           publications: pkiPublications(publications),
         },
-        successStatus: 204,
       }),
     recover: (id: string, attempt: string, chain: string[]) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/pki/signing/recover',
-        body: {
-          operation: uuid(id),
-          attempt: uuid(attempt),
-          chain: chain.map((v) => encoded(v, 45000)),
+      api.postApiV1PkiSigningRecover(
+        transport,
+        {
+          body: {
+            operation: uuid(id),
+            attempt: uuid(attempt),
+            chain: chain.map((v) => encoded(v, 45000)),
+          },
         },
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['attempt', 'fingerprint'])
+        (value) => {
+          const v = value
           if (v['attempt'] !== attempt) throw new Error('Wrong signing attempt')
           return { attempt: uuid(v['attempt']), fingerprint: sha256(v['fingerprint']) }
         },
-      }),
+      ),
     observation: (device: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/pki/agent/trust/devices/{device}/observation',
-        pathParams: { device: identifier(device) },
-        successStatus: 200,
-        decode: installationObservation,
-      }),
+      api.getApiV1PkiAgentTrustDevicesByDeviceObservation(
+        transport,
+        { pathParams: { device: identifier(device) } },
+        installationObservation,
+      ),
   }
 }

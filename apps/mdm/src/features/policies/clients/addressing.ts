@@ -1,6 +1,6 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import {
   array,
-  closed,
   count,
   enumeration,
   identifier,
@@ -10,10 +10,7 @@ import {
 } from '../../../services/decode'
 import { jsonValue } from '../../../services/json'
 import { policyName } from './model'
-export type CapabilitySelector =
-  | { kind: 'id'; id: string }
-  | { kind: 'tool_name'; name: string }
-  | { kind: 'alias'; alias: string }
+export type CapabilitySelector = wireSchemas.postApiV1PoliciesResolveBody.Root
 export function toolName(value: unknown) {
   const name = string(value)
   if (!/^policy_[0-9a-f]{32}$/.test(name) || /^policy_0{32}$/.test(name))
@@ -21,33 +18,18 @@ export function toolName(value: unknown) {
   return name
 }
 export function decodeSelector(value: CapabilitySelector): CapabilitySelector {
-  if (value.kind === 'id') {
-    const v = closed(value, ['kind', 'id'])
-    return { kind: 'id', id: uuid(v['id']) }
-  }
-  if (value.kind === 'tool_name') {
-    const v = closed(value, ['kind', 'name'])
-    return { kind: 'tool_name', name: toolName(v['name']) }
-  }
-  const v = closed(value, ['kind', 'alias'])
-  if (v['kind'] !== 'alias') throw new Error('Invalid selector')
-  return { kind: 'alias', alias: policyName(v['alias']) }
+  const normalized = value.kind === 'alias' ? { ...value, alias: policyName(value.alias) } : value
+  if (!wireSchemas.postApiV1PoliciesResolveBody.validateRoot(normalized))
+    throw new Error('Invalid selector')
+  if (normalized.kind === 'id') uuid(normalized.id)
+  if (normalized.kind === 'tool_name') toolName(normalized.name)
+  return normalized
 }
 export function decodeCapability(value: unknown) {
-  const v = closed(value, [
-    'id',
-    'objectType',
-    'toolName',
-    'alias',
-    'scope',
-    'instance',
-    'tenant',
-    'revision',
-    'version',
-    'operations',
-    'inputSchema',
-    'outputSchema',
-  ])
+  if (!wireSchemas.postApiV1PoliciesResolveResponse.validateCapabilityDescriptor(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const id = uuid(v['id']),
     name = toolName(v['toolName'])
   if (name !== `policy_${id.replaceAll('-', '')}`) throw new Error('Wrong tool identity')

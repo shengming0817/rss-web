@@ -1,8 +1,12 @@
+import type { EndpointDescription } from './mdm-contract-response'
+
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 export type QueryValue = string | number | boolean | undefined
 export type Decoder<T> = (value: unknown) => T
 
 interface RequestBase {
+  /** Internal generated operation binding, preserved by the existing session owner. */
+  contract?: EndpointDescription
   method: HttpMethod
   path: string
   pathParams?: Readonly<Record<string, string | number>>

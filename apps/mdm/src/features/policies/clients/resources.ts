@@ -1,24 +1,18 @@
+import * as wireValidators from '@rss/api/mdm-validators'
+import * as api from '@rss/api/mdm-operations'
 import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import { attachment } from '../../enrollment/clients/binary'
 import { jsonValue, jsonObject } from '../../../services/json'
 import { createUploadsClient } from './uploads'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
-import {
-  array,
-  closed,
-  count,
-  nullable,
-  enumeration,
-  identifier,
-  record,
-} from '../../../services/decode'
+import { array, count, nullable, enumeration, identifier, record } from '../../../services/decode'
 import { checked } from '../../../contracts/collection/check'
 import {
   validateResourceWrite,
   validateResourceResponse,
   validateScriptDefinition,
-} from '../../../contracts/collection/generated/validators'
+} from '@rss/api/mdm-validators'
 import type {
   Change,
   Kind,
@@ -27,14 +21,8 @@ import type {
   Declaration,
   Artifact,
   ScriptDefinition,
-} from '../../../contracts/collection/generated/ResourceWrite'
-export type {
-  Platform,
-  Architecture,
-  Variant,
-  Declaration,
-  Artifact,
-} from '../../../contracts/collection/generated/ResourceWrite'
+} from '@rss/api/mdm-types'
+export type { Platform, Architecture, Variant, Declaration, Artifact } from '@rss/api/mdm-types'
 export type ResourceKind = Kind
 export type ResourceChange = Change
 export type ScriptSpec = ScriptDefinition
@@ -61,6 +49,8 @@ export type ResourceDirectoryField = keyof typeof resourceFields
 export const platforms = ['windows', 'macos'] as const
 export const architectures = ['x86_64', 'aarch64'] as const
 export function decodeResource(value: unknown, id: string) {
+  if (!wireValidators.validateResourceResponse(value)) throw new Error('Invalid contract value')
+
   const response = checked(validateResourceResponse, value)
   if (!('versions' in response) || response.id !== id) throw new Error('Wrong resource')
   const kind = enumeration(response.kind, [
@@ -96,71 +86,47 @@ export function createResourcesClient(transport: HttpTransport) {
         variant: string
       },
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/resources/{id}/versions/{version}/script',
-        pathParams: { id, version },
-        query: { ...selection },
-        responseType: 'arraybuffer',
-        successStatus: 200,
-        decode: (v) => attachment(v, 'application/octet-stream', 'script.txt', 32 * 1024 * 1024),
-      }),
+      api.getApiV1ResourcesByIdVersionsByVersionScript(
+        transport,
+        { pathParams: { id, version }, query: { ...selection } },
+        (v) => attachment(v, 'application/octet-stream', 'script.txt', 32 * 1024 * 1024),
+      ),
     blueprints: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/collection-blueprints',
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['categories', 'items'])
-          return {
-            categories: array(v['categories'], identifier),
-            items: array(v['items'], (value) => {
-              const b = closed(value, ['id', 'version', 'presentation', 'platform', 'definition']),
-                d = record(b['definition']),
-                kind = enumeration(d['kind'], [
-                  'native_collection',
-                  'agent_collection',
-                  'configuration',
-                ] as const)
-              closed(d, kind === 'configuration' ? ['kind', 'content'] : ['kind', 'template'])
-              return {
-                id: identifier(b['id']),
-                version: identifier(b['version']),
-                presentation: jsonObject(b['presentation'], 65536),
-                category: identifier(record(b['presentation'])['category']),
-                platform: enumeration(b['platform'], platforms),
-                definition: { kind, ...record(jsonValue(d, 8 * 1024 * 1024)) },
-              }
-            }),
-          }
-        },
+      api.getApiV1CollectionBlueprints(transport, {}, (value) => {
+        const v = value
+        return {
+          categories: array(v['categories'], identifier),
+          items: array(v['items'], (value) => {
+            const b = value,
+              d = b['definition'],
+              kind = d['kind']
+
+            return {
+              id: identifier(b['id']),
+              version: identifier(b['version']),
+              presentation: jsonObject(b['presentation'], 65536),
+              category: identifier(b['presentation']['category']),
+              platform: b['platform'],
+              definition: { kind, ...record(jsonValue(d, 8 * 1024 * 1024)) },
+            }
+          }),
+        }
       }),
     list: <F extends ResourceDirectoryField = ResourceDirectoryField>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/resources',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode: (value) => projectedPage(value, resourceFields, query.fields, ['id']),
-      }),
+      api.getApiV1Resources(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (value) => projectedPage(value, resourceFields, query.fields, ['id']),
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/resources/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => decodeResource(v, id),
-      }),
+      api.getApiV1ResourcesById(transport, { pathParams: { id } }, (v) => decodeResource(v, id)),
     change: (id: string, body: Operation<ResourceChange>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/resources/{id}',
-        pathParams: { id },
-        body: checked(validateResourceWrite, body),
-        successStatus: 200,
-        decode(value) {
+      api.postApiV1ResourcesById(
+        transport,
+        { pathParams: { id }, body: checked(validateResourceWrite, body) },
+        (value) => {
           if (body.input.action === 'instantiate') return decodeResource(value, id)
           const v = checked(validateResourceResponse, value)
           if (!('resource' in v)) throw new Error('Wrong resource response')
@@ -172,7 +138,7 @@ export function createResourcesClient(transport: HttpTransport) {
             storageRevision: count(v.storageRevision),
           }
         },
-      }),
+      ),
     uploads: createUploadsClient(transport),
   }
 }

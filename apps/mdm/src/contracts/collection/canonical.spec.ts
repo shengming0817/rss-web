@@ -8,7 +8,7 @@ import {
   validateResourceWrite,
   validateResourceResponse,
   validateFieldWrite,
-} from './generated/validators'
+} from '@rss/api/mdm-validators'
 // Existing producer canonical contents are real format vectors; reorder every JSON object on read.
 function reordered(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(reordered)

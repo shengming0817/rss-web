@@ -1,0 +1,2 @@
+/* Generated. Do not edit. */
+var d=e,p=e;function e(t,{instancePath:a="",parentData:o,parentDataProperty:c,rootData:i=t,dynamicAnchors:l={}}={}){let s=null,n=0,r=e.evaluated;return r.dynamicProps&&(r.props=void 0),r.dynamicItems&&(r.items=void 0),typeof t!="string"?(e.errors=[{instancePath:a,schemaPath:"#/type",keyword:"type",params:{type:"string"}}],!1):t!=="no-cache"?(e.errors=[{instancePath:a,schemaPath:"#/const",keyword:"const",params:{allowedValue:"no-cache"}}],!1):(e.errors=s,n===0)}e.evaluated={dynamicProps:!1,dynamicItems:!1};export{p as default,d as validate};

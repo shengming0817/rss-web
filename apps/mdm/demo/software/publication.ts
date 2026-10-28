@@ -160,14 +160,41 @@ export function createPublicationDemo(
           if (!lifecycle.isEnabled(r.id, v.id) && !canEnableDraft(request.actor.principalId))
             return error('permission_denied', 403)
           const d = declaration.definition
-          let document: Publication['document']
+          let document: NonNullable<Publication['document']>
+          if (d.export.kind === 'winget' && !['msi', 'exe'].includes(d.material.format))
+            return error('action_not_supported', 501)
           if (d.export.kind === 'winget')
             document = {
               kind: 'Winget',
               manifest: {
                 PackageIdentifier: d.package,
                 Versions: [
-                  { PackageVersion: d.version, DefaultLocale: { PackageName: d.export.name } },
+                  {
+                    PackageVersion: d.version,
+                    Installers: [
+                      {
+                        Architecture: v.variants[0]!.architecture === 'aarch64' ? 'arm64' : 'x64',
+                        InstallerSha256: d.artifacts[d.material.installer]!.sha256.map((n) =>
+                          n.toString(16).padStart(2, '0'),
+                        ).join(''),
+                        InstallerSuccessCodes: [0],
+                        InstallerSwitches: {},
+                        InstallerType: d.material.format === 'msi' ? 'msi' : 'exe',
+                        InstallerUrl:
+                          d.artifacts[d.material.installer]!.origin ??
+                          'https://demo.invalid/installer',
+                        ProductCode: '',
+                        Scope: 'machine',
+                      },
+                    ],
+                    DefaultLocale: {
+                      PackageName: d.export.name,
+                      PackageLocale: d.export.locale,
+                      Publisher: d.export.publisher,
+                      License: d.export.license,
+                      ShortDescription: d.export.description,
+                    },
+                  },
                 ],
               },
             }

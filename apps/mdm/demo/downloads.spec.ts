@@ -145,7 +145,13 @@ it('renders four direct download links in their Windows/macOS architecture cards
     async request<T>(options: RequestOptions<T>) {
       requests.push(`${options.method} ${options.path}`)
       const response = await scenario.handle(options.method, options.path)
-      if (response.status !== options.successStatus)
+      if (
+        !(
+          (Array.isArray(options.successStatus)
+            ? options.successStatus
+            : [options.successStatus]) as readonly number[]
+        ).includes(response.status)
+      )
         throw decodeMdmError(response.status, response.body)
       return options.decode(response.body)
     },

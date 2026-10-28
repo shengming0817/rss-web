@@ -1,3 +1,5 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   projectedPage,
@@ -8,13 +10,12 @@ import {
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   boolean,
+  enumeration,
   closed,
   count,
-  enumeration,
   identifier,
   integer,
   nullable,
-  record,
   uuid,
 } from '../../../services/decode'
 export const appleCredentialActions = [
@@ -28,28 +29,22 @@ export const appleCredentialActions = [
 ] as const
 export type AppleAction = (typeof appleCredentialActions)[number]
 export function subject(value: unknown) {
-  const kind = enumeration(record(value)['kind'], [
-    'rss_login',
-    'bitlocker',
-    'local_administrator',
-    'filevault',
-    'recovery_lock',
-    'lock_pin',
-  ] as const)
-  if (kind === 'filevault' || kind === 'recovery_lock') {
-    closed(value, ['kind'])
-    return { kind }
-  }
+  if (!wireSchemas.getApiV1DevicesByDeviceRecoveryCredentialsResponse.validateSubject(value))
+    throw new Error('Invalid contract value')
+
+  const kind = value['kind']
+  if (kind === 'filevault') return { kind, custody: uuid(value.custody), epoch: count(value.epoch) }
+  if (kind === 'recovery_lock') return { kind }
   if (kind === 'bitlocker') {
-    const v = closed(value, ['kind', 'volume', 'protector'])
+    const v = value
     return { kind, volume: identifier(v['volume']), protector: uuid(v['protector']) }
   }
   if (kind === 'lock_pin') {
-    const v = closed(value, ['kind', 'operation'])
+    const v = value
     return { kind, operation: uuid(v['operation']) }
   }
   if (kind === 'rss_login') {
-    const v = closed(value, ['kind', 'binding', 'bindingGeneration', 'sid'])
+    const v = value
     return {
       kind,
       binding: uuid(v['binding']),
@@ -57,22 +52,19 @@ export function subject(value: unknown) {
       sid: identifier(v['sid']),
     }
   }
-  const v = closed(value, ['kind', 'sid'])
+  const v = value
   return { kind, sid: identifier(v['sid']) }
 }
 export function material(value: unknown, device: string) {
-  const v = closed(value, [
-      'id',
-      'binding',
-      'version',
-      'current',
-      'validity',
-      'escrowed',
-      'operation',
-      'createdAt',
-      'invalidatedAt',
-    ]),
-    binding = closed(v['binding'], ['device', 'registration', 'generation', 'subject'])
+  if (
+    !wireSchemas.postApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionRevokeResponse.validateRoot(
+      value,
+    )
+  )
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    binding = v['binding']
   if (binding['device'] !== device || !count(binding['generation']) || !count(v['version']))
     throw new Error('Wrong material binding')
   return {
@@ -84,15 +76,9 @@ export function material(value: unknown, device: string) {
       subject: subject(binding['subject']),
     },
     version: count(v['version']),
-    current: boolean(v['current']),
-    validity: enumeration(v['validity'], [
-      'unverified',
-      'verified',
-      'unknown',
-      'superseded',
-      'revoked',
-    ] as const),
-    escrowed: boolean(v['escrowed']),
+    current: v['current'],
+    validity: v['validity'],
+    escrowed: v['escrowed'],
     operation: uuid(v['operation']),
     createdAt: integer(v['createdAt']),
     invalidatedAt: nullable(v['invalidatedAt'], integer),
@@ -109,21 +95,10 @@ function disclosure(value: unknown) {
   return value
 }
 export type Material = ReturnType<typeof material>
-export interface CredentialInput {
-  registration: string
-  generation: number
-  deadline: number
-  action: {
-    kind: AppleAction
-    expectedRevision?: number
-    recipient?: string | null
-    material?: { id: string; version: number }
-    current?: { id: string; version: number } | null
-    clear?: boolean
-    operation?: string
-    unlockPassword?: string
-  }
-}
+export type CredentialInput = Omit<
+  Parameters<typeof api.postApiV1DevicesByDeviceRecoveryCredentialsOperations>[1]['body'],
+  'operationId'
+>
 function materialFields(device: string) {
   return {
     id: uuid,
@@ -159,53 +134,46 @@ export function createCredentialsClient(transport: HttpTransport) {
       device: string,
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/recovery-credentials',
-        pathParams: { device },
-        query: queryParameters({ limit: 100, ...query }),
-        successStatus: 200,
-        decode: (v) => projectedPage(v, materialFields(device), query.fields, ['id', 'version']),
-      }),
+      api.getApiV1DevicesByDeviceRecoveryCredentials(
+        transport,
+        { pathParams: { device }, query: queryParameters({ limit: 100, ...query }) },
+        (v) => projectedPage(v, materialFields(device), query.fields, ['id', 'version']),
+      ),
     read: (device: string, id: string, version: number) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/recovery-credentials',
-        pathParams: { device },
-        query: queryParameters({
-          filter: allOf(comparison('id', '==', uuid(id)), comparison('version', '==', version)),
-          limit: 1,
-        }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1DevicesByDeviceRecoveryCredentials(
+        transport,
+        {
+          pathParams: { device },
+          query: queryParameters({
+            filter: allOf(comparison('id', '==', uuid(id)), comparison('version', '==', version)),
+            limit: 1,
+          }),
+        },
+        (value) => {
           const page = projectedPage(value, materialFields(device))
           const row = page.items[0]
           if (!row || row.id !== id || row.version !== version || page.nextCursor)
             throw new Error('Wrong material')
           return material(row, device)
         },
-      }),
+      ),
     reveal: (device: string, entry: Material) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/devices/{device}/recovery-credentials/{id}/versions/{version}/secret',
-        pathParams: versionPath(device, entry),
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['material', 'secret']),
+      api.getApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionSecret(
+        transport,
+        { pathParams: versionPath(device, entry) },
+        (value) => {
+          const v = value,
             result = material(v['material'], device)
           if (result.id !== entry.id || result.version !== entry.version)
             throw new Error('Wrong disclosed version')
           return { material: result, secret: disclosure(v['secret']) }
         },
-      }),
+      ),
     revoke: (device: string, entry: Material) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/devices/{device}/recovery-credentials/{id}/versions/{version}/revoke',
-        pathParams: versionPath(device, entry),
-        successStatus: 200,
-        decode(v) {
+      api.postApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionRevoke(
+        transport,
+        { pathParams: versionPath(device, entry) },
+        (v) => {
           const result = material(v, device)
           if (
             result.id !== entry.id ||
@@ -215,16 +183,13 @@ export function createCredentialsClient(transport: HttpTransport) {
             throw new Error('Wrong revoked version')
           return result
         },
-      }),
+      ),
     create: (device: string, operationId: string, input: CredentialInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/devices/{device}/recovery-credentials/operations',
-        pathParams: { device },
-        body: { operationId, ...input },
-        successStatus: 202,
-        decode(value) {
-          const v = closed(value, ['operationId', 'commandId', 'revision', 'accepted'])
+      api.postApiV1DevicesByDeviceRecoveryCredentialsOperations(
+        transport,
+        { pathParams: { device }, body: { operationId, ...input } },
+        (value) => {
+          const v = value
           if (
             v['operationId'] !== operationId ||
             v['commandId'] !== operationId ||
@@ -233,6 +198,6 @@ export function createCredentialsClient(transport: HttpTransport) {
             throw new Error('Wrong credential receipt')
           return { operationId: uuid(v['operationId']), revision: count(v['revision']) }
         },
-      }),
+      ),
   }
 }

@@ -13,7 +13,7 @@ import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-uti
 import { createRouter, createMemoryHistory } from 'vue-router'
 import type { IdentitySession } from '@rss/auth'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
-import { decodeMdmError, decodeAgentError } from '@rss/api/mdm'
+import { decodeMdmError } from '@rss/api/mdm'
 import { mdmKey, type MdmRuntime } from '../../../context'
 import { mdmI18n } from '../../../i18n'
 import { useSettingsAction } from '../useSettingsAction'
@@ -166,7 +166,8 @@ async function fixture(
         value = {
           revision: 0,
           desiredRevision: null,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         }
@@ -181,7 +182,7 @@ async function fixture(
       else if (o.path === '/api/v1/windows/wns' || o.path === '/api/v1/storage/connections')
         value = {
           revision: 0,
-          desiredRevision: null,
+          [o.path === '/api/v1/storage/connections' ? 'activeRevision' : 'desiredRevision']: null,
           versionCount: 0,
           current: null,
           latest: null,
@@ -308,7 +309,8 @@ it('clears imported private keys immediately, keeps unknown writes across remoun
     return {
       revision: 0,
       desiredRevision: null,
-      versions: [],
+      versionCount: 0,
+      materials: {},
       runtimeObservation: 'separate',
       accountBindings: {},
     }
@@ -340,7 +342,8 @@ it('clears imported private keys immediately, keeps unknown writes across remoun
       : {
           revision: 1,
           desiredRevision: null,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         },
@@ -381,7 +384,6 @@ it.each(['storage', 'smtp', 'wns'] as const)(
             profile: 'approved',
             state: 'pending',
             failureReason: null,
-            selected: false,
             revoked: false,
             qualifiedAt: null,
             expiresAt: null,
@@ -414,7 +416,7 @@ it.each(['storage', 'smtp', 'wns'] as const)(
         ? { revision: 1, selectedRevision: null, versionCount: 0, current: null, latest: null }
         : {
             revision: 1,
-            desiredRevision: null,
+            [kind === 'storage' ? 'activeRevision' : 'desiredRevision']: null,
             versionCount: 0,
             current: null,
             latest: null,
@@ -664,7 +666,7 @@ it('requires reading the conflicting version and a separate explicit edit decisi
     if (o.method === 'POST') throw decodeMdmError(409, { code: 'operation_conflict' })
     return {
       revision: 2,
-      desiredRevision: null,
+      activeRevision: null,
       versionCount: 0,
       current: null,
       latest: null,
@@ -796,7 +798,8 @@ it('clears an unused imported Apple key when submitting a different material act
       : {
           revision: 1,
           desiredRevision: 1,
-          versions: [],
+          versionCount: 0,
+          materials: {},
           runtimeObservation: 'separate',
           accountBindings: {},
         },
@@ -1805,7 +1808,7 @@ it('clears recovery secrets on submission and preserves exact Agent issuance unk
   await f.wrapper.get('#agent-recovery-secret').setValue('A'.repeat(43))
   await f.wrapper.get('#agent-recovery-csr').setValue('YQ==')
   f.setHandler(() => {
-    throw decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal })
+    throw decodeMdmError(503, { code: 'issuance_unknown', issuanceId: principal })
   })
   await button(f.wrapper, '核对并继续').trigger('click')
   await flushPromises()
@@ -1841,7 +1844,7 @@ it('presents recovered Agent candidates with original signing identity while kee
   expect(f.wrapper.text()).toContain('仍需设备通过实际候选 mTLS 激活')
   expect(f.wrapper.text()).toContain(tenant)
   expect(f.calls.filter((o) => o.method === 'POST').map((o) => o.path)).toEqual([
-    '/api/v1/agent-issuances/{issuance}/recover',
+    '/api/v1/agent-issuances/{id}/recover',
   ])
 })
 
@@ -1863,7 +1866,7 @@ it('discards a late Agent recovery error locator after a session changes during 
   await button(f.wrapper, '核验并继续原恢复').trigger('click')
   await flushPromises()
   f.state.value = { ...f.state.value, session: { id: principal } }
-  reject(decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal }))
+  reject(decodeMdmError(503, { code: 'issuance_unknown', issuanceId: principal }))
   await flushPromises()
   expect(f.wrapper.text()).not.toContain(principal)
   expect(f.settings.operations.records.size).toBe(0)
@@ -1875,7 +1878,7 @@ it('offers controlled handoff for recovery conflicts without exposing a nonfunct
   await f.wrapper.get('#agent-recovery-secret').setValue('A'.repeat(43))
   await f.wrapper.get('#agent-recovery-csr').setValue('YQ==')
   f.setHandler(() => {
-    throw decodeAgentError(409, { code: 'operation_conflict', issuanceId: null })
+    throw decodeMdmError(409, { code: 'operation_conflict', issuanceId: null })
   })
   await button(f.wrapper, '核对并继续').trigger('click')
   await flushPromises()
@@ -1966,7 +1969,7 @@ it('shows authoritative deployment and retirement reasons, clears forbidden fact
   const f = await fixture(ConnectionsPanel)
   f.setHandler((o) => {
     if (o.method === 'POST')
-      throw decodeAgentError(409, { code: 'connection_retirement_blocked', issuanceId: null })
+      throw decodeMdmError(409, { code: 'connection_retirement_blocked', issuanceId: null })
     return connectionValue(2)
   })
   await button(f.wrapper, '重新读取').trigger('click')
@@ -1979,7 +1982,7 @@ it('shows authoritative deployment and retirement reasons, clears forbidden fact
   await flushPromises()
   expect(f.calls.filter((o) => o.method === 'POST')).toHaveLength(1)
   f.setHandler(() => {
-    throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
+    throw decodeMdmError(403, { code: 'permission_denied', issuanceId: null })
   })
   await button(f.wrapper, '重新读取').trigger('click')
   await flushPromises()
@@ -2029,7 +2032,7 @@ it('keeps issuance recovery unknown after null query and retries only the origin
   let lose = true
   f.setHandler((o) => {
     if (o.method === 'GET') return null
-    if (lose) throw decodeAgentError(503, { code: 'issuance_unknown', issuanceId: principal })
+    if (lose) throw decodeMdmError(503, { code: 'issuance_unknown', issuanceId: principal })
     return {
       wireVersion: 1,
       issuanceId: principal,
@@ -2129,7 +2132,7 @@ it('clears a previously queried issuance candidate when the same session loses C
   expect(f.wrapper.get('table').text()).toContain(principal)
   expect(f.wrapper.get('table').text()).toContain(tenant)
   f.setHandler(() => {
-    throw decodeAgentError(403, { code: 'permission_denied', issuanceId: null })
+    throw decodeMdmError(403, { code: 'permission_denied', issuanceId: null })
   })
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()
@@ -2258,8 +2261,8 @@ it('returns focus to the configuration button after closing a material dialog', 
 it('queries both platform directories as projections and resolves a tenant before opening its editor', async () => {
   const f = await fixture(TenantsView, {}, 'platform')
   f.setHandler((o) => {
-    if (o.path.endsWith('/tenants/{id}')) return row
-    if (o.path.includes('/provisionings/{id}')) return provision(id)
+    if (o.path.endsWith('/tenants/{tenant}')) return row
+    if (o.path.includes('/provisionings/{operation}')) return provision(id)
     const value = o.path.endsWith('/tenants') ? row : provision(id)
     const fields = String(o.query?.['fields'] ?? '')
       .split(',')
@@ -2288,9 +2291,70 @@ it('queries both platform directories as projections and resolves a tenant befor
   const details = f.wrapper.findAll('.directory-results')
   await details[1]!.get('button').trigger('click')
   await flushPromises()
-  expect(f.calls.some((o) => o.path.endsWith('/tenants/{id}'))).toBe(true)
+  expect(f.calls.some((o) => o.path.endsWith('/tenants/{tenant}'))).toBe(true)
   expect(f.wrapper.text()).toContain('Team')
   await details[0]!.get('button').trigger('click')
   await flushPromises()
-  expect(f.calls.some((o) => o.path.endsWith('/provisionings/{id}'))).toBe(true)
+  expect(f.calls.some((o) => o.path.endsWith('/provisionings/{operation}'))).toBe(true)
+})
+
+it('shows storage candidate, active binding and unknown runtime observation separately', async () => {
+  const f = await fixture(ProviderPanel, { kind: 'storage' })
+  const current = {
+    operationId: id,
+    revision: 1,
+    profile: 'source',
+    state: 'qualified',
+    failureReason: null,
+    revoked: false,
+    qualifiedAt: 1,
+    expiresAt: null,
+  }
+  f.setHandler(() => ({
+    revision: 2,
+    activeRevision: 1,
+    versionCount: 2,
+    current,
+    latest: { ...current, revision: 2, profile: 'candidate' },
+    applied: null,
+  }))
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  const summary = f.wrapper.get('.settings-version-summary').text()
+  expect(summary).toMatch(/保存版本\s*2/)
+  expect(summary).toMatch(/活动连接版本\s*1/)
+  expect(summary).toMatch(/实际观察版本\s*—/)
+  expect(summary).not.toContain('请求应用版本')
+  expect(f.wrapper.text()).toContain('资格通过不代表已经切换存储')
+  expect(f.calls.filter((o) => o.method !== 'GET')).toHaveLength(0)
+})
+
+it('labels the storage catalog binding as active in overview evidence', async () => {
+  const f = await fixture(SettingsView, {}, 'tenant', 'settings-overview')
+  f.setHandler(() => ({
+    items: [
+      {
+        id: 'storage',
+        scope: 'tenant',
+        owner: 'software',
+        custody: 'storage_provider',
+        lifecycle: 'provider_credential',
+        status: 'configured',
+        revision: 2,
+        desiredRevision: 1,
+        appliedRevision: null,
+        configuredCount: 2,
+        reason: null,
+        actions: [],
+      },
+    ],
+    domains: [],
+  }))
+  await button(f.wrapper, '重新读取').trigger('click')
+  await flushPromises()
+  const row = f.wrapper.get('[data-setting=storage]')
+  await row.get('.v-expansion-panel-title').trigger('click')
+  await flushPromises()
+  expect(row.text()).toMatch(/活动连接版本\s*1/)
+  expect(row.text()).not.toContain('请求应用版本')
 })

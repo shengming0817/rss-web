@@ -1,3 +1,5 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import { jsonObject } from '../../../services/json'
 import {
@@ -12,13 +14,11 @@ import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   boolean,
-  closed,
   count,
   enumeration,
   identifier,
   integer,
   nullable,
-  record,
   string,
   unique,
   uuid,
@@ -35,18 +35,21 @@ export interface GroupCondition extends ConditionContext {
   criteria: GroupCriteria
 }
 export function groupCriteria(value: unknown, depth = 0): GroupCriteria {
+  if (!wireSchemas.postApiV1GroupsByIdBody.validateCriteria(value))
+    throw new Error('Invalid contract value')
+
   if (depth > 16) throw new Error('Group condition too deep')
-  const kind = record(value)['kind']
+  const kind = value['kind']
   if (kind === 'group') {
-    const v = closed(value, ['kind', 'groupId', 'op'])
+    const v = value
     return {
       kind,
       groupId: uuid(v['groupId']),
-      op: enumeration(v['op'], ['member_of', 'not_member_of'] as const),
+      op: v['op'],
     }
   }
   if (kind === 'and' || kind === 'or') {
-    const v = closed(value, ['kind', 'children'])
+    const v = value
     return { kind, children: array(v['children'], (x) => groupCriteria(x, depth + 1)) }
   }
   const predicate = assetCriteria(value)
@@ -54,7 +57,10 @@ export function groupCriteria(value: unknown, depth = 0): GroupCriteria {
   return predicate
 }
 export function groupCondition(value: unknown): GroupCondition {
-  const v = closed(value, ['selector', 'quantifier', 'criteria'])
+  if (!wireSchemas.postApiV1GroupsByIdBody.validateInventoryCondition(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     ...conditionContext({ selector: v['selector'], quantifier: v['quantifier'] }),
     criteria: groupCriteria(v['criteria']),
@@ -67,41 +73,37 @@ export interface GroupQuery<
   referenceableFor?: string | undefined
 }
 export function groupReferences(value: unknown) {
-  const v = closed(value, ['items', 'nextCursor', 'deletionBlocked'])
+  if (!wireSchemas.getApiV1GroupsByIdReferencesResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const source = (value: unknown) => {
-    const v = closed(value, ['kind', 'id'])
+    if (!wireSchemas.getApiV1GroupsByIdReferencesResponse.validateObject(value))
+      throw new Error('Invalid contract value')
+
+    const v = value
     return {
-      kind: enumeration(v['kind'], ['group', 'scope', 'policy', 'compliance_rule'] as const),
+      kind: v['kind'],
       id: uuid(v['id']),
     }
   }
   return {
     items: array(v['items'], (value) => {
-      const item = closed(value, [
-        'source',
-        'revision',
-        'relation',
-        'roles',
-        'via',
-        'lifecycleState',
-        'freshness',
-        'effective',
-        'blocksDeletion',
-      ])
+      const item = value
       return {
         source: source(item['source']),
         revision: count(item['revision']),
-        relation: enumeration(item['relation'], ['direct', 'indirect'] as const),
+        relation: item['relation'],
         roles: array(item['roles'], identifier),
         via: array(item['via'], source),
         lifecycleState: identifier(item['lifecycleState']),
         freshness: identifier(item['freshness']),
-        effective: boolean(item['effective']),
-        blocksDeletion: boolean(item['blocksDeletion']),
+        effective: item['effective'],
+        blocksDeletion: item['blocksDeletion'],
       }
     }),
     nextCursor: cursor(v['nextCursor']),
-    deletionBlocked: boolean(v['deletionBlocked']),
+    deletionBlocked: v['deletionBlocked'],
   }
 }
 export function groupPresentation(value: unknown) {
@@ -136,24 +138,13 @@ const groupFields = {
   deleted: boolean,
 }
 export function groupSummary(value: unknown) {
-  const v = closed(value, [
-    'id',
-    'kind',
-    'systemSelector',
-    'assetContext',
-    'calculationRevision',
-    'presentation',
-    'revision',
-    'memberVersion',
-    'memberCount',
-    'ruleVersion',
-    'deleted',
-  ])
-  const kind = enumeration(v['kind'], ['static', 'dynamic', 'system'] as const),
-    assetContext = enumeration(v['assetContext'], ['endpoint', 'associated_device'] as const)
-  const systemSelector = nullable(v['systemSelector'], (x) =>
-    enumeration(x, ['all_active', 'windows', 'macos'] as const),
-  )
+  if (!wireSchemas.getApiV1GroupsByIdResponse200.validateGroup(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+  const kind = v['kind'],
+    assetContext = v['assetContext']
+  const systemSelector = nullable(v['systemSelector'], (x) => x)
   if ((kind === 'system') !== (systemSelector !== null)) throw new Error('Invalid system group')
   if (kind !== 'dynamic' && assetContext !== 'endpoint')
     throw new Error('Static groups require endpoints')
@@ -168,38 +159,39 @@ export function groupSummary(value: unknown) {
     memberVersion: count(v['memberVersion']),
     memberCount: count(v['memberCount']),
     ruleVersion: nullable(v['ruleVersion'], identifier),
-    deleted: boolean(v['deleted']),
+    deleted: v['deleted'],
   }
 }
 export function decodeGroup(value: unknown, id: string) {
-  const v = closed(value, ['group', 'criteria', 'memberSet', 'freshness'])
+  if (!wireSchemas.getApiV1GroupsByIdResponse200.validateGroupRead(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+
   const group = groupSummary(v['group'])
   if (group.id !== id) throw new Error('Wrong group')
   return {
     group,
     criteria: nullable(v['criteria'], groupCondition),
     memberSet: nullable(v['memberSet'], uuid),
-    freshness: enumeration(v['freshness'], ['current', 'pending'] as const),
+    freshness: v['freshness'],
   }
 }
 export type GroupRead = ReturnType<typeof decodeGroup>
 function decision(value: unknown) {
-  const v = closed(value, [
-    'object',
-    'sourceObjects',
-    'origin',
-    'decision',
-    'explanations',
-    'provenance',
-  ])
+  if (!wireSchemas.getApiV1GroupsByIdResponse200.validateDecisionView(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     object: objectRef(v['object']),
     sourceObjects: array(v['sourceObjects'], deviceObject),
     origin: enumeration(v['origin'], ['rule', 'manual'] as const),
     decision: enumeration(v['decision'], ['match', 'no_match', 'unknown'] as const),
     explanations: array(v['explanations'], (value) => {
-      const e = closed(value, ['path', 'outcome'])
+      const e = value
       return {
+        context: string(e.context),
         path: array(e['path'], count),
         outcome: enumeration(e['outcome'], [
           'match',
@@ -213,8 +205,9 @@ function decision(value: unknown) {
       }
     }),
     provenance: array(v['provenance'], (value) => {
-      const e = closed(value, ['field', 'source', 'snapshot_id', 'observed_at'])
+      const e = value
       return {
+        context: string(e.context),
         field: fieldKey(e['field']),
         source: enumeration(e['source'], sourceIds),
         snapshot_id: identifier(e['snapshot_id']),
@@ -224,8 +217,11 @@ function decision(value: unknown) {
   }
 }
 function pageItems(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['members', 'changes', 'decisions'] as const)
-  const v = closed(value, kind === 'changes' ? ['kind', 'added', 'removed'] : ['kind', 'items'])
+  if (!wireSchemas.getApiV1GroupsByIdResponse200.validateGroupPageItems(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+  const kind = v.kind
   if (kind === 'members') return { kind, items: unique(array(v['items'], objectRef), objectKey) }
   if (kind === 'changes')
     return {
@@ -241,16 +237,10 @@ export function decodeGroupPage(
   result: string,
   kind: GroupProjection,
 ) {
-  const v = closed(value, [
-    'result',
-    'group',
-    'current',
-    'sources',
-    'totalObjects',
-    'totalMembers',
-    'page',
-    'nextCursor',
-  ])
+  if (!wireSchemas.getApiV1GroupsByIdResponse200.validateGroupPage(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const page = pageItems(v['page'])
   if (uuid(v['group']) !== group || uuid(v['result']) !== result || page.kind !== kind)
     throw new Error('Wrong group result')
@@ -258,14 +248,8 @@ export function decodeGroupPage(
     group,
     result,
     sources: array(v['sources'], (value) => {
-      const source = closed(value, ['group', 'coordinates']),
-        c = closed(source['coordinates'], [
-          'definitionVersion',
-          'memberVersion',
-          'authorityVersion',
-          'memberSet',
-          'assetContext',
-        ])
+      const source = value,
+        c = source['coordinates']
       return {
         group: uuid(source['group']),
         coordinates: {
@@ -273,11 +257,11 @@ export function decodeGroupPage(
           memberVersion: count(c['memberVersion']),
           authorityVersion: count(c['authorityVersion']),
           memberSet: nullable(c['memberSet'], uuid),
-          assetContext: enumeration(c['assetContext'], ['endpoint', 'associated_device'] as const),
+          assetContext: c['assetContext'],
         },
       }
     }),
-    current: boolean(v['current']),
+    current: v['current'],
     totalObjects: count(v['totalObjects']),
     totalMembers: count(v['totalMembers']),
     page,
@@ -286,13 +270,16 @@ export function decodeGroupPage(
 }
 export function createGroupsClient(transport: HttpTransport) {
   function accepted(value: unknown, id: string, operation: string, kind: GroupTaskKind) {
-    const v = closed(value, ['task', 'kind', 'target', 'statusUrl'])
+    if (!wireSchemas.getApiV1GroupsByIdResponse202.validateJobAccepted(value))
+      throw new Error('Invalid contract value')
+
+    const v = value
     const task = uuid(v['task'])
     if (
       task !== operation ||
       v['kind'] !== kind ||
       v['target'] !== id ||
-      v['statusUrl'] !== `/api/v1/groups/${id}/tasks/${task}`
+      v['statusUrl'] !== api.getApiV1GroupsByGroupTasksByTask.url({ group: id, task })
     )
       throw new Error('Wrong group task')
     return { task, kind, statusUrl: string(v['statusUrl']) }
@@ -300,20 +287,20 @@ export function createGroupsClient(transport: HttpTransport) {
   return {
     list: <F extends GroupDirectoryField = GroupDirectoryField>(query: GroupQuery<F> = {}) => {
       const { referenceableFor, ...parameters } = query
-      return transport.request({
-        method: 'GET',
-        path: '/api/v1/groups',
-        query: {
-          ...queryParameters({ limit: 20, ...parameters }),
-          ...(referenceableFor === undefined ? {} : { referenceableFor: uuid(referenceableFor) }),
+      return api.getApiV1Groups(
+        transport,
+        {
+          query: {
+            ...queryParameters({ limit: 20, ...parameters }),
+            ...(referenceableFor === undefined ? {} : { referenceableFor: uuid(referenceableFor) }),
+          },
         },
-        successStatus: 200,
-        decode(value) {
+        (value) => {
           const page = projectedPage(value, groupFields, query.fields, ['id'])
           if (query.fields === undefined) page.items.forEach(groupSummary)
           return page
         },
-      })
+      )
     },
     references: (
       id: string,
@@ -323,22 +310,13 @@ export function createGroupsClient(transport: HttpTransport) {
         cursor?: string | undefined
       } = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/groups/{id}/references',
-        pathParams: { id: uuid(id) },
-        query: { ...query, limit: 20 },
-        successStatus: 200,
-        decode: groupReferences,
-      }),
+      api.getApiV1GroupsByIdReferences(
+        transport,
+        { pathParams: { id: uuid(id) }, query: { ...query, limit: 20 } },
+        groupReferences,
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/groups/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => decodeGroup(v, id),
-      }),
+      api.getApiV1GroupsById(transport, { pathParams: { id } }, (v) => decodeGroup(v, id)),
     change: (id: string, body: Operation<GroupChange>) => {
       if (
         body.input.action === 'rule' ||
@@ -347,8 +325,6 @@ export function createGroupsClient(transport: HttpTransport) {
         groupCondition(body.input.criteria)
 
       const options = {
-        method: 'POST' as const,
-        path: '/api/v1/groups/{id}',
         pathParams: { id },
         body,
       }
@@ -358,62 +334,51 @@ export function createGroupsClient(transport: HttpTransport) {
         body.input.action === 'rule' ||
         (body.input.action === 'create' && body.input.criteria !== null)
       )
-        return transport.request({
-          ...options,
-          successStatus: 202,
-          decode: (v) =>
-            accepted(
-              v,
-              id,
-              body.operationId,
-              body.input.action === 'rule' || body.input.action === 'create'
-                ? 'group_definition'
-                : 'group',
-            ),
-        })
-      return transport.request({
-        ...options,
-        successStatus: 200,
-        decode: (value) => {
-          const v = closed(value, ['operation', 'group', 'added', 'removed', 'task'])
-          const group = groupSummary(v['group'])
-          if (uuid(v['operation']) !== body.operationId || group.id !== id)
-            throw new Error('Wrong group receipt')
-          return {
-            operation: body.operationId,
-            group,
-            added: count(v['added']),
-            removed: count(v['removed']),
-            task: nullable(v['task'], uuid),
-          }
-        },
+        return api.postApiV1GroupsById(transport, { ...options }, (v) =>
+          accepted(
+            v,
+            id,
+            body.operationId,
+            body.input.action === 'rule' || body.input.action === 'create'
+              ? 'group_definition'
+              : 'group',
+          ),
+        )
+      return api.postApiV1GroupsById(transport, { ...options }, (value) => {
+        const v = value
+        if (
+          !('group' in v) ||
+          !('operation' in v) ||
+          !('added' in v) ||
+          !('removed' in v) ||
+          !('task' in v)
+        )
+          throw new Error('Wrong group receipt')
+        const group = groupSummary(v['group'])
+        if (uuid(v['operation']) !== body.operationId || group.id !== id)
+          throw new Error('Wrong group receipt')
+        return {
+          operation: body.operationId,
+          group,
+          added: count(v['added']),
+          removed: count(v['removed']),
+          task: nullable(v['task'], uuid),
+        }
       })
     },
     preview: (id: string, body: Operation<Record<string, never>>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/groups/{id}/previews',
-        pathParams: { id },
-        body,
-        successStatus: 202,
-        decode: (v) => accepted(v, id, body.operationId, 'group_preview'),
-      }),
+      api.postApiV1GroupsByIdPreviews(transport, { pathParams: { id }, body }, (v) =>
+        accepted(v, id, body.operationId, 'group_preview'),
+      ),
     status: (group: string, task: string, kind: GroupTaskKind = 'group') =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/groups/{group}/tasks/{task}',
-        pathParams: { group, task },
-        successStatus: 200,
-        decode: (value) => calculationTask(value, kind, group, task),
-      }),
+      api.getApiV1GroupsByGroupTasksByTask(transport, { pathParams: { group, task } }, (value) =>
+        calculationTask(value, kind, group, task),
+      ),
     page: (group: string, result: string, kind: GroupProjection, next?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/groups/{group}/results/{result}/{kind}',
-        pathParams: { group, result, kind },
-        query: { limit: 20, cursor: next },
-        successStatus: 200,
-        decode: (v) => decodeGroupPage(v, group, result, kind),
-      }),
+      api.getApiV1GroupsByGroupResultsByResultByKind(
+        transport,
+        { pathParams: { group, result, kind }, query: { limit: 20, cursor: next } },
+        (v) => decodeGroupPage(v, group, result, kind),
+      ),
   }
 }

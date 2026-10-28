@@ -34,7 +34,13 @@ export async function setup() {
           Object.entries(o.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
         ),
       })
-      if (reply.status !== o.successStatus)
+      if (
+        !(
+          (Array.isArray(o.successStatus)
+            ? o.successStatus
+            : [o.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
         throw Object.assign(new Error('Request rejected'), {
           status: reply.status,
           body: reply.body,

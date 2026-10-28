@@ -45,7 +45,12 @@ function transport(reply: unknown | ((o: RequestOptions<unknown>) => unknown)) {
 }
 const entry = {
   id: a,
-  binding: { device: 'mac', registration: b, generation: 2, subject: { kind: 'filevault' } },
+  binding: {
+    device: 'mac',
+    registration: b,
+    generation: 2,
+    subject: { kind: 'filevault', custody: a, epoch: 1 },
+  },
   version: 3,
   current: true,
   validity: 'unknown',
@@ -241,7 +246,7 @@ it('uses body operation IDs for webhook writes and supports empty authorized pag
     recoveryVersion: 4,
   })
   expect(f.calls[1]?.body).toEqual({ operationId: b, expectedVersion: 3 })
-  expect(f.calls[1]?.headers).toBeUndefined()
+  expect(f.calls[1]?.headers).toEqual({ 'Content-Type': 'application/json' })
 })
 it('separates Key management from platform network policy and never accepts elevated Key grants', async () => {
   const metadata = {
@@ -654,7 +659,7 @@ it('renders nonempty redacted DDM facts, unknown observation and the exact opera
     compliance: 'unknown',
     synchronization: 'published',
     inputVersion: 'v1',
-    expected: { Configurations: [] },
+    expected: { Activations: [], Assets: [], Configurations: [], Management: [] },
     nativeStatus: {
       items: {},
       unknownItems: [],
@@ -767,12 +772,22 @@ it('edits webhook metadata without losing extensions and consumes actual replay 
     sourceDelivery: null,
     attempts: 2,
     status: 'pending',
-    transportObservation: 'rejected',
+    transportObservation: 'received',
     failureStage: 'transport',
     failureReason: 'gone',
   }
   const f = transport((o: RequestOptions<unknown>) => {
-    if (o.path.endsWith('/event-types')) return { version: 1, items: ['device.retired'] }
+    if (o.path.endsWith('/event-types'))
+      return {
+        version: 1,
+        items: [
+          'device.registered',
+          'device.retired',
+          'policy.execution.terminal',
+          'compliance.status.changed',
+          'device.access.changed',
+        ],
+      }
     if (o.path.endsWith('/deliveries/{id}/replay')) return { id: c, eventId: c, sourceDelivery: b }
     if (o.path.endsWith('/deliveries/{id}/redrive'))
       return {
@@ -1550,7 +1565,17 @@ it('opens full webhook and delivery objects from independent id-only directory p
     failureReason: null,
   }
   const f = transport((o: RequestOptions<unknown>) => {
-    if (o.path.endsWith('/event-types')) return { version: 1, items: ['device.retired'] }
+    if (o.path.endsWith('/event-types'))
+      return {
+        version: 1,
+        items: [
+          'device.registered',
+          'device.retired',
+          'policy.execution.terminal',
+          'compliance.status.changed',
+          'device.access.changed',
+        ],
+      }
     if (o.path.endsWith('/subscriptions/{id}')) return record
     const row = o.path.includes('/deliveries') ? delivery : record
     const fields = String(o.query?.['fields'] ?? '')

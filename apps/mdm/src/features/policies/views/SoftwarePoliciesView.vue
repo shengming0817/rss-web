@@ -88,14 +88,7 @@ async function loadCapabilities() {
 onMounted(loadCapabilities)
 function selectChannel(event: Event) {
   const channel = (event.target as HTMLSelectElement).value
-  if (
-    channel === 'mdm' &&
-    (!capabilities.value?.mdmSoftwareDistributionEnabled ||
-      draft.value.action.delivery.kind !== 'direct' ||
-      draft.value.action.intent !== 'required_install' ||
-      draft.value.selfService)
-  )
-    return
+  if (channel === 'mdm' && mdmChannelDisabled.value) return
   if (channel === 'agent' || channel === 'mdm') draft.value.action.channel = channel
 }
 
@@ -134,6 +127,13 @@ function fresh(): SoftwarePolicyDefinition {
 }
 const draft = ref(fresh()),
   resource = ref<ResourceRead>()
+const mdmChannelDisabled = computed(
+  () =>
+    !capabilities.value?.mdmSoftwareDistributionEnabled ||
+    draft.value.action.delivery.kind !== 'direct' ||
+    draft.value.action.intent !== 'required_install' ||
+    !!draft.value.selfService,
+)
 const rolloutMode = ref<'full' | 'staged'>('full')
 const published = ref<Awaited<ReturnType<typeof runtime.software.publication.list>>>()
 const publicationQuery = useDirectoryQuery(
@@ -713,11 +713,8 @@ directoryQuery.onClear(() => {
                   title: 'MDM',
                   value: 'mdm',
                   props: {
-                    disabled:
-                      !capabilities?.mdmSoftwareDistributionEnabled ||
-                      draft.action.delivery.kind !== 'direct' ||
-                      draft.action.intent !== 'required_install' ||
-                      !!draft.selfService,
+                    disabled: mdmChannelDisabled,
+                    'aria-disabled': mdmChannelDisabled,
                   },
                 },
               ]"

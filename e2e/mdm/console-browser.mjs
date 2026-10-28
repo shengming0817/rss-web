@@ -170,6 +170,7 @@ try {
     materials.getByLabel('操作类型', { exact: true }),
     '设置或清除 Recovery Lock',
   )
+  phase = 'credential-confirmation'
   await materials.getByLabel('确认对当前目标执行此操作', { exact: true }).check()
   const accepted = page.waitForResponse(
     (r) => r.request().method() === 'POST' && r.url().endsWith('/recovery-credentials/operations'),
@@ -547,16 +548,36 @@ try {
     enabled: true,
     definition: windowDefinition,
   })
+  // Exercise the mounted application's injected clients and its existing session/executor.
+  // Vue records the mounted app on its container; no production test hook or second session.
+  await page.goto(at('policies') + '?id=' + windowPolicy)
+  await ready()
+  async function consume(kind, input) {
+    return page.evaluate(
+      async ({ kind, input }) => {
+        const provides = document.querySelector('#app').__vue_app__._context.provides
+        const key = Object.getOwnPropertySymbols(provides).find((key) => key.description === 'mdm')
+        const runtime = provides[key]
+        if (!runtime || runtime.session.state.value.status !== 'authenticated')
+          throw new Error('Mounted MDM session required')
+        if (kind === 'preview') return runtime.policies.policies.preview(input.body, input.page)
+        if (kind === 'assignments')
+          return runtime.policies.policies.assignments(input.id, input.page)
+        if (kind === 'registrations')
+          return runtime.devices.enrollment.registrations(input.id, input.page)
+        if (kind === 'runs') return runtime.policies.runs.list(input.id, input.page)
+        throw new Error('Unknown contract scenario')
+      },
+      { kind, input },
+    )
+  }
   const input = { definition: windowDefinition }
-  phase = 'preview-implicit-first'
-  const first = await api('/api/v1/policies/previews?limit=1', 'POST', input)
+  const first = await consume('preview', { body: input, page: { limit: 1 } })
   assert.ok(first.nextCursor && typeof first.nextCursor === 'string')
-  phase = 'preview-implicit-next'
-  const second = await api(
-    '/api/v1/policies/previews?limit=1&cursor=' + encodeURIComponent(first.nextCursor),
-    'POST',
-    input,
-  )
+  const second = await consume('preview', {
+    body: input,
+    page: { limit: 1, cursor: first.nextCursor },
+  })
   assert.equal(second.scopeResult, first.scopeResult)
   assert.equal(second.nextCursor, null)
   assert.notDeepEqual(first.items[0].object, second.items[0].object)
@@ -567,27 +588,22 @@ try {
     409,
   )
   const explicit = { ...input, scopeResult: first.scopeResult }
-  phase = 'preview-explicit-first'
-  const explicitFirst = await api('/api/v1/policies/previews?limit=1', 'POST', explicit)
-  phase = 'preview-explicit-next'
+  const explicitFirst = await consume('preview', { body: explicit, page: { limit: 1 } })
   assert.equal(
     (
-      await api(
-        '/api/v1/policies/previews?limit=1&cursor=' + encodeURIComponent(explicitFirst.nextCursor),
-        'POST',
-        explicit,
-      )
+      await consume('preview', {
+        body: explicit,
+        page: { limit: 1, cursor: explicitFirst.nextCursor },
+      })
     ).nextCursor,
     null,
   )
-  async function walk(path, key) {
+  async function walk(kind, id, key) {
     const rows = [],
       seen = new Set()
     let cursor
     do {
-      const page = await api(
-        path + '?limit=1' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''),
-      )
+      const page = await consume(kind, { id, page: { limit: 1, ...(cursor ? { cursor } : {}) } })
       for (const row of page.items) {
         assert.ok(!seen.has(key(row)))
         seen.add(key(row))
@@ -599,16 +615,10 @@ try {
     } while (cursor)
     return rows
   }
-  assert.equal(
-    (await walk(`/api/v1/policies/${windowPolicy}/assignments`, (r) => JSON.stringify(r.object)))
-      .length,
-    2,
-  )
-  assert.ok(
-    (await walk(`/api/v1/devices/${f.mdm}/registrations`, (r) => r.registrationId)).length >= 2,
-  )
+  assert.equal((await walk('assignments', windowPolicy, (r) => JSON.stringify(r.object))).length, 2)
+  assert.ok((await walk('registrations', f.mdm, (r) => r.registrationId)).length >= 2)
   const existingRuns = new Set(
-    (await walk(`/api/v1/policies/${windowPolicy}/runs`, (r) => r.taskId)).map((r) => r.taskId),
+    (await walk('runs', windowPolicy, (r) => r.taskId)).map((r) => r.taskId),
   )
   phase = 'policy-history-rerun'
   for (let i = 0; i < 2; i++) {
@@ -626,7 +636,7 @@ try {
         windowPolicy,
         '0',
       ],
-      { timeout: 45000, stdio: 'pipe' },
+      { timeout: 45000, stdio: ['ignore', 'inherit', 'pipe'] },
     )
     if (claimed.status !== 0) {
       try {
@@ -645,7 +655,7 @@ try {
     assert.equal(claimed.status, 0, 'actual Agent mTLS claim')
   }
   const history = await until(
-    () => walk(`/api/v1/policies/${windowPolicy}/runs`, (r) => r.taskId),
+    () => walk('runs', windowPolicy, (r) => r.taskId),
     (rows) => rows.filter((r) => !existingRuns.has(r.taskId)).length >= 2,
   )
   for (let i = 1; i < history.length; i++)
@@ -684,7 +694,7 @@ try {
   const reread = await api(`/api/v1/policies/${windowPolicy}`)
   assert.equal(reread.definition.customEvent, 'refresh.contract')
   assert.ok(reread.revision > edited.revision)
-  coverage.push('fixed-producer-four-opaque-windows-and-policy-event-roundtrip')
+  coverage.push('fixed-producer-generated-clients-four-opaque-windows-and-policy-event-roundtrip')
   phase = 'tool-alias-event-and-link'
   assert.equal(reread.definition.alias, 'support.tool')
   const resolved = await api('/api/v1/policies/resolve', 'POST', {
@@ -1004,6 +1014,7 @@ try {
       phase,
       result: 'failed',
       classification: error.name,
+      location: /console-browser\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0],
       ...(typeof error.actual === 'number'
         ? { actual: error.actual, expected: error.expected }
         : {}),

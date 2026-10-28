@@ -79,7 +79,14 @@ async function setup(view: unknown, allow = true, targetEvidence = false) {
         lost.path = ''
         throw networkErrorForTest()
       }
-      if (reply.status !== o.successStatus) throw decodeMdmError(reply.status, reply.body)
+      if (
+        !(
+          (Array.isArray(o.successStatus)
+            ? o.successStatus
+            : [o.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
+        throw decodeMdmError(reply.status, reply.body)
       if (typeof o.decode !== 'function') return undefined
       const binary =
         o.responseType === 'arraybuffer'
@@ -213,7 +220,7 @@ it('downloads all current published formats without requesting enrollment author
 it('shows plaintext TOU with a native form, a join-specific decision and no RSS identity requests', async () => {
   const { wrapper, runtime, calls } = await setup(TermsView, false)
   const form = wrapper.find('form')
-  expect(form.attributes('method')).toBe('post')
+  expect(form.attributes('method')).toBe('POST')
   expect(form.attributes('action')).toBe('/api/v1/windows/entra/terms/finish')
   expect(wrapper.find('input[type=hidden]').attributes('name')).toBe('csrfToken')
   expect(wrapper.find('button[value=false]').exists()).toBe(true)

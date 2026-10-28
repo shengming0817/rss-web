@@ -100,9 +100,9 @@ describe('accepted directory navigation', () => {
         },
       }),
     )
-    expect(q.request().fields).toBeUndefined()
+    expect(q.parameters().fields).toBeUndefined()
     q.draft.fields = columns.slice(0, 17)
-    expect(() => q.request()).toThrow('Invalid field set')
+    expect(() => q.parameters()).toThrow('Invalid field set')
     wrapper.unmount()
   })
 })

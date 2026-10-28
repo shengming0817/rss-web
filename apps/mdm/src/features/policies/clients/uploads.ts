@@ -1,9 +1,9 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 /** Native content-service upload sessions. No retry or session ownership here. */
 import type { HttpTransport } from '@rss/api/mdm'
 import { MDM_CONTENT_TIMEOUT_MS } from '@rss/api/mdm-limits'
 import {
-  boolean,
-  closed,
   count,
   digest,
   enumeration,
@@ -15,36 +15,25 @@ import {
 import type { UploadTarget } from './resources'
 import { softwareFormats, softwareSource } from './software-definition'
 export function decodeUpload(value: unknown, resource: string, upload: string) {
-  const v = closed(value, ['id', 'binding', 'offset', 'expires', 'complete'])
-  const b = closed(v['binding'], ['purpose', 'reference', 'length', 'sha256', 'actor'])
-  const purpose = closed(b['purpose'], ['kind', 'binding'])
-  enumeration(purpose['kind'], ['resource'] as const)
-  const r = closed(purpose['binding'], [
-    'inspection',
-    'storage_class',
-    'resource',
-    'version',
-    'variant',
-    'platform',
-    'architecture',
-    'resource_digest',
-    'source',
-    'origin',
-  ])
+  if (!wireSchemas.getApiV1ResourcesByIdUploadsByUploadResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
+  const b = v['binding']
+  const purpose = b['purpose']
+  if (purpose.kind !== 'resource') throw new Error('Wrong upload purpose')
+  const r = purpose['binding']
   const binding = {
     purpose: {
       kind: 'resource' as const,
       binding: {
         inspection: nullable(r['inspection'], (value) => enumeration(value, softwareFormats)),
-        storage_class: enumeration(r['storage_class'], [
-          'artifact',
-          'native_configuration',
-        ] as const),
+        storage_class: r['storage_class'],
         resource: identifier(r['resource']),
         version: identifier(r['version']),
         variant: identifier(r['variant']),
-        platform: enumeration(r['platform'], ['windows', 'macos'] as const),
-        architecture: enumeration(r['architecture'], ['x86_64', 'aarch64'] as const),
+        platform: r['platform'],
+        architecture: r['architecture'],
         resource_digest: digest(r['resource_digest']),
         source: nullable(r['source'], softwareSource),
         origin: nullable(r['origin'], string),
@@ -60,7 +49,7 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
     binding,
     offset: count(v['offset']),
     expires: count(v['expires']),
-    complete: boolean(v['complete']),
+    complete: v['complete'],
   }
   if (
     result.id !== upload ||
@@ -75,17 +64,22 @@ export function decodeUpload(value: unknown, resource: string, upload: string) {
 }
 export type UploadSession = ReturnType<typeof decodeUpload>
 export function createUploadsClient(transport: HttpTransport) {
-  const path = '/api/v1/resources/{id}/uploads/{upload}'
   return {
     begin: (id: string, upload: string, target: UploadTarget, signal?: AbortSignal) =>
-      transport.request({
-        method: 'POST',
-        path,
-        pathParams: { id, upload },
-        query: { ...target },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode(v) {
+      api.postApiV1ResourcesByIdUploadsByUpload(
+        transport,
+        {
+          pathParams: { id, upload },
+          query: {
+            version: target.version,
+            variant: target.variant,
+            platform: target.platform,
+            architecture: target.architecture,
+            ...(target.artifact === undefined ? {} : { artifact: target.artifact }),
+          },
+          ...(signal ? { signal } : {}),
+        },
+        (v) => {
           const value = decodeUpload(v, id, upload),
             b = value.binding
           if (
@@ -98,58 +92,37 @@ export function createUploadsClient(transport: HttpTransport) {
             throw new Error('Wrong upload selection')
           return value
         },
-      }),
+      ),
     read: (id: string, upload: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'GET',
-        path,
-        pathParams: { id, upload },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode: (v) => decodeUpload(v, id, upload),
-      }),
+      api.getApiV1ResourcesByIdUploadsByUpload(
+        transport,
+        { pathParams: { id, upload }, ...(signal ? { signal } : {}) },
+        (v) => decodeUpload(v, id, upload),
+      ),
     append: (id: string, upload: string, offset: number, body: ArrayBuffer, signal?: AbortSignal) =>
-      transport.request({
-        method: 'PATCH',
-        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
-        path,
-        pathParams: { id, upload },
-        query: { offset },
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body,
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode: (v) => decodeUpload(v, id, upload),
-      }),
-    complete: (id: string, upload: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'POST',
-        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
-        path: `${path}/complete`,
-        pathParams: { id, upload },
-        ...(signal ? { signal } : {}),
-        successStatus: 201,
-        decode(v): void {
-          if (v !== '' && v !== undefined) throw new Error('Invalid completion acknowledgement')
+      api.patchApiV1ResourcesByIdUploadsByUpload(
+        transport,
+        {
+          timeoutMs: MDM_CONTENT_TIMEOUT_MS,
+          pathParams: { id, upload },
+          query: { offset },
+          body,
+          ...(signal ? { signal } : {}),
         },
+        (v) => decodeUpload(v, id, upload),
+      ),
+    complete: (id: string, upload: string, signal?: AbortSignal) =>
+      api.postApiV1ResourcesByIdUploadsByUploadComplete(transport, {
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
+        pathParams: { id, upload },
+        ...(signal ? { signal } : {}),
       }),
     receipt: (id: string, upload: string, signal?: AbortSignal) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/resources/{id}/content/operations/{upload}',
-        pathParams: { id, upload },
-        ...(signal ? { signal } : {}),
-        successStatus: 200,
-        decode(v) {
-          const r = closed(v, [
-            'operationId',
-            'committed',
-            'resource',
-            'version',
-            'reference',
-            'length',
-            'sha256',
-          ])
+      api.getApiV1ResourcesByIdContentOperationsByOperation(
+        transport,
+        { pathParams: { id: id, operation: upload }, ...(signal ? { signal } : {}) },
+        (v) => {
+          const r = v
           if (uuid(r['operationId']) !== upload || r['resource'] !== id || r['committed'] !== true)
             throw new Error('Wrong content receipt')
           return {
@@ -161,6 +134,6 @@ export function createUploadsClient(transport: HttpTransport) {
             sha256: digest(r['sha256']),
           }
         },
-      }),
+      ),
   }
 }

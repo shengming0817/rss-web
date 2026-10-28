@@ -4,6 +4,7 @@ export const policiesZh = {
     '上传受支持的原生配置 JSON，声明目标、应用动作及可选撤回动作。平台内容支持 macOS Profile / DDM 与 Windows CSP。',
   publishedSoftware: '软件发布记录',
   publicationHint: '展示确切软件版本的发布结果和撤回状态。发布不代表设备已安装，分配由策略控制。',
+
   softwarePublished: '已发布',
   scopeEditor: {
     manage: '配置设备组与目标范围',
@@ -638,6 +639,7 @@ export const policiesEn: typeof policiesZh = {
   publishedSoftware: 'Software publications',
   publicationHint:
     'Shows exact software versions, publication outcomes and withdrawal state. Publication is separate from device installation; policies control assignment.',
+
   softwarePublished: 'Published',
   scopeEditor: {
     manage: 'Configure device groups and targeting',

@@ -90,7 +90,14 @@ export async function softwareAssetsHttp() {
           .map(([key, value]) => [key, String(value)]),
       )
       const reply = await http(o.method, `${path}?${query}`, o.body)
-      if (reply.status !== o.successStatus) throw decodeMdmError(reply.status, reply.body)
+      if (
+        !(
+          (Array.isArray(o.successStatus)
+            ? o.successStatus
+            : [o.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
+        throw decodeMdmError(reply.status, reply.body)
       return o.decode(reply.body)
     },
   } as HttpTransport

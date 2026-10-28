@@ -14,7 +14,6 @@ import { useSettingsFacts } from '../useSettingsAction'
 import {
   subscription,
   webhookSettings,
-  eventTypes,
   type WebhookIntent,
   type Subscription,
   type Delivery,
@@ -66,7 +65,7 @@ const rows = ref<Subscription[]>([]),
   deliveries = ref<Awaited<ReturnType<typeof client.deliveries>>>(),
   currentDelivery = ref<Delivery>(),
   receipt = ref<unknown>(),
-  availableEvents = ref<readonly string[]>(eventTypes)
+  availableEvents = ref<readonly string[]>([])
 function clear() {
   rows.value = []
   selected.value = undefined

@@ -50,7 +50,7 @@ export function useDirectoryQuery<const F extends string>(columns: readonly F[],
   }
   watch(() => JSON.stringify([route.fullPath, deviceBinding(runtime)]), reset, { flush: 'sync' })
   onBeforeUnmount(reset)
-  function request(after?: string, fixed: DirectoryQuery<F> = {}): DirectoryQuery<F> {
+  function parameters(after?: string, fixed: DirectoryQuery<F> = {}): DirectoryQuery<F> {
     const base: DirectoryQuery<F> =
       continues(after) && applied.value
         ? applied.value
@@ -102,7 +102,7 @@ export function useDirectoryQuery<const F extends string>(columns: readonly F[],
     fetch: (query: DirectoryQuery<F>) => Promise<T>,
     fixed: DirectoryQuery<F> = {},
   ) {
-    const query = request(after, fixed),
+    const query = parameters(after, fixed),
       expected = pending,
       own = epoch
     const result = await fetch(query)
@@ -130,7 +130,7 @@ export function useDirectoryQuery<const F extends string>(columns: readonly F[],
     trail,
     next,
     previous,
-    request,
+    parameters,
     accept,
     read,
     complete,

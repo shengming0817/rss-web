@@ -22,10 +22,7 @@ import WriteRecovery from '../components/WriteRecovery.vue'
 import '../telemetry.css'
 import FieldTypeEditor from '../components/FieldTypeEditor.vue'
 import { sourceIds } from '../../devices/clients/asset-model'
-import type {
-  FieldDefinition as Definition,
-  FieldWrite,
-} from '../../../contracts/collection/generated/FieldWrite'
+import type { FieldDefinition as Definition, FieldWrite } from '@rss/api/mdm-types'
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.devices.assets

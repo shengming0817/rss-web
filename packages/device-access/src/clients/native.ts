@@ -1,23 +1,16 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
 import type { Application, Binding, Computer, Material, Observation, Platform } from '../model'
-import {
-  object,
-  closed,
-  text,
-  count,
-  bool,
-  uuid,
-  nullable,
-  list,
-  choice,
-  same,
-} from '../model/decode'
+import { text, count, uuid, nullable, list, choice, same } from '../model/decode'
 /** Decode only requested/current public facts. No last-known value is promoted to current. */
 export function nativeComputer(value: unknown): Computer {
-  const v = object(value),
+  if (!wireSchemas.getApiV1DeviceViewsByKindByIdResponse.validateEndpoint(value))
+    throw new Error('Invalid MDM contract')
+
+  const v = value,
     id = text(v['id'], 256),
-    p = closed(v['platform'], ['state', 'values'])
-  const state = choice(p['state'], ['known', 'unknown', 'conflict']),
-    platforms = list(p['values'], (v) => choice(v, ['windows', 'macos']))
+    p = v['platform']
+  const state = p['state'],
+    platforms = list(p['values'], (v) => v)
   if (
     (state === 'known' && platforms.length !== 1) ||
     (state === 'unknown' && platforms.length !== 0) ||
@@ -25,22 +18,17 @@ export function nativeComputer(value: unknown): Computer {
   )
     throw new Error('Invalid platform')
   let name: string | null = null
-  if (v['displayName'] !== undefined) {
-    const f = object(v['displayName']),
-      s = object(f['state'])
-    if (s['kind'] === 'known') {
-      const scalar = closed(s['value'], ['kind', 'value'])
-      if (scalar['kind'] === 'string') name = text(scalar['value'], 256)
-    }
-  }
+  const display = v.displayName?.state
+  if (display?.kind === 'known' && display.value.kind === 'string')
+    name = text(display.value.value, 256)
   const channels = list(v['channels'], (raw) => {
-    const c = object(raw)
+    const c = raw
     return {
       id: uuid(c['registrationId']),
       generation: count(c['generation']),
-      status: choice(c['status'], ['active', 'revoked', 'superseded']),
+      status: c['status'],
       at: nullable(c['lastCommunicationReceivedAt'], count),
-      channel: choice(c['channel'], ['agent', 'mdm']),
+      channel: c['channel'],
     }
   })
   const agent = channels.find((c) => c.channel === 'agent' && c.status === 'active'),
@@ -51,23 +39,22 @@ export function nativeComputer(value: unknown): Computer {
     platform: (state === 'known' ? platforms[0] : 'unknown') as Platform,
     registration: agent?.id ?? null,
     generation: agent?.generation ?? null,
-    status: choice(v['status'], [
-      'active',
-      'pending',
-      'revoked',
-      'superseded',
-      'registered',
-      'cancelled',
-      'expired',
-    ]),
+    status: v['status'],
     lastObservedAt: times.length ? Math.max(...times) : null,
   }
 }
 export function nativeAccountLabel(value: unknown) {
-  const account = value === null ? null : object(value)
+  if (
+    value !== null &&
+    !wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateAccessAccount(
+      value,
+    )
+  )
+    throw new Error('Invalid account')
+  const account = value
   let accountLabel = 'unknown'
   if (account) {
-    const platform = choice(account['platform'], ['windows', 'macos'])
+    const platform = account.platform
     accountLabel = platform === 'windows' ? text(account['sid']) : uuid(account['generatedUid'])
   }
   return accountLabel
@@ -83,8 +70,14 @@ export function nativeBindingObservations(value: unknown): Observation[] {
     })
   }
   if (value !== null) {
-    const e = object(value),
-      effect = choice(e['state'], ['applied', 'unbound', 'unknown', 'failed', 'whfb_retired'])
+    if (
+      !wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateAccessEffect(
+        value,
+      )
+    )
+      throw new Error('Invalid effect')
+    const e = value,
+      effect = e.state
     observations.push({
       key: 'effect',
       state: effect === 'unknown' ? 'unknown' : effect === 'failed' ? 'failed' : 'known',
@@ -94,15 +87,15 @@ export function nativeBindingObservations(value: unknown): Observation[] {
       observations.push({
         key: 'role',
         state: 'known',
-        value: choice(e['role'], ['standard', 'administrator']),
+        value: e['role'],
       })
       if (e['mac'] !== null) {
-        const m = object(e['mac'])
+        const m = e.mac
         native('secureToken', m['secureToken'])
         native('volumeOwner', m['volumeOwner'])
         native('filevaultUnlock', m['filevaultUnlock'])
         if (m['platformSso'] !== null) {
-          const p = object(m['platformSso'])
+          const p = m.platformSso
           native('configuration', p['configuration'])
           native('deviceRegistered', p['deviceRegistered'])
           native('userRegistered', p['userRegistered'])
@@ -113,20 +106,15 @@ export function nativeBindingObservations(value: unknown): Observation[] {
       observations.push({
         key: 'reason',
         state: 'failed',
-        value: choice(e['reason'], [
-          'unsupported',
-          'account_changed',
-          'name_conflict',
-          'recovery_account_protected',
-          'needs_user',
-          'native_failure',
-        ]),
+        value: e['reason'],
       })
   }
   return observations
 }
 export function nativeBinding(value: unknown, device: string): Binding {
-  const v = object(value)
+  if (!wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateRoot(value))
+    throw new Error('Invalid binding')
+  const v = value
   same(v['device'], device)
   const accountLabel = nativeAccountLabel(v['account'])
   const observations = nativeBindingObservations(v['effect'])
@@ -142,33 +130,23 @@ export function nativeBinding(value: unknown, device: string): Binding {
     targetRevision: count(v['revision']),
     receivedRevision: nullable(v['receivedRevision'], count),
     appliedRevision: nullable(v['appliedRevision'], count),
-    serverState: choice(v['serverState'], ['pending', 'active', 'revoked']),
+    serverState: v['serverState'],
     observations,
   }
 }
 export function nativeMaterial(value: unknown, device: string): Material {
-  const v = closed(value, [
-      'id',
-      'binding',
-      'version',
-      'current',
-      'validity',
-      'escrowed',
-      'operation',
-      'createdAt',
-      'invalidatedAt',
-    ]),
-    b = closed(v['binding'], ['device', 'registration', 'generation', 'subject']),
-    s = object(b['subject'])
+  if (
+    !wireSchemas.postApiV1DevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionSecretResponse.validateMaterial(
+      value,
+    )
+  )
+    throw new Error('Invalid MDM contract')
+
+  const v = value,
+    b = v['binding'],
+    s = b.subject
   same(b['device'], device)
-  const kind = choice(s['kind'], [
-    'rss_login',
-    'bitlocker',
-    'local_administrator',
-    'filevault',
-    'recovery_lock',
-    'lock_pin',
-  ])
+  const kind = s['kind']
   return {
     id: uuid(v['id']),
     device,
@@ -181,20 +159,16 @@ export function nativeMaterial(value: unknown, device: string): Material {
       bindingGeneration: kind === 'rss_login' ? count(s['bindingGeneration']) : null,
       sid: kind === 'rss_login' ? text(s['sid']) : null,
     },
-    escrowed: bool(v['escrowed']),
-    validity: choice(v['validity'], ['unverified', 'verified', 'unknown', 'superseded', 'revoked']),
-    current: bool(v['current']),
+    escrowed: v['escrowed'],
+    validity: v['validity'],
+    current: v['current'],
   }
 }
 export function application(value: unknown): Application {
-  const v = closed(value, [
-    'id',
-    'revision',
-    'enabled',
-    'callback',
-    'targetFingerprint',
-    'capabilities',
-  ])
+  if (!wireSchemas.getApiV1DeviceAccessEnterpriseConfigurationResponse.validateRelyingParty(value))
+    throw new Error('Invalid MDM contract')
+
+  const v = value
   const callback = text(v['callback'])
   const u = new URL(callback)
   if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash)
@@ -202,8 +176,8 @@ export function application(value: unknown): Application {
   return {
     id: text(v['id'], 64),
     revision: count(v['revision']),
-    enabled: bool(v['enabled']),
+    enabled: v['enabled'],
     callback,
-    capabilities: list(v['capabilities'], (x) => choice(x, ['native_key', 'password'])),
+    capabilities: list(v['capabilities'], (x) => x),
   }
 }

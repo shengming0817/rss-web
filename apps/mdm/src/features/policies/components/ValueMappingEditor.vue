@@ -4,8 +4,7 @@ import { controlEvent } from '../control-event'
 
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ValueMapping } from '../../../contracts/collection/generated/ResourceWrite'
-import type { FieldView } from '../../../contracts/collection/generated/FieldView'
+import type { ValueMapping, FieldView } from '@rss/api/mdm-types'
 import { identityMapping } from '../collection-draft'
 const props = withDefaults(
   defineProps<{ valueType?: FieldView['valueType'] | undefined; depth?: number }>(),

@@ -1,31 +1,18 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 /** Current Agent wire DTOs. Browser reads public trust; the backend alone signs it. */
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  closed,
-  count,
-  enumeration,
-  identifier,
-  nullable,
-  record,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, identifier, nullable, unique, uuid } from '../../../services/decode'
 import { base64url } from '../../enrollment/clients/packages'
 import { attachment } from '../../enrollment/clients/binary'
 import { origin, positive, sha256 } from './value'
 
 export const connectionsFilename = 'rss-agent-connections.json'
 export function connectionConfiguration(value: unknown, tenant: string, service?: string) {
-  const v = closed(value, [
-    'wireVersion',
-    'serviceId',
-    'tenantId',
-    'revision',
-    'preferredOrigin',
-    'origins',
-    'keyId',
-  ])
+  if (!wireSchemas.getApiV1AgentConnectionsResponse.validateConfiguration(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const serviceId = uuid(v['serviceId']),
     origins = unique(array(v['origins'], origin), (v) => v)
   const keyId = identifier(v['keyId']),
@@ -54,7 +41,10 @@ export function connectionConfiguration(value: unknown, tenant: string, service?
   }
 }
 export function signedConnections(value: unknown, tenant: string, service?: string) {
-  const v = closed(value, ['configuration', 'signature'])
+  if (!wireSchemas.postApiV1AgentConnectionsPublishResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     configuration: connectionConfiguration(v['configuration'], tenant, service),
     signature: base64url(v['signature'], 64),
@@ -62,25 +52,23 @@ export function signedConnections(value: unknown, tenant: string, service?: stri
 }
 export type SignedConnections = ReturnType<typeof signedConnections>
 function draft(value: unknown, tenant: string, service?: string) {
-  const v = closed(value, ['configuration'])
+  if (!wireSchemas.putApiV1AgentConnectionsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return { configuration: connectionConfiguration(v['configuration'], tenant, service) }
 }
 export function connectionState(value: unknown, tenant: string, service?: string) {
-  const v = closed(value, [
-    'serviceId',
-    'draft',
-    'published',
-    'verificationKeys',
-    'deployments',
-    'convergence',
-    'retirementBlockers',
-  ])
+  if (!wireSchemas.getApiV1AgentConnectionsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const serviceId = uuid(v['serviceId']),
-    c = closed(v['convergence'], ['targetRevision', 'activeDevices', 'confirmedDevices']),
-    b = closed(v['retirementBlockers'], ['configurations', 'installations'])
+    c = v['convergence'],
+    b = v['retirementBlockers']
   if (service && serviceId !== service) throw new Error('Wrong host service')
   const verificationKeys = Object.fromEntries(
-    Object.entries(record(v['verificationKeys'])).map(([k, v]) => {
+    Object.entries(v['verificationKeys']).map(([k, v]) => {
       if (!/^[A-Za-z0-9._-]{1,128}$/.test(k)) throw new Error('Invalid connection key')
       return [k, base64url(v, 32)]
     }),
@@ -93,13 +81,7 @@ export function connectionState(value: unknown, tenant: string, service?: string
     verificationKeys,
     deployments: unique(
       array(v['deployments'], (value) => {
-        const d = closed(value, [
-          'origin',
-          'hostId',
-          'revision',
-          'observedAt',
-          'configurationRevision',
-        ])
+        const d = value
         return {
           origin: origin(d['origin']),
           hostId: uuid(d['hostId']),
@@ -131,29 +113,27 @@ export function connectionState(value: unknown, tenant: string, service?: string
 }
 export type ConnectionState = ReturnType<typeof connectionState>
 export function connectionReceipt(value: unknown, tenant: string, service?: string) {
+  if (!wireSchemas.getApiV1AgentConnectionOperationsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
   return nullable(value, (value) => {
-    const v = record(value),
-      action = enumeration(v['action'], ['saved', 'published'] as const)
+    const v = value,
+      action = v['action']
     if (action === 'saved') {
-      closed(v, ['action', 'draft'])
       return { action, draft: draft(v['draft'], tenant, service) }
     }
-    closed(v, ['action', 'configuration'])
+
     return { action, configuration: signedConnections(v['configuration'], tenant, service) }
   })
 }
 export function connectionObservation(value: unknown) {
+  if (!wireSchemas.getApiV1AgentConnectionsDevicesByDeviceObservationResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
   return nullable(value, (value) => {
-    const v = closed(value, [
-      'targetRevision',
-      'registration',
-      'generation',
-      'acknowledgement',
-      'receivedAt',
-      'failure',
-    ])
+    const v = value
     const acknowledgement = nullable(v['acknowledgement'], (value) => {
-      const a = closed(value, ['operationId', 'revision', 'digest', 'origin'])
+      const a = value
       return {
         operationId: uuid(a['operationId']),
         revision: positive(a['revision']),
@@ -171,19 +151,13 @@ export function connectionObservation(value: unknown) {
       acknowledgement,
       receivedAt,
       failure: nullable(v['failure'], (value) => {
-        const f = closed(value, ['report', 'origin', 'receivedAt']),
-          r = closed(f['report'], ['operationId', 'revision', 'reason'])
+        const f = value,
+          r = f['report']
         return {
           report: {
             operationId: uuid(r['operationId']),
             revision: positive(r['revision']),
-            reason: enumeration(r['reason'], [
-              'signature_rejected',
-              'identity_mismatch',
-              'revision_rejected',
-              'persistence_failed',
-              'network_unavailable',
-            ] as const),
+            reason: r['reason'],
           },
           origin: origin(f['origin']),
           receivedAt: count(f['receivedAt']),
@@ -193,20 +167,16 @@ export function connectionObservation(value: unknown) {
   })
 }
 export function connectionDevices(value: unknown, revision: number) {
-  const v = closed(value, ['targetRevision', 'items', 'next'])
+  if (!wireSchemas.getApiV1AgentConnectionsDevicesResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (positive(v['targetRevision']) !== revision) throw new Error('Wrong convergence target')
   return {
     targetRevision: revision,
     items: unique(
       array(v['items'], (value) => {
-        const d = closed(value, [
-          'device',
-          'registration',
-          'generation',
-          'installedRevision',
-          'origin',
-          'receivedAt',
-        ])
+        const d = value
         return {
           device: identifier(d['device']),
           registration: uuid(d['registration']),
@@ -224,29 +194,24 @@ export function connectionDevices(value: unknown, revision: number) {
 export function createConnectionsClient(transport: HttpTransport, tenant: string, service: string) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connections',
-        successStatus: 200,
-        decode: (v) => connectionState(v, tenant, service),
-      }),
+      api.getApiV1AgentConnections(transport, {}, (v) => connectionState(v, tenant, service)),
     save: (
       operationId: string,
       expectedRevision: number,
       preferredOrigin: string,
       origins: string[],
     ) =>
-      transport.request({
-        method: 'PUT',
-        path: '/api/v1/agent-connections',
-        body: {
-          operationId: uuid(operationId),
-          expectedRevision: count(expectedRevision),
-          preferredOrigin: origin(preferredOrigin),
-          origins: origins.map(origin),
+      api.putApiV1AgentConnections(
+        transport,
+        {
+          body: {
+            operationId: uuid(operationId),
+            expectedRevision: count(expectedRevision),
+            preferredOrigin: origin(preferredOrigin),
+            origins: origins.map(origin),
+          },
         },
-        successStatus: 200,
-        decode: (v) => {
+        (v) => {
           const d = draft(v, tenant, service)
           if (
             d.configuration.revision !== expectedRevision + 1 ||
@@ -256,59 +221,43 @@ export function createConnectionsClient(transport: HttpTransport, tenant: string
             throw new Error('Wrong saved connection receipt')
           return d
         },
-      }),
+      ),
     publish: (operationId: string, expectedRevision: number) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/agent-connections/publish',
-        body: { operationId: uuid(operationId), expectedRevision: positive(expectedRevision) },
-        successStatus: 200,
-        decode: (v) => {
+      api.postApiV1AgentConnectionsPublish(
+        transport,
+        { body: { operationId: uuid(operationId), expectedRevision: positive(expectedRevision) } },
+        (v) => {
           const c = signedConnections(v, tenant, service)
           if (c.configuration.revision !== expectedRevision)
             throw new Error('Wrong published connection receipt')
           return c
         },
-      }),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connection-operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: (v) => connectionReceipt(v, tenant, service),
-      }),
+      api.getApiV1AgentConnectionOperationsById(transport, { pathParams: { id: uuid(id) } }, (v) =>
+        connectionReceipt(v, tenant, service),
+      ),
     devices: (revision: number, after?: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connections/devices',
-        query: { revision: positive(revision), ...(after ? { after: uuid(after) } : {}) },
-        successStatus: 200,
-        decode: (v) => connectionDevices(v, revision),
-      }),
+      api.getApiV1AgentConnectionsDevices(
+        transport,
+        { query: { revision: positive(revision), ...(after ? { after: uuid(after) } : {}) } },
+        (v) => connectionDevices(v, revision),
+      ),
     observation: (device: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connections/devices/{device}/observation',
-        pathParams: { device: identifier(device) },
-        successStatus: 200,
-        decode: connectionObservation,
-      }),
+      api.getApiV1AgentConnectionsDevicesByDeviceObservation(
+        transport,
+        { pathParams: { device: identifier(device) } },
+        connectionObservation,
+      ),
     download: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/agent-connections/configuration',
-        responseType: 'arraybuffer',
-        successStatus: 200,
-        decode: (v) => {
-          const file = attachment(v, 'application/json', connectionsFilename, 65_536)
-          signedConnections(
-            JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
-            tenant,
-            service,
-          )
-          return file
-        },
+      api.getApiV1AgentConnectionsConfiguration(transport, {}, (v) => {
+        const file = attachment(v, 'application/json', connectionsFilename, 65_536)
+        signedConnections(
+          JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
+          tenant,
+          service,
+        )
+        return file
       }),
   }
 }

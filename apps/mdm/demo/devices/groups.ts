@@ -20,7 +20,13 @@ type DeviceObject = ReturnType<typeof deviceObject>
 type Decision = ReturnType<typeof evaluate> & {
   device: string
   origin: 'rule' | 'manual'
-  provenance: { field: string; source: string; snapshot_id: string; observed_at: number }[]
+  provenance: {
+    context: string
+    field: string
+    source: string
+    snapshot_id: string
+    observed_at: number
+  }[]
 }
 interface GroupState {
   read: GroupRead
@@ -40,6 +46,16 @@ interface Job {
   inputs: string
   objects: DeviceObject[]
   assetContext: GroupRead['group']['assetContext']
+}
+function responseCriteria(value: GroupRead['criteria']): unknown {
+  if (!value) return null
+  const visit = (node: GroupCondition['criteria']): unknown =>
+    node.kind === 'predicate'
+      ? { ...node, value: node.value ?? null, values: node.values ?? null }
+      : node.kind === 'and' || node.kind === 'or'
+        ? { ...node, children: node.children.map(visit) }
+        : node
+  return { ...value, criteria: visit(value.criteria) }
 }
 export function createGroupDemo(
   devices: () => Map<string, DemoDevice>,
@@ -255,10 +271,12 @@ export function createGroupDemo(
         device: key,
         origin: state.read.group.kind === 'dynamic' ? 'rule' : 'manual',
         ...evaluation,
+        explanations: evaluation.explanations.map((e) => ({ ...e, context: 'device' })),
         provenance: contexts
           .flatMap((c) => Object.values(c.fields))
           .flatMap((f) =>
             f.sources.map((s) => ({
+              context: 'device',
               field: f.field,
               source: s.evidence.source,
               snapshot_id: s.evidence.snapshotId,
@@ -424,8 +442,7 @@ export function createGroupDemo(
             : job.status === 'superseded'
               ? 'superseded'
               : null,
-        failureDetail:
-          job.status === 'failed' ? { reason: 'stale_plan', device: null, stage: 'execute' } : null,
+        failureDetail: null,
         replacementTask: null,
       })
     }
@@ -491,7 +508,9 @@ export function createGroupDemo(
       if (state)
         for (const job of jobs.values())
           if (job.group === id && job.publish) advance(job, state, scenario)
-      return state && !state.read.group.deleted ? ok(state.read) : error('group_not_found', 404)
+      return state && !state.read.group.deleted
+        ? ok({ ...state.read, criteria: responseCriteria(state.read.criteria) })
+        : error('group_not_found', 404)
     }
     if (method !== 'POST') return
     const op = operation(request.body)

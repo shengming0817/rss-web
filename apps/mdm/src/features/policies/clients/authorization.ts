@@ -1,53 +1,38 @@
-import { boolean, closed, enumeration, record } from '../../../services/decode'
+import * as wireSchemas from '@rss/api/mdm-schemas'
 
 /** Current server decisions; neither a read nor this summary grants a later write. */
 export function authorization(value: unknown) {
-  const state = enumeration(record(value)['state'], [
-    'authorized',
-    'blocked',
-    'not_applicable',
-  ] as const)
+  if (!wireSchemas.getApiV1OperationsResponse.validateAuthorization(value))
+    throw new Error('Invalid contract value')
+
+  const state = value['state']
   if (state === 'blocked') {
-    const v = closed(value, ['state', 'reason'])
+    const v = value
     return {
       state,
-      reason: enumeration(v['reason'], [
-        'lifecycle_blocked',
-        'registration_changed',
-        'input_mismatch',
-        'source_invalid',
-      ] as const),
+      reason: v['reason'],
     }
   }
-  closed(value, ['state'])
+
   return { state }
 }
 export function reauthorizationEligibility(value: unknown) {
-  const state = enumeration(record(value)['state'], [
-    'available',
-    'unavailable',
-    'not_applicable',
-  ] as const)
+  if (!wireSchemas.getApiV1OperationsResponse.validateReauthorization(value))
+    throw new Error('Invalid contract value')
+
+  const state = value['state']
   if (state === 'available') {
-    const v = closed(value, ['state', 'confirmationRequired'])
-    return { state, confirmationRequired: boolean(v['confirmationRequired']) }
+    const v = value
+    return { state, confirmationRequired: v['confirmationRequired'] }
   }
   if (state === 'unavailable') {
-    const v = closed(value, ['state', 'reason'])
+    const v = value
     return {
       state,
-      reason: enumeration(v['reason'], [
-        'permission_denied',
-        'terminal',
-        'already_received',
-        'expired',
-        'registration_changed',
-        'input_mismatch',
-        'unsupported',
-      ] as const),
+      reason: v['reason'],
     }
   }
-  closed(value, ['state'])
+
   return { state }
 }
 export type Authorization = ReturnType<typeof authorization>

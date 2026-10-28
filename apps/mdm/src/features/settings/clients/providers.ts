@@ -1,67 +1,46 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import { windowParameters, windowPage } from '@rss/api/mdm-query'
 import { operationReceipt, positive } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  boolean,
-  closed,
-  count,
-  enumeration,
-  nullable,
-  uuid,
-  string,
-} from '../../../services/decode'
-function receiptHead(value: unknown, keys: string[]) {
-  return closed(value, ['operationId', 'revision', ...keys])
-}
+import { count, enumeration, nullable, uuid, string } from '../../../services/decode'
+
 export function storageReceipt(value: unknown) {
-  const v = receiptHead(value, [
-    'profile',
-    'state',
-    'failureReason',
-    'selected',
-    'revoked',
-    'qualifiedAt',
-    'expiresAt',
-  ])
+  if (!wireSchemas.postApiV1StorageConnectionsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     revision: positive(v['revision']),
     profile: string(v['profile']),
     state: enumeration(v['state'], ['pending', 'qualified', 'rejected'] as const),
     failureReason: nullable(v['failureReason'], string),
-    selected: boolean(v['selected']),
-    revoked: boolean(v['revoked']),
+    revoked: v['revoked'],
     qualifiedAt: nullable(v['qualifiedAt'], count),
     expiresAt: nullable(v['expiresAt'], count),
   }
 }
 export function mailReceipt(value: unknown) {
-  const v = receiptHead(value, ['profile', 'state', 'attemptedAt', 'acceptedAt', 'failureReason'])
+  if (!wireSchemas.postApiV1SmtpResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     revision: positive(v['revision']),
     profile: string(v['profile']),
-    state: enumeration(v['state'], [
-      'pending',
-      'submitting',
-      'accepted',
-      'failed',
-      'unknown',
-    ] as const),
+    state: v['state'],
     attemptedAt: nullable(v['attemptedAt'], count),
     acceptedAt: nullable(v['acceptedAt'], count),
     failureReason: nullable(v['failureReason'], string),
   }
 }
 export function wnsReceipt(value: unknown) {
-  const v = receiptHead(value, [
-    'packageFamilyName',
-    'qualifiedAt',
-    'attemptedAt',
-    'failureReason',
-    'selected',
-    'revoked',
-  ])
+  if (!wireSchemas.getApiV1WindowsWnsResponse.validateReceipt(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     revision: positive(v['revision']),
@@ -69,15 +48,18 @@ export function wnsReceipt(value: unknown) {
     qualifiedAt: nullable(v['qualifiedAt'], count),
     attemptedAt: nullable(v['attemptedAt'], count),
     failureReason: nullable(v['failureReason'], string),
-    selected: boolean(v['selected']),
-    revoked: boolean(v['revoked']),
+    selected: v['selected'],
+    revoked: v['revoked'],
   }
 }
 export function wnsOperation(value: unknown) {
-  const v = closed(value, ['kind', 'receipt']),
-    kind = enumeration(v['kind'], ['material', 'revocation'] as const)
+  if (!wireSchemas.postApiV1WindowsWnsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    kind = v['kind']
   if (kind === 'material') return { kind, receipt: wnsReceipt(v['receipt']) }
-  const r = receiptHead(v['receipt'], ['materialRevision'])
+  const r = v['receipt']
   return {
     kind,
     receipt: {
@@ -89,19 +71,32 @@ export function wnsOperation(value: unknown) {
 }
 function providerState<T extends { revision: number }>(
   value: unknown,
-  selection: 'desiredRevision' | 'selectedRevision',
+  selection: 'activeRevision' | 'desiredRevision' | 'selectedRevision',
   decode: (v: unknown) => T,
 ) {
-  const keys = ['revision', selection, 'versionCount', 'current', 'latest']
-  if (selection === 'desiredRevision') keys.push('applied')
-  const v = closed(value, keys)
+  if (
+    !wireSchemas.getApiV1StorageConnectionsResponse.validateRoot(value) &&
+    !wireSchemas.getApiV1SmtpResponse.validateRoot(value) &&
+    !wireSchemas.getApiV1WindowsWnsResponse.validateRoot(value)
+  )
+    throw new Error('Invalid contract value')
+
+  const v = value
+  if (!(selection in v)) throw new Error('Wrong provider selection')
   return {
     revision: count(v['revision']),
-    activeRevision: nullable(v[selection], positive),
+    activeRevision: nullable(
+      'activeRevision' in v
+        ? v.activeRevision
+        : 'desiredRevision' in v
+          ? v.desiredRevision
+          : v.selectedRevision,
+      positive,
+    ),
     versionCount: count(v['versionCount']),
     current: nullable(v['current'], decode),
     latest: nullable(v['latest'], decode),
-    applied: selection === 'desiredRevision' ? nullable(v['applied'], decode) : null,
+    applied: 'applied' in v ? nullable(v.applied, decode) : null,
   }
 }
 export type StorageInput = {
@@ -134,137 +129,92 @@ export type WnsInput = {
 export function createStorageClient(transport: HttpTransport) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/storage/connections',
-        successStatus: 200,
-        decode: (v) => providerState(v, 'desiredRevision', storageReceipt),
-      }),
+      api.getApiV1StorageConnections(transport, {}, (v) =>
+        providerState(v, 'activeRevision', storageReceipt),
+      ),
     history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/storage/connections/versions',
-        query: windowParameters({ limit: 64, ...query }),
-        successStatus: 200,
-        decode: (v) => windowPage(v, storageReceipt),
-      }),
+      api.getApiV1StorageConnectionsVersions(
+        transport,
+        { query: windowParameters({ limit: 64, ...query }) },
+        (v) => windowPage(v, storageReceipt),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/storage/connections/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, storageReceipt),
-      }),
+      api.getApiV1StorageConnectionsOperationsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        operationReceipt(id, storageReceipt),
+      ),
     save: (id: string, body: StorageInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/storage/connections',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 202,
-        decode(v) {
+      api.postApiV1StorageConnections(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        (v) => {
           const r = storageReceipt(v)
           if (r.operationId !== id) throw new Error('Wrong operation')
           return r
         },
-      }),
+      ),
   }
 }
 export function createMailClient(transport: HttpTransport) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/smtp',
-        successStatus: 200,
-        decode: (v) => providerState(v, 'selectedRevision', mailReceipt),
-      }),
+      api.getApiV1Smtp(transport, {}, (v) => providerState(v, 'selectedRevision', mailReceipt)),
     history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/smtp/versions',
-        query: windowParameters({ limit: 64, ...query }),
-        successStatus: 200,
-        decode: (v) => windowPage(v, mailReceipt),
-      }),
+      api.getApiV1SmtpVersions(
+        transport,
+        { query: windowParameters({ limit: 64, ...query }) },
+        (v) => windowPage(v, mailReceipt),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/smtp/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, mailReceipt),
-      }),
+      api.getApiV1SmtpOperationsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        operationReceipt(id, mailReceipt),
+      ),
     save: (id: string, body: MailInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/smtp',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 202,
-        decode(v) {
-          const r = mailReceipt(v)
-          if (r.operationId !== id) throw new Error('Wrong operation')
-          return r
-        },
+      api.postApiV1Smtp(transport, { headers: { 'Idempotency-Key': uuid(id) }, body }, (v) => {
+        const r = mailReceipt(v)
+        if (r.operationId !== id) throw new Error('Wrong operation')
+        return r
       }),
   }
 }
 export function createWnsClient(transport: HttpTransport) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/windows/wns',
-        successStatus: 200,
-        decode: (v) => providerState(v, 'desiredRevision', wnsReceipt),
-      }),
+      api.getApiV1WindowsWns(transport, {}, (v) => providerState(v, 'desiredRevision', wnsReceipt)),
     history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/windows/wns/versions',
-        query: windowParameters({ limit: 64, ...query }),
-        successStatus: 200,
-        decode: (v) => windowPage(v, wnsReceipt),
-      }),
+      api.getApiV1WindowsWnsVersions(
+        transport,
+        { query: windowParameters({ limit: 64, ...query }) },
+        (v) => windowPage(v, wnsReceipt),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/windows/wns/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode(value) {
-          const result = wnsOperation(value)
-          if (result.receipt.operationId !== id) throw new Error('Wrong original operation')
-          return result
-        },
+      api.getApiV1WindowsWnsOperationsById(transport, { pathParams: { id: uuid(id) } }, (value) => {
+        const result = wnsOperation(value)
+        if (result.receipt.operationId !== id) throw new Error('Wrong original operation')
+        return result
       }),
     save: (id: string, body: WnsInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/windows/wns',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 202,
-        decode(value) {
+      api.postApiV1WindowsWns(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        (value) => {
           const result = wnsOperation(value)
           if (result.receipt.operationId !== id) throw new Error('Wrong original operation')
           return result
         },
-      }),
+      ),
     revoke: (id: string, body: { expectedRevision: number; materialRevision: number }) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/windows/wns/revoke',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 202,
-        decode(value) {
+      api.postApiV1WindowsWnsRevoke(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        (value) => {
           const result = wnsOperation(value)
           if (result.receipt.operationId !== id) throw new Error('Wrong original operation')
           return result
         },
-      }),
+      ),
   }
 }

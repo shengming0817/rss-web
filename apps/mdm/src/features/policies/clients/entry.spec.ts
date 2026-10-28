@@ -72,7 +72,19 @@ const member = {
   revision: 1,
   state: 'accepted',
   decision: { state: 'accepted', operations: [reference] },
-  operations: [{ reference, state: 'queued', allowedActions: [] }],
+  operations: [
+    {
+      reference,
+      state: {
+        delivery: { kind: 'queued' },
+        execution: 'not_started',
+        cancellation: 'none',
+        deadline: 100,
+        startedAt: null,
+      },
+      allowedActions: [],
+    },
+  ],
 }
 const links = {
   policy: id,

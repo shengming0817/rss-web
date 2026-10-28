@@ -76,9 +76,15 @@ it('decodes unknown explanations and snake-case provenance without claiming memb
     sourceObjects: [],
     origin: 'rule',
     decision: 'unknown',
-    explanations: [{ path: [0], outcome: 'deleted' }],
+    explanations: [{ context: 'device', path: [0], outcome: 'deleted' }],
     provenance: [
-      { field: 'custom.is_loaner', source: 'manual', snapshot_id: task, observed_at: 0 },
+      {
+        context: 'device',
+        field: 'custom.is_loaner',
+        source: 'manual',
+        snapshot_id: task,
+        observed_at: 0,
+      },
     ],
   }
   const response = {
@@ -143,7 +149,7 @@ it.each([null, id])(
 it('uses current job kinds for definitions, recompute and preview while keeping metadata synchronous', async () => {
   const request = vi.fn(async (o: RequestOptions<unknown>) =>
     o.decode(
-      o.successStatus === 202
+      (o.body as { input?: { action: string } })?.input?.action !== 'edit'
         ? {
             task,
             kind: o.path.endsWith('/previews')
@@ -181,7 +187,12 @@ it('uses current job kinds for definitions, recompute and preview while keeping 
       },
     },
   })
-  expect(request.mock.calls.map(([o]) => o.successStatus)).toEqual([200, 202, 202, 202])
+  expect(request.mock.calls.map(([o]) => o.successStatus)).toEqual([
+    [200, 202],
+    [200, 202],
+    [200, 202],
+    [200, 202],
+  ])
   expect(request.mock.calls[2]?.[0]).toMatchObject({
     path: '/api/v1/groups/{id}/previews',
     body: { expectedRevision: 2, input: {} },
@@ -189,7 +200,7 @@ it('uses current job kinds for definitions, recompute and preview while keeping 
 })
 
 it('accepts safe failed-task details and rejects unknown diagnostic fields', async () => {
-  let detail: unknown = { reason: 'stale_plan', device: 'device-01', stage: 'execute' }
+  let detail: unknown = { reason: 'group_input_pending' }
   let replacement: unknown = null
   let extra: Record<string, unknown> = {}
   const client = createGroupsClient({

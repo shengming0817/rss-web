@@ -1,16 +1,16 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 /** Safe formal FactView, shared by audit queries and path-bound device timelines. */
 import type { HttpTransport } from '@rss/api/mdm'
 import {
+  enumeration,
   array,
-  boolean,
-  closed,
   count,
   identifier,
   integer,
   nullable,
   uuid,
   string,
-  enumeration,
 } from '../../../services/decode'
 const cursor = (v: unknown) =>
   nullable(v, (value) => {
@@ -32,23 +32,8 @@ export interface AuditQuery {
   cursor?: string
 }
 export function auditQuery(query: AuditQuery): AuditQuery {
-  closed(
-    query,
-    [],
-    [
-      'targetId',
-      'targetType',
-      'device',
-      'operationId',
-      'actor',
-      'action',
-      'outcome',
-      'from',
-      'until',
-      'limit',
-      'cursor',
-    ],
-  )
+  if (!wireSchemas.getApiV1AuditEventsQuery.validateRoot(query))
+    throw new Error('Invalid audit query')
   for (const text of [query.targetId, query.targetType, query.device, query.actor, query.action])
     if (text !== undefined) identifier(text)
   if (query.operationId !== undefined) uuid(query.operationId)
@@ -64,33 +49,13 @@ export function auditQuery(query: AuditQuery): AuditQuery {
   return { ...query }
 }
 export function timelinePage(value: unknown) {
-  const v = closed(value, ['items', 'nextCursor', 'coverage']),
-    coverage = closed(v['coverage'], ['complete'])
+  if (!wireSchemas.getApiV1AuditEventsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    coverage = v['coverage']
   const items = array(v['items'], (x) => {
-    const e = closed(x, [
-      'source',
-      'eventId',
-      'position',
-      'recordedAt',
-      'observedAt',
-      'actorKind',
-      'actor',
-      'action',
-      'target',
-      'deviceId',
-      'operationId',
-      'relatedOperationIds',
-      'requestId',
-      'registrationId',
-      'registrationRequestId',
-      'instanceId',
-      'auditOutcome',
-      'phase',
-      'executionState',
-      'effect',
-      'requestWriteOutcome',
-      'supported',
-    ])
+    const e = x
     return {
       source: identifier(e['source']),
       eventId: identifier(e['eventId']),
@@ -101,7 +66,7 @@ export function timelinePage(value: unknown) {
       actor: identifier(e['actor']),
       action: identifier(e['action']),
       target: (() => {
-        const target = closed(e['target'], ['type', 'id'])
+        const target = e['target']
         return { type: identifier(target['type']), id: identifier(target['id']) }
       })(),
       deviceId: nullable(e['deviceId'], identifier),
@@ -116,14 +81,14 @@ export function timelinePage(value: unknown) {
       executionState: nullable(e['executionState'], identifier),
       effect: identifier(e['effect']),
       requestWriteOutcome: nullable(e['requestWriteOutcome'], identifier),
-      supported: boolean(e['supported']),
+      supported: e['supported'],
     }
   })
   return {
     items,
     nextCursor: cursor(v['nextCursor']),
     coverage: {
-      complete: boolean(coverage['complete']),
+      complete: coverage['complete'],
     },
   }
 }
@@ -133,12 +98,10 @@ export type AuditFact = AuditPage['items'][number]
 export function createAuditClient(transport: HttpTransport) {
   return {
     list: (filter: AuditQuery = {}) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/audit-events',
-        query: { ...auditQuery(filter), limit: filter.limit ?? 20 },
-        successStatus: 200,
-        decode: timelinePage,
-      }),
+      api.getApiV1AuditEvents(
+        transport,
+        { query: { ...auditQuery(filter), limit: filter.limit ?? 20 } },
+        timelinePage,
+      ),
   }
 }

@@ -14,6 +14,5 @@ specs/
 .claude/
 **/*.md
 
-# Reproducible upstream schema and generated binding output
-apps/mdm/src/contracts/collection/Collection.json
-apps/mdm/src/contracts/collection/generated/
+# Reproducible validators are emitted by the fixed generator.
+packages/api/src/generated/mdm/*.js

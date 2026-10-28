@@ -73,8 +73,8 @@ async function fixture(
       : ['authorization_read', 'authorization_write'])
   const transport = {
     async request(o: Options) {
-      const { decode, ...request } = o
-      calls.push({ ...structuredClone(request), decode })
+      const { decode, contract, ...request } = o
+      calls.push({ ...structuredClone(request), decode, ...(contract ? { contract } : {}) })
       const next = () => {
         if (o.method === 'GET' && o.path.endsWith('/authorization'))
           return {

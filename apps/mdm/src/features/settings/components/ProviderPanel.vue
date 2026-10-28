@@ -224,6 +224,7 @@ useSettingsFacts(() => {
     variant="tonal"
     >{{ t('settings.secretCleared') }}</VAlert
   >
+  <p v-if="kind === 'storage'">{{ t('settings.storageBindingHint') }}</p>
   <p v-if="failure" role="alert">{{ t('devices.' + failure) }}</p>
   <VBtn :disabled="busy || !canRead" @click="load">{{ t('settings.reload') }}</VBtn
   ><OperationNotice
@@ -239,6 +240,8 @@ useSettingsFacts(() => {
     v-if="directory"
     :revision="directory.revision"
     :desired-revision="directory.activeRevision"
+    :active-revision="kind === 'storage' ? directory.activeRevision : undefined"
+    :applied-revision="kind === 'storage' ? (directory.applied?.revision ?? null) : undefined"
     :versions="currentVersions"
   /><VCard v-if="directory" class="console-panel" tag="section" variant="outlined"
     ><p>{{ t('settings.historyCount', { count: directory.versionCount }) }}</p>
@@ -247,6 +250,8 @@ useSettingsFacts(() => {
       v-if="history.length"
       :revision="directory.revision"
       :desired-revision="directory.activeRevision"
+      :active-revision="kind === 'storage' ? directory.activeRevision : undefined"
+      :applied-revision="kind === 'storage' ? (directory.applied?.revision ?? null) : undefined"
       :versions="history"
     /><VBtn v-if="historyCursor" :disabled="busy" @click="loadHistory(historyCursor)">{{
       t('settings.next')

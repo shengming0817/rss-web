@@ -1,102 +1,16 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { Operation } from '../../../services/useOperation'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  digest,
-  enumeration,
-  identifier,
-  nullable,
-  record,
-  string,
-} from '../../../services/decode'
+import { boolean, count, digest, enumeration, identifier, nullable } from '../../../services/decode'
 
-function publicArtifact(value: unknown) {
-  const v = closed(value, ['key', 'url', 'length', 'sha256'])
-  return {
-    key: identifier(v['key']),
-    url: string(v['url']),
-    length: count(v['length']),
-    sha256: digest(v['sha256']),
-  }
-}
-function caskInstall(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['App', 'Pkg'] as const)
-  const v = closed(value, kind === 'App' ? ['kind', 'path'] : ['kind', 'path', 'receipts'])
-  return kind === 'App'
-    ? { kind, path: identifier(v['path']) }
-    : { kind, path: identifier(v['path']), receipts: array(v['receipts'], identifier) }
-}
-function brewPayload(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['Cask', 'Formula'] as const)
-  const v = closed(
-    value,
-    kind === 'Cask'
-      ? ['kind', 'artifacts', 'install']
-      : ['kind', 'source', 'executable', 'bottles', 'dependencies'],
-  )
-  if (kind === 'Cask')
-    return {
-      kind,
-      artifacts: array(v['artifacts'], (value) => {
-        const a = closed(value, ['architecture', 'artifact'])
-        return {
-          architecture: enumeration(a['architecture'], ['aarch64', 'x86_64'] as const),
-          artifact: publicArtifact(a['artifact']),
-        }
-      }),
-      install: caskInstall(v['install']),
-    }
-  return {
-    kind,
-    source: publicArtifact(v['source']),
-    executable: identifier(v['executable']),
-    bottles: array(v['bottles'], (value) => {
-      const b = closed(value, ['tag', 'rootUrl', 'artifact'])
-      return {
-        tag: identifier(b['tag']),
-        rootUrl: string(b['rootUrl']),
-        artifact: publicArtifact(b['artifact']),
-      }
-    }),
-    dependencies: array(v['dependencies'], (value) => {
-      const d = closed(value, ['tap', 'name', 'snapshot', 'artifacts'])
-      return {
-        tap: identifier(d['tap']),
-        name: identifier(d['name']),
-        snapshot: digest(d['snapshot']),
-        artifacts: array(d['artifacts'], publicArtifact),
-      }
-    }),
-  }
-}
 export function exportDocument(value: unknown) {
-  const kind = enumeration(record(value)['kind'], ['Winget', 'Brew'] as const)
-  const v = closed(value, kind === 'Winget' ? ['kind', 'manifest'] : ['kind', 'recipe'])
-  if (kind === 'Winget') return { kind, manifest: jsonValue(v['manifest'], 8 * 1024 * 1024) }
-  const r = closed(v['recipe'], [
-    'package',
-    'version',
-    'name',
-    'description',
-    'homepage',
-    'payload',
-  ])
-  return {
-    kind,
-    recipe: {
-      package: identifier(r['package']),
-      version: identifier(r['version']),
-      name: identifier(r['name']),
-      description: string(r['description']),
-      homepage: string(r['homepage']),
-      payload: brewPayload(r['payload']),
-    },
-  }
+  if (!wireSchemas.postApiV1SoftwarePublicationsResponse.validateExportDocument(value))
+    throw new Error('Invalid export document')
+  if (value.kind === 'Winget') jsonValue(value.manifest, 8 * 1024 * 1024)
+  return value
 }
 export type ExportDocument = ReturnType<typeof exportDocument>
 export type Publish = {
@@ -110,25 +24,10 @@ export type Publish = {
 }
 export type PublicationChange = Publish | { action: 'recover' | 'retry' | 'withdraw' }
 export function decodePublication(value: unknown, expectedId?: string) {
-  const v = closed(
-    value,
-    [
-      'id',
-      'revision',
-      'target',
-      'resource',
-      'version',
-      'publication',
-      'contentDigest',
-      'manifestDigest',
-      'targetDigest',
-      'attempt',
-      'outcome',
-      'withdrawn',
-      'withdrawal',
-    ],
-    ['document'],
-  )
+  if (!wireSchemas.postApiV1SoftwarePublicationsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   const id = identifier(v['id'])
   if (expectedId !== undefined && id !== expectedId) throw new Error('Wrong publication')
   const attempt = count(v['attempt'])
@@ -145,7 +44,7 @@ export function decodePublication(value: unknown, expectedId?: string) {
     targetDigest: digest(v['targetDigest']),
     attempt,
     outcome: enumeration(v['outcome'], ['pending', 'unknown', 'not_applied', 'published'] as const),
-    withdrawn: boolean(v['withdrawn']),
+    withdrawn: v['withdrawn'],
     withdrawal: nullable(v['withdrawal'], (v) =>
       enumeration(v, [
         'withdrawn',
@@ -160,7 +59,12 @@ export function decodePublication(value: unknown, expectedId?: string) {
 }
 export type Publication = ReturnType<typeof decodePublication>
 export function publicationTarget(value: unknown) {
-  const v = closed(value, ['id', 'digest', 'protocol'])
+  if (
+    !wireSchemas.getApiV1SoftwarePublicationTargetsResponse.validateProjection_PublicTarget(value)
+  )
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     id: identifier(v['id']),
     digest: digest(v['digest']),
@@ -210,47 +114,30 @@ export function createPublicationClient(transport: HttpTransport) {
     targets: <F extends keyof typeof targetFields = keyof typeof targetFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/publication-targets',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode: (value) => projectedPage(value, targetFields, query.fields),
-      }),
+      api.getApiV1SoftwarePublicationTargets(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (value) => projectedPage(value, targetFields, query.fields),
+      ),
     list: <F extends keyof typeof publicationFields = keyof typeof publicationFields>(
       query: PublicationQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/publications',
-        query: queryParameters({ limit: 20, ...query }),
-        successStatus: 200,
-        decode: (value) => projectedPage(value, publicationFields, query.fields),
-      }),
+      api.getApiV1SoftwarePublications(
+        transport,
+        { query: queryParameters({ limit: 20, ...query }) },
+        (value) => projectedPage(value, publicationFields, query.fields),
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/software/publications/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode: (v) => decodePublication(v, id),
-      }),
+      api.getApiV1SoftwarePublicationsById(transport, { pathParams: { id } }, (v) =>
+        decodePublication(v, id),
+      ),
     publish: (body: Operation<Publish>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/software/publications',
-        body,
-        successStatus: 202,
-        decode: (v) => decodePublication(v, body.operationId),
-      }),
+      api.postApiV1SoftwarePublications(transport, { body }, (v) =>
+        decodePublication(v, body.operationId),
+      ),
     change: (id: string, body: Operation<Exclude<PublicationChange, Publish>>) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/software/publications/{id}',
-        pathParams: { id },
-        body,
-        successStatus: 200,
-        decode: (v) => decodePublication(v, id),
-      }),
+      api.postApiV1SoftwarePublicationsById(transport, { pathParams: { id }, body }, (v) =>
+        decodePublication(v, id),
+      ),
   }
 }

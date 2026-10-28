@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build": "vue-tsc --noEmit && vite build",
+    "dev": "vite --configLoader runner --host 127.0.0.1",
+    "build": "vue-tsc --noEmit && vite build --configLoader runner",
     "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --maxWorkers=2",
-    "demo": "vite --mode demo --host 127.0.0.1"
+    "demo": "vite --configLoader runner --mode demo --host 127.0.0.1"
   },
   "dependencies": {
     "@noble/hashes": "catalog:",

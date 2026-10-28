@@ -4,10 +4,7 @@ import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions, NoContentRequest } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
 const transportOwner = vi.hoisted(() => ({ value: undefined as HttpTransport | undefined }))
-vi.mock('@rss/api/mdm', async (original) => ({
-  ...(await original<object>()),
-  createMdmTransport: () => transportOwner.value,
-}))
+vi.mock('@rss/api/mdm-demo', () => ({ createMdmDemoTransport: () => transportOwner.value }))
 import { createDemo } from '../demo/bootstrap'
 import { createScenario, TENANT } from '../demo/scenario'
 import { createAutomationDemo } from '../demo/policies/state'
@@ -59,7 +56,14 @@ async function start(platform = false) {
         o.body,
         Object.fromEntries(Object.entries(o.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v])),
       )
-      if (reply.status !== o.successStatus) throw decodeMdmError(reply.status, reply.body)
+      if (
+        !(
+          (Array.isArray(o.successStatus)
+            ? o.successStatus
+            : [o.successStatus]) as readonly number[]
+        ).includes(reply.status)
+      )
+        throw decodeMdmError(reply.status, reply.body)
       return 'decode' in o ? o.decode(reply.body) : undefined
     },
   } as HttpTransport

@@ -527,7 +527,7 @@ try {
   await page.getByRole('button', { name: /custom.browser.state/ }).click()
   await page.getByRole('img', { name: /离散状态/ }).waitFor()
   assert.equal(await page.locator('.telemetry-line').count(), 0)
-  await page.getByRole('link', { name: '采集健康', exact: true }).click()
+  await page.getByRole('tab', { name: '采集健康', exact: true }).click()
   await chooseOption(page, page.getByLabel('指标', { exact: true }), 'custom.browser.gauge')
   await page.getByText('历史已投递', { exact: true }).waitFor()
   await page.getByText(/容量丢弃/).waitFor()

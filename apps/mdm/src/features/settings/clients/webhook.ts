@@ -1,32 +1,13 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import { operationReceipt, positive, sha256 } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  boolean,
-  closed,
-  count,
-  nullable,
-  record,
-  string,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, nullable, string, unique, uuid } from '../../../services/decode'
 export function webhookMaterial(value: unknown) {
-  const v = closed(value, [
-    'operationId',
-    'reference',
-    'revision',
-    'configurationSha256',
-    'keyDigest',
-    'challenge',
-    'confirmed',
-    'revoked',
-    'endpoint',
-    'networkReference',
-    'attemptedAt',
-    'confirmedAt',
-    'failureReason',
-  ])
+  if (!wireSchemas.postApiV1WebhooksMaterialsResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     reference: string(v['reference']),
@@ -34,8 +15,8 @@ export function webhookMaterial(value: unknown) {
     configurationSha256: sha256(v['configurationSha256']),
     keyDigest: sha256(v['keyDigest']),
     challenge: string(v['challenge']),
-    confirmed: boolean(v['confirmed']),
-    revoked: boolean(v['revoked']),
+    confirmed: v['confirmed'],
+    revoked: v['revoked'],
     endpoint: nullable(v['endpoint'], string),
     networkReference: nullable(v['networkReference'], string),
     attemptedAt: nullable(v['attemptedAt'], count),
@@ -44,7 +25,10 @@ export function webhookMaterial(value: unknown) {
   }
 }
 export function webhookHead(value: unknown) {
-  const v = closed(value, ['reference', 'revision', 'activeRevision', 'retiringRevision'])
+  if (!wireSchemas.getApiV1WebhooksMaterialsResponse.validateHead(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     reference: string(v['reference']),
     revision: positive(v['revision']),
@@ -53,14 +37,11 @@ export function webhookHead(value: unknown) {
   }
 }
 export function webhookOperation(value: unknown) {
-  if ('configurationSha256' in record(value)) return webhookMaterial(value)
-  const v = closed(value, [
-    'operationId',
-    'reference',
-    'revision',
-    'activeRevision',
-    'retiringRevision',
-  ])
+  if (!wireSchemas.getApiV1WebhooksMaterialsOperationsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  if ('configurationSha256' in value) return webhookMaterial(value)
+  const v = value
   return {
     operationId: uuid(v['operationId']),
     ...webhookHead({
@@ -87,45 +68,32 @@ export interface WebhookTransition {
 export function createWebhookMaterials(transport: HttpTransport) {
   return {
     read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/materials',
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['configurationSha256', 'keys']),
-            keys = closed(v['keys'], ['heads', 'materials'])
-          return {
-            configurationSha256: sha256(v['configurationSha256']),
-            heads: unique(array(keys['heads'], webhookHead), (v) => v.reference),
-            materials: array(keys['materials'], webhookMaterial),
-          }
-        },
+      api.getApiV1WebhooksMaterials(transport, {}, (value) => {
+        const v = value,
+          keys = v['keys']
+        return {
+          configurationSha256: sha256(v['configurationSha256']),
+          heads: unique(array(keys['heads'], webhookHead), (v) => v.reference),
+          materials: array(keys['materials'], webhookMaterial),
+        }
       }),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/materials/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode: operationReceipt(id, webhookOperation),
-      }),
+      api.getApiV1WebhooksMaterialsOperationsById(
+        transport,
+        { pathParams: { id: uuid(id) } },
+        operationReceipt(id, webhookOperation),
+      ),
     prepare: (id: string, body: WebhookInput) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/webhooks/materials',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 200,
-        decode: operationReceipt(id, webhookMaterial),
-      }),
+      api.postApiV1WebhooksMaterials(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        operationReceipt(id, webhookMaterial),
+      ),
     transition: (id: string, body: WebhookTransition) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/webhooks/materials/transitions',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 200,
-        decode: operationReceipt(id, webhookOperation),
-      }),
+      api.postApiV1WebhooksMaterialsTransitions(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
+        operationReceipt(id, webhookOperation),
+      ),
   }
 }

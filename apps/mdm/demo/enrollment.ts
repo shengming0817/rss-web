@@ -458,7 +458,12 @@ export function createOnboardingDemo(
             }
           } else if (op.kind === 'sync') {
             organizations.get(op.organization)!.ade!.syncedAt = Math.floor(Date.now() / 1000)
-            op.result = { pageDevices: 0, moreToFollow: false, registration: 'not_implied' }
+            op.result = {
+              pageDevices: 0,
+              moreToFollow: false,
+              changed: false,
+              registration: 'not_implied',
+            }
           } else {
             op.state = 'unknown'
             op.result = { reason: 'external_outcome_unknown' }

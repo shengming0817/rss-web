@@ -138,7 +138,7 @@ function load(cursor?: string) {
       ? comparison('authorization.reason', '==', selection.authorizationReason)
       : undefined,
   )
-  const query = directoryQuery.request(cursor, { filter })
+  const query = directoryQuery.parameters(cursor, { filter })
   activeFilter.value = query.filter
   commandDetails.value = {}
   if (!cursor) {

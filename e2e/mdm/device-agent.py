@@ -146,7 +146,7 @@ def claim_policy(fixture, policy):
     while True:
         response = call(agent['origin'], agent['ca'], '/api/v1/agent/runtime/tasks/claim',
                         dict(wireVersion=1, operationId=str(uuid.uuid4()), profiles=['posix_sh'],
-                             environment=dict(edition=None, tools={}, nativeEngines={'macos.hardware':1,'macos.applications':1}),
+                             environment=dict(edition=None, tools={}, nativeEngines={}),
                              executionContext=agent['executionContext']), agent['cert'], agent['key'])
         if response['task'] is not None:
             payload = response['task']['payload']

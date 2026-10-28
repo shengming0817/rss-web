@@ -1,3 +1,4 @@
+import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   windowParameters,
@@ -5,7 +6,7 @@ import {
   type DirectoryQuery,
 } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import { boolean, closed } from '../../../services/decode'
+
 import {
   type entryFields,
   page,
@@ -19,155 +20,124 @@ import {
   type GenerateInput,
   type Reference,
 } from './model'
-const base = '/api/v1/certificate-archive'
 export function createCertificateArchiveClient(transport: HttpTransport, tenant: string) {
-  function write<T>(
-    path: string,
-    operation: string,
-    body: unknown,
-    decode: (v: unknown) => T,
-    method: 'POST' | 'PUT' = 'POST',
-  ) {
-    return transport.request({
-      method,
-      path: base + path,
-      headers: { 'Idempotency-Key': operation },
-      body,
-      successStatus: 200,
-      decode,
-    })
-  }
   return {
-    state: () =>
-      transport.request({
-        method: 'GET',
-        path: base + '/vault',
-        successStatus: 200,
-        decode: vault,
-      }),
+    state: () => api.getApiV1CertificateArchiveVault(transport, {}, vault),
     initialize: (operation: string, password: string) =>
-      write('/vault/initialize', operation, { password }, (v) => receipt(v, operation)),
+      api.postApiV1CertificateArchiveVaultInitialize(
+        transport,
+        { headers: { 'Idempotency-Key': operation }, body: { password } },
+        (v) => receipt(v, operation),
+      ),
     unlock: (password: string) =>
-      transport.request({
-        method: 'POST',
-        path: base + '/vault/unlock',
-        body: { password },
-        successStatus: 200,
-        decode: vault,
-      }),
+      api.postApiV1CertificateArchiveVaultUnlock(transport, { body: { password } }, vault),
     lock: () =>
-      transport.request({
-        method: 'POST',
-        path: base + '/vault/lock',
-        successStatus: 200,
-        decode: (v) => {
-          const value = closed(v, ['locked'])
-          if (!boolean(value['locked'])) throw new Error('Invalid lock result')
-          return true
-        },
+      api.postApiV1CertificateArchiveVaultLock(transport, {}, (v) => {
+        const value = v
+        if (!value['locked']) throw new Error('Invalid lock result')
+        return true
       }),
     password: (operation: string, oldPassword: string, newPassword: string) =>
-      write('/vault/password', operation, { oldPassword, newPassword }, (v) =>
-        receipt(v, operation),
+      api.postApiV1CertificateArchiveVaultPassword(
+        transport,
+        { headers: { 'Idempotency-Key': operation }, body: { oldPassword, newPassword } },
+        (v) => receipt(v, operation),
       ),
     list: <F extends keyof typeof entryFields = keyof typeof entryFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: base + '/entries',
-        query: queryParameters({ limit: 50, ...query }),
-        successStatus: 200,
-        decode: (v) => page(v, tenant, query.fields),
-      }),
+      api.getApiV1CertificateArchiveEntries(
+        transport,
+        { query: queryParameters({ limit: 50, ...query }) },
+        (v) => page(v, tenant, query.fields),
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: base + '/entries/{entry}',
-        pathParams: { entry: id },
-        successStatus: 200,
-        decode: (value) => {
+      api.getApiV1CertificateArchiveEntriesByEntry(
+        transport,
+        { pathParams: { entry: id } },
+        (value) => {
           const row = entry(value)
           if (row.id !== id) throw new Error('Wrong entry')
           return row
         },
-      }),
+      ),
     history: (entry: string, query: { limit?: number; cursor?: string } = {}) =>
-      transport.request({
-        method: 'GET',
-        path: base + '/entries/{entry}/versions',
-        pathParams: { entry },
-        query: windowParameters({ limit: 50, ...query }),
-        successStatus: 200,
-        decode: (v) => {
+      api.getApiV1CertificateArchiveEntriesByEntryVersions(
+        transport,
+        { pathParams: { entry }, query: windowParameters({ limit: 50, ...query }) },
+        (v) => {
           const result = windowPage(v, version)
           if (result.items.some((r) => r.entryId !== entry)) throw new Error('Wrong history')
           return result
         },
-      }),
+      ),
     import: (operation: string, input: ImportInput) =>
-      write('/import', operation, input, (v) => {
-        const r = receipt(v, operation)
-        if (
-          r.action !== 'certificate_archive_import' ||
-          r.entryId !== input.entryId ||
-          r.version !== input.expectedRevision + 1
-        )
-          throw new Error('Wrong import receipt')
-        return r
-      }),
+      api.postApiV1CertificateArchiveImport(
+        transport,
+        { headers: { 'Idempotency-Key': operation }, body: input },
+        (v) => {
+          const r = receipt(v, operation)
+          if (
+            r.action !== 'certificate_archive_import' ||
+            r.entryId !== input.entryId ||
+            r.version !== input.expectedRevision + 1
+          )
+            throw new Error('Wrong import receipt')
+          return r
+        },
+      ),
     saveMetadata: (
       operation: string,
       entry: string,
       expectedRevision: number,
       metadata: ImportInput['metadata'],
     ) =>
-      write(
-        '/entries/' + encodeURIComponent(entry) + '/metadata',
-        operation,
-        { expectedRevision, metadata },
+      api.putApiV1CertificateArchiveEntriesByEntryMetadata(
+        transport,
+        {
+          pathParams: { entry },
+          headers: { 'Idempotency-Key': operation },
+          body: { expectedRevision, metadata },
+        },
         (v) => receipt(v, operation),
-        'PUT',
       ),
     generate: (operation: string, input: GenerateInput) =>
-      write('/generate', operation, input, (v) => {
-        const r = receipt(v, operation)
-        if (
-          r.action !== 'certificate_archive_generate' ||
-          r.entryId !== input.entryId ||
-          r.version !== input.expectedRevision + 1
-        )
-          throw new Error('Wrong generation receipt')
-        return r
-      }),
+      api.postApiV1CertificateArchiveGenerate(
+        transport,
+        { headers: { 'Idempotency-Key': operation }, body: input },
+        (v) => {
+          const r = receipt(v, operation)
+          if (
+            r.action !== 'certificate_archive_generate' ||
+            r.entryId !== input.entryId ||
+            r.version !== input.expectedRevision + 1
+          )
+            throw new Error('Wrong generation receipt')
+          return r
+        },
+      ),
     export: (operation: string, id: Reference) =>
-      write('/export', operation, id, (v) => exported(v, id)),
+      api.postApiV1CertificateArchiveExport(
+        transport,
+        { headers: { 'Idempotency-Key': operation }, body: id },
+        (v) => exported(v, id),
+      ),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: base + '/operations/{operation}',
-        pathParams: { operation: id },
-        successStatus: 200,
-        decode: (v) => receipt(v, id),
-      }),
-    settings: () =>
-      transport.request({
-        method: 'GET',
-        path: base + '/settings',
-        successStatus: 200,
-        decode: settings,
-      }),
+      api.getApiV1CertificateArchiveOperationsByOperation(
+        transport,
+        { pathParams: { operation: id } },
+        (v) => receipt(v, id),
+      ),
+    settings: () => api.getApiV1CertificateArchiveSettings(transport, {}, settings),
     saveSettings: (
       operation: string,
       expectedRevision: number,
       value: { reminderDays: number; categories: string[] },
     ) =>
-      write(
-        '/settings',
-        operation,
-        { expectedRevision, value },
+      api.putApiV1CertificateArchiveSettings(
+        transport,
+        { headers: { 'Idempotency-Key': operation }, body: { expectedRevision, value } },
         (v) => receipt(v, operation),
-        'PUT',
       ),
     manage: (
       operation: string,
@@ -176,12 +146,14 @@ export function createCertificateArchiveClient(transport: HttpTransport, tenant:
       retired: boolean,
       recommendedVersion: number | null,
     ) =>
-      write(
-        '/entries/' + encodeURIComponent(entryId),
-        operation,
-        { expectedRevision, retired, recommendedVersion },
+      api.putApiV1CertificateArchiveEntriesByEntry(
+        transport,
+        {
+          pathParams: { entry: entryId },
+          headers: { 'Idempotency-Key': operation },
+          body: { expectedRevision, retired, recommendedVersion },
+        },
         (v) => receipt(v, operation),
-        'PUT',
       ),
   }
 }

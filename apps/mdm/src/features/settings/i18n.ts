@@ -269,6 +269,9 @@ export const settingsZh = {
   custody: '保管方',
   savedVersion: '保存版本',
   requestedVersion: '请求应用版本',
+  activeConnectionVersion: '活动连接版本',
+  storageBindingHint:
+    '资格通过不代表已经切换存储。变更存储目标需由部署管理员执行维护迁移；活动连接与实际观察分别显示。',
   runtimeVersion: '实际观察版本',
   observedAt: '观察时间',
   receivedAt: '服务器接收时间',
@@ -675,6 +678,9 @@ export const settingsEn = {
   custody: 'Custodian',
   savedVersion: 'Saved revision',
   requestedVersion: 'Requested revision',
+  activeConnectionVersion: 'Active connection revision',
+  storageBindingHint:
+    'Qualification does not switch storage. A deployment administrator must run maintenance to change the storage target; the active connection and runtime observation are shown separately.',
   runtimeVersion: 'Observed revision',
   observedAt: 'Observed at',
   receivedAt: 'Received at',

@@ -17,7 +17,7 @@ it('uses the shared executor and explicit operation header; rejects the wrong re
   const client = createCertificateArchiveClient({ request } as unknown as HttpTransport, id)
   await client.initialize(id, 'transient password')
   expect(requests[0]!.path).toBe('/api/v1/certificate-archive/vault/initialize')
-  expect(requests[0]!.headers).toEqual({ 'Idempotency-Key': id })
+  expect(requests[0]!.headers).toMatchObject({ 'Idempotency-Key': id })
   await expect(
     client.initialize('22222222-2222-4222-8222-222222222222', 'transient password'),
   ).rejects.toThrow()

@@ -4,7 +4,7 @@ import { controlEvent } from '../../policies/control-event'
 
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { FieldDefinition } from '../../../contracts/collection/generated/FieldWrite'
+import type { FieldDefinition } from '@rss/api/mdm-types'
 const props = withDefaults(defineProps<{ depth?: number }>(), { depth: 0 })
 const model = defineModel<FieldDefinition['valueType']>({ required: true })
 const { t } = useI18n(),

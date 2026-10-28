@@ -1,5 +1,5 @@
 /** Exact serde struct field order and BTreeMap order, not a general JSON canonicalization scheme.
- * Source: rss-mdm cbc47ebb resource/{agent_collection,native_collection,telemetry}.rs
+ * Source: pinned rss-mdm resource/{agent_collection,native_collection,telemetry}.rs
  */
 import type {
   Applicability,
@@ -8,13 +8,13 @@ import type {
   AgentCollectionDefinition,
   NativeQuery,
   TelemetryProfile,
-} from './generated/ResourceWrite'
+} from '@rss/api/mdm-types'
 import { checked } from './check'
 import {
   validateNativeCollectionDefinition,
   validateAgentCollectionDefinition,
   validateTelemetryProfile,
-} from './generated/validators'
+} from '@rss/api/mdm-validators'
 const encoder = new TextEncoder()
 const compare = (a: string, b: string) => {
   const x = encoder.encode(a),

@@ -1,0 +1,2 @@
+/* Generated. Do not edit. */
+var d=e,p=e;function e(t,{instancePath:s="",parentData:n,parentDataProperty:i,rootData:l=t,dynamicAnchors:c={}}={}){let a=null,o=0,r=e.evaluated;return r.dynamicProps&&(r.props=void 0),r.dynamicItems&&(r.items=void 0),typeof t!="string"?(e.errors=[{instancePath:s,schemaPath:"#/type",keyword:"type",params:{type:"string"}}],!1):t!=="no-store"?(e.errors=[{instancePath:s,schemaPath:"#/const",keyword:"const",params:{allowedValue:"no-store"}}],!1):(e.errors=a,o===0)}e.evaluated={dynamicProps:!1,dynamicItems:!1};export{p as default,d as validate};

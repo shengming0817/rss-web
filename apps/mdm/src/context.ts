@@ -1,7 +1,6 @@
 import type { createRegistrationChannels } from './services/registrationChannelState'
 import { inject, type InjectionKey } from 'vue'
 import type { IdentitySession } from '@rss/auth'
-import type { HttpTransport } from '@rss/api/mdm'
 import type { createWorkspaceClient } from './services/workspace'
 import type { createPolicyClients } from './features/policies/client'
 import type { createDeviceClients } from './features/devices/client'
@@ -14,7 +13,6 @@ import type { createOnboardingClients } from './features/enrollment/client'
 export interface MdmRuntime {
   registrationChannels: ReturnType<typeof createRegistrationChannels>
   session: IdentitySession
-  transport: HttpTransport
   onboarding: ReturnType<typeof createOnboardingClients>
   workspace: ReturnType<typeof createWorkspaceClient>
   devices: ReturnType<typeof createDeviceClients>

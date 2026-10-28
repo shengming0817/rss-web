@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { validateEndpointResponse } from './mdm-contract-response'
 import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 import type {
   BinaryResponse,
@@ -16,7 +17,7 @@ import {
   timeoutError,
 } from './wire-error'
 
-const PATH_PARAM = /\{([A-Za-z][A-Za-z0-9]*)\}/g
+const PATH_PARAM = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
 const ENCODED_PATH_SEPARATOR = /%(?:2e|2f|5c)/i
 const URL_BASE = 'https://rss-web.invalid'
 
@@ -37,7 +38,10 @@ function hasUnsafeUrlCharacter(value: string): boolean {
   })
 }
 
-function resolvePath(path: string, params: Readonly<Record<string, string | number>> = {}): string {
+export function resolvePath(
+  path: string,
+  params: Readonly<Record<string, string | number>> = {},
+): string {
   if (
     (!path.startsWith('/api/') && path !== '/readyz') ||
     path.startsWith('//') ||
@@ -108,17 +112,34 @@ export async function execute<T>(
   if (options.signal?.aborted === true) throw abortedError()
   try {
     const response = await instance.request(requestConfig(options, defaultTimeoutMs))
-    const readinessUnavailable =
-      options.method === 'GET' &&
-      options.path === '/readyz' &&
-      Array.isArray(options.successStatus) &&
-      options.successStatus.length === 2 &&
-      options.successStatus[0] === 200 &&
-      options.successStatus[1] === 503 &&
-      response.status === 503
-    if (response.status >= 400 && !readinessUnavailable) {
+    if (options.contract) {
+      let data: unknown = response.data
+      if (
+        response.status >= 400 &&
+        response.status !== 413 &&
+        options.responseType === 'arraybuffer' &&
+        data instanceof ArrayBuffer
+      ) {
+        if (data.byteLength > 16_384) throw protocolError(response.status)
+        try {
+          data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data))
+        } catch {
+          throw protocolError(response.status)
+        }
+      }
+      try {
+        validateEndpointResponse(options.contract, response.status, data, response.headers)
+      } catch {
+        throw protocolError(response.status)
+      }
+    }
+    const accepted = Array.isArray(options.successStatus)
+      ? options.successStatus.includes(response.status)
+      : response.status === options.successStatus
+    if (response.status >= 400 && !accepted) {
       let value: unknown = response.data
-      if ('responseType' in options && options.responseType === 'arraybuffer') {
+      if (response.status === 413 && options.responseType === 'arraybuffer') value = undefined
+      else if ('responseType' in options && options.responseType === 'arraybuffer') {
         if (!(value instanceof ArrayBuffer) || value.byteLength > 16_384)
           throw protocolError(response.status)
         try {
@@ -132,9 +153,6 @@ export async function execute<T>(
       )?.[1]
       throw decodeError(response.status, value, retryAfter)
     }
-    const accepted = Array.isArray(options.successStatus)
-      ? options.successStatus.includes(response.status)
-      : response.status === options.successStatus
     if (!accepted) throw protocolError(response.status)
     if (options.successStatus === 204 || options.responseType === 'empty') return undefined
     try {

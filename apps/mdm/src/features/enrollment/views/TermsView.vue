@@ -2,6 +2,7 @@
 import { VAlert, VBtn } from 'vuetify/components'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { postApiV1WindowsEntraTermsFinish } from '@rss/api/mdm-operations'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import MdmPage from '../../../ui/MdmPage.vue'
@@ -58,7 +59,10 @@ refresh()
       <p>{{ t('onboarding.termsVersion') }}: {{ context.termsVersion }}</p>
       <p v-if="context.mode === 'azureadjoin'">{{ t('onboarding.joinTerms') }}</p>
       <pre class="enrollment-terms">{{ context.termsText }}</pre>
-      <form method="post" action="/api/v1/windows/entra/terms/finish">
+      <form
+        :method="postApiV1WindowsEntraTermsFinish.method"
+        :action="postApiV1WindowsEntraTermsFinish.url({})"
+      >
         <input type="hidden" name="csrfToken" :value="context.csrfToken" />
         <v-btn name="accepted" value="true" type="submit">{{ t('onboarding.accept') }}</v-btn>
         <v-btn v-if="context.canDecline" name="accepted" value="false" type="submit">

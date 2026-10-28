@@ -1,11 +1,11 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import { queryParameters, windowPage, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
   boolean,
-  closed,
   count,
-  enumeration,
   identifier,
   nullable,
   string,
@@ -13,24 +13,14 @@ import {
   uuid,
 } from '../../../services/decode'
 import { jsonObject } from '../../../services/json'
-export const eventTypes = [
-  'device.registered',
-  'device.retired',
-  'policy.execution.terminal',
-  'compliance.status.changed',
-] as const
 export function webhookSettings(value: unknown) {
-  const v = closed(value, [
-      'presentation',
-      'endpoint',
-      'eventTypes',
-      'selection',
-      'keyReference',
-      'networkReference',
-    ]),
-    selection = closed(v['selection'], ['kind'], ['ids'])
-  const kind = enumeration(selection['kind'], ['allDevices', 'devices', 'groups'] as const)
-  closed(selection, kind === 'allDevices' ? ['kind'] : ['kind', 'ids'])
+  if (!wireSchemas.getApiV1WebhooksSubscriptionsResponse.validateSettings(value))
+    throw new Error('Invalid contract value')
+
+  const v = value,
+    selection = v['selection']
+  const kind = selection['kind']
+
   const endpoint = string(v['endpoint']),
     url = new URL(endpoint)
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash)
@@ -41,7 +31,7 @@ export function webhookSettings(value: unknown) {
     presentation,
     endpoint,
     eventTypes: unique(
-      array(v['eventTypes'], (x) => enumeration(x, eventTypes)),
+      array(v['eventTypes'], (x) => x),
       (x) => x,
     ),
     selection:
@@ -56,32 +46,25 @@ export function webhookSettings(value: unknown) {
   }
 }
 export function subscription(value: unknown) {
-  const v = closed(value, ['id', 'revision', 'targetVersion', 'enabled', 'deleted', 'settings'])
+  if (!wireSchemas.getApiV1WebhooksSubscriptionsByIdResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     id: uuid(v['id']),
     revision: count(v['revision']),
     targetVersion: count(v['targetVersion']),
-    enabled: boolean(v['enabled']),
-    deleted: boolean(v['deleted']),
+    enabled: v['enabled'],
+    deleted: v['deleted'],
     settings: webhookSettings(v['settings']),
   }
 }
 export type Subscription = ReturnType<typeof subscription>
 export function delivery(value: unknown) {
-  const v = closed(value, [
-    'id',
-    'eventId',
-    'subscriptionId',
-    'targetVersion',
-    'sourceDelivery',
-    'recoveryVersion',
-    'redriveWindowOpen',
-    'attempts',
-    'status',
-    'transportObservation',
-    'failureStage',
-    'failureReason',
-  ])
+  if (!wireSchemas.getApiV1WebhooksDeliveriesResponse.validateProjection_Delivery(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   return {
     id: uuid(v['id']),
     eventId: uuid(v['eventId']),
@@ -134,127 +117,114 @@ const deliveryFields = {
 }
 export function createWebhookSubscriptions(transport: HttpTransport) {
   function page(value: unknown) {
+    if (!wireSchemas.getApiV1WebhooksDeliveriesResponse.validateRoot(value))
+      throw new Error('Invalid contract value')
+
     return windowPage(value, delivery)
   }
   return {
     types: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/event-types',
-        successStatus: 200,
-        decode(value) {
-          const v = closed(value, ['items', 'version'])
-          if (v['version'] !== 1) throw new Error('Invalid event contract')
-          return array(v['items'], (x) => enumeration(x, eventTypes))
-        },
+      api.getApiV1WebhooksEventTypes(transport, {}, (value) => {
+        const v = value
+        if (v['version'] !== 1) throw new Error('Invalid event contract')
+        return array(v['items'], (x) => x)
       }),
     list: <F extends keyof typeof subscriptionFields = keyof typeof subscriptionFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/subscriptions',
-        query: queryParameters({ limit: 32, ...query }),
-        successStatus: 200,
-        decode(value) {
+      api.getApiV1WebhooksSubscriptions(
+        transport,
+        { query: queryParameters({ limit: 32, ...query }) },
+        (value) => {
           return projectedPage(value, subscriptionFields, query.fields, ['id'])
         },
-      }),
+      ),
     read: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/subscriptions/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode(v) {
-          const s = subscription(v)
-          if (s.id !== id) throw new Error('Wrong subscription')
-          return s
-        },
+      api.getApiV1WebhooksSubscriptionsById(transport, { pathParams: { id } }, (v) => {
+        const s = subscription(v)
+        if (s.id !== id) throw new Error('Wrong subscription')
+        return s
       }),
     deliveries: <F extends keyof typeof deliveryFields = keyof typeof deliveryFields>(
       query: DirectoryQuery<F> = {},
     ) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/deliveries',
-        query: queryParameters({ limit: 32, ...query }),
-        successStatus: 200,
-        decode: (value) => projectedPage(value, deliveryFields, query.fields, ['id']),
-      }),
+      api.getApiV1WebhooksDeliveries(
+        transport,
+        { query: queryParameters({ limit: 32, ...query }) },
+        (value) => projectedPage(value, deliveryFields, query.fields, ['id']),
+      ),
     delivery: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/webhooks/deliveries/{id}',
-        pathParams: { id },
-        successStatus: 200,
-        decode(value) {
-          const v = page(value)
-          if (v.items.length !== 1 || v.items[0]?.id !== id) throw new Error('Wrong delivery')
-          return v.items[0]
-        },
+      api.getApiV1WebhooksDeliveriesById(transport, { pathParams: { id } }, (value) => {
+        const v = page(value)
+        if (v.items.length !== 1 || v.items[0]?.id !== id) throw new Error('Wrong delivery')
+        return v.items[0]
       }),
     async write(operationId: string, input: WebhookIntent): Promise<unknown> {
       if (input.kind === 'subscription')
-        return transport.request({
-          method: 'PUT',
-          path: '/api/v1/webhooks/subscriptions/{id}',
-          pathParams: { id: input.id },
-          body: { operationId, expectedRevision: input.revision, change: input.change },
-          successStatus: 200,
-          decode(v) {
+        return api.putApiV1WebhooksSubscriptionsById(
+          transport,
+          {
+            pathParams: { id: input.id },
+            body: { operationId, expectedRevision: input.revision, change: input.change },
+          },
+          (v) => {
             const s = subscription(v)
             if (s.id !== input.id || s.revision !== input.revision + 1)
               throw new Error('Wrong subscription receipt')
             return s
           },
-        })
+        )
       if (input.kind === 'test')
-        return transport.request({
-          method: 'POST',
-          path: '/api/v1/webhooks/subscriptions/{id}/test',
-          pathParams: { id: input.id },
-          body: { operationId, deviceId: input.deviceId },
-          successStatus: 200,
-          decode(value) {
-            const v = closed(value, ['id', 'eventId'])
+        return api.postApiV1WebhooksSubscriptionsByIdTest(
+          transport,
+          { pathParams: { id: input.id }, body: { operationId, deviceId: input.deviceId } },
+          (value) => {
+            const v = value
             return { id: uuid(v['id']), eventId: uuid(v['eventId']) }
           },
-        })
-      return transport.request({
-        method: 'POST',
-        path: `/api/v1/webhooks/deliveries/{id}/${input.kind}`,
-        pathParams: { id: input.id },
-        body: {
-          operationId,
-          ...(input.kind === 'redrive' ? { expectedVersion: input.expectedVersion } : {}),
-        },
-        successStatus: 200,
-        decode(value) {
-          if (input.kind === 'redrive') {
-            const v = closed(value, ['id', 'operationId', 'status', 'recoveryVersion'])
-            if (
-              v['id'] !== input.id ||
-              v['operationId'] !== operationId ||
-              v['status'] !== 'redriven'
-            )
-              throw new Error('Wrong redrive receipt')
-            return {
-              id: input.id,
-              operationId,
-              status: 'redriven',
-              recoveryVersion: count(v['recoveryVersion']),
-            }
-          }
-          const v = closed(value, ['id', 'eventId', 'sourceDelivery'])
-          if (v['sourceDelivery'] !== input.id) throw new Error('Wrong replay source')
+        )
+      const project = (value: unknown) => {
+        if (input.kind === 'redrive') {
+          if (!wireSchemas.postApiV1WebhooksDeliveriesByIdRedriveResponse.validateRoot(value))
+            throw new Error('Invalid redrive receipt')
+          const v = value
+          if (
+            v['id'] !== input.id ||
+            v['operationId'] !== operationId ||
+            v['status'] !== 'redriven'
+          )
+            throw new Error('Wrong redrive receipt')
           return {
-            id: uuid(v['id']),
-            eventId: uuid(v['eventId']),
-            sourceDelivery: uuid(v['sourceDelivery']),
+            id: input.id,
+            operationId,
+            status: 'redriven',
+            recoveryVersion: count(v['recoveryVersion']),
           }
-        },
-      })
+        }
+        if (!wireSchemas.postApiV1WebhooksDeliveriesByIdReplayResponse.validateRoot(value))
+          throw new Error('Invalid replay receipt')
+        const v = value
+        if (v['sourceDelivery'] !== input.id) throw new Error('Wrong replay source')
+        return {
+          id: uuid(v['id']),
+          eventId: uuid(v['eventId']),
+          sourceDelivery: uuid(v['sourceDelivery']),
+        }
+      }
+      return input.kind === 'redrive'
+        ? api.postApiV1WebhooksDeliveriesByIdRedrive(
+            transport,
+            {
+              pathParams: { id: input.id },
+              body: { operationId, expectedVersion: input.expectedVersion },
+            },
+            project,
+          )
+        : api.postApiV1WebhooksDeliveriesByIdReplay(
+            transport,
+            { pathParams: { id: input.id }, body: { operationId } },
+            project,
+          )
     },
   }
 }

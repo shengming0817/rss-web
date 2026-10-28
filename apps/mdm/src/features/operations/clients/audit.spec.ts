@@ -56,8 +56,8 @@ it('uses the same safe projection and exact formal query names for audit and dev
   expect(await createDirectoryClient(transport).history('device-01', query)).toEqual(page)
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/devices/{id}/timeline',
-    pathParams: { id: 'device-01' },
+    path: '/api/v1/devices/{device}/timeline',
+    pathParams: { device: 'device-01' },
     query,
   })
   expect(() =>

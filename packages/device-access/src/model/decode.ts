@@ -42,17 +42,28 @@ export function choice<T extends string>(v: unknown, values: readonly T[]): T {
   if (typeof v !== 'string' || !values.includes(v as T)) throw new Error('Invalid enum')
   return v as T
 }
-export function nullable<T>(v: unknown, decode: (v: unknown) => T): T | null {
-  return v === null ? null : decode(v)
+export function nullable<V, T>(v: V, decode: (v: Exclude<V, null>) => T): T | null
+export function nullable<T>(v: unknown, decode: (v: never) => T): T | null {
+  return v === null ? null : decode(v as never)
 }
-export function list<T>(v: unknown, decode: (v: unknown) => T, max = 1000): T[] {
+export function list<V, T>(v: readonly V[], decode: (v: V) => T, max?: number): T[]
+export function list<T>(v: unknown, decode: (v: unknown) => T, max?: number): T[]
+export function list<T>(v: unknown, decode: (v: never) => T, max = 1000): T[] {
   if (!Array.isArray(v) || v.length > max) throw new Error('Invalid list')
-  return v.map((x) => decode(x))
+  return v.map((x) => decode(x as never))
 }
-export function page<T>(value: unknown, decode: (v: unknown) => T) {
+export function page<V, T>(
+  value: { items: readonly V[]; nextCursor: string | null },
+  decode: (v: V) => T,
+): { items: T[]; nextCursor: string | null }
+export function page<T>(
+  value: unknown,
+  decode: (v: unknown) => T,
+): { items: T[]; nextCursor: string | null }
+export function page<T>(value: unknown, decode: (v: never) => T) {
   const v = closed(value, ['items', 'nextCursor'])
   return {
-    items: list(v['items'], decode),
+    items: list(v['items'], (item) => decode(item as never)),
     nextCursor: nullable(v['nextCursor'], (v) => text(v, 4096)),
   }
 }

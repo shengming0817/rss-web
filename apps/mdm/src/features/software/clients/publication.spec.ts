@@ -26,7 +26,25 @@ it('decodes exact publication identity, independent target digest and withdrawal
         ...value,
         withdrawn: true,
         withdrawal: 'waiting_publication',
-        document: { kind: 'Winget', manifest: { PackageIdentifier: 'Example.App' } },
+        document: {
+          kind: 'Winget',
+          manifest: {
+            PackageIdentifier: 'Example.App',
+            Versions: [
+              {
+                PackageVersion: '1',
+                DefaultLocale: {
+                  PackageLocale: 'en-US',
+                  Publisher: 'Example',
+                  PackageName: 'Example App',
+                  License: 'Proprietary',
+                  ShortDescription: 'Fixture',
+                },
+                Installers: [],
+              },
+            ],
+          },
+        },
       },
       id,
     ),

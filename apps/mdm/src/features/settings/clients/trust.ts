@@ -1,18 +1,13 @@
+import * as wireSchemas from '@rss/api/mdm-schemas'
+import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
-import {
-  array,
-  closed,
-  count,
-  enumeration,
-  identifier,
-  nullable,
-  string,
-  unique,
-  uuid,
-} from '../../../services/decode'
+import { array, count, identifier, nullable, string, unique, uuid } from '../../../services/decode'
 import { positive, sha256 } from './value'
 export function taskTrust(value: unknown, tenant: string, service?: string) {
-  const v = closed(value, ['version', 'service_id', 'tenant', 'revision', 'keys'])
+  if (!wireSchemas.getApiV1TaskSigningTrustResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
+  const v = value
   if (
     v['version'] !== 1 ||
     uuid(v['tenant']) !== tenant ||
@@ -21,7 +16,7 @@ export function taskTrust(value: unknown, tenant: string, service?: string) {
     throw new Error('Wrong task trust binding')
   const keys = unique(
     array(v['keys'], (value) => {
-      const k = closed(value, ['id', 'public_key', 'state']),
+      const k = value,
         publicKey = string(k['public_key'])
       if (
         !/^[A-Za-z0-9_-]{43}$/.test(publicKey) ||
@@ -34,7 +29,7 @@ export function taskTrust(value: unknown, tenant: string, service?: string) {
       return {
         id: identifier(k['id']),
         public_key: publicKey,
-        state: enumeration(k['state'], ['prepared', 'active', 'verify_only'] as const),
+        state: k['state'],
       }
     }),
     (k) => k.id,
@@ -56,22 +51,12 @@ export function taskTrust(value: unknown, tenant: string, service?: string) {
   }
 }
 export function installationObservation(value: unknown) {
+  if (!wireSchemas.getApiV1PkiAgentTrustDevicesByDeviceObservationResponse.validateRoot(value))
+    throw new Error('Invalid contract value')
+
   return nullable(value, (value) => {
-    const v = closed(value, ['observation', 'received_at']),
-      o = closed(v['observation'], [
-        'operation',
-        'version',
-        'registration',
-        'generation',
-        'sequence',
-        'target_revision',
-        'target_digest',
-        'actual_revision',
-        'actual_digest',
-        'state',
-        'reason',
-        'observed_at',
-      ])
+    const v = value,
+      o = v['observation']
     if (o['version'] !== 1) throw new Error('Unsupported observation')
     const result = {
       operation: uuid(o['operation']),
@@ -83,17 +68,8 @@ export function installationObservation(value: unknown) {
       target_digest: nullable(o['target_digest'], sha256),
       actual_revision: nullable(o['actual_revision'], positive),
       actual_digest: nullable(o['actual_digest'], sha256),
-      state: enumeration(o['state'], ['received', 'applied', 'failed', 'unknown'] as const),
-      reason: nullable(o['reason'], (v) =>
-        enumeration(v, [
-          'transport',
-          'validation',
-          'storage',
-          'credential',
-          'installation',
-          'restart',
-        ] as const),
-      ),
+      state: o['state'],
+      reason: nullable(o['reason'], (v) => v),
       observed_at: count(o['observed_at']),
     }
     if (
@@ -111,37 +87,20 @@ export type TaskChange =
 export function createTaskTrustClient(transport: HttpTransport, tenant: string, service: string) {
   const decode = (v: unknown) => taskTrust(v, tenant, service)
   return {
-    read: () =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/task-signing/trust',
-        successStatus: 200,
-        decode,
-      }),
+    read: () => api.getApiV1TaskSigningTrust(transport, {}, decode),
     operation: (id: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/task-signing/operations/{id}',
-        pathParams: { id: uuid(id) },
-        successStatus: 200,
-        decode,
-      }),
+      api.getApiV1TaskSigningOperationsById(transport, { pathParams: { id: uuid(id) } }, decode),
     change: (id: string, body: TaskChange) =>
-      transport.request({
-        method: 'POST',
-        path: '/api/v1/task-signing/trust',
-        headers: { 'Idempotency-Key': uuid(id) },
-        body,
-        successStatus: 200,
+      api.postApiV1TaskSigningTrust(
+        transport,
+        { headers: { 'Idempotency-Key': uuid(id) }, body },
         decode,
-      }),
+      ),
     observation: (device: string) =>
-      transport.request({
-        method: 'GET',
-        path: '/api/v1/task-signing/trust/devices/{device}/observation',
-        pathParams: { device: identifier(device) },
-        successStatus: 200,
-        decode: installationObservation,
-      }),
+      api.getApiV1TaskSigningTrustDevicesByDeviceObservation(
+        transport,
+        { pathParams: { device: identifier(device) } },
+        installationObservation,
+      ),
   }
 }

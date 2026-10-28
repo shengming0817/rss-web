@@ -776,11 +776,7 @@ directoryQuery.onClear(() => {
                     ? t('devices.' + status.failureDetail.reason)
                     : status.failure
                 }}
-                <p v-if="status.failureDetail">
-                  {{ t('devices.stage') }}: {{ status.failureDetail.stage }} ·
-                  {{ t('policies.device') }}: {{ status.failureDetail.device }}
-                </p></v-alert
-              >
+              </v-alert>
             </template>
           </section>
           <v-btn

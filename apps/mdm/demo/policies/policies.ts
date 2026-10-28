@@ -260,7 +260,7 @@ export function createPolicyDemo(
         if (!row) return error('operation_not_found', 404)
         const { occurrence: _occurrence, ...detail } = row
         void _occurrence
-        return ok(detail)
+        return ok({ ...detail, nodes: [] })
       }
       return ok(windowPage(items, request, (row) => [row.availableAt, row.taskId], match[1], true))
     }

@@ -1,8 +1,0 @@
-{
-  "repository": "rss-mdm",
-  "revision": "cbc47ebb04c8931419d1c3dba440d2cc7e18852e",
-  "path": "crates/management-http/schema/Collection.json",
-  "sha256": "8944d4f5842a4d0add3720d58b5339e926beb9a11ad0ede7974fd41a301b8924",
-  "originPR": 1452,
-  "changesSinceOrigin": ["references default/max limit 1000", "secret sensitivity classification"]
-}
