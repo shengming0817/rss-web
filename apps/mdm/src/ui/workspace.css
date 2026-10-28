@@ -334,3 +334,11 @@
 .mdm-app .console-main {
   min-width: 0;
 }
+
+.device-table-scroll {
+  overflow-x: auto;
+}
+.device-help {
+  color: var(--fg-muted);
+  font-size: 12px;
+}

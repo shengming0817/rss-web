@@ -94,7 +94,7 @@ const commands = computed(() =>
         >{{ t('operations.auditUi.command') }} · {{ id }}</VBtn
       >
     </nav>
-    <p class="ui-help">{{ t('operations.auditUi.operationHint') }}</p>
+    <p class="device-help">{{ t('operations.auditUi.operationHint') }}</p>
     <VExpansionPanels
       ><VExpansionPanel>
         <VExpansionPanelTitle>{{ t('policies.ux.technical') }}</VExpansionPanelTitle

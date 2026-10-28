@@ -114,11 +114,6 @@
   padding: 12px;
   border-top: 1px solid var(--line);
 }
-.console-sidebar-bottom .ui-button {
-  width: 100%;
-  justify-content: flex-start;
-  font-size: 12px;
-}
 .console-workspace {
   min-width: 0;
 }
@@ -176,10 +171,6 @@
 .console-topbar-actions {
   flex-shrink: 0;
   gap: 5px;
-}
-.console-topbar-actions .ui-button {
-  font-size: 12px;
-  min-height: 30px;
 }
 .console-command-trigger {
   color: var(--fg-muted);
@@ -302,9 +293,6 @@
   padding: 24px;
   color: var(--fg-muted);
   font-size: 12px;
-}
-.console-mobile-toggle.ui-button {
-  display: none;
 }
 /* Page compositions use the shared controls. These rules own structure only. */
 .console-toolbar {
@@ -519,19 +507,11 @@
   .sidebar-collapsed.has-console .console-workspace {
     margin-left: 0;
   }
-  .console-mobile-toggle.ui-button {
-    display: inline-flex;
-  }
   .console-topbar {
     padding: 10px 14px;
   }
   .console-topbar-actions {
     gap: 1px;
-  }
-  .console-breadcrumb > a:first-child,
-  .console-breadcrumb > span:nth-child(2),
-  .console-command-trigger.ui-button {
-    display: none;
   }
   .console-main {
     padding: 24px 16px 40px;
@@ -562,13 +542,7 @@
   gap: 14px;
   min-width: 0;
 }
-.console-page-body form > .ui-button {
-  justify-self: start;
-}
-.console-page-body > .ui-button {
-  justify-self: start;
-}
-.console-page-body :where(fieldset:not([class*='ui-'])) {
+.console-page-body :where(fieldset:not([class*='v-'])) {
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -577,19 +551,19 @@
   border-radius: 8px;
   margin: 0;
 }
-.console-page-body :where(fieldset:not([class*='ui-'])) > legend {
+.console-page-body :where(fieldset:not([class*='v-'])) > legend {
   padding: 0 6px;
   font-size: 13px;
   font-weight: 600;
 }
-.console-page-body :where(label:not([class*='ui-'])) {
+.console-page-body :where(label:not([class*='v-'])) {
   display: grid;
   gap: 6px;
   font-size: 12px;
   color: var(--fg-muted);
 }
-.console-page-body :where(label:not([class*='ui-'])):has(input[type='checkbox']),
-.console-page-body :where(label:not([class*='ui-'])):has(input[type='radio']) {
+.console-page-body :where(label:not([class*='v-'])):has(input[type='checkbox']),
+.console-page-body :where(label:not([class*='v-'])):has(input[type='radio']) {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -709,9 +683,6 @@
 .console-wizard {
   max-width: 1000px;
 }
-.console-wizard .ui-steps {
-  margin-bottom: 26px;
-}
 .console-wizard .console-form-section {
   border: 0;
   padding: 0;
@@ -731,10 +702,6 @@
 .console-object-list > li {
   border-bottom: 1px solid var(--line);
   padding-block: var(--space-2);
-}
-.console-object-list .ui-button {
-  justify-content: flex-start;
-  width: 100%;
 }
 .console-task > summary {
   cursor: pointer;
@@ -876,11 +843,6 @@
   gap: 0.5rem;
   position: sticky;
   top: 1rem;
-}
-.first-use-steps .ui-button {
-  justify-content: start;
-  white-space: normal;
-  text-align: start;
 }
 .first-use-steps [aria-current='step'] {
   outline: 2px solid currentColor;
@@ -1104,19 +1066,6 @@
 .group-extra[open] input {
   margin-top: 8px;
 }
-.ui-dialog--right:has(.field-layout-editor) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.ui-dialog--right:has(.field-layout-editor) .ui-dialog-body {
-  min-height: 0;
-  overflow-y: auto;
-  flex: 1;
-}
-.ui-dialog--right:has(.field-layout-editor) .ui-dialog-footer {
-  flex-shrink: 0;
-}
 @media (max-width: 420px) {
   .group-choice-row {
     grid-template-columns: 1fr;
@@ -1136,11 +1085,6 @@
 }
 .group-picker {
   min-width: 0;
-}
-.ui-dialog-body .group-member-editor {
-  margin: 0;
-  padding: 0;
-  border: 0;
 }
 
 /* Configuration task surfaces use the product theme and existing control owners. */
@@ -1172,10 +1116,6 @@
   font-size: 1.5rem;
   margin: 0.5rem 0 0;
   font-weight: 600;
-}
-.task-filterbar .ui-search {
-  flex: 1 1 16rem;
-  max-width: 30rem;
 }
 .task-filterbar > select {
   width: auto;

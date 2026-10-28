@@ -1,12 +1,12 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { deviceStyles } from './device-styles'
+import { vuetifyStyles } from '../../build/vuetify-styles.mjs'
 export default defineConfig(async ({ mode, command }) => {
   if (mode === 'demo' && command !== 'serve')
     throw new Error('Demo requires the local HTTP scenario server; use pnpm dev:mdm:demo')
   return {
     plugins: [
-      deviceStyles(),
+      vuetifyStyles('.mdm-device-surface'),
       vue(),
       ...(mode === 'demo' ? [(await import('./demo/plugin')).demoPlugin()] : []),
     ],

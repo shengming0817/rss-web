@@ -40,7 +40,6 @@ const {
   owner,
   load,
   reloadSessions,
-  stepUp,
   change,
   logout,
   reauthenticate,
@@ -81,7 +80,7 @@ const {
           </VBtn>
         </div>
         <div class="auth-table">
-          <div class="ui-table-scroll">
+          <div class="device-table-scroll">
             <VTable>
               <thead>
                 <tr>
@@ -141,18 +140,7 @@ const {
                   .join(' · ') || t('identity.noMethods')
               }}
             </p>
-            <p v-if="!session.state.value.security.eligibleStepUpProviders.length">
-              {{ t('identity.noStepUp') }}
-            </p>
-            <VBtn
-              v-for="p in session.state.value.security.eligibleStepUpProviders"
-              :key="p.providerId"
-              :disabled="!!busy"
-              type="submit"
-              @click="stepUp(p.providerId)"
-            >
-              {{ t('identity.stepUp') }} · {{ p.label }}
-            </VBtn>
+            <p>{{ t('identity.operationAuthentication') }}</p>
           </template>
           <VBtn
             :disabled="!!(busy || !owner)"

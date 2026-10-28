@@ -1,9 +1,9 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
-import { deviceStyles } from './device-styles'
+import { vuetifyStyles } from '../../build/vuetify-styles.mjs'
 export default defineConfig({
-  plugins: [deviceStyles(), vue()],
+  plugins: [vuetifyStyles('.mdm-device-surface'), vue()],
   test: {
     name: 'mdm',
     root: fileURLToPath(new URL('.', import.meta.url)),

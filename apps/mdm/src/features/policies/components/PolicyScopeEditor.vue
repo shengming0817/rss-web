@@ -428,7 +428,7 @@ if (route.query['device'] || route.query['group']) scopeOpen.value = true
               <ObjectLink :object="object" />
             </li>
           </ul>
-          <div v-else class="ui-table-scroll">
+          <div v-else class="device-table-scroll">
             <VTable density="comfortable">
               <thead>
                 <tr>

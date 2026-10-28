@@ -47,7 +47,7 @@ const {
       </VBtn>
       <p v-if="!loaded" role="status">{{ t('identity.listNotLoaded') }}</p>
       <div v-if="loaded" class="auth-table">
-        <div class="ui-table-scroll">
+        <div class="device-table-scroll">
           <VTable>
             <thead>
               <tr>
@@ -167,15 +167,8 @@ const {
       @update:open="!$event && (pending = null)"
     >
       <template #footer>
-        <VBtn class="ui-button" type="submit" @click="pending = null">{{
-          t('identity.cancel')
-        }}</VBtn>
-        <VBtn
-          class="ui-button ui-button--primary"
-          :disabled="!!busy"
-          type="submit"
-          @click="confirm"
-        >
+        <VBtn type="submit" @click="pending = null">{{ t('identity.cancel') }}</VBtn>
+        <VBtn color="primary" :disabled="!!busy" type="submit" @click="confirm">
           {{ t('identity.confirm') }}
         </VBtn>
       </template>
@@ -201,7 +194,7 @@ const {
           required
           :label="t('identity.newPassword')"
         />
-        <VBtn class="ui-button ui-button--primary" type="submit" :disabled="!!busy">
+        <VBtn color="primary" type="submit" :disabled="!!busy">
           {{ t('identity.confirm') }}
         </VBtn>
       </VForm>

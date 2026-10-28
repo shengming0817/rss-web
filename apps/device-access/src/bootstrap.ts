@@ -21,7 +21,7 @@ import {
 import { daKey, identityKey, type DaRuntime } from './context'
 import type { DaHost } from './config'
 import { featureRoutes } from './router'
-import { vuetify } from './ui/vuetify'
+import { createAccessVuetify } from './ui/vuetify'
 import LoginView from './auth/LoginView.vue'
 import ErrorView from './auth/ErrorView.vue'
 import App from './App.vue'
@@ -81,7 +81,7 @@ export function createDeviceAccess(
   i18n.global.locale.value = 'zh-CN'
   const app = createApp(App)
     .use(i18n)
-    .use(vuetify)
+    .use(createAccessVuetify())
     .use(router)
     .provide(runtimeKey, {
       session,

@@ -21,8 +21,7 @@ const zh = {
   method_otp: '一次性口令',
   method_pwd: '密码',
   noMethods: '未提供已验证方法',
-  noStepUp: '当前会话没有已关联且可用于增强认证的身份提供方。',
-  stepUp: '增强认证',
+  operationAuthentication: '敏感操作需要验证身份时，请从该操作发起认证。',
   reloadSecurity: '重新读取认证事实',
 
   login: '登录',
@@ -153,8 +152,8 @@ const en = {
   method_otp: 'One-time password',
   method_pwd: 'Password',
   noMethods: 'No verified methods supplied',
-  noStepUp: 'This session has no linked provider eligible for step-up.',
-  stepUp: 'Step up authentication',
+  operationAuthentication:
+    'When a sensitive operation requires verification, authenticate from that operation.',
   reloadSecurity: 'Reload authentication facts',
 
   login: 'Sign in',

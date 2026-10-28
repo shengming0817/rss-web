@@ -214,7 +214,11 @@ export default tseslint.config(
                   (target === root + 'demo' || target.startsWith(root + 'demo' + sep))
                 )
                   context.report({ node, messageId: 'demo' })
-                if (!target.startsWith(root)) context.report({ node, messageId: 'escape' })
+                const buildHelper =
+                  ['vite.config.ts', 'vitest.config.ts'].includes(path.basename(filename)) &&
+                  target === resolve(__dirname, 'build/vuetify-styles.mjs')
+                if (!target.startsWith(root) && !buildHelper)
+                  context.report({ node, messageId: 'escape' })
               }
               return {
                 ImportDeclaration: (node) => check(node.source),
@@ -363,8 +367,11 @@ export default tseslint.config(
                     : `${sep}packages${sep}device-access${sep}`
                 const root = filename.slice(0, filename.lastIndexOf(marker)) + marker,
                   target = resolve(dirname(filename), node.value)
+                const buildHelper =
+                  ['vite.config.ts', 'vitest.config.ts'].includes(path.basename(filename)) &&
+                  target === resolve(__dirname, 'build/vuetify-styles.mjs')
                 if (
-                  !target.startsWith(root) ||
+                  (!target.startsWith(root) && !buildHelper) ||
                   (filename.startsWith(root + 'src' + sep) &&
                     !filename.endsWith('.spec.ts') &&
                     (target === root + 'demo' || target.startsWith(root + 'demo' + sep)))

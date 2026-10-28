@@ -51,7 +51,7 @@ describe('current session security', () => {
           finish = r
         }),
     )
-    const command = f.api.stepUp(OTHER)
+    const command = f.api.link(OTHER, null)
     const rejected = expect(command).rejects.toThrow('Operation abandoned')
     f.session.leavePage()
     finish()

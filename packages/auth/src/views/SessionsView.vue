@@ -1,7 +1,24 @@
 <script setup lang="ts">
-import { UiButton, UiTabs, UiDialog } from '@rss/core/components'
+import {
+  VBtn,
+  VCard,
+  VCardActions,
+  VCardText,
+  VCardTitle,
+  VDialog,
+  VSelect,
+  VTab,
+  VTable,
+  VTabs,
+  VTextField,
+  VWindow,
+  VWindowItem,
+} from 'vuetify/components'
+import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAccountSecurity } from '../useAccountSecurity'
+const pageId = useId()
+const dialogActivator = ref<HTMLElement>()
 const { t } = useI18n()
 const {
   session,
@@ -24,7 +41,6 @@ const {
   owner,
   load,
   reloadSessions,
-  stepUp,
   change,
   logout,
   reauthenticate,
@@ -41,25 +57,45 @@ const {
     </p>
     <p v-else-if="error" role="alert">{{ errorMessage }}</p>
     <p class="auth-muted">{{ t('identity.logoutHelp') }}</p>
-    <UiTabs
-      v-model="tab"
-      :label="t('identity.sessions')"
-      :items="[
-        { value: 'sessions', label: t('identity.sessions') },
-        { value: 'security', label: t('identity.authentication') },
-      ]"
-      keep-mounted
-      ><template #sessions
+    <VTabs v-model="tab" :aria-label="t('identity.sessions')"
+      ><VTab
+        :id="`${pageId}-tab-sessions`"
+        :aria-controls="`${pageId}-panel-sessions`"
+        value="sessions"
+        >{{ t('identity.sessions') }}</VTab
+      ><VTab
+        :id="`${pageId}-tab-security`"
+        :aria-controls="`${pageId}-panel-security`"
+        value="security"
+        >{{ t('identity.authentication') }}</VTab
+      ></VTabs
+    ><VWindow v-model="tab"
+      ><VWindowItem
+        :id="`${pageId}-panel-sessions`"
+        role="tabpanel"
+        :aria-labelledby="`${pageId}-tab-sessions`"
+        value="sessions"
+        eager
         ><div class="auth-actions">
-          <UiButton :disabled="!!busy" type="submit" @click="run(reloadSessions)">{{
+          <VBtn :disabled="!!busy" type="submit" @click="run(reloadSessions)">{{
             t('identity.reload')
-          }}</UiButton
-          ><UiButton :disabled="!!(busy || !owner)" type="submit" @click="logout(false)">{{
+          }}</VBtn
+          ><VBtn :disabled="!!(busy || !owner)" type="submit" @click="logout(false)">{{
             t('identity.logout')
-          }}</UiButton
-          ><UiButton :disabled="!!(busy || !owner)" type="submit" @click="confirmAll = true">
+          }}</VBtn
+          ><VBtn
+            :disabled="!!(busy || !owner)"
+            type="submit"
+            @keydown.esc="!busy && (confirmAll = false)"
+            @click="
+              ($event: MouseEvent) => {
+                dialogActivator = $event.currentTarget as HTMLElement
+                confirmAll = true
+              }
+            "
+          >
             {{ t('identity.logoutAll') }}
-          </UiButton>
+          </VBtn>
           <RouterLink
             v-if="session.logoutOutcome.value === 'unconfirmed' && !owner"
             :to="loginTarget(session.state.value.tenant, host)"
@@ -68,8 +104,8 @@ const {
           </RouterLink>
         </div>
         <div class="auth-table">
-          <div class="ui-table-scroll">
-            <table class="ui-table">
+          <div class="auth-table-scroll">
+            <VTable>
               <thead>
                 <tr>
                   <th>{{ t('identity.session') }}</th>
@@ -87,18 +123,23 @@ const {
                   <td>{{ new Date(row.idleExpiresAt * 1000).toLocaleString() }}</td>
                 </tr>
               </tbody>
-            </table>
+            </VTable>
           </div>
         </div>
-        <UiButton
+        <VBtn
           v-if="next"
           :disabled="!!busy"
           type="submit"
           @click="run(() => load(next ?? undefined))"
         >
           {{ t('identity.more') }}
-        </UiButton></template
-      ><template #security
+        </VBtn></VWindowItem
+      ><VWindowItem
+        :id="`${pageId}-panel-security`"
+        role="tabpanel"
+        :aria-labelledby="`${pageId}-tab-security`"
+        value="security"
+        eager
         ><section v-if="session.config.oidcEnabled" aria-labelledby="security-title">
           <h2 id="security-title">{{ t('identity.authentication') }}</h2>
           <template v-if="session.state.value.security">
@@ -128,26 +169,15 @@ const {
                   .join(' · ') || t('identity.noMethods')
               }}
             </p>
-            <p v-if="!session.state.value.security.eligibleStepUpProviders.length">
-              {{ t('identity.noStepUp') }}
-            </p>
-            <UiButton
-              v-for="p in session.state.value.security.eligibleStepUpProviders"
-              :key="p.providerId"
-              :disabled="!!busy"
-              type="submit"
-              @click="stepUp(p.providerId)"
-            >
-              {{ t('identity.stepUp') }} · {{ p.label }}
-            </UiButton>
+            <p>{{ t('identity.operationAuthentication') }}</p>
           </template>
-          <UiButton
+          <VBtn
             :disabled="!!(busy || !owner)"
             type="submit"
             @click="run(() => session.loadSecurity())"
           >
             {{ t('identity.reloadSecurity') }}
-          </UiButton>
+          </VBtn>
         </section>
         <details
           v-if="session.state.value.identity?.hasLocalPassword"
@@ -157,26 +187,22 @@ const {
           <summary>{{ t('identity.changePassword') }}</summary>
           <form @submit.prevent="change">
             <h2>{{ t('identity.changePassword') }}</h2>
-            <label for="current-password">{{ t('identity.currentPassword') }}</label
-            ><input
+            <VTextField
               id="current-password"
               v-model="current"
-              class="ui-input"
               type="password"
               autocomplete="current-password"
               required
-            /><label for="new-password">{{ t('identity.newPassword') }}</label
-            ><input
+              :label="t('identity.currentPassword')"
+            /><VTextField
               id="new-password"
               v-model="password"
-              class="ui-input"
               type="password"
               autocomplete="new-password"
               minlength="15"
               required
-            /><UiButton type="submit" :disabled="!!busy">{{
-              t('identity.changePassword')
-            }}</UiButton>
+              :label="t('identity.newPassword')"
+            /><VBtn type="submit" :disabled="!!busy">{{ t('identity.changePassword') }}</VBtn>
           </form>
         </details>
         <details
@@ -187,16 +213,16 @@ const {
           <summary>{{ t('identity.reauthenticate') }}</summary>
           <form @submit.prevent="reauthenticate">
             <h2>{{ t('identity.reauthenticate') }}</h2>
-            <label for="reauth-password">{{ t('identity.currentPassword') }}</label>
-            <input
+
+            <VTextField
               id="reauth-password"
               v-model="reauthPassword"
-              class="ui-input"
               type="password"
               autocomplete="current-password"
               required
+              :label="t('identity.currentPassword')"
             />
-            <UiButton :disabled="!!busy" type="submit">{{ t('identity.reauthenticate') }}</UiButton>
+            <VBtn :disabled="!!busy" type="submit">{{ t('identity.reauthenticate') }}</VBtn>
           </form>
         </details>
         <details
@@ -207,38 +233,59 @@ const {
           <summary>{{ t('identity.linkProvider') }}</summary>
           <form @submit.prevent="link">
             <h2>{{ t('identity.linkProvider') }}</h2>
-            <label for="link-provider">{{ t('identity.providers') }}</label>
-            <select id="link-provider" v-model="selectedProvider" class="ui-input" required>
-              <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.label }}</option>
-            </select>
+
+            <VSelect
+              id="link-provider"
+              v-model="selectedProvider"
+              :items="providers"
+              item-title="label"
+              item-value="id"
+              :label="t('identity.providers')"
+              required
+            />
             <template v-if="session.state.value.identity?.hasLocalPassword">
-              <label for="link-password">{{ t('identity.currentPassword') }}</label>
-              <input
+              <VTextField
                 id="link-password"
                 v-model="linkPassword"
-                class="ui-input"
                 type="password"
                 autocomplete="current-password"
                 required
+                :label="t('identity.currentPassword')"
               />
             </template>
-            <UiButton :disabled="!!busy" type="submit">{{ t('identity.linkProvider') }}</UiButton>
+            <VBtn :disabled="!!busy" type="submit">{{ t('identity.linkProvider') }}</VBtn>
           </form>
-        </details></template
-      ></UiTabs
+        </details></VWindowItem
+      ></VWindow
     >
-    <UiDialog
-      :open="confirmAll"
-      :title="t('identity.logoutAll')"
-      :description="t('identity.logoutHelp')"
-      :close-label="t('identity.cancel')"
-      kind="alertdialog"
-      @update:open="confirmAll = $event"
-      ><template #footer
-        ><UiButton :disabled="busy || !owner" @click="submitConfirmed">{{
-          t('identity.confirm')
-        }}</UiButton></template
-      ></UiDialog
+    <VDialog
+      :model-value="confirmAll"
+      :activator="dialogActivator"
+      :open-on-click="false"
+      :persistent="true"
+      :aria-label="t('identity.logoutAll')"
+      :aria-describedby="`${pageId}-1`"
+      role="alertdialog"
+      @update:model-value="confirmAll = $event"
+      @keydown.esc.stop="!busy && (confirmAll = false)"
+      ><VCard
+        ><VCardTitle tag="h2" class="auth-dialog-heading"
+          ><span>{{ t('identity.logoutAll') }}</span
+          ><VBtn
+            variant="text"
+            :aria-label="t('identity.cancel')"
+            :disabled="busy"
+            @click="confirmAll = false"
+            >{{ t('identity.cancel') }}</VBtn
+          ></VCardTitle
+        ><VCardText
+          ><p :id="`${pageId}-1`">{{ t('identity.logoutHelp') }}</p></VCardText
+        ><VCardActions class="auth-actions"
+          ><VBtn :disabled="busy || !owner" @click="submitConfirmed">{{
+            t('identity.confirm')
+          }}</VBtn></VCardActions
+        ></VCard
+      ></VDialog
     >
   </section>
 </template>

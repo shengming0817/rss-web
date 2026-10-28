@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useTheme } from '@rss/core/composables'
 import { useI18n } from 'vue-i18n'
-import 'virtual:mdm-device-styles.css'
+import 'virtual:vuetify-styles.css'
 import './workspace.css'
 const { locale } = useI18n()
 const { theme } = useTheme()

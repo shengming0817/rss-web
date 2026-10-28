@@ -366,7 +366,7 @@ watch(
       :device-name="name"
     />
     <section v-if="records" class="console-panel">
-      <p v-if="statistics" class="ui-help">
+      <p v-if="statistics" class="device-help">
         {{ t('policies.ux.observedAt') }} · {{ utc(statistics.asOf) }}
       </p>
       <VDataTable
@@ -456,7 +456,7 @@ watch(
                 :operation="commandDetails[item.id]!"
                 :device="item.device"
             /></template>
-            <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
+            <p class="device-help">{{ t('policies.ux.stagesHint') }}</p>
           </MdmDisclosure>
         </template>
       </VDataTable>

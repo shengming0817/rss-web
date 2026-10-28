@@ -215,7 +215,7 @@ it('never applies queued logout to a newly selected tenant', async () => {
   f.session.clear()
 })
 
-it('dispatches step-up after same-session rotation using the new CSRF', async () => {
+it('dispatches identity linking after same-session rotation using the new CSRF', async () => {
   const f = fixture()
   await f.login()
   let release!: (v: unknown) => void
@@ -227,7 +227,7 @@ it('dispatches step-up after same-session rotation using the new CSRF', async ()
     { authorizationUrl: 'https://idp.test/authorize' },
   )
   const rotation = f.session.refresh()
-  const work = f.api.stepUp(TENANT)
+  const work = f.api.link(TENANT, null)
   release(sessionValue(true, 'c'.repeat(64)))
   await Promise.all([rotation, work])
   expect(f.request.mock.calls.at(-1)?.[0].headers?.['X-CSRF-Token']).toBe('c'.repeat(64))

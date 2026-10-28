@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { VBtn, VCheckbox, VTextField, VTextarea } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import { useLocalProfile } from '../useLocalProfile'
 const props = defineProps<{ principalId: string }>()
@@ -32,90 +32,78 @@ const {
     <p v-if="pending" role="status">
       {{ t('identity.profilePending') }} <code>{{ pending.id }}</code>
     </p>
-    <UiButton :disabled="busy" @click="load">{{ t('identity.reload') }}</UiButton>
-    <UiButton v-if="pending" :disabled="busy" @click="receipt">{{
-      t('identity.profileReceipt')
-    }}</UiButton>
+    <VBtn :disabled="busy" @click="load">{{ t('identity.reload') }}</VBtn>
+    <VBtn v-if="pending" :disabled="busy" @click="receipt">{{ t('identity.profileReceipt') }}</VBtn>
     <p v-if="pending && compared">{{ t('identity.profileComparedHelp') }}</p>
-    <UiButton v-if="pending && compared" :disabled="busy" @click="resumeEditing">{{
+    <VBtn v-if="pending && compared" :disabled="busy" @click="resumeEditing">{{
       t('identity.profileResume')
-    }}</UiButton>
+    }}</VBtn>
     <form v-if="revision !== undefined" class="auth-form" @submit.prevent="save()">
-      <label for="local-display">{{ t('identity.profileDisplayName') }}</label
-      ><input
+      <VTextField
         id="local-display"
         v-model="displayName"
-        class="ui-input"
         :disabled="busy || !!pending"
         maxlength="2048"
+        :label="t('identity.profileDisplayName')"
         @input="displayMissing = false"
       />
-      <label
-        ><input
-          id="local-display-missing"
-          v-model="displayMissing"
-          type="checkbox"
-          :disabled="busy || !!pending"
-        />{{ t('identity.profileNotProvided') }}</label
-      >
-      <label for="local-username">{{ t('identity.username') }}</label
-      ><input
+      <VCheckbox
+        id="local-display-missing"
+        v-model="displayMissing"
+        :disabled="busy || !!pending"
+        :label="t('identity.profileNotProvided')"
+      />
+      <VTextField
         id="local-username"
         v-model="username"
-        class="ui-input"
         :disabled="busy || !!pending"
         maxlength="2048"
+        :label="t('identity.username')"
         @input="usernameMissing = false"
       />
-      <label
-        ><input
-          id="local-username-missing"
-          v-model="usernameMissing"
-          type="checkbox"
-          :disabled="busy || !!pending"
-        />{{ t('identity.profileNotProvided') }}</label
-      >
-      <label for="local-email">{{ t('identity.profileEmail') }}</label
-      ><input
+      <VCheckbox
+        id="local-username-missing"
+        v-model="usernameMissing"
+        :disabled="busy || !!pending"
+        :label="t('identity.profileNotProvided')"
+      />
+      <VTextField
         id="local-email"
         v-model="email"
-        class="ui-input"
         :disabled="busy || !!pending"
         type="email"
         maxlength="2048"
+        :label="t('identity.profileEmail')"
         @input="emailMissing = false"
       />
-      <label
-        ><input
-          id="local-email-missing"
-          v-model="emailMissing"
-          type="checkbox"
-          :disabled="busy || !!pending"
-        />{{ t('identity.profileNotProvided') }}</label
-      >
-      <label for="local-extensions">{{ t('identity.profileExtensions') }}</label
-      ><textarea
+      <VCheckbox
+        id="local-email-missing"
+        v-model="emailMissing"
+        :disabled="busy || !!pending"
+        :label="t('identity.profileNotProvided')"
+      />
+      <VTextarea
         id="local-extensions"
         v-model="extensions"
-        class="ui-input"
         :disabled="busy || !!pending"
         rows="8"
+        :label="t('identity.profileExtensions')"
+        auto-grow
       />
-      <label for="local-profile-age">{{ t('identity.profileAge') }}</label
-      ><input
+      <VTextField
         id="local-profile-age"
         v-model.number="age"
-        class="ui-input"
         :disabled="busy || !!pending"
         type="number"
         min="60"
         max="86400"
         required
+        :label="t('identity.profileAge')"
       />
-      <UiButton type="submit" :disabled="busy || !!pending">{{ t('identity.save') }}</UiButton>
-      <UiButton type="button" :disabled="busy || !!pending" @click="save(true)">{{
+      <VBtn type="submit" :disabled="busy || !!pending">{{ t('identity.save') }}</VBtn>
+      <VBtn type="button" :disabled="busy || !!pending" @click="save(true)">{{
         t('identity.profileDelete')
-      }}</UiButton>
+      }}</VBtn>
     </form>
   </section>
 </template>

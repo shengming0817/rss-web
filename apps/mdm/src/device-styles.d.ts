@@ -1,1 +1,1 @@
-declare module 'virtual:mdm-device-styles.css'
+declare module 'virtual:vuetify-styles.css'

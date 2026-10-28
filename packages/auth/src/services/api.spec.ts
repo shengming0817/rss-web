@@ -68,7 +68,7 @@ describe('Identity operations use one protected transport without replay', () =>
       password: null,
     })
     f.replies.push(decodeIdentityError(503, { code: 'identity_unavailable' }))
-    await expect(f.api.stepUp(OTHER)).rejects.toBeDefined()
+    await expect(f.api.link(OTHER, null)).rejects.toBeDefined()
     expect(f.session.state.value.status).toBe('unavailable')
   })
   it('does not turn conflicts, permission errors or unknown outcomes into retries', async () => {

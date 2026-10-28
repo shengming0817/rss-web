@@ -14,7 +14,8 @@
     "vue-i18n": "catalog:",
     "pinia": "catalog:",
     "@rss/core": "workspace:*",
-    "@rss/api": "workspace:*"
+    "@rss/api": "workspace:*",
+    "vuetify": "catalog:"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "catalog:",
