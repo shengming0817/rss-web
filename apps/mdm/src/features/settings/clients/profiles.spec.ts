@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import { profileJson, profileObject } from '@rss/auth/profile-json'
-import { profile, definition, definitionReceipt } from './profiles'
+import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
+import { createProfilesClient, profile, definition, definitionReceipt } from './profiles'
 const id = '11111111-1111-4111-8111-111111111111'
 const input = {
   fieldId: id,
@@ -113,4 +114,47 @@ it('requires complete observation metadata independently of fixed identity field
     }),
   ).toThrow()
   expect(() => profile({ ...value, principalId: { arbitrary: 'identity' } })).toThrow()
+})
+
+it('queries attribute projections without manufacturing omitted definitions and keeps source metadata intact', async () => {
+  const row = {
+    ...input,
+    key: input.value.key,
+    displayName: input.value.displayName,
+    sourceKind: 'identity_local',
+    provider: null,
+    valueType: 'string',
+    enabled: true,
+    sensitive: false,
+    required: true,
+    visibility: 'both',
+    displayUse: 'profile',
+  }
+  const sources = [
+    {
+      source: { kind: 'identity_local' },
+      providerConfigVersion: null,
+      extensionsRoot: '/extensions',
+      maxAgeSeconds: 600,
+    },
+  ]
+  let reply: unknown = { items: [row], nextCursor: 'YQ', sources }
+  const calls: RequestOptions<unknown>[] = []
+  const client = createProfilesClient({
+    request: async (o: RequestOptions<unknown>) => {
+      calls.push(o)
+      return o.decode(reply)
+    },
+  } as HttpTransport)
+  expect((await client.definitions({ limit: 1, sort: ['-key'] })).items[0]).toEqual(row)
+  reply = { items: [{ fieldId: id, enabled: false }], nextCursor: null, sources }
+  expect(
+    await client.definitions({ fields: ['fieldId', 'enabled'], cursor: 'YQ', limit: 1 }),
+  ).toEqual({ items: [{ fieldId: id, enabled: false }], nextCursor: null, sources })
+  expect(calls.at(-1)?.query).toMatchObject({ fields: 'fieldId,enabled', cursor: 'YQ', limit: 1 })
+  reply = { items: [{ fieldId: id }], nextCursor: null, sources }
+  await expect(client.definitions({ fields: ['fieldId', 'enabled'] })).rejects.toThrow()
+  reply = input
+  expect(await client.definition(id)).toEqual(input)
+  expect(calls.at(-1)?.path).toBe('/api/v1/user-attribute-definitions/{id}')
 })

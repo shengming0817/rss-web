@@ -94,10 +94,11 @@ function openSubscription(row: Record<string, unknown>) {
 }
 async function load(after?: string) {
   await run(
-    async () => ({
-      rows: await subscriptionQuery.read(after, (query) => client.list(query)),
-      types: await client.types(),
-    }),
+    async () => {
+      const types = await client.types()
+      const rows = await subscriptionQuery.read(after, (query) => client.list(query))
+      return { rows, types }
+    },
     (v) => {
       rows.value = v.rows.items
       nextCursor.value = v.rows.nextCursor

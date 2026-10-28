@@ -116,3 +116,30 @@ it('rejects the retired version DTO without current presentation and Resource re
     createLifecycleClient({ request } as unknown as HttpTransport).version('app', '1'),
   ).rejects.toThrow()
 })
+
+it('keeps source directory projections distinct from the complete revision used by import', async () => {
+  const source = { id: 'private', revision: '1', protocol: { kind: 'private' } }
+  const snapshot = { id: 'private', revision: '1', sha256: sha }
+  const row = {
+    id: 'private',
+    revision: '1',
+    protocol: 'private',
+    state: 'enabled',
+    source,
+    snapshot,
+    lifecycle: enabled,
+  }
+  let reply: unknown = { items: [row], nextCursor: 'YQ' }
+  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
+  const client = createLifecycleClient({ request } as unknown as HttpTransport)
+  expect((await client.sources({ limit: 1, sort: ['-revision'] })).items).toEqual([row])
+  reply = { items: [{ id: 'private', revision: '1', state: 'enabled' }], nextCursor: null }
+  expect(
+    (await client.sources({ fields: ['id', 'revision', 'state'], cursor: 'YQ' })).items,
+  ).toEqual([{ id: 'private', revision: '1', state: 'enabled' }])
+  reply = { source, snapshot, lifecycle: enabled }
+  expect(await client.source('private', '1')).toEqual(reply)
+  expect(request.mock.lastCall![0].pathParams).toEqual({ id: 'private', revision: '1' })
+  reply = { items: [{ ...row, snapshot: { ...snapshot, revision: '2' } }], nextCursor: null }
+  await expect(client.sources()).rejects.toThrow()
+})

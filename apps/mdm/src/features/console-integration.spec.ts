@@ -1609,3 +1609,40 @@ it('opens full webhook and delivery objects from independent id-only directory p
   expect(f.calls.at(-1)?.path).toBe('/api/v1/webhooks/deliveries/{id}')
   expect(w.text()).toContain(b)
 })
+
+it('keeps webhook navigation at its accepted position when the required event contract cannot be read', async () => {
+  let available = false
+  const f = transport((o: RequestOptions<unknown>) => {
+    if (o.path.endsWith('/event-types')) {
+      if (!available) throw new Error('unavailable')
+      return {
+        version: 1,
+        items: [
+          'device.registered',
+          'device.retired',
+          'policy.execution.terminal',
+          'compliance.status.changed',
+          'device.access.changed',
+        ],
+      }
+    }
+    return { items: [{ id: a }], nextCursor: 'YQ' }
+  })
+  const w = await mountAt(WebhookSubscriptionsPanel, {
+    tenant: a,
+    session: session(),
+    settings: { subscriptions: createWebhookSubscriptions(f.client) },
+    operations: authority(['webhook_read', 'webhook_write', 'webhook_replay']),
+  })
+  const q = w.findAll('.directory-query')[1]!
+  await q.get('select').setValue(['id'])
+  await button(q, '应用查询').trigger('click')
+  await flushPromises()
+  expect(f.calls.some((o) => o.path.endsWith('/subscriptions'))).toBe(false)
+  expect(button(q, '下一页').attributes('disabled')).toBeDefined()
+  available = true
+  await button(q, '应用查询').trigger('click')
+  await flushPromises()
+  expect(w.get('.directory-results').text()).toContain(a)
+  expect(button(q, '下一页').attributes('disabled')).toBeUndefined()
+})
