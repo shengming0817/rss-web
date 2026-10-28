@@ -3,16 +3,16 @@ import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 
 import * as r from './responses'
 import v_se567b14aa549227198dd from './se567b14aa549227198dd.validator.js'
-import type * as sb05a07a6e6f9e78a64ea from './sb05a07a6e6f9e78a64ea'
+import type * as s92a8c33638a6c7d878bb from './s92a8c33638a6c7d878bb'
 import type * as se567b14aa549227198dd from './se567b14aa549227198dd'
 export type Input = {
   query?: WireInput<se567b14aa549227198dd.Root> | undefined
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
-export type Output = sb05a07a6e6f9e78a64ea.Root
+export type Output = s92a8c33638a6c7d878bb.Root
 
-export type * as Response from './sb05a07a6e6f9e78a64ea'
+export type * as Response from './s92a8c33638a6c7d878bb'
 export const getApiV1StorageConnectionsVersions = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/storage/connections/versions',
@@ -39,7 +39,7 @@ export const getApiV1StorageConnectionsVersions = /* @__PURE__ */ defineEndpoint
   },
   checks: { headers: {}, path: null, query: v_se567b14aa549227198dd, body: null },
   responses: [
-    r.rb9bd489151d5ff5cf91d,
+    r.reedc136234975766810a,
     r.r188b9270e0a9d6de1391,
     r.r6fd7bf70daf3205eeddb,
     r.rfb2ac9dae112f89656c6,

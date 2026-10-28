@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 defineProps<{
   revision: number
   desiredRevision?: number | null
+  activeRevision?: number | null | undefined
+  appliedRevision?: number | null | undefined
   versions: readonly {
     revision: number
     state?: string
@@ -28,8 +30,13 @@ function time(value: number | null | undefined) {
   <div class="settings-version-summary">
     <span
       >{{ t('settings.savedVersion') }} <strong>{{ revision }}</strong></span
-    ><span
+    ><span v-if="activeRevision !== undefined"
+      >{{ t('settings.activeConnectionVersion') }}
+      <strong>{{ activeRevision ?? '—' }}</strong></span
+    ><span v-else
       >{{ t('settings.requestedVersion') }} <strong>{{ desiredRevision ?? '—' }}</strong></span
+    ><span v-if="appliedRevision !== undefined"
+      >{{ t('settings.runtimeVersion') }} <strong>{{ appliedRevision ?? '—' }}</strong></span
     >
   </div>
   <div class="settings-table-wrap">

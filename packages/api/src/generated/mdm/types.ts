@@ -5375,6 +5375,16 @@ export type Tpbfjgahmglegkaadgjmapieijjhjnlagckdgfcfcmdokpillioicbmhclgimglng20 
   'operation_rollback_unconfirmed'
 /**
  * This interface was referenced by `TypeGraph`'s JSON-Schema
+ * via the `definition` "Tabknahihhpjcnfcfciedebfmekdbmkjcbhmajkpmnfegbfiphobikmghohkamcac".
+ */
+export type Tabknahihhpjcnfcfciedebfmekdbmkjcbhmajkpmnfegbfiphobikmghohkamcac =
+  | 'requested'
+  | 'preparing'
+  | 'ready'
+  | 'committed'
+  | 'cancelled'
+/**
+ * This interface was referenced by `TypeGraph`'s JSON-Schema
  * via the `definition` "Tamilndhcclllhjdkfoacmmogjcbbajmnpfgbkhhkcldkkngpjmihoeaedpgehnfi".
  */
 export type Tamilndhcclllhjdkfoacmmogjcbbajmnpfgbkhhkcldkkngpjmihoeaedpgehnfi =
@@ -8905,6 +8915,20 @@ export interface Tigadngmifakacilaognejbbfkbfljeoklcjjkopdagbcnifddnnokijnjfgnei
 }
 /**
  * This interface was referenced by `TypeGraph`'s JSON-Schema
+ * via the `definition` "Tgnggkcgkglgdgpghefimenngjmoiidjdmomcopkbdamnnoopfkjohoenboojfmfd".
+ */
+export interface Tgnggkcgkglgdgpghefimenngjmoiidjdmomcopkbdamnnoopfkjohoenboojfmfd {
+  expiresAt: number | null
+  failureReason: string | null
+  operationId: string
+  profile: string
+  qualifiedAt: number | null
+  revision: number
+  revoked: boolean
+  state: string
+}
+/**
+ * This interface was referenced by `TypeGraph`'s JSON-Schema
  * via the `definition` "Tdmnoobpkcgjplmjnbdfpicmiopflfdfdhjhopajknjpbagodcghhcfheabmojknc".
  */
 export interface Tdmnoobpkcgjplmjnbdfpicmiopflfdfdhjhopajknjpbagodcghhcfheabmojknc {
@@ -9028,6 +9052,18 @@ export interface Tkohgkccjbihhpiheppjfalpbeollinidlccgkbppnpgnibdcpnlaljgkageimo
   generation: number
   initialized: boolean
   unlockedUntil: number | null
+}
+/**
+ * This interface was referenced by `TypeGraph`'s JSON-Schema
+ * via the `definition` "Tdncljeiolldhcdnikgalljklijpjbidgfjfnghcpldnjmockhaknchoeoebhdhag".
+ */
+export interface Tdncljeiolldhcdnikgalljklijpjbidgfjfnghcpldnjmockhaknchoeoebhdhag {
+  activeRevision: number | null
+  applied: Tgnggkcgkglgdgpghefimenngjmoiidjdmomcopkbdamnnoopfkjohoenboojfmfd | null
+  current: Tgnggkcgkglgdgpghefimenngjmoiidjdmomcopkbdamnnoopfkjohoenboojfmfd | null
+  latest: Tgnggkcgkglgdgpghefimenngjmoiidjdmomcopkbdamnnoopfkjohoenboojfmfd | null
+  revision: number
+  versionCount: number
 }
 /**
  * This interface was referenced by `TypeGraph`'s JSON-Schema
@@ -14120,6 +14156,24 @@ export interface Tgffhiebinpiilobiaakcifidenakkmdfpbjliplfengieppblendgnpdapacdi
 }
 /**
  * This interface was referenced by `TypeGraph`'s JSON-Schema
+ * via the `definition` "Tbdmgociifbjicnmcppofadbplklifaolphfeimgjlfmlndaokhamkkamflddogoo".
+ */
+export interface Tbdmgociifbjicnmcppofadbplklifaolphfeimgjlfmlndaokhamkkamflddogoo {
+  blockedReason: string | null
+  expectedStorageRevision: number
+  nextAction: string
+  observedAt: number | null
+  operationId: string
+  phase: Tabknahihhpjcnfcfciedebfmekdbmkjcbhmajkpmnfegbfiphobikmghohkamcac
+  sourceGeneration: string
+  sourceObjects: number
+  targetGeneration: string
+  targetRevision: number
+  verifiedBytes: number
+  verifiedObjects: number
+}
+/**
+ * This interface was referenced by `TypeGraph`'s JSON-Schema
  * via the `definition` "Tclfbnaogapdelgplefllijajfdeniadahemldiijbfolahfodpnjlllbpodficnh".
  */
 export interface Tclfbnaogapdelgplefllijajfdeniadahemldiijbfolahfodpnjlllbpodficnh {
@@ -14289,6 +14343,14 @@ export interface Tmbckbdokeiadbijnbhbohapoeajklkmcaobmkmjpigjnfplbjjlgkabjbdmgij
  */
 export interface Tbeeagddbcbgmneejiiedhnfklddcnonlgimjepldccpnecbkllfofknfgccoigie {
   items: Tmbckbdokeiadbijnbhbohapoeajklkmcaobmkmjpigjnfplbjjlgkabjbdmgijjc[]
+  nextCursor: string | null
+}
+/**
+ * This interface was referenced by `TypeGraph`'s JSON-Schema
+ * via the `definition` "Tajicnolnoojpogeihggbnjobepjfmnghefaiehbondkdckilhllbbidlgpfgpibd".
+ */
+export interface Tajicnolnoojpogeihggbnjobepjfmnghefaiehbondkdckilhllbbidlgpfgpibd {
+  items: Tgnggkcgkglgdgpghefimenngjmoiidjdmomcopkbdamnnoopfkjohoenboojfmfd[]
   nextCursor: string | null
 }
 /**
@@ -15320,33 +15382,6 @@ export interface Tcdopipmmbceljnkfchbjleomlnnhfhopeifidlocpkcfhkeendkalpgpnlfgem
 }
 /**
  * This interface was referenced by `TypeGraph`'s JSON-Schema
- * via the `definition` "Tdgoialmmdciefmbnapnkfpflamnbbgpgbidppcjgjhkdbifablbemfndpfmhiimn".
- */
-export interface Tdgoialmmdciefmbnapnkfpflamnbbgpgbidppcjgjhkdbifablbemfndpfmhiimn {
-  expiresAt: number | null
-  failureReason: string | null
-  operationId: string
-  profile: string
-  qualifiedAt: number | null
-  revision: number
-  revoked: boolean
-  selected: boolean
-  state: string
-}
-/**
- * This interface was referenced by `TypeGraph`'s JSON-Schema
- * via the `definition` "Tgoajagbfdgcdchdodeflilnapdallgbmfiknbjdfkibihpojjamlepoblamcmgdi".
- */
-export interface Tgoajagbfdgcdchdodeflilnapdallgbmfiknbjdfkibihpojjamlepoblamcmgdi {
-  applied: Tdgoialmmdciefmbnapnkfpflamnbbgpgbidppcjgjhkdbifablbemfndpfmhiimn | null
-  current: Tdgoialmmdciefmbnapnkfpflamnbbgpgbidppcjgjhkdbifablbemfndpfmhiimn | null
-  desiredRevision: number | null
-  latest: Tdgoialmmdciefmbnapnkfpflamnbbgpgbidppcjgjhkdbifablbemfndpfmhiimn | null
-  revision: number
-  versionCount: number
-}
-/**
- * This interface was referenced by `TypeGraph`'s JSON-Schema
  * via the `definition` "Takeoahddlmjieflkihbkejaeklebbajglhnfmecokiojgkjfgfigbkhgoegblaha".
  */
 export interface Takeoahddlmjieflkihbkejaeklebbajglhnfmecokiojgkjfgfigbkhgoegblaha {
@@ -15872,14 +15907,6 @@ export interface Tknocjommbgnpnfndfgnbmdolimoeikgehmpkncjlmpikdidlicblcapfkjjeoa
 }
 /**
  * This interface was referenced by `TypeGraph`'s JSON-Schema
- * via the `definition` "Timdlklfcklbpagnmdlfmpmpjcllkmgkolgfdabpfofpbngmdhjodmlmhmkmnhkje".
- */
-export interface Timdlklfcklbpagnmdlfmpmpjcllkmgkolgfdabpfofpbngmdhjodmlmhmkmnhkje {
-  items: Tdgoialmmdciefmbnapnkfpflamnbbgpgbidppcjgjhkdbifablbemfndpfmhiimn[]
-  nextCursor: string | null
-}
-/**
- * This interface was referenced by `TypeGraph`'s JSON-Schema
  * via the `definition` "Tpmgjndgekdgnheoedcfoijbcoomlofapbjighnkimafcohojebdbhgolejhllcbd".
  */
 export interface Tpmgjndgekdgnheoedcfoijbcoomlofapbjighnkimafcohojebdbhgolejhllcbd {
@@ -16286,6 +16313,17 @@ export interface Tidekcliaepjecgbmchcmcmklmmfaajlboplpfeleikfjiokfcihmdmpmfbdjac
 }
 /**
  * This interface was referenced by `TypeGraph`'s JSON-Schema
+ * via the `definition` "Tbpddmccebckhgiojijiklamidjjfpaojfbkimgbfgcjongbaicmmckjmkbihgohl".
+ */
+export interface Tbpddmccebckhgiojijiklamidjjfpaojfbkimgbfgcjongbaicmmckjmkbihgohl {
+  activeGeneration: string
+  history: Tbdmgociifbjicnmcppofadbplklifaolphfeimgjlfmlndaokhamkkamflddogoo[]
+  maintenance: string
+  operation: Tbdmgociifbjicnmcppofadbplklifaolphfeimgjlfmlndaokhamkkamflddogoo | null
+  storageRevision: number
+}
+/**
+ * This interface was referenced by `TypeGraph`'s JSON-Schema
  * via the `definition` "Tncpbjaikjhphjdgoomdddpmepihddjplicopijjfmhdbojbhfdpallajclcckdja".
  */
 export interface Tncpbjaikjhphjdgoomdddpmepihddjplicopijjfmhdbojbhfdpallajclcckdja {
@@ -16490,6 +16528,14 @@ export interface Tegngaliocghcbaomcbmaapbjimhhcbfondmkfgjnoagnhfaegidnbkhedinkoh
  */
 export interface Tjlkeopflniemkcmieoalfcjgbhoaeahehijolplipmdbopcaemkmchelbgpnllhc {
   code: Tpbfjgahmglegkaadgjmapieijjhjnlagckdgfcfcmdokpillioicbmhclgimglng31
+}
+/**
+ * This interface was referenced by `TypeGraph`'s JSON-Schema
+ * via the `definition` "Tellcdnnananjjfjneocdjgipbokamnlhkmbhllfckbcphjakjfmbihcjjbgdldkk".
+ */
+export interface Tellcdnnananjjfjneocdjgipbokamnlhkmbhllfckbcphjakjfmbihcjjbgdldkk {
+  expectedStorageRevision: number
+  targetRevision: number
 }
 /**
  * This interface was referenced by `TypeGraph`'s JSON-Schema

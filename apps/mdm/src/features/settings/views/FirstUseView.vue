@@ -424,8 +424,15 @@ useSettingsFacts(() => {
               <strong>{{ locale === 'zh-CN' ? entries[item.id].zh : entries[item.id].en }}</strong>
               <p>
                 {{ t('settings.savedVersion') }} {{ item.revision ?? '—' }} ·
-                {{ t('settings.requestedVersion') }} {{ item.desiredRevision ?? '—' }} ·
-                {{ t('settings.runtimeVersion') }} {{ item.appliedRevision ?? '—' }}
+                {{
+                  t(
+                    item.id === 'storage' || item.id === 's3-key'
+                      ? 'settings.activeConnectionVersion'
+                      : 'settings.requestedVersion',
+                  )
+                }}
+                {{ item.desiredRevision ?? '—' }} · {{ t('settings.runtimeVersion') }}
+                {{ item.appliedRevision ?? '—' }}
               </p>
               <VBtn
                 v-if="settingsDestination(entries[item.id].target, runtime.tenant)"

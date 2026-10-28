@@ -255,7 +255,7 @@ export function createSettingsDemo(options: { seedDownloads?: boolean } = {}) {
       if (r.path === '/api/v1/storage/connections' || r.path === '/api/v1/windows/wns')
         return ok({
           revision: 0,
-          desiredRevision: null,
+          [r.path === '/api/v1/storage/connections' ? 'activeRevision' : 'desiredRevision']: null,
           versionCount: 0,
           current: null,
           latest: null,

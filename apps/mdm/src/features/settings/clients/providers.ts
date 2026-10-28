@@ -16,7 +16,6 @@ export function storageReceipt(value: unknown) {
     profile: string(v['profile']),
     state: enumeration(v['state'], ['pending', 'qualified', 'rejected'] as const),
     failureReason: nullable(v['failureReason'], string),
-    selected: v['selected'],
     revoked: v['revoked'],
     qualifiedAt: nullable(v['qualifiedAt'], count),
     expiresAt: nullable(v['expiresAt'], count),
@@ -72,7 +71,7 @@ export function wnsOperation(value: unknown) {
 }
 function providerState<T extends { revision: number }>(
   value: unknown,
-  selection: 'desiredRevision' | 'selectedRevision',
+  selection: 'activeRevision' | 'desiredRevision' | 'selectedRevision',
   decode: (v: unknown) => T,
 ) {
   if (
@@ -83,12 +82,15 @@ function providerState<T extends { revision: number }>(
     throw new Error('Invalid contract value')
 
   const v = value
-  if ((selection === 'desiredRevision') !== 'desiredRevision' in v)
-    throw new Error('Wrong provider selection')
+  if (!(selection in v)) throw new Error('Wrong provider selection')
   return {
     revision: count(v['revision']),
     activeRevision: nullable(
-      'desiredRevision' in v ? v.desiredRevision : v.selectedRevision,
+      'activeRevision' in v
+        ? v.activeRevision
+        : 'desiredRevision' in v
+          ? v.desiredRevision
+          : v.selectedRevision,
       positive,
     ),
     versionCount: count(v['versionCount']),
@@ -128,7 +130,7 @@ export function createStorageClient(transport: HttpTransport) {
   return {
     read: () =>
       api.getApiV1StorageConnections(transport, {}, (v) =>
-        providerState(v, 'desiredRevision', storageReceipt),
+        providerState(v, 'activeRevision', storageReceipt),
       ),
     history: (query: { limit?: number | undefined; cursor?: string | undefined } = {}) =>
       api.getApiV1StorageConnectionsVersions(

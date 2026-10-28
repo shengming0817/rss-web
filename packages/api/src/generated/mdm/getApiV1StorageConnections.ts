@@ -3,11 +3,11 @@ import { defineEndpoint } from '../../mdm-endpoint'
 
 import * as r from './responses'
 
-import type * as sa1565ef5b5e66e91e0dc from './sa1565ef5b5e66e91e0dc'
+import type * as s1a95ad3c8b2d1c278d4e from './s1a95ad3c8b2d1c278d4e'
 export type Input = { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }
-export type Output = sa1565ef5b5e66e91e0dc.Root
+export type Output = s1a95ad3c8b2d1c278d4e.Root
 
-export type * as Response from './sa1565ef5b5e66e91e0dc'
+export type * as Response from './s1a95ad3c8b2d1c278d4e'
 export const getApiV1StorageConnections = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:GET:/api/v1/storage/connections',
@@ -25,7 +25,7 @@ export const getApiV1StorageConnections = /* @__PURE__ */ defineEndpoint<Input, 
   },
   checks: { headers: {}, path: null, query: null, body: null },
   responses: [
-    r.rcb8cc0e828f55e3c6c64,
+    r.r9b94dfd3a9bc3f6cded8,
     r.r188b9270e0a9d6de1391,
     r.r6fd7bf70daf3205eeddb,
     r.rfb2ac9dae112f89656c6,

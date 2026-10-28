@@ -4,18 +4,18 @@ import { defineEndpoint, type WireInput } from '../../mdm-endpoint'
 import * as r from './responses'
 import v_s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d.validator.js'
 import v_s4e8d3388ed8a29693c9e from './s4e8d3388ed8a29693c9e.validator.js'
+import type * as s13cafc1454c337de4b08 from './s13cafc1454c337de4b08'
 import type * as s419ad0a8895f8af9050d from './s419ad0a8895f8af9050d'
 import type * as s4e8d3388ed8a29693c9e from './s4e8d3388ed8a29693c9e'
-import type * as sf4807b71e8c3510b1ccf from './sf4807b71e8c3510b1ccf'
 export type Input = {
   body: WireInput<s4e8d3388ed8a29693c9e.Root>
   headers: { 'Idempotency-Key': s419ad0a8895f8af9050d.Root }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
-export type Output = sf4807b71e8c3510b1ccf.Root
+export type Output = s13cafc1454c337de4b08.Root
 export type * as Body from './s4e8d3388ed8a29693c9e'
-export type * as Response from './sf4807b71e8c3510b1ccf'
+export type * as Response from './s13cafc1454c337de4b08'
 export const postApiV1StorageConnections = /* @__PURE__ */ defineEndpoint<Input, Output>({
   ...{
     operationId: 'browser:POST:/api/v1/storage/connections',
@@ -38,7 +38,7 @@ export const postApiV1StorageConnections = /* @__PURE__ */ defineEndpoint<Input,
     body: v_s4e8d3388ed8a29693c9e,
   },
   responses: [
-    r.rf0cbf2dd5b5a9b17d53c,
+    r.r3682faba9cac68f45a16,
     r.r188b9270e0a9d6de1391,
     r.r6fd7bf70daf3205eeddb,
     r.rfb2ac9dae112f89656c6,

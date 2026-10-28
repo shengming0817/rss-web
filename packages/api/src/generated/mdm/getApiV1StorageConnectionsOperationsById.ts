@@ -3,15 +3,15 @@ import { defineEndpoint } from '../../mdm-endpoint'
 
 import * as r from './responses'
 import v_s2780e2776b10651fb19c from './s2780e2776b10651fb19c.validator.js'
-import type * as sf4807b71e8c3510b1ccf from './sf4807b71e8c3510b1ccf'
+import type * as s13cafc1454c337de4b08 from './s13cafc1454c337de4b08'
 export type Input = {
   pathParams: { id: string }
   signal?: AbortSignal | undefined
   timeoutMs?: number | undefined
 }
-export type Output = sf4807b71e8c3510b1ccf.Root
+export type Output = s13cafc1454c337de4b08.Root
 
-export type * as Response from './sf4807b71e8c3510b1ccf'
+export type * as Response from './s13cafc1454c337de4b08'
 export const getApiV1StorageConnectionsOperationsById = /* @__PURE__ */ defineEndpoint<
   Input,
   Output
@@ -32,7 +32,7 @@ export const getApiV1StorageConnectionsOperationsById = /* @__PURE__ */ defineEn
   },
   checks: { headers: {}, path: v_s2780e2776b10651fb19c, query: null, body: null },
   responses: [
-    r.rd245d799f8968ef357da,
+    r.r6676e5ac976b98120ee8,
     r.r188b9270e0a9d6de1391,
     r.r6fd7bf70daf3205eeddb,
     r.rfb2ac9dae112f89656c6,
