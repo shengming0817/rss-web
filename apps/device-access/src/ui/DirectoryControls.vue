@@ -15,10 +15,10 @@ const labels = {
 </script>
 <template>
   <QueryControls
-    v-model:filter="query.draft.filter"
-    v-model:sort="query.draft.sort"
-    v-model:fields="query.draft.fields"
-    v-model:limit="query.draft.limit"
+    :filter="query.draft.filter"
+    :sort="query.draft.sort"
+    :fields="query.draft.fields"
+    :limit="query.draft.limit"
     :columns="query.columns"
     :maximum="query.maximum"
     :labels="labels"
@@ -26,6 +26,10 @@ const labels = {
     :disabled="busy"
     :previous="!!query.trail.value.length"
     :next="!!query.next.value"
+    @update:filter="query.updateDraft({ filter: $event })"
+    @update:sort="query.updateDraft({ sort: $event })"
+    @update:fields="query.updateDraft({ fields: $event })"
+    @update:limit="query.updateDraft({ limit: $event })"
     @apply="query.apply()"
     @first="query.first()"
     @previous="query.previous()"

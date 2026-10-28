@@ -318,9 +318,9 @@ organizationQuery.restrict(canRead)
       @load="loadDevices"
     />
     <DirectoryResults
+      v-if="!deviceQuery.complete.value"
       :disabled="busy || uncertain"
       :required="['serial']"
-      v-if="!deviceQuery.complete.value"
       :items="deviceRows"
       @open="
         (row) => {
@@ -336,8 +336,8 @@ organizationQuery.restrict(canRead)
       @load="loadProfiles"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!profileQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="profileRows"
       @open="
         (row) => {
@@ -348,8 +348,8 @@ organizationQuery.restrict(canRead)
 
     <DirectoryControls :query="organizationQuery" :busy="busy" hint="id" @load="list" />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!organizationQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="organizationRows"
       @open="
         (row) => {

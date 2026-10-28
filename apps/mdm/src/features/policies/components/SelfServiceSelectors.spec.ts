@@ -13,7 +13,17 @@ const source = { providerId: id, issuer: 'https://idp.example.test', configurati
 it('adds fixed user, department and active static group selections, rejects duplicates and unavailable departments', async () => {
   const effective = vi.fn(async () => ({ instanceId: id }))
   const groups = vi.fn(async () => ({
-    items: [{ id, value: { name: 'Engineering', enabled: true } }],
+    items: [
+      {
+        id,
+        revision: 1,
+        deleted: false,
+        name: 'Engineering',
+        enabled: true,
+        memberCount: 0,
+        value: { name: 'Engineering', enabled: true },
+      },
+    ],
     nextCursor: null,
   }))
   const departments = vi.fn(async () => ({
@@ -45,7 +55,19 @@ it('adds fixed user, department and active static group selections, rejects dupl
       provide: {
         [mdmKey as symbol]: {
           tenant: id,
-          operations: { authorization: { effective, groups, departments } },
+          session: { state: ref({ status: 'authenticated' }) },
+          operations: {
+            authorization: {
+              effective,
+              groups,
+              departments,
+              group: vi.fn(async () => ({
+                id,
+                revision: 1,
+                value: { name: 'Engineering', enabled: true, members: [] },
+              })),
+            },
+          },
         },
       },
     },

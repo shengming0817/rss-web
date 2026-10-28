@@ -12,6 +12,7 @@ import {
 import { deviceObject, type ObjectRef } from './objects'
 export function retirement(value: unknown, id: string) {
   const v = closed(value, [
+    'origin',
     'id',
     'policy',
     'version',
@@ -22,6 +23,7 @@ export function retirement(value: unknown, id: string) {
   ])
   if (v['id'] !== id) throw new Error('Wrong retirement')
   return {
+    origin: enumeration(v['origin'], ['system', 'policy', 'human', 'ai'] as const),
     id: uuid(v['id']),
     policy: uuid(v['policy']),
     version: uuid(v['version']),

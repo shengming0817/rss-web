@@ -175,6 +175,7 @@ it('keeps retirement cleanup unknown after forced revocation and validates asset
   const value = retirement(
     {
       id: a,
+      origin: 'policy',
       policy: b,
       version: c,
       target: {
@@ -462,7 +463,7 @@ it('renders credential outcomes without confusing escrow or recovered mutation w
   ).toMatchObject({ effect: 'applied', result: { kind: 'credential_recovery' } })
 })
 
-function button(w: VueWrapper, label: string) {
+function button(w: Pick<VueWrapper, 'findAll'>, label: string) {
   return w.findAll('button').find((b) => b.text() === label)!
 }
 async function confirm(w: VueWrapper) {
@@ -889,7 +890,13 @@ it('reads and rotates a Key with a local first-response secret, then revokes usi
     revoked: false,
   }
   const f = transport((o: RequestOptions<unknown>) => {
-    if (o.path.endsWith('/api-keys')) return { items: [key], nextCursor: null }
+    if (o.path.endsWith('/api-keys'))
+      return {
+        items: [
+          { ...key, name: metadata.name, enabled: metadata.enabled, expiresAt: metadata.expiresAt },
+        ],
+        nextCursor: null,
+      }
     if (o.method === 'GET') return key
     const body = o.body as { expectedRevision: number }
     return {
@@ -1212,6 +1219,7 @@ it('reloads retirement channel facts after a confirmed force receipt leaves the 
   const before = retirement(
     {
       id: a,
+      origin: 'policy',
       policy: b,
       version: c,
       target: {
@@ -1443,4 +1451,136 @@ it('clears lifecycle alias and event on same-route principal and session replace
     alias: null,
     customEvent: null,
   })
+})
+it('reads complete API key metadata after an id-only directory projection before editing', async () => {
+  const metadata = {
+    name: 'Projected key',
+    enabled: true,
+    expiresAt: null,
+    grants: [{ operation: 'inventory_read', scope: { kind: 'all_devices' } }],
+  }
+  const key = {
+    id: a,
+    revision: 1,
+    authorityRevision: 1,
+    credentialRevision: 1,
+    metadata,
+    createdBy: { instanceId: c, tenantId: a, principalId: b },
+    createdAt: 1,
+    revoked: false,
+  }
+  const f = transport((o: RequestOptions<unknown>) =>
+    o.path.endsWith('/api-keys') ? { items: [{ id: a }], nextCursor: null } : key,
+  )
+  const w = await mountAt(ApiAccessPanel, {
+    tenant: a,
+    realm: 'tenant',
+    session: session(),
+    settings: { apiAccess: createApiAccess(f.client, a) },
+    operations: authority(['authorization_read', 'authorization_write']),
+  })
+  const q = w.get('.directory-query')
+  await q.get('select').setValue(['id'])
+  await button(q, '应用查询').trigger('click')
+  await flushPromises()
+  await w.get('.directory-results button').trigger('click')
+  await flushPromises()
+  expect(f.calls.at(-1)?.path).toBe('/api/v1/api-keys/{id}')
+  await field(w, '名称').setValue('Edited projection')
+  await field(w, '到期时间').setValue(1000)
+  await w.get('form input[type=checkbox]').setValue(false)
+  expect(field(w, '名称').element).toHaveProperty('value', 'Edited projection')
+})
+it('reads exact complete recovery metadata after an id/version-only projection and retains its Apple action form', async () => {
+  const f = transport((o: RequestOptions<unknown>) => ({
+    items: [o.query?.['fields'] ? { id: a, version: 3 } : entry],
+    nextCursor: null,
+  }))
+  const endpoint = {
+    id: 'mac',
+    status: 'active',
+    primaryMdmRegistration: { registrationId: b, generation: 2, source: 'mdm.apple' },
+    channels: [],
+    enrollments: [],
+  }
+  const w = await mountAt(
+    CredentialsPanel,
+    { tenant: a, session: session(), security: { credentials: createCredentialsClient(f.client) } },
+    { endpoint },
+  )
+  const q = w.get('.directory-query')
+  await q.get('select').setValue(['id', 'version'])
+  await button(q, '应用查询').trigger('click')
+  await flushPromises()
+  await w.get('.directory-results button').trigger('click')
+  await flushPromises()
+  expect(f.calls.at(-1)?.query?.['filter']).toContain('version')
+  await select(w, '操作类型').setValue('set_recovery_lock')
+  for (const [label, value] of [
+    ['接收者引用', 'recipient'],
+    ['材料 ID', a],
+    ['版本', 3],
+    ['预期修订', 2],
+  ])
+    await field(w, String(label)).setValue(value)
+  await w
+    .findAllComponents({ name: 'VCheckbox' })
+    .find((c) => c.props('label') === '清除明文')
+    ?.setValue(true)
+  await select(w, '操作类型').setValue('reconcile_recovery_lock')
+  await field(w, '操作').setValue(c)
+  await select(w, '操作类型').setValue('rotate_filevault')
+  await field(w, '解锁密码').setValue('Synthetic private input')
+  expect(w.text()).toContain('材料与有效性')
+})
+it('opens full webhook and delivery objects from independent id-only directory projections', async () => {
+  const record = { id: a, revision: 1, targetVersion: 1, enabled: true, deleted: false, settings }
+  const delivery = {
+    id: b,
+    eventId: c,
+    subscriptionId: a,
+    targetVersion: 1,
+    recoveryVersion: 1,
+    attempts: 1,
+    status: 'pending',
+    sourceDelivery: null,
+    redriveWindowOpen: false,
+    transportObservation: 'unknown',
+    failureStage: null,
+    failureReason: null,
+  }
+  const f = transport((o: RequestOptions<unknown>) => {
+    if (o.path.endsWith('/event-types')) return { version: 1, items: ['device.retired'] }
+    if (o.path.endsWith('/subscriptions/{id}')) return record
+    const row = o.path.includes('/deliveries') ? delivery : record
+    const fields = String(o.query?.['fields'] ?? '')
+      .split(',')
+      .filter(Boolean)
+    return {
+      items: [
+        fields.length ? Object.fromEntries(fields.map((key) => [key, Reflect.get(row, key)])) : row,
+      ],
+      nextCursor: null,
+    }
+  })
+  const w = await mountAt(WebhookSubscriptionsPanel, {
+    tenant: a,
+    session: session(),
+    settings: { subscriptions: createWebhookSubscriptions(f.client) },
+    operations: authority(['webhook_read', 'webhook_write', 'webhook_replay']),
+  })
+  const query = w.findAll('.directory-query')
+  await query[1]!.get('select').setValue(['id'])
+  await button(query[1]!, '应用查询').trigger('click')
+  await flushPromises()
+  await w.get('.directory-results button').trigger('click')
+  await flushPromises()
+  expect(f.calls.at(-1)?.path).toContain('/subscriptions/{id}')
+  await query[0]!.get('select').setValue(['id'])
+  await button(query[0]!, '应用查询').trigger('click')
+  await flushPromises()
+  await w.findAll('.directory-results')[0]!.get('button').trigger('click')
+  await flushPromises()
+  expect(f.calls.at(-1)?.path).toBe('/api/v1/webhooks/deliveries/{id}')
+  expect(w.text()).toContain(b)
 })

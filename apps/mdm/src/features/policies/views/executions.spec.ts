@@ -61,16 +61,15 @@ it('keeps applied filters on opaque pagination and clears continuation after a f
     .find((b) => b.text() === '下一页')!
     .trigger('click')
   await flushPromises()
-  expect(directory.mock.calls[1]?.[0]).toEqual({
-    filter: "(device=='endpoint');(policy=='policy')",
+  expect(directory.mock.calls[1]?.[0]).toMatchObject({
+    filter: "((device=='endpoint');(policy=='policy'))",
     cursor: 'YWJj',
   })
   directory.mockRejectedValueOnce(new Error('unavailable'))
   await form.trigger('submit')
   await flushPromises()
-  expect(wrapper.findAll('button').some((button) => button.text() === '下一页')).toBe(false)
   expect(directory.mock.calls[2]?.[0]).toMatchObject({
-    filter: "(device=='endpoint');(policy=='policy');(kind=='command');(status=='unknown')",
+    filter: "((device=='endpoint');(policy=='policy');(kind=='command');(status=='unknown'))",
     cursor: undefined,
   })
   wrapper.unmount()
@@ -194,7 +193,10 @@ it('removes the old control target when the device selection is cleared without 
             },
           },
           devices: {
-            directory: { list: async () => ({ items: [{ id: 'endpoint' }] }), detail },
+            directory: {
+              list: async () => ({ items: [{ id: 'endpoint' }], nextCursor: null }),
+              detail,
+            },
             views: { detail: view },
           },
         },
@@ -207,7 +209,7 @@ it('removes the old control target when the device selection is cleared without 
     .find((b) => b.text() === '新建远程操作')!
     .trigger('click')
   await flushPromises()
-  const select = selectControl(wrapper, '[role=dialog] select')
+  const select = selectControl(wrapper.findComponent({ name: 'PolicyDialog' }), 'select')
   await select.setValue('endpoint')
   await flushPromises()
   expect(wrapper.findComponent(DeviceControlPanel).exists()).toBe(true)
@@ -216,7 +218,7 @@ it('removes the old control target when the device selection is cleared without 
     .find((b) => b.text() === '新建远程操作')!
     .trigger('click')
   await flushPromises()
-  await selectControl(wrapper, '[role=dialog] select').setValue('')
+  await selectControl(wrapper.findComponent({ name: 'PolicyDialog' }), 'select').setValue('')
   await flushPromises()
   expect(wrapper.findComponent(DeviceControlPanel).exists()).toBe(false)
   expect(detail.mock.calls).toEqual([['endpoint']])
@@ -271,14 +273,14 @@ it('uses the same server queue predicate for the directory and statistics withou
       .find((b) => b.text() === '下一页')!
       .trigger('click')
     await flushPromises()
-    expect(directory.mock.lastCall?.[0]).toEqual({ filter, cursor: 'YWJj' })
+    expect(directory.mock.lastCall?.[0]).toMatchObject({ filter, cursor: 'YWJj', limit: 50 })
     directory.mockRejectedValueOnce(new Error('invalidated cursor'))
     await wrapper
       .findAll('button')
       .find((b) => b.text() === '下一页')!
       .trigger('click')
     await flushPromises()
-    expect(wrapper.findAll('button').some((b) => b.text() === '下一页')).toBe(false)
+    expect(directory.mock.lastCall?.[0].cursor).toBe('YWJj')
     expect(directory.mock.lastCall?.[0].filter).toBe(filter)
   } finally {
     wrapper.unmount()

@@ -28,6 +28,10 @@ import {
   type Material,
 } from '../clients/credentials'
 import type { EndpointDetail } from '../../devices/clients/endpoint-model'
+const props = defineProps<{ endpoint: EndpointDetail }>(),
+  runtime = useMdm(),
+  { t } = useI18n()
+
 const credentialQuery = useDirectoryQuery(
   [
     'id',
@@ -43,9 +47,6 @@ const credentialQuery = useDirectoryQuery(
   100,
 )
 
-const props = defineProps<{ endpoint: EndpointDetail }>(),
-  runtime = useMdm(),
-  { t } = useI18n()
 const client = runtime.security.credentials
 const { run, submit, pending, locked, busy, failure, confirmOriginal, resolvedConflict } =
   useOriginalOperation(() => 'credentials/' + props.endpoint.id)
@@ -253,9 +254,9 @@ credentialQuery.onClear(() => {
     @load="load"
   />
   <DirectoryResults
+    v-if="!credentialQuery.complete.value"
     :disabled="busy || locked"
     :required="['id', 'version']"
-    v-if="!credentialQuery.complete.value"
     :items="projectedRows"
     @open="
       (row) => {

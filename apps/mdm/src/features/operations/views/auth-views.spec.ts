@@ -9,6 +9,7 @@ import {
   type RequestOptions,
 } from '@rss/api/identity'
 import { mdmI18n } from '../../../i18n'
+import OrganizationView from './OrganizationView.vue'
 import LoginView from './LoginView.vue'
 import AccountSecurityView from './AccountSecurityView.vue'
 const tenant = '11111111-1111-4111-8111-111111111111',
@@ -27,7 +28,7 @@ afterEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()
 })
-function fixture(oidcEnabled = false) {
+function fixture(oidcEnabled = false, manager = false) {
   const replies: unknown[] = []
   const request = vi.fn(async (options: RequestOptions<unknown> | NoContentRequest) => {
     const result = options.path.endsWith('/context')
@@ -35,7 +36,7 @@ function fixture(oidcEnabled = false) {
           tenantId: tenant,
           principalId: principal,
           sessionId,
-          navigation: { manageAccounts: false, manageProviders: false },
+          navigation: { manageAccounts: manager, manageProviders: false },
         }
       : replies.shift()
     if (result instanceof Error) throw result
@@ -152,8 +153,8 @@ it('pages and reloads only the current tenant sessions and requires confirmation
   f.replies.push({ sessions: [sessionFact.session], nextCursor: cursor })
   const { wrapper, router } = await view(AccountSecurityView, f, 'sessions')
   f.replies.push({ sessions: [{ ...sessionFact.session, id: otherSession }], nextCursor: null })
-  await click(wrapper, '加载更多')
-  expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+  await click(wrapper, '下一页')
+  expect(wrapper.findAll('tbody tr')).toHaveLength(1)
   expect(wrapper.get('tbody').text()).toContain(otherSession)
   expect(f.request.mock.lastCall?.[0]).toMatchObject({
     method: 'GET',
@@ -163,7 +164,7 @@ it('pages and reloads only the current tenant sessions and requires confirmation
   })
   f.replies.push({ sessions: [sessionFact.session], nextCursor: null })
   await click(wrapper, '重新读取')
-  expect(f.request.mock.lastCall?.[0].query).toBeUndefined()
+  expect(f.request.mock.lastCall?.[0].query).toEqual({ limit: '50' })
   expect(wrapper.findAll('tbody tr')).toHaveLength(1)
   expect(wrapper.get('tbody').text()).not.toContain(otherSession)
   await click(wrapper, '退出全部会话')
@@ -288,4 +289,124 @@ it('continues a checked host session into its tenant and clears an unrelated rec
   expect(f.runtime.flows.take()).toBeNull()
   expect(f.request.mock.calls.filter(([o]) => o.method === 'POST')).toHaveLength(1)
   expect(f.runtime.session.state.value.session?.id).toBe(sessionId)
+})
+it('queries source-bound projected accounts in MDM, keeps applied navigation, and reads full accounts for actions', async () => {
+  const f = fixture(false, true)
+  f.replies.push(sessionFact)
+  await f.runtime.session.login(tenant, 'operator', 'Synthetic-private-password')
+  const account = {
+    principalId: '44444444-4444-4444-8444-444444444444',
+    login: 'Member',
+    enabled: true,
+    memberActive: true,
+    hasLocalPassword: true,
+  }
+  f.replies.push({ accounts: [account], nextCursor: 'YQ' })
+  const { wrapper } = await view(OrganizationView, f, 'sessions')
+  const controls = wrapper.get('.directory-query')
+  await wrapper.get('label input').setValue(principal)
+  await controls
+    .get('select')
+    .setValue(['principalId', 'email', 'departmentStatus', 'departmentSnapshot'])
+  f.replies.push({
+    accounts: [
+      {
+        principalId: account.principalId,
+        email: null,
+        departmentStatus: 'available',
+        departmentSnapshot: { version: 1, sourceRevision: 'one', nodes: [], memberships: [] },
+      },
+    ],
+    nextCursor: 'YQ',
+  })
+  await click(controls, '应用查询')
+  expect(wrapper.text()).toContain('无部门')
+  expect(f.request.mock.lastCall?.[0].query).toMatchObject({
+    source: principal,
+    fields: 'principalId,email,departmentStatus,departmentSnapshot',
+  })
+  await wrapper.get('label input').setValue('local')
+  f.replies.push({ accounts: [], nextCursor: null })
+  await click(controls, '下一页')
+  expect(f.request.mock.lastCall?.[0].query?.['source']).toBe(principal)
+  f.replies.push({
+    accounts: [
+      {
+        principalId: account.principalId,
+        email: null,
+        departmentStatus: 'available',
+        departmentSnapshot: { version: 1, sourceRevision: 'one', nodes: [], memberships: [] },
+      },
+    ],
+    nextCursor: 'YQ',
+  })
+  await click(controls, '上一页')
+  f.replies.push({
+    accounts: [
+      {
+        principalId: account.principalId,
+        email: null,
+        departmentStatus: 'available',
+        departmentSnapshot: { version: 1, sourceRevision: 'one', nodes: [], memberships: [] },
+      },
+    ],
+    nextCursor: 'YQ',
+  })
+  await click(controls, '首页 / 重新查询')
+  f.replies.push(account)
+  await click(wrapper, '修改账户状态')
+  expect(f.request.mock.lastCall?.[0].path).toContain('/accounts/' + account.principalId)
+  await click(new DOMWrapper(document.body).get('[role=alertdialog]'), '取消')
+  f.replies.push(account)
+  await click(wrapper, '修改成员状态')
+  await click(new DOMWrapper(document.body).get('[role=alertdialog]'), '取消')
+  f.replies.push(account)
+  await click(wrapper, '重置密码')
+  await click(new DOMWrapper(document.body).get('[role=dialog]'), '取消')
+  f.replies.push(account, {
+    revision: 1,
+    value: { displayName: null, username: null, email: null, extensions: {}, maxAgeSeconds: 14400 },
+  })
+  await click(wrapper, '本地资料')
+  await click(new DOMWrapper(document.body).get('[role=dialog]'), '取消')
+  await click(wrapper, '创建本地账户')
+  const creation = new DOMWrapper(document.body)
+  await creation.get('#account-login').setValue('created-member')
+  await creation.get('#account-password').setValue('Synthetic new private password')
+  f.replies.push(account, {
+    accounts: [
+      {
+        principalId: account.principalId,
+        email: null,
+        departmentStatus: 'available',
+        departmentSnapshot: { version: 1, sourceRevision: 'one', nodes: [], memberships: [] },
+      },
+    ],
+    nextCursor: null,
+  })
+  creation
+    .get('#account-password')
+    .element.closest('form')!
+    .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await flushPromises()
+  expect(
+    f.request.mock.calls.some(([o]) => o.method === 'POST' && o.path.endsWith('/accounts')),
+  ).toBe(true)
+  await click(wrapper, '创建本地账户')
+  await click(new DOMWrapper(document.body).get('[role=dialog]'), '取消')
+  f.replies.push(account)
+  await click(wrapper, '重置密码')
+  await new DOMWrapper(document.body).get('#reset-password').setValue('Cancelled private password')
+  await click(new DOMWrapper(document.body).get('[role=dialog]'), '取消')
+  f.replies.push(account)
+  await click(wrapper, '修改账户状态')
+  const cancels = new DOMWrapper(document.body)
+    .get('[role=alertdialog]')
+    .findAll('button')
+    .filter((b) => b.text() === '取消')
+  await cancels.at(-1)!.trigger('click')
+  await flushPromises()
+  expect(
+    f.request.mock.calls.filter(([o]) => o.method === 'POST' && o.path.endsWith('/accounts')),
+  ).toHaveLength(1)
 })

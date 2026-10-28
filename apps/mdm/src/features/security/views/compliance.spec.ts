@@ -221,7 +221,7 @@ it('keeps unedited presentation keys on a rule edit without merging them into co
 it('counts only the current directory page and exposes failed device assessments without inferring a conclusion', async () => {
   const list = vi.fn(async ({ cursor }: { cursor?: string } = {}) => ({
     items: cursor ? [{ id: 'device-03' }] : [{ id: 'device-01' }, { id: 'device-02' }],
-    nextCursor: cursor ? null : 'page-2',
+    nextCursor: cursor ? null : 'cGFnZS0y',
   }))
   const current = vi.fn(async (device: string) => {
     if (device === 'device-02') throw new Error('unavailable')
@@ -248,7 +248,7 @@ it('counts only the current directory page and exposes failed device assessments
     .find((item) => item.text() === '下一页')!
     .trigger('click')
   await flushPromises()
-  expect(list).toHaveBeenLastCalledWith({ cursor: 'page-2' })
+  expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'cGFnZS0y', limit: 50 }))
   expect(wrapper.findAll('.text-h4').map((item) => item.text())).toEqual(['0', '1', '0', '0', '0'])
   expect(wrapper.text()).not.toContain('device-01')
   wrapper.unmount()

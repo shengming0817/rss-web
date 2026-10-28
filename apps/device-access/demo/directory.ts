@@ -144,7 +144,7 @@ export function directoryPage(
     }
   }
   const filter = query.get('filter')
-  let rows = filter ? items.filter((v) => matches(v, parseFilter(filter))) : [...items]
+  const rows = filter ? items.filter((v) => matches(v, parseFilter(filter))) : [...items]
   const sort = query.get('sort')?.split(',') ?? [available.includes('key') ? 'key' : 'id']
   rows.sort((a, b) => {
     for (const term of [...sort, 'id' in (a ?? {}) ? 'id' : 'key']) {

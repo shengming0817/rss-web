@@ -409,9 +409,9 @@ const sourceOptions = computed(() => [
     </div>
     <div class="console-results device-directory">
       <DirectoryResults
+        v-if="page && acceptedFields.length < 4"
         :disabled="busy"
         :required="['reference']"
-        v-if="page && acceptedFields.length < 4"
         :items="page.items"
         @open="readProjected"
       />

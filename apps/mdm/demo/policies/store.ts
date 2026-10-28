@@ -107,6 +107,10 @@ export function createPolicyStore() {
           .filter((p) => request.query.get('filter')?.includes('state') || p.state !== 'archived')
           .map((p) => ({
             ...wire(p),
+            action: p.definition.action.kind,
+            scope: p.definition.scope,
+            resource: 'resource' in p.definition.action ? p.definition.action.resource.id : null,
+            category: p.definition.selfService?.presentation?.['category'] ?? null,
             toolName: `policy_${p.id.replaceAll('-', '')}`,
             alias: p.definition.alias,
             customEvent: p.definition.customEvent,

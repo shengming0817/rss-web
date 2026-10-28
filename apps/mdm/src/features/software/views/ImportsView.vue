@@ -65,16 +65,31 @@ const step = ref(0),
   nativeExport = ref(false),
   result = ref<Awaited<ReturnType<typeof runtime.software.imports.import>>>(),
   observed = ref<Awaited<ReturnType<typeof runtime.policies.resources.read>>>()
-const chosen = computed(() =>
-  (sourceQuery.complete.value ? sources.value?.items : [])?.find(
-    (v) => `${v.id}/${v.revision}` === chosenSource.value,
-  ),
-)
+const chosenDetail = ref<Awaited<ReturnType<typeof runtime.software.lifecycle.source>>>()
+const chosen = computed(() => {
+  const value = chosenDetail.value
+  return value
+    ? {
+        ...value,
+        id: value.source.id,
+        revision: value.source.revision,
+        protocol: value.source.protocol.kind,
+        state: value.lifecycle.state,
+      }
+    : undefined
+})
 function chooseProjected(row: Record<string, unknown>) {
-  if (typeof row['id'] === 'string' && typeof row['revision'] === 'string') {
-    source.value = row['id']
-    sourceRevision.value = row['revision']
-  }
+  if (typeof row['id'] !== 'string' || typeof row['revision'] !== 'string') return
+  chosenDetail.value = undefined
+  void run(
+    () => runtime.software.lifecycle.source(String(row['id']), String(row['revision'])),
+    (value) => {
+      chosenDetail.value = value
+      source.value = value.source.id
+      sourceRevision.value = value.source.revision
+      platform.value = value.source.protocol.kind === 'brew_tap' ? 'macos' : 'windows'
+    },
+  )
 }
 function loadSources(after?: string) {
   void run(
@@ -85,9 +100,9 @@ function loadSources(after?: string) {
   )
 }
 watch(chosenSource, () => {
-  source.value = chosen.value?.id ?? ''
-  sourceRevision.value = chosen.value?.revision ?? ''
-  platform.value = chosen.value?.protocol === 'brew_tap' ? 'macos' : 'windows'
+  const row = sources.value?.items.find((v) => `${v.id}/${v.revision}` === chosenSource.value)
+  if (row) chooseProjected(row)
+  else chosenDetail.value = undefined
 })
 onMounted(() => loadSources())
 function writeOriginal() {
@@ -184,6 +199,7 @@ watch(
     confirmedReplay.value = false
     sources.value = undefined
     chosenSource.value = ''
+    chosenDetail.value = undefined
     step.value = 0
     result.value = undefined
     observed.value = undefined
@@ -205,9 +221,9 @@ sourceQuery.onClear(() => {
       @load="loadSources"
     />
     <DirectoryResults
+      v-if="!sourceQuery.complete.value"
       :disabled="busy || uncertain"
       :required="['id', 'revision']"
-      v-if="!sourceQuery.complete.value"
       :items="sources?.items ?? []"
       @open="
         (row) => {

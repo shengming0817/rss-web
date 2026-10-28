@@ -258,9 +258,9 @@ fieldQuery.onClear(() => {
     @load="loadFields"
   />
   <DirectoryResults
+    v-if="fieldPage"
     :disabled="busy || uncertain"
     :required="['key']"
-    v-if="fieldPage"
     :items="fieldPage?.items ?? []"
     @open="
       (row) => {
@@ -276,8 +276,8 @@ fieldQuery.onClear(() => {
     @load="loadSaved"
   />
   <DirectoryResults
-    :disabled="busy || uncertain"
     v-if="!directoryQuery.complete.value"
+    :disabled="busy || uncertain"
     :items="saved?.items ?? []"
     @open="
       (row) => {

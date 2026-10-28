@@ -230,8 +230,8 @@ deliveryQuery.onClear(() => {
     @load="loadDeliveries"
   />
   <DirectoryResults
-    :disabled="busy || locked"
     v-if="!deliveryQuery.complete.value"
+    :disabled="busy || locked"
     :items="deliveries?.items ?? []"
     @open="
       (row) => {
@@ -247,8 +247,8 @@ deliveryQuery.onClear(() => {
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy || locked"
     v-if="!subscriptionQuery.complete.value"
+    :disabled="busy || locked"
     :items="rows"
     @open="
       (row) => {

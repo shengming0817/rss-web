@@ -122,7 +122,7 @@ describe('Identity views use actual app session and decoder modules', () => {
     f.replies.push({ sessions: [], nextCursor: null })
     await wrapper
       .findAll('button')
-      .find((b) => b.text().includes('加载更多'))!
+      .find((b) => b.text() === '下一页')!
       .trigger('click')
     await flushPromises()
     await wrapper.get('#current-password').setValue('private old password')
@@ -545,7 +545,12 @@ it('clears prior-owner rows, pagination and password drafts when visibility rech
   await flushPromises()
   expect(wrapper.get('tbody').text()).not.toContain(ID)
   expect(wrapper.get('tbody').text()).toContain(OTHER)
-  expect(wrapper.findAll('button').some((b) => b.text() === '加载更多')).toBe(false)
+  expect(
+    wrapper
+      .findAll('button')
+      .find((b) => b.text() === '下一页')!
+      .attributes('disabled'),
+  ).toBeDefined()
   expect((wrapper.get('#current-password').element as HTMLInputElement).value).toBe('')
   expect((wrapper.get('#new-password').element as HTMLInputElement).value).toBe('')
   wrapper.unmount()
@@ -570,7 +575,7 @@ it('discards an old owner list completion and reloads after the pending read set
   )
   await wrapper
     .findAll('button')
-    .find((b) => b.text() === '加载更多')!
+    .find((b) => b.text() === '下一页')!
     .trigger('click')
   f.session.clear()
   await flushPromises()
@@ -589,7 +594,12 @@ it('discards an old owner list completion and reloads after the pending read set
   await flushPromises()
   expect(wrapper.get('tbody').text()).toContain(OTHER)
   expect(wrapper.get('tbody').text()).not.toContain(ID)
-  expect(wrapper.findAll('button').some((b) => b.text() === '加载更多')).toBe(false)
+  expect(
+    wrapper
+      .findAll('button')
+      .find((b) => b.text() === '下一页')!
+      .attributes('disabled'),
+  ).toBeDefined()
   wrapper.unmount()
   f.session.clear()
   vi.restoreAllMocks()

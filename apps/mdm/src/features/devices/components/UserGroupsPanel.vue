@@ -24,12 +24,13 @@ import { user, type UserGroup } from '../../operations/clients/authorization'
 import MdmPage from '../../../ui/MdmPage.vue'
 import TenantUserSelect from './TenantUserSelect.vue'
 import { groupMessages } from '../group-i18n'
+const emit = defineEmits<{ locked: [value: boolean] }>()
+
 const directoryQuery = useDirectoryQuery(
   ['id', 'revision', 'deleted', 'name', 'enabled', 'memberCount', 'value'],
   1000,
 )
 
-const emit = defineEmits<{ locked: [value: boolean] }>()
 const confirmingAction = ref<'delete'>()
 function confirmAction() {
   const action = confirmingAction.value
@@ -234,8 +235,8 @@ directoryQuery.onClear(() => {
       @load="load"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="page?.items ?? []"
       @open="
         (row) => {

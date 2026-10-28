@@ -158,8 +158,8 @@ directoryQuery.onClear(() => {
       @load="list"
     />
     <DirectoryResults
-      :disabled="busy || locked"
       v-if="!directoryQuery.complete.value"
+      :disabled="busy || locked"
       :items="page?.items ?? []"
       @open="
         (row) => {

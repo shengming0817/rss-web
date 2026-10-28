@@ -44,6 +44,10 @@ import GroupDependencies from '../components/GroupDependencies.vue'
 import EndpointPicker from '../components/EndpointPicker.vue'
 import { deviceBinding } from '../useDeviceBinding'
 import { deviceCondition } from '../clients/asset-model'
+const props = defineProps<{ groupKind?: 'static' | 'dynamic' }>()
+
+const emit = defineEmits<{ locked: [value: boolean] }>()
+
 const directoryQuery = useDirectoryQuery(
   [
     'id',
@@ -61,8 +65,6 @@ const directoryQuery = useDirectoryQuery(
   1000,
 )
 
-const props = defineProps<{ groupKind?: 'static' | 'dynamic' }>()
-const emit = defineEmits<{ locked: [value: boolean] }>()
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.devices.groups,
@@ -457,7 +459,7 @@ watch(
     create()
     void run(
       async () => ({
-        list: await runtime.devices.groups.list({
+        list: await directoryQuery.read(undefined, (query) => runtime.devices.groups.list(query), {
           filter: allOf(
             props.groupKind ? queryComparison('kind', '==', props.groupKind) : undefined,
           ),
@@ -497,8 +499,8 @@ directoryQuery.onClear(() => {
       @load="loadList"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="list?.items ?? []"
       @open="
         (row) => {

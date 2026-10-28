@@ -1,5 +1,4 @@
-import { projectedRow } from '@rss/api/mdm-query'
-import { nextCursor } from '@rss/api/mdm-query'
+import { projectedRow, nextCursor } from '@rss/api/mdm-query'
 import { jsonObject } from '../../../services/json'
 import {
   array,

@@ -150,18 +150,23 @@ def claim_policy(fixture, policy):
                              executionContext=agent['executionContext']), agent['cert'], agent['key'])
         if response['task'] is not None:
             payload = response['task']['payload']
-            check(payload['kind'] == 'script', 'policy-task-family')
+            check(payload['kind'] in ['script','collection','software','device_access','credential','enrollment','unmanage'], 'policy-task-family')
             task = payload['task']
-            check(task['authorization']['policyId'] == policy, 'policy-task-authority')
+            check(task['deviceId'] == agent['runtime']['deviceId'] and task['registrationId'] == agent['runtime']['registrationId'], 'policy-task-device-binding')
+            wanted = payload['kind'] == 'script' and task['authorization']['policyId'] == policy
             prior = agent.setdefault('policyTasks', [])
-            check(task['taskId'] not in prior, 'policy-distinct-task')
+            if wanted:
+                check(task['taskId'] not in prior, 'policy-distinct-task')
+            # Shared fixture queues may include collection or retirement offers. Acknowledge
+            # cancellation without starting any device effect, then await the requested Policy.
             for kind in ['received', 'cancelled']:
                 receipt = call(agent['origin'], agent['ca'], '/api/v1/agent/runtime/tasks/'+task['taskId']+'/events',
                                dict(wireVersion=1, operationId=str(uuid.uuid4()), attemptId=task['attemptId'],
                                     executionContext=agent['executionContext'], event=dict(kind=kind)), agent['cert'], agent['key'])
                 check(receipt['accepted'], 'policy-terminal-'+kind)
-            prior.append(task['taskId'])
-            return dict(result='passed')
+            if wanted:
+                prior.append(task['taskId'])
+                return dict(result='passed')
         check(time.monotonic() < deadline, 'policy-task-deadline')
         time.sleep(.5)
 

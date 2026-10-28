@@ -508,8 +508,8 @@ entryQuery.onClear(() => {
       @load="load"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!entryQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="projectedItems"
       @open="
         (row) => {

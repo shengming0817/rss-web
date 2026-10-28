@@ -46,8 +46,6 @@ export function useAccounts() {
       () => session.state.value.tenant,
       () => session.state.value.identity?.principalId,
       () => session.state.value.session?.id,
-      () => session.managementHint.value,
-      () => session.state.value.navigation,
     ],
     () => {
       login.value = ''
@@ -55,6 +53,18 @@ export function useAccounts() {
       closeReset()
       profileTarget.value = null
       pending.value = null
+    },
+    { flush: 'sync' },
+  )
+  watch(
+    () => session.state.value.navigation === 'ready' && !session.managementHint.value,
+    (denied) => {
+      if (denied) {
+        closeCreate()
+        closeReset()
+        profileTarget.value = null
+        pending.value = null
+      }
     },
     { flush: 'sync' },
   )

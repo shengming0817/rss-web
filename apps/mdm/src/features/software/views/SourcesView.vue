@@ -152,8 +152,8 @@ directoryQuery.onClear(() => {
       @load="list"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="page?.items ?? []"
       @open="
         (row) => {
@@ -168,8 +168,8 @@ directoryQuery.onClear(() => {
       }}</VBtn></template
     >
     <VDataTable
-      disable-sort
       v-if="directoryQuery.complete.value && page"
+      disable-sort
       :items="page.items"
       :headers="[
         { key: 'source.id', title: t('software.source') },

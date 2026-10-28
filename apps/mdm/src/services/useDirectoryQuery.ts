@@ -121,6 +121,7 @@ export function useDirectoryQuery<const F extends string>(columns: readonly F[],
   // Empty previous cursor denotes the successfully accepted first page.
   const previous = computed(() => trail.value.at(-1))
   return {
+    updateDraft: (values: Partial<typeof draft>) => Object.assign(draft, values),
     draft,
     columns,
     maximum,
@@ -144,5 +145,5 @@ export function useDirectoryQuery<const F extends string>(columns: readonly F[],
 }
 export type DirectoryNavigation = Pick<
   ReturnType<typeof useDirectoryQuery<string>>,
-  'draft' | 'columns' | 'maximum' | 'trail' | 'next' | 'previous' | 'navigate'
+  'updateDraft' | 'draft' | 'columns' | 'maximum' | 'trail' | 'next' | 'previous' | 'navigate'
 >

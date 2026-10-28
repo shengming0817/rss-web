@@ -112,7 +112,16 @@ it('uses formal V1 collection and operation/CAS without a candidate fallback or 
   })
   response = {
     items: [
-      { ...policy, toolName: `policy_${id.replaceAll('-', '')}`, alias: null, customEvent: null },
+      {
+        ...policy,
+        action: definition.action.kind,
+        scope: definition.scope,
+        resource: 'resource' in definition.action ? definition.action.resource.id : null,
+        category: null,
+        toolName: `policy_${id.replaceAll('-', '')}`,
+        alias: null,
+        customEvent: null,
+      },
     ],
     nextCursor: null,
   }

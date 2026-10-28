@@ -35,7 +35,6 @@ export function useDirectory<T>(
     : undefined
   let attempt: Attempt | undefined,
     initialError = initial?.error
-  let reader: ReturnType<typeof useRead<DirectoryPage<T>>> | undefined
   function reset() {
     candidate = undefined
     attempt = undefined
@@ -68,7 +67,7 @@ export function useDirectory<T>(
     queryParameters(query)
     return query
   }
-  reader = useRead(
+  const reader = useRead(
     async (signal) => {
       if (initialError) throw new Error(initialError)
       const request = candidate ?? attempt ?? { query: snapshot(), trail: [] }
@@ -127,6 +126,7 @@ export function useDirectory<T>(
   }
   return {
     ...reader,
+    updateDraft: (values: Partial<typeof draft>) => Object.assign(draft, values),
     draft,
     columns,
     maximum,
@@ -146,5 +146,14 @@ export function useDirectory<T>(
 }
 export type DirectoryNavigation = Pick<
   ReturnType<typeof useDirectory>,
-  'draft' | 'columns' | 'maximum' | 'trail' | 'next' | 'apply' | 'first' | 'previous' | 'following'
+  | 'updateDraft'
+  | 'draft'
+  | 'columns'
+  | 'maximum'
+  | 'trail'
+  | 'next'
+  | 'apply'
+  | 'first'
+  | 'previous'
+  | 'following'
 >

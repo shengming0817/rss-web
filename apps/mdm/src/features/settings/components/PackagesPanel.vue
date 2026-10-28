@@ -159,9 +159,9 @@ directoryQuery.onClear(() => {
     @load="load"
   />
   <DirectoryResults
+    v-if="!directoryQuery.complete.value"
     :disabled="busy"
     :required="['releaseId']"
-    v-if="!directoryQuery.complete.value"
     :items="packages"
     @open="
       (row) => {

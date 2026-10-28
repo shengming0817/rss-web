@@ -4,6 +4,10 @@ import { useI18n } from 'vue-i18n'
 import type { DirectoryNavigation } from '../services/useDirectoryQuery'
 const props = defineProps<{ query: DirectoryNavigation; busy?: boolean; hint?: string }>()
 const emit = defineEmits<{ load: [cursor?: string] }>()
+function navigate(after?: string) {
+  props.query.navigate()
+  emit('load', after)
+}
 const { locale } = useI18n()
 const labels = () =>
   locale.value.startsWith('zh')
@@ -30,10 +34,10 @@ const labels = () =>
 </script>
 <template>
   <QueryControls
-    v-model:filter="props.query.draft.filter"
-    v-model:sort="props.query.draft.sort"
-    v-model:fields="props.query.draft.fields"
-    v-model:limit="props.query.draft.limit"
+    :filter="query.draft.filter"
+    :sort="query.draft.sort"
+    :fields="query.draft.fields"
+    :limit="query.draft.limit"
     :columns="query.columns"
     :maximum="query.maximum"
     :disabled="busy"
@@ -41,18 +45,13 @@ const labels = () =>
     :next="!!query.next.value"
     :labels="labels()"
     :hint="hint"
+    @update:filter="query.updateDraft({ filter: $event })"
+    @update:sort="query.updateDraft({ sort: $event })"
+    @update:fields="query.updateDraft({ fields: $event })"
+    @update:limit="query.updateDraft({ limit: $event })"
     @apply="emit('load')"
-    @first="
-      query.navigate()
-      emit('load')
-    "
-    @previous="
-      query.navigate()
-      emit('load', query.previous.value)
-    "
-    @next="
-      query.navigate()
-      emit('load', query.next.value ?? undefined)
-    "
+    @first="navigate()"
+    @previous="navigate(query.previous.value)"
+    @next="navigate(query.next.value ?? undefined)"
   />
 </template>

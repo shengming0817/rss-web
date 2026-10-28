@@ -269,7 +269,8 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-limits)$)',
+            regex:
+              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-limits|mdm-query|mdm-filter)$)',
             message: 'Use public product boundaries.',
           },
         ],
@@ -284,7 +285,8 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!core(?:/|$)|auth(?:/profile-json)?$|api/(?:mdm|mdm-limits)$)',
+            regex:
+              '^@rss/(?!core(?:/|$)|auth(?:/(?:profile-json|account-query))?$|api/(?:mdm|mdm-limits|mdm-query|mdm-filter)$)',
             message: 'Features consume injected clients and public UI.',
           },
         ],
@@ -405,7 +407,7 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^@rss/(?!api/(?:identity|mdm)$)',
+            regex: '^@rss/(?!api/(?:identity|mdm|mdm-query)$)',
             message: 'The domain owns no session or application composition.',
           },
         ],
@@ -425,7 +427,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm)$)',
+              '^@rss/(?!core$|auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm|mdm-query)$)',
             message: 'Features consume injected clients.',
           },
         ],
@@ -453,7 +455,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!auth$|device-access/(?:client|model)$|api/(?:identity|mdm|device-access-demo)$)',
+              '^@rss/(?!auth$|device-access/(?:client|model)$|api/(?:identity|mdm|mdm-query|mdm-filter|device-access-demo)$)',
             message: 'Demo is explicit and uses the existing executor.',
           },
         ],

@@ -12,6 +12,8 @@ import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
+const props = defineProps<{ collection: 'scopes' | 'resources'; disabled?: boolean }>()
+
 const resourceQuery = useDirectoryQuery(
   ['id', 'revision', 'kind', 'activeVersion', 'presentation'],
   1000,
@@ -22,7 +24,6 @@ const scopeQuery = useDirectoryQuery(
   1000,
 )
 
-const props = defineProps<{ collection: 'scopes' | 'resources'; disabled?: boolean }>()
 const value = defineModel<string>({ required: true })
 const { t } = useI18n(),
   runtime = useMdm()
@@ -120,8 +121,8 @@ resourceQuery.bind(() => props.collection)
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy"
     v-if="collection === 'resources' && !resourceQuery.complete.value"
+    :disabled="busy"
     :items="resourceRows"
     @open="
       (row) => {
@@ -138,8 +139,8 @@ resourceQuery.bind(() => props.collection)
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy"
     v-if="collection === 'scopes' && !scopeQuery.complete.value"
+    :disabled="busy"
     :items="scopeRows"
     @open="
       (row) => {

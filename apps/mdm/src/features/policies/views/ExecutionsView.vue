@@ -278,9 +278,9 @@ function readProjected(row: Record<string, unknown>) {
       @load="load"
     />
     <DirectoryResults
+      v-if="!directoryQuery.complete.value"
       :disabled="busy"
       :required="['detailUrl']"
-      v-if="!directoryQuery.complete.value"
       :items="records?.items ?? []"
       @open="readProjected"
     />

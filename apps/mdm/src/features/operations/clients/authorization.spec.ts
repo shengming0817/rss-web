@@ -26,7 +26,6 @@ it('reads one complete group detail as the CAS baseline and pages members with a
   expect(request.mock.lastCall![0].query).toEqual({
     cursor: 'YQ',
     limit: 2,
-    fields: 'principalId,tenantId,instanceId',
   })
 })
 it('rejects mismatched group identities and duplicate members', async () => {
@@ -161,14 +160,16 @@ it('uses the directory query for rules, accepts short continuation pages and rea
     subject: { kind: 'user_group', id: group },
     grants: [{ operation: 'authorization_read', scope: { kind: 'tenant' } }],
   }
-  let reply: unknown = { items: [{ id: group, revision: 1, value }], nextCursor: 'YQ' }
+  let reply: unknown = {
+    items: [{ id: group, revision: 1, deleted: false, subjectKind: 'user_group', value }],
+    nextCursor: 'YQ',
+  }
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply)),
     client = createAuthorizationClient({ request } as unknown as HttpTransport, tenant)
   expect((await client.rules({ cursor: 'YQ', limit: 1 })).nextCursor).toBe('YQ')
   expect(request.mock.lastCall![0].query).toEqual({
     limit: 1,
     cursor: 'YQ',
-    fields: 'id,revision,value',
   })
   reply = { id: group, revision: 1, value }
   expect((await client.rule(group)).value).toEqual(value)

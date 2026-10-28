@@ -86,9 +86,9 @@ viewQuery.onClear(() => {
     @load="load"
   />
   <DirectoryResults
+    v-if="!viewQuery.complete.value"
     :disabled="busy"
     :required="['reference']"
-    v-if="!viewQuery.complete.value"
     :items="projectedViews"
     @open="
       (row) => {

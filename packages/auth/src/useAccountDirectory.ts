@@ -45,15 +45,32 @@ export function useAccountDirectory() {
     next.value = null
   }
   watch(
-    () => [
-      session.state.value.status,
-      session.state.value.tenant,
-      session.state.value.identity?.principalId,
-      session.state.value.session?.id,
-      session.managementHint.value,
-      session.state.value.navigation,
-    ],
+    () =>
+      JSON.stringify([
+        session.state.value.status,
+        session.state.value.tenant,
+        session.state.value.identity?.principalId,
+        session.state.value.session?.id,
+      ]),
     clear,
+    { flush: 'sync' },
+  )
+  let allowed = session.managementHint.value
+  watch(
+    () =>
+      JSON.stringify([
+        session.state.value.navigation,
+        session.state.value.navigation === 'ready' ? session.managementHint.value : null,
+      ]),
+    () => {
+      generation++
+      operation.invalidate()
+      if (session.state.value.navigation === 'ready') {
+        const current = session.managementHint.value
+        if (current !== allowed) clear()
+        allowed = current
+      }
+    },
     { flush: 'sync' },
   )
   onBeforeUnmount(clear)

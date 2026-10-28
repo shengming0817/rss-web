@@ -68,6 +68,7 @@ const {
         :busy="busy"
         :previous="!!trail.length"
         :next="!!next"
+        @change="Object.assign(query, $event)"
         @apply="run(() => load())"
         @first="run(() => navigate())"
         @previous="run(() => navigate(previous))"

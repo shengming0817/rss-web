@@ -18,6 +18,10 @@ const id = '11111111-1111-4111-8111-111111111111',
   sha = Array<number>(32).fill(1)
 const life = { revision: 1, state: 'enabled', operation: id, actor: 'operator', at: 1, digest: sha }
 const source = {
+  id: 'enterprise',
+  revision: '1',
+  protocol: 'private',
+  state: 'enabled',
   source: { id: 'enterprise', revision: '1', protocol: { kind: 'private' } },
   snapshot: { id: 'enterprise', revision: '1', sha256: sha },
   lifecycle: life,
@@ -246,6 +250,7 @@ it('pins source and complete import operation across a lost response and explici
     policies: { resources: { read: vi.fn().mockResolvedValue({ id: 'app', revision: 1 }) } },
   })
   await field(wrapper, '企业来源 ID').setValue('enterprise/1')
+  await flushPromises()
   await button(wrapper, '继续').trigger('click')
   await field(wrapper, '软件资源').setValue('app')
   await field(wrapper, '包标识').setValue('Example.App')
@@ -284,7 +289,7 @@ it('uses Resource pages and reads versions only after selection without inventin
           activeVersion: '1',
         },
       ],
-      nextCursor: 'app',
+      nextCursor: 'YXBw',
     }),
     read = vi.fn().mockResolvedValue({
       id: 'app',
@@ -297,7 +302,9 @@ it('uses Resource pages and reads versions only after selection without inventin
   const { wrapper, session } = await fixture(CatalogView, {
     policies: { resources: { list, read } },
   })
-  expect(list).toHaveBeenCalledWith({ cursor: undefined, filter: "kind=='software'" })
+  expect(list).toHaveBeenCalledWith(
+    expect.objectContaining({ cursor: undefined, filter: "(kind=='software')", limit: 50 }),
+  )
   expect(read).not.toHaveBeenCalled()
   await wrapper.get('tbody button').trigger('click')
   await flushPromises()
@@ -306,7 +313,9 @@ it('uses Resource pages and reads versions only after selection without inventin
   await flushPromises()
   await button(wrapper, '下一页').trigger('click')
   await flushPromises()
-  expect(list).toHaveBeenLastCalledWith({ cursor: 'app', filter: "kind=='software'" })
+  expect(list).toHaveBeenLastCalledWith(
+    expect.objectContaining({ cursor: 'YXBw', filter: "(kind=='software')", limit: 50 }),
+  )
   session.value = { ...session.value, session: { id: crypto.randomUUID() } }
   await flushPromises()
   expect(wrapper.find('[data-testid=resource-locator]').exists()).toBe(false)
@@ -330,7 +339,7 @@ it('filters and clears the current Resource page without detail requests, then e
     policies: { resources: { list, read } },
   })
   onTestFinished(() => wrapper.unmount())
-  const search = field(wrapper, '搜索本页名称或标识')
+  const search = field(wrapper, '当前页搜索')
   await search.setValue('EXAMPLE')
   await flushPromises()
   expect(wrapper.get('tbody').text()).toContain('Example Editor')
@@ -338,7 +347,7 @@ it('filters and clears the current Resource page without detail requests, then e
   expect(list).toHaveBeenCalledTimes(1)
   expect(read).not.toHaveBeenCalled()
 
-  await search.get('[role="button"][aria-label="清除 搜索本页名称或标识"]').trigger('click')
+  await search.get('[role="button"][aria-label="清除 当前页搜索"]').trigger('click')
   await flushPromises()
   expect(wrapper.get('tbody').text()).toContain('Example Editor')
   expect(wrapper.get('tbody').text()).toContain('Enterprise Tools')
@@ -347,10 +356,12 @@ it('filters and clears the current Resource page without detail requests, then e
 
   await button(wrapper, '重新读取').trigger('click')
   await flushPromises()
-  expect(list.mock.calls).toEqual([
-    [{ cursor: undefined, filter: "kind=='software'" }],
-    [{ cursor: undefined, filter: "kind=='software'" }],
-  ])
+  expect(list.mock.calls).toHaveLength(2)
+  expect(list.mock.calls[1]?.[0]).toMatchObject({
+    cursor: undefined,
+    filter: "(kind=='software')",
+    limit: 50,
+  })
   expect(wrapper.get('tbody').text()).not.toContain('Example Editor')
   expect(wrapper.get('tbody').text()).toContain('Enterprise Tools')
   expect(read).not.toHaveBeenCalled()
@@ -570,6 +581,10 @@ it('submits a complete synchronous import with explicit target and auxiliary mat
       revision: '2',
       protocol: { kind: 'winget_rest', location: 'https://source.test/', identifier: 'enterprise' },
     },
+    id: 'enterprise',
+    revision: '2',
+    protocol: 'private',
+    state: 'enabled',
     snapshot: { ...source.snapshot, revision: '2' },
   }
   const { wrapper } = await fixture(ImportsView, {
@@ -582,6 +597,7 @@ it('submits a complete synchronous import with explicit target and auxiliary mat
     },
   })
   await field(wrapper, '企业来源 ID').setValue('enterprise/2')
+  await flushPromises()
   await button(wrapper, '继续').trigger('click')
   for (const [label, value] of [
     ['软件资源', 'imported'],

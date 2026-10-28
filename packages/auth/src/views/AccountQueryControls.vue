@@ -2,14 +2,27 @@
 import { QueryControls } from '@rss/core'
 import { useI18n } from 'vue-i18n'
 import { accountCodecs, type AccountField } from '../services/account-query'
-const props = defineProps<{
-  query: { filter: string; sort: string; fields: AccountField[]; limit: number; source: string }
+interface QueryDraft {
+  filter: string
+  sort: string
+  fields: AccountField[]
+  limit: number
+  source: string
+}
+defineProps<{
+  query: QueryDraft
   busy?: boolean
   departments?: boolean
   previous?: boolean
   next?: boolean
 }>()
-const emit = defineEmits<{ apply: []; first: []; previous: []; next: [] }>()
+const emit = defineEmits<{
+  change: [values: Partial<QueryDraft>]
+  apply: []
+  first: []
+  previous: []
+  next: []
+}>()
 const { locale } = useI18n()
 const zh = () => locale.value.startsWith('zh')
 const labels = () =>
@@ -38,13 +51,16 @@ const labels = () =>
 <template>
   <label
     >{{ zh() ? '资料来源（local 或指定 IdP UUID）' : 'Profile source (local or IdP UUID)'
-    }}<input v-model="props.query.source" :disabled="busy"
+    }}<input
+      :value="query.source"
+      :disabled="busy"
+      @input="emit('change', { source: ($event.target as HTMLInputElement).value })"
   /></label>
   <QueryControls
-    v-model:filter="props.query.filter"
-    v-model:sort="props.query.sort"
-    v-model:fields="props.query.fields"
-    v-model:limit="props.query.limit"
+    :filter="query.filter"
+    :sort="query.sort"
+    :fields="query.fields"
+    :limit="query.limit"
     :columns="
       Object.keys(accountCodecs).filter((field) => departments || !field.startsWith('department'))
     "
@@ -63,7 +79,10 @@ const labels = () =>
           : ' Departments: department / departmentSubtree == department ID; select an IdP.'
         : '')
     "
-    @update:fields="props.query.fields = $event as AccountField[]"
+    @update:filter="emit('change', { filter: $event })"
+    @update:sort="emit('change', { sort: $event })"
+    @update:limit="emit('change', { limit: $event })"
+    @update:fields="emit('change', { fields: $event as AccountField[] })"
     @apply="emit('apply')"
     @first="emit('first')"
     @previous="emit('previous')"

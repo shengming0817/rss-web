@@ -771,8 +771,8 @@ usageQuery.bind(id)
       @load="references"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!usageQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="usageRows"
       @open="
         (row) => {
@@ -789,8 +789,8 @@ usageQuery.bind(id)
       @load="scopes"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!scopeQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="scopeRows"
       @open="
         (row) => {
@@ -806,8 +806,8 @@ usageQuery.bind(id)
       @load="sources"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!templateQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="templateRows"
       @open="
         (row) => {
@@ -823,8 +823,8 @@ usageQuery.bind(id)
       @load="load"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="list?.items ?? []"
       @open="
         (row) => {

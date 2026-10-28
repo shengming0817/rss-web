@@ -1,10 +1,5 @@
-import {
-  accountPage,
-  accountQuery,
-  type AccountQuery,
-  type AccountField,
-  accountBaseFields,
-} from './account-query'
+import { accountPage, accountQuery } from './account-query'
+import type { accountBaseFields, AccountQuery, AccountField } from './account-query'
 import { localProfile, profileReceipt, type LocalProfile } from './profile'
 import { isRssApiError } from '@rss/api/identity'
 import type { IdentitySession } from './session'

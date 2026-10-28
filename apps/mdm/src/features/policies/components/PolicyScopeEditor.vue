@@ -21,12 +21,13 @@ import ObjectLink from '../../devices/components/ObjectLink.vue'
 
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import ReferenceEditor from '../components/ReferenceEditor.vue'
+const props = defineProps<{ disabled?: boolean }>()
+
 const directoryQuery = useDirectoryQuery(
   ['id', 'revision', 'deleted', 'calculationRevision', 'resolution', 'resolutionRevision'],
   1000,
 )
 
-const props = defineProps<{ disabled?: boolean }>()
 const selected = defineModel<string>({ default: '' })
 const scopeOpen = ref(false)
 const { t } = useI18n(),
@@ -230,8 +231,8 @@ directoryQuery.onClear(() => {
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy || uncertain"
     v-if="!directoryQuery.complete.value"
+    :disabled="busy || uncertain"
     :items="list?.items ?? []"
     @open="
       (row) => {

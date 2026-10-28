@@ -129,8 +129,8 @@ deviceQuery.bind(kind)
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy"
     v-if="kind === 'device' && !deviceQuery.complete.value"
+    :disabled="busy"
     :items="deviceRows"
     @open="
       (row) => {
@@ -147,8 +147,8 @@ deviceQuery.bind(kind)
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy"
     v-if="kind === 'group' && !groupQuery.complete.value"
+    :disabled="busy"
     :items="groupRows"
     @open="
       (row) => {

@@ -176,9 +176,9 @@ provisioningQuery.onClear(() => {
       hint="operationId"
       @load="loadProvisionings" />
     <DirectoryResults
+      v-if="!provisioningQuery.complete.value"
       :disabled="busy"
       :required="['operationId']"
-      v-if="!provisioningQuery.complete.value"
       :items="projectedProvisionings"
       @open="
         (row) => {
@@ -192,9 +192,9 @@ provisioningQuery.onClear(() => {
       hint="tenantId / name / notes / revision / initialEpoch / management / deletable"
       @load="loadTenants" />
     <DirectoryResults
+      v-if="!tenantQuery.complete.value"
       :disabled="busy"
       :required="['tenantId']"
-      v-if="!tenantQuery.complete.value"
       :items="projectedTenants"
       @open="
         (row) => {

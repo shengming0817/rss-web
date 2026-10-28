@@ -20,6 +20,15 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import type { GroupRead } from '../clients/groups'
+const props = defineProps<{
+  modelValue: string
+  assetContext: 'endpoint' | 'associated_device'
+  referenceableFor?: string | undefined
+  disabled?: boolean
+}>()
+
+const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+
 const groupQuery = useDirectoryQuery(
   [
     'id',
@@ -37,13 +46,6 @@ const groupQuery = useDirectoryQuery(
   1000,
 )
 
-const props = defineProps<{
-  modelValue: string
-  assetContext: 'endpoint' | 'associated_device'
-  referenceableFor?: string | undefined
-  disabled?: boolean
-}>()
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const runtime = useMdm(),
   { t } = useI18n(),
   { run, busy, failure } = useOperation([], () => [
@@ -122,8 +124,8 @@ groupQuery.onClear(() => {
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy"
     v-if="!groupQuery.complete.value"
+    :disabled="busy"
     :items="projectedGroups"
     @open="
       (row) => {

@@ -7,7 +7,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 import process from 'node:process'
-import { assertSoftwareOption } from './vuetify-software-controls.mjs'
+import { assertSoftwareOption, chooseSoftwareOption } from './vuetify-software-controls.mjs'
 let browser,
   phase = 'setup',
   result = 'failed'
@@ -83,6 +83,14 @@ try {
     csrf = (await api(`/api/v1/identity/tenants/${target}/session`)).csrfToken
   }
   const ready = () => page.locator('section.console-page:not([aria-busy="true"])').waitFor()
+  async function readPanel(panel) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await ready()
+      if (await panel.isVisible()) return
+      await page.getByRole('button', { name: '重新读取', exact: true }).first().click()
+    }
+    await panel.waitFor({ state: 'visible' })
+  }
   const mutation = (path, input, revision = 0, expected = 200) =>
     api(path, 'POST', { operationId: randomUUID(), expectedRevision: revision, input }, expected)
   async function until(read, valid) {
@@ -148,9 +156,20 @@ try {
   await page.goto(at('devices/fixture-mac/management'))
   await ready()
   const materials = page.locator('[data-panel="recovery-credentials"]')
+  phase = 'credential-panel'
+  await readPanel(materials)
+  assert.equal(await materials.locator('form').count(), 1, 'Apple material actions')
+  assert.equal(
+    await materials.getByLabel('操作类型', { exact: true }).count(),
+    1,
+    'material action label',
+  )
   phase = 'credential-action'
-  await materials.getByRole('combobox', { name: '操作类型', exact: true }).click()
-  await page.getByRole('option', { name: '设置或清除 Recovery Lock', exact: true }).click()
+  await chooseSoftwareOption(
+    page,
+    materials.getByLabel('操作类型', { exact: true }),
+    '设置或清除 Recovery Lock',
+  )
   await materials.getByLabel('确认对当前目标执行此操作', { exact: true }).check()
   const accepted = page.waitForResponse(
     (r) => r.request().method() === 'POST' && r.url().endsWith('/recovery-credentials/operations'),
@@ -226,6 +245,7 @@ try {
   await page.goto(at(`devices/${f.mdm}/management`))
   await ready()
   const queries = page.locator('[data-panel="device-management-queries"]')
+  await readPanel(queries)
   phase = 'device-memberships'
   const groupRead = page.waitForResponse(
     (r) =>
@@ -377,11 +397,19 @@ try {
     })
   await page.goto(at('policies/assignments/lifecycle'))
   await ready()
-  await page.getByRole('button', { name: '下一页', exact: true }).first().waitFor()
-  const firstIds = await page.locator('ul').first().textContent()
+  const policyQuery = page.locator('.directory-query').first()
+  await policyQuery.locator('summary').click()
+  await policyQuery.getByLabel('每页数量', { exact: true }).fill('20')
+  const policyPage = page.waitForResponse(
+    (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/v1/policies',
+  )
+  await policyQuery.getByRole('button', { name: '应用查询', exact: true }).click()
+  assert.equal((await policyPage).status(), 200)
+  await ready()
+  const firstIds = await page.locator('section.console-page ul').first().textContent()
   await page.getByRole('button', { name: '下一页', exact: true }).first().click()
   await ready()
-  assert.notEqual(await page.locator('ul').first().textContent(), firstIds)
+  assert.notEqual(await page.locator('section.console-page ul').first().textContent(), firstIds)
   coverage.push('opaque-policy-directory-pagination')
   phase = 'script-resource-create'
   const resource = randomUUID(),
@@ -520,8 +548,10 @@ try {
     definition: windowDefinition,
   })
   const input = { definition: windowDefinition }
+  phase = 'preview-implicit-first'
   const first = await api('/api/v1/policies/previews?limit=1', 'POST', input)
   assert.ok(first.nextCursor && typeof first.nextCursor === 'string')
+  phase = 'preview-implicit-next'
   const second = await api(
     '/api/v1/policies/previews?limit=1&cursor=' + encodeURIComponent(first.nextCursor),
     'POST',
@@ -537,7 +567,9 @@ try {
     409,
   )
   const explicit = { ...input, scopeResult: first.scopeResult }
+  phase = 'preview-explicit-first'
   const explicitFirst = await api('/api/v1/policies/previews?limit=1', 'POST', explicit)
+  phase = 'preview-explicit-next'
   assert.equal(
     (
       await api(
@@ -575,7 +607,10 @@ try {
   assert.ok(
     (await walk(`/api/v1/devices/${f.mdm}/registrations`, (r) => r.registrationId)).length >= 2,
   )
-  assert.equal((await walk(`/api/v1/policies/${windowPolicy}/runs`, (r) => r.taskId)).length, 0)
+  const existingRuns = new Set(
+    (await walk(`/api/v1/policies/${windowPolicy}/runs`, (r) => r.taskId)).map((r) => r.taskId),
+  )
+  phase = 'policy-history-rerun'
   for (let i = 0; i < 2; i++) {
     await api(`/api/v1/policies/${windowPolicy}/reruns`, 'POST', {
       operationId: randomUUID(),
@@ -593,11 +628,25 @@ try {
       ],
       { timeout: 45000, stdio: 'pipe' },
     )
+    if (claimed.status !== 0) {
+      try {
+        const diagnostic = JSON.parse(claimed.stdout.toString().trim())
+        if (
+          typeof diagnostic.classification === 'string' &&
+          /^[a-zA-Z0-9_-]{1,120}$/.test(diagnostic.classification)
+        )
+          console.error(
+            JSON.stringify({ phase: 'policy-claim', classification: diagnostic.classification }),
+          )
+      } catch {
+        /* Ignore unstructured subprocess diagnostics. */
+      }
+    }
     assert.equal(claimed.status, 0, 'actual Agent mTLS claim')
   }
   const history = await until(
     () => walk(`/api/v1/policies/${windowPolicy}/runs`, (r) => r.taskId),
-    (rows) => rows.length >= 2,
+    (rows) => rows.filter((r) => !existingRuns.has(r.taskId)).length >= 2,
   )
   for (let i = 1; i < history.length; i++)
     assert.ok(
@@ -605,6 +654,7 @@ try {
         (history[i - 1].availableAt === history[i].availableAt &&
           history[i - 1].taskId > history[i].taskId),
     )
+  phase = 'policy-roundtrip-update'
   const edited = await mutation(
     `/api/v1/policies/${windowPolicy}`,
     {
@@ -614,13 +664,16 @@ try {
     },
     1,
   )
-  await page.goto(at('policies/assignments') + '?id=' + windowPolicy)
+  phase = 'policy-roundtrip-editor'
+  await page.goto(at('policies') + '?id=' + windowPolicy)
   await ready()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
+  phase = 'policy-roundtrip-resource'
   await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
   await page.locator('#policy-lifetime').fill('3400')
   await page.getByLabel('唯一别名', { exact: true }).fill(' Support.Tool ')
   await page.getByLabel('自定义事件', { exact: true }).fill('refresh.contract')
+  phase = 'policy-roundtrip-submit'
   const updated = page.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -712,9 +765,11 @@ try {
   await ready()
   await page.getByText('观察时间 · UTC', { exact: false }).waitFor()
   // Withdraw through the same current Policy editor. Original batch facts remain frozen.
-  await page.goto(at('policies/assignments') + '?id=' + windowPolicy)
+  phase = 'policy-roundtrip-editor'
+  await page.goto(at('policies') + '?id=' + windowPolicy)
   await ready()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
+  phase = 'policy-roundtrip-resource'
   await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
   await page.getByLabel('唯一别名', { exact: true }).fill('')
   await page.getByLabel('自定义事件', { exact: true }).fill('')
@@ -736,6 +791,7 @@ try {
   )
 
   phase = 'software-channel-default'
+  phase = 'software-capabilities'
   const capabilities = await api('/api/v1/policies/capabilities')
   assert.deepEqual(capabilities, {
     defaultSoftwareChannel: 'agent',
@@ -744,11 +800,13 @@ try {
   await page.goto(at('policies?action=software'))
   await ready()
   await page.getByRole('button', { name: '新建', exact: true }).first().click()
-  const channel = page.getByRole('combobox', { name: '软件写通道', exact: true })
+  const channel = page.getByLabel('软件写通道', { exact: true })
+  phase = 'software-agent-default'
   await assertSoftwareOption(page, channel, 'Agent')
   await channel.press('ArrowDown')
   const channelListId = await channel.getAttribute('aria-controls')
   const channelList = page.locator(`[id=${JSON.stringify(channelListId)}]`)
+  phase = 'software-disabled-mdm'
   assert.equal(
     await channelList
       .getByRole('option', { name: 'MDM', exact: true })

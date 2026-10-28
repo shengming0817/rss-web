@@ -18,7 +18,7 @@ it('browses published exact software versions through the formal publication dir
         withdrawn: false,
       },
     ],
-    nextCursor: 'opaque',
+    nextCursor: 'b3BhcXVl',
   })
   const router = createFeatureRouter({
     history: createMemoryHistory(),
@@ -38,16 +38,20 @@ it('browses published exact software versions through the formal publication dir
       },
     },
   })
-  await wrapper.get('button').trigger('click')
+  await wrapper.get('.v-expansion-panel-title').trigger('click')
   await wrapper
     .findAll('button')
     .find((button) => button.text() === '重新读取')!
     .trigger('click')
   await flushPromises()
-  expect(list).toHaveBeenCalledWith({
-    cursor: undefined,
-    filter: "(outcome=='published');(withdrawn=='false')",
-  })
+  expect(list).toHaveBeenCalledWith(
+    expect.objectContaining({
+      cursor: undefined,
+      limit: 50,
+      filter: undefined,
+      fields: expect.arrayContaining(['id', 'outcome', 'withdrawn']),
+    }),
+  )
   expect(wrapper.text()).toContain('7.2')
   expect(wrapper.text()).toContain('winget-private')
   expect(wrapper.find('a[href*="resource=editor"]').exists()).toBe(true)
@@ -56,9 +60,10 @@ it('browses published exact software versions through the formal publication dir
     .find((button) => button.text() === '下一页')!
     .trigger('click')
   await flushPromises()
-  expect(list.mock.lastCall?.[0]).toEqual({
-    cursor: 'opaque',
-    filter: "(outcome=='published');(withdrawn=='false')",
+  expect(list.mock.lastCall?.[0]).toMatchObject({
+    cursor: 'b3BhcXVl',
+    limit: 50,
+    filter: undefined,
   })
   wrapper.unmount()
 })

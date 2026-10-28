@@ -461,8 +461,14 @@ it('clears credentials on tab hiding and prevents changed intent from replaying 
 })
 it('provisions with an immediately cleared password and displays capacity without creating a target session', async () => {
   const f = await fixture(TenantsView, {}, 'platform')
-  const inputs = f.wrapper.findAll('input:not([type=hidden]):not([role=combobox]):not([readonly])')
-  for (const input of inputs.slice(0, 3)) await input.setValue('secure-fixture-value')
+  const form = f.wrapper.get('form')
+  const inputs = form.findAll('input:not([type=hidden]):not([type=checkbox]):not([readonly])')
+  await inputs[0]!.setValue('Team')
+  await inputs[1]!.setValue('administrator')
+  await button(f.wrapper, '生成安全随机密码').trigger('click')
+  await flushPromises()
+  await form.get('input[type=checkbox]').setValue(false)
+  await form.get('input[autocomplete=new-password]').setValue('Synthetic private password')
   f.setHandler((o) => {
     if (o.method === 'POST') return provision(o.headers!['Idempotency-Key']!)
     if (o.path.endsWith('/tenants')) return { items: [] }
@@ -2248,4 +2254,43 @@ it('returns focus to the configuration button after closing a material dialog', 
   ;(close.element as HTMLButtonElement).focus()
   await close.trigger('click')
   await vi.waitFor(() => expect(document.activeElement).toBe(opener.element))
+})
+it('queries both platform directories as projections and resolves a tenant before opening its editor', async () => {
+  const f = await fixture(TenantsView, {}, 'platform')
+  f.setHandler((o) => {
+    if (o.path.endsWith('/tenants/{id}')) return row
+    if (o.path.includes('/provisionings/{id}')) return provision(id)
+    const value = o.path.endsWith('/tenants') ? row : provision(id)
+    const fields = String(o.query?.['fields'] ?? '')
+      .split(',')
+      .filter(Boolean)
+    return {
+      items: [
+        fields.length
+          ? Object.fromEntries(fields.map((key) => [key, Reflect.get(value, key)]))
+          : value,
+      ],
+      nextCursor: o.query?.['cursor'] ? null : 'YQ',
+    }
+  })
+  const controls = f.wrapper.findAll('.directory-query')
+  for (const [index, field] of ['operationId', 'tenantId'].entries()) {
+    const q = controls[index]!
+    await q.get('select').setValue([field])
+    await button(q, '应用查询').trigger('click')
+    await flushPromises()
+    await button(q, '下一页').trigger('click')
+    await flushPromises()
+    await button(q, '上一页').trigger('click')
+    await flushPromises()
+    expect(f.calls.at(-1)?.query).toMatchObject({ fields: field, limit: 50 })
+  }
+  const details = f.wrapper.findAll('.directory-results')
+  await details[1]!.get('button').trigger('click')
+  await flushPromises()
+  expect(f.calls.some((o) => o.path.endsWith('/tenants/{id}'))).toBe(true)
+  expect(f.wrapper.text()).toContain('Team')
+  await details[0]!.get('button').trigger('click')
+  await flushPromises()
+  expect(f.calls.some((o) => o.path.endsWith('/provisionings/{id}'))).toBe(true)
 })

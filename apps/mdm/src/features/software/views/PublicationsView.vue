@@ -212,8 +212,8 @@ targetQuery.onClear(() => {
   <MdmPage :title="t('software.publications')" :busy="busy" :failure="failure">
     <DirectoryControls :query="targetQuery" :busy="busy" hint="id / protocol" @load="loadTargets" />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!targetQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="targets?.items ?? []"
       @open="
         (row) => {
@@ -229,8 +229,8 @@ targetQuery.onClear(() => {
       @load="load"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="page?.items ?? []"
       @open="
         (row) => {

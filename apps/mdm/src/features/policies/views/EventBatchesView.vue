@@ -157,8 +157,8 @@ memberQuery.onClear(() => {
       @load="loadMembers"
     />
     <DirectoryResults
-      :disabled="op.busy.value"
       v-if="batch && !memberQuery.complete.value"
+      :disabled="op.busy.value"
       :items="members?.items ?? []"
       @open="
         (row) => {
@@ -175,8 +175,8 @@ memberQuery.onClear(() => {
       @load="load"
     />
     <DirectoryResults
-      :disabled="op.busy.value"
       v-if="!batch && !batchQuery.complete.value"
+      :disabled="op.busy.value"
       :items="page?.items ?? []"
       @open="
         (row) => {

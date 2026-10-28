@@ -78,8 +78,8 @@ publicationQuery.onClear(() => {
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy"
     v-if="!publicationQuery.complete.value"
+    :disabled="busy"
     :items="page?.items ?? []"
     @open="
       (row) => {
@@ -95,8 +95,8 @@ publicationQuery.onClear(() => {
         <VBtn :disabled="busy" @click="load()">{{ t('policies.reload') }}</VBtn>
         <VAlert v-if="failure" type="error" variant="tonal">{{ t(`devices.${failure}`) }}</VAlert>
         <VDataTable
-          disable-sort
           v-if="page && publicationQuery.complete.value"
+          disable-sort
           :items="page.items"
           :headers="[
             { key: 'resource', title: t('policies.resources') },

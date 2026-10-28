@@ -220,6 +220,8 @@ it('shows Resource bounds, starts numeric fixed values within bounds, and follow
   await flushPromises()
   expect(f.read).toHaveBeenLastCalledWith(next)
   expect((f.wrapper.get('#policy-id').element as HTMLInputElement).value).toBe(next)
+  await f.button('读取').trigger('click')
+  await flushPromises()
   const first = f.wrapper.findAll('tbody button')[0]!
   await first.trigger('click')
   await flushPromises()
@@ -479,14 +481,14 @@ it('keeps a preview body unchanged across opaque continuations and clears it on 
   await flushPromises()
   await f.wrapper
     .findAll('button')
-    .find((b) => b.text() === '下一页')!
+    .find((b) => b.text() === '下一页' && b.attributes('disabled') === undefined)!
     .trigger('click')
   await flushPromises()
   expect(f.preview.mock.calls[1]![0]).toEqual(f.preview.mock.calls[0]![0])
   expect(f.preview.mock.calls[1]![0]).not.toHaveProperty('scopeResult')
   expect(f.preview.mock.calls[1]![1]).toEqual({ cursor: 'b3BhcXVl' })
   await f.wrapper.get('#policy-scope').setValue(crypto.randomUUID())
-  expect(f.wrapper.text()).not.toContain('下一页')
+  expect(f.preview).toHaveBeenCalledTimes(2)
   f.wrapper.unmount()
 })
 

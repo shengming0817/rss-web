@@ -116,7 +116,10 @@ function saveOrganization() {
       enabled: enabled.value,
     }),
   ).then((ok) => {
-    if (ok) void refresh()
+    if (ok) {
+      creatingOrganization = undefined
+      void load()
+    }
   })
 }
 function saveMapping() {
@@ -201,7 +204,9 @@ accountQuery.restrict(canRead)
 organizationQuery.restrict(canRead)
 </script>
 <template>
-  <VBtn :disabled="busy || !id" @click="load()">{{ t('settings.reload') }}</VBtn>
+  <VBtn :disabled="busy || !id" @click="load()"
+    >{{ t('settings.reload') }} · {{ t('onboarding.organizationConfiguration') }}</VBtn
+  >
   <MdmPage :title="t('onboarding.appleAccount')" :busy="busy" :failure="failure">
     <DirectoryControls
       :query="accountQuery"
@@ -210,9 +215,9 @@ organizationQuery.restrict(canRead)
       @load="loadAccounts"
     />
     <DirectoryResults
+      v-if="!accountQuery.complete.value"
       :disabled="busy || uncertain"
       :required="['account']"
-      v-if="!accountQuery.complete.value"
       :items="accountRows"
       @open="
         (row) => {
@@ -223,8 +228,8 @@ organizationQuery.restrict(canRead)
 
     <DirectoryControls :query="organizationQuery" :busy="busy" hint="id" @load="refresh" />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!organizationQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="organizationRows"
       @open="
         (row) => {

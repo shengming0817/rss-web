@@ -36,3 +36,53 @@ it('rejects retired UUID account cursors and invalid field or page contracts', (
     }),
   ).toMatchObject({ fields: 'principalId,email', source: 'local', limit: '1' })
 })
+it('keeps one complete department snapshot and decodes unavailable or empty observations explicitly', () => {
+  const fields = [
+    'principalId',
+    'displayName',
+    'email',
+    'profileStatus',
+    'departmentStatus',
+    'departmentSnapshot',
+  ] as const
+  const row = {
+    principalId: '11111111-1111-4111-8111-111111111111',
+    displayName: 'Name',
+    email: 'name@example.test',
+    profileStatus: 'available',
+    departmentStatus: 'available',
+    departmentSnapshot: {
+      version: 1,
+      sourceRevision: 'r2',
+      nodes: [
+        { id: 'engineering', displayName: 'Engineering', parentId: null },
+        { id: 'platform', displayName: 'Platform', parentId: 'engineering' },
+      ],
+      memberships: [],
+    },
+  }
+  const decoded = accountPage({ accounts: [row], nextCursor: null }, fields).accounts[0]!
+  expect(decoded.departmentSnapshot?.memberships).toEqual([])
+  expect(decoded.displayName).toBe('Name')
+  expect(
+    accountPage(
+      {
+        accounts: [
+          {
+            ...row,
+            departmentStatus: 'expired',
+            departmentSnapshot: null,
+            profileStatus: 'invalid_claim',
+            displayName: null,
+            email: null,
+          },
+        ],
+        nextCursor: null,
+      },
+      fields,
+    ).accounts[0]?.departmentStatus,
+  ).toBe('expired')
+  expect(() =>
+    accountPage({ accounts: [{ ...row, departmentStatus: 'invented' }], nextCursor: null }, fields),
+  ).toThrow()
+})

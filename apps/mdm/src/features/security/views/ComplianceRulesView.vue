@@ -295,8 +295,8 @@ groupQuery.onClear(() => {
       @load="groupPage"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!groupQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="groups?.items ?? []"
       @open="
         (row) => {
@@ -312,8 +312,8 @@ groupQuery.onClear(() => {
       @load="load"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="list?.items ?? []"
       @open="
         (row) => {

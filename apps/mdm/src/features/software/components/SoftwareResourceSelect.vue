@@ -11,13 +11,15 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import type { ResourceRead } from '../../policies/clients/resources'
+const props = defineProps<{ disabled?: boolean }>()
+
+const emit = defineEmits<{ change: [] }>()
+
 const resourceQuery = useDirectoryQuery(
   ['id', 'revision', 'kind', 'activeVersion', 'presentation'],
   1000,
 )
 
-const props = defineProps<{ disabled?: boolean }>()
-const emit = defineEmits<{ change: [] }>()
 const resource = defineModel<string>('resource', { required: true }),
   version = defineModel<string>('version', { required: true }),
   { t } = useI18n(),
@@ -85,8 +87,8 @@ resourceQuery.onClear(() => {
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy"
     v-if="!resourceQuery.complete.value"
+    :disabled="busy"
     :items="page?.items ?? []"
     @open="
       (row) => {

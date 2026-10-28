@@ -14,6 +14,12 @@ async function selectValue(wrapper: VueWrapper, id: string, value: unknown) {
 const tenant = '11111111-1111-4111-8111-111111111111'
 async function setup(overrides: object = {}) {
   const client = {
+    read: vi.fn(async (id: string) => {
+      const page = await client.list()
+      const row = page.items.find((v: { id: string }) => v.id === id)
+      if (!row) throw new Error('Missing entry')
+      return row
+    }),
     state: vi.fn().mockResolvedValue({ initialized: false, generation: 0, unlockedUntil: null }),
     list: vi.fn().mockResolvedValue({
       tenantId: tenant,
@@ -196,7 +202,7 @@ function archiveEntry(id: string, revision = 1) {
   }
 }
 it.each(['import', 'generate'] as const)(
-  'blocks a lost second-page %s target after refresh and a successful append',
+  'requires a fresh complete %s baseline after directory navigation',
   async (mode) => {
     let revision = 1
     const list = vi.fn(async (query: { cursor?: string } = {}) => ({
@@ -222,6 +228,7 @@ it.each(['import', 'generate'] as const)(
         unlockedUntil: Math.floor(Date.now() / 1000) + 900,
       }),
       list,
+      read: vi.fn(async (id: string) => archiveEntry(id, revision)),
       history,
       [mode]: write,
     })
@@ -232,7 +239,7 @@ it.each(['import', 'generate'] as const)(
         .trigger('click')
       await flushPromises()
     }
-    await click('加载更多')
+    await click('下一页')
     await click(secondId)
     await selectValue(wrapper, 'archive-mode', mode)
     await click('刷新')
@@ -263,7 +270,8 @@ it.each(['import', 'generate'] as const)(
     await submit()
     expect(write).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('对象或操作不存在')
-    await click('加载更多')
+    await click('下一页')
+    await click(secondId)
     await submit()
     expect(write).toHaveBeenCalledTimes(1)
     expect(write.mock.calls[0]).toEqual([
@@ -272,7 +280,8 @@ it.each(['import', 'generate'] as const)(
     ])
     await submit()
     expect(write).toHaveBeenCalledTimes(1)
-    await click('加载更多')
+    await click('下一页')
+    await click(secondId)
     await submit()
     expect(write).toHaveBeenCalledTimes(2)
     expect(write.mock.calls[1]).toEqual([
@@ -414,7 +423,7 @@ it('edits certificate metadata, explicit issuance inputs, recommendation, export
     await click(tenant)
     await selectValue(wrapper, 'archive-comparison', 1)
     expect(wrapper.text()).toContain('Previous certificate')
-    await selectValue(wrapper, 'archive-filter', 'all')
+
     await wrapper.get('#archive-name').setValue('HTTPS service')
     await wrapper.get('#archive-category').setValue('custom')
     await wrapper.get('#archive-labels').setValue('edge, service')

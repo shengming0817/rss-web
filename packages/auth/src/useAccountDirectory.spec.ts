@@ -1,3 +1,4 @@
+import { decodeIdentityError } from '@rss/api/identity'
 import { it, expect, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import { mount } from '@vue/test-utils'
@@ -44,7 +45,7 @@ it('freezes source and all query fields on continuation, then applies drafts on 
     cursor: 'YWJj',
   })
   expect(d.trail.value).toEqual([undefined])
-  f.replies.push(new Error('offline'))
+  f.replies.push(decodeIdentityError(409, { code: 'account_cursor_invalidated' }))
   await d.run(() => d.navigate(d.previous.value))
   expect(d.trail.value).toEqual([undefined])
   expect(d.rows.value).toEqual([])

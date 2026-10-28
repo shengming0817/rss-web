@@ -159,8 +159,8 @@ groupQuery.bind(kind)
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy"
     v-if="kind === 'user_group' && !groupQuery.complete.value"
+    :disabled="busy"
     :items="projectedGroups"
     @open="
       (row) => {

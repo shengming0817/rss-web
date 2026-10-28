@@ -68,7 +68,6 @@ function apply() {
           :id="id + '-fields'"
           multiple
           required
-          :value="fields"
           @change="
             emit(
               'update:fields',
@@ -78,7 +77,14 @@ function apply() {
             )
           "
         >
-          <option v-for="column in columns" :key="column" :value="column">{{ column }}</option>
+          <option
+            v-for="column in columns"
+            :key="column"
+            :value="column"
+            :selected="fields.includes(column)"
+          >
+            {{ column }}
+          </option>
         </select>
         <label :for="id + '-limit'">{{ labels.limit }}</label>
         <input

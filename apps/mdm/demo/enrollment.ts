@@ -304,6 +304,14 @@ export function createOnboardingDemo(
           defaultLimit: 100,
         }),
       )
+    if (action === 'account-enrollment' && request.method === 'GET') {
+      const config = organization.accountEnrollment
+      return ok(
+        config
+          ? Object.fromEntries(Object.entries(config).filter(([key]) => key !== 'accounts'))
+          : null,
+      )
+    }
     if (action === 'account-enrollment') {
       const v = closed(body, ['expectedRevision', 'domain', 'serverUuid', 'signingKey', 'enabled'])
       return receipts.write(request, uuid(request.headers['idempotency-key']), () => {
@@ -321,6 +329,12 @@ export function createOnboardingDemo(
         }
         return ok({ revision: revision + 1 })
       })
+    }
+    if (apple[3] && request.method === 'GET') {
+      const account = organization.accountEnrollment?.accounts.find(
+        (v) => v.account === decodeURIComponent(apple[3]!),
+      )
+      return account ? ok(account) : error('resource_not_found', 404)
     }
     if (apple[3]) {
       if (!organization.accountEnrollment) return error('resource_not_found', 404)

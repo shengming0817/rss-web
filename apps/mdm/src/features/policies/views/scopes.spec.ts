@@ -156,7 +156,7 @@ it.each([
       .find((b) => b.text().includes('返回范围目录'))!
       .trigger('click')
     await flushPromises()
-    expect(list.mock.calls[1]?.[0]).toEqual({ after: undefined })
+    expect(list.mock.calls[1]?.[0]).toMatchObject({ cursor: undefined, limit: 50 })
     expect(wrapper.text()).toContain('当前没有结果')
     wrapper.unmount()
   },

@@ -12,6 +12,10 @@ import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
 import { deviceBinding } from '../useDeviceBinding'
 import type { EndpointDetail } from '../clients/endpoint-model'
+const props = defineProps<{ endpoint: EndpointDetail }>()
+
+const emit = defineEmits<{ changed: [] }>()
+
 const registrationQuery = useDirectoryQuery(
   [
     'registrationId',
@@ -25,8 +29,6 @@ const registrationQuery = useDirectoryQuery(
   1000,
 )
 
-const props = defineProps<{ endpoint: EndpointDetail }>()
-const emit = defineEmits<{ changed: [] }>()
 const runtime = useMdm(),
   { t } = useI18n(),
   { run, runWrite, busy, uncertain, failure } = useOperation(
@@ -97,9 +99,6 @@ async function compareRegistration() {
 }
 </script>
 <template>
-  <VBtn v-if="original" :disabled="busy" @click="compareRegistration"
-    >{{ t('devices.reload') }} · {{ original.registration }}</VBtn
-  >
   <DirectoryControls
     :query="registrationQuery"
     :busy="busy"
@@ -107,9 +106,9 @@ async function compareRegistration() {
     @load="load"
   />
   <DirectoryResults
+    v-if="!registrationQuery.complete.value"
     :disabled="busy || uncertain"
     :required="['registrationId']"
-    v-if="!registrationQuery.complete.value"
     :items="page?.items ?? []"
     @open="
       (row) => {
@@ -147,6 +146,9 @@ async function compareRegistration() {
           ><p>{{ t('devices.revokeNote') }}</p>
           <code>{{ target }}</code>
           <p v-if="uncertain">{{ t('devices.unknownWrite') }}</p>
+          <VBtn v-if="uncertain && original" :disabled="busy" @click="compareRegistration">{{
+            t('devices.compare')
+          }}</VBtn>
           <v-btn v-if="uncertain && compared" :disabled="busy" @click="revoke(true)">{{
             t('devices.replay')
           }}</v-btn></v-card-text

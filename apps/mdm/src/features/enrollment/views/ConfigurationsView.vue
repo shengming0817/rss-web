@@ -323,9 +323,9 @@ directoryQuery.restrict(canRead)
       @load="loadDirectory"
     />
     <DirectoryResults
+      v-if="!directoryQuery.complete.value"
       :disabled="busy || uncertain"
       :required="['configurationId']"
-      v-if="!directoryQuery.complete.value"
       :items="directory?.items ?? []"
       @open="
         (row) => {

@@ -138,8 +138,8 @@ policyQuery.bind(mode)
       @load="load"
     />
     <DirectoryResults
-      :disabled="op.busy.value"
       v-if="mode === 'event' && !policyQuery.complete.value"
+      :disabled="op.busy.value"
       :items="rows?.items ?? []"
       @open="
         (row) => {
@@ -186,8 +186,8 @@ policyQuery.bind(mode)
     />
     <p v-if="rows">{{ t('console.pageNotTotal') }}</p>
     <VDataTable
-      disable-sort
       v-if="rows && policyQuery.complete.value"
+      disable-sort
       :items="rows.items"
       item-value="id"
       :aria-label="t('policies.entry.members')"

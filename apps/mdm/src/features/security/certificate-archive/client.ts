@@ -7,9 +7,9 @@ import {
 import type { HttpTransport } from '@rss/api/mdm'
 import { boolean, closed } from '../../../services/decode'
 import {
+  type entryFields,
   page,
   entry,
-  entryFields,
   vault,
   settings,
   receipt,

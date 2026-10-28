@@ -474,8 +474,8 @@ ruleQuery.restrict(canRead)
       @load="load"
     />
     <DirectoryResults
-      :disabled="busy || locked"
       v-if="!ruleQuery.complete.value"
+      :disabled="busy || locked"
       :items="page?.items ?? []"
       @open="
         (row) => {
@@ -613,6 +613,7 @@ ruleQuery.restrict(canRead)
           :busy="busy || accountDirectory.busy.value"
           :previous="!!accountDirectory.trail.value.length"
           :next="!!accountCursor"
+          @change="Object.assign(accountDirectory.query, $event)"
           @apply="loadAccounts()"
           @first="accountDirectory.run(() => accountDirectory.navigate())"
           @previous="

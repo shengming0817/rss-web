@@ -637,8 +637,8 @@ directoryQuery.onClear(() => {
       @load="load"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="list?.items ?? []"
       @open="
         (row) => {
@@ -1077,8 +1077,8 @@ directoryQuery.onClear(() => {
       {{ t('policies.refreshProgress') }}
     </VBtn>
     <VDataTable
-      disable-sort
       v-if="progress"
+      disable-sort
       :aria-label="t('policies.refreshProgress')"
       :items-per-page="-1"
       hide-default-footer

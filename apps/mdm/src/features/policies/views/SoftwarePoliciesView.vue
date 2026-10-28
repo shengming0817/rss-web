@@ -136,25 +136,46 @@ const draft = ref(fresh()),
   resource = ref<ResourceRead>()
 const rolloutMode = ref<'full' | 'staged'>('full')
 const published = ref<Awaited<ReturnType<typeof runtime.software.publication.list>>>()
-const nativeChoices = computed(
-  () => published.value?.items.filter((v) => v.outcome === 'published' && !v.withdrawn) ?? [],
+const publicationQuery = useDirectoryQuery(
+  [
+    'id',
+    'target',
+    'resource',
+    'version',
+    'revision',
+    'publication',
+    'contentDigest',
+    'manifestDigest',
+    'targetDigest',
+    'attempt',
+    'outcome',
+    'withdrawn',
+    'withdrawal',
+  ],
+  100,
+)
+const nativeChoices = computed(() =>
+  publicationQuery.complete.value ? (published.value?.items ?? []) : [],
 )
 function loadPublications(after?: string) {
-  const r = draft.value.action.resource
+  const resource = draft.value.action.resource
   void run(
     () =>
-      runtime.software.publication.list({
-        cursor: after,
+      publicationQuery.read(after, (query) => runtime.software.publication.list(query), {
         filter: allOf(
-          queryComparison('resource', '==', r.id),
-          queryComparison('version', '==', r.version),
+          queryComparison('resource', '==', resource.id),
+          queryComparison('version', '==', resource.version),
         ),
       }),
-    (v) => {
-      published.value = v
+    (value) => {
+      published.value = value
     },
   )
 }
+publicationQuery.bind(() => JSON.stringify(draft.value.action.resource))
+publicationQuery.onClear(() => {
+  published.value = undefined
+})
 function delivery(event: Event) {
   draft.value.action.delivery =
     (event.target as HTMLSelectElement).value === 'native'
@@ -162,8 +183,21 @@ function delivery(event: Event) {
       : { kind: 'direct' }
   published.value = undefined
 }
-function choosePublication(value: Publication) {
-  draft.value.action.delivery = { kind: 'native', target: value.target }
+function choosePublication(value: Pick<Publication, 'id'>) {
+  void run(
+    () => runtime.software.publication.read(value.id),
+    (current) => {
+      const expected = draft.value.action.resource
+      if (
+        current.resource !== expected.id ||
+        current.version !== expected.version ||
+        current.outcome !== 'published' ||
+        current.withdrawn
+      )
+        throw new Error('Publication unavailable')
+      draft.value.action.delivery = { kind: 'native', target: current.target }
+    },
+  )
 }
 function changeRolloutMode(event: Event) {
   rolloutMode.value = (event.target as HTMLSelectElement).value as 'full' | 'staged'
@@ -556,8 +590,8 @@ directoryQuery.onClear(() => {
       @load="list"
     />
     <DirectoryResults
-      :disabled="busy || uncertain"
       v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
       :items="page?.items ?? []"
       @open="
         (row) => {
@@ -726,24 +760,32 @@ directoryQuery.onClear(() => {
                 @click="loadPublications()"
                 >{{ t('software.publishedVersions') }}</VBtn
               >
+              <DirectoryControls
+                :query="publicationQuery"
+                :busy="busy || uncertain"
+                hint="id / target / resource / version；operationId 可筛选。"
+                @load="loadPublications"
+              />
+              <DirectoryResults
+                v-if="!publicationQuery.complete.value"
+                :items="published?.items ?? []"
+                :disabled="busy || uncertain"
+                @open="(row) => choosePublication({ id: String(row.id) })"
+              />
               <p v-if="published && !nativeChoices.length">
                 {{ t('software.noPublishedVersion') }}
               </p>
               <label v-for="item in nativeChoices" :key="item.id">
                 <VRadio
                   name="native-publication"
+                  :disabled="item.outcome !== 'published' || item.withdrawn || busy || uncertain"
                   :model-value="draft.action.delivery.target === item.target"
                   hide-details="auto"
                   @update:model-value="choosePublication(item)"
                 />
-                {{ item.target }} · {{ item.resource }} / {{ item.version }}
+                {{ item.target }} · {{ item.resource }} / {{ item.version }} · {{ item.outcome }} ·
+                {{ item.withdrawn }}
               </label>
-              <VBtn
-                v-if="published?.nextCursor"
-                type="button"
-                @click="loadPublications(published.nextCursor)"
-                >{{ t('devices.next') }}</VBtn
-              >
             </section>
             <label for="deployment-intent">{{ t('software.intent') }}</label
             ><VSelect

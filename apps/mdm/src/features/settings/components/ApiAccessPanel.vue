@@ -204,8 +204,8 @@ directoryQuery.onClear(() => {
     @load="load"
   />
   <DirectoryResults
-    :disabled="busy || locked"
     v-if="!directoryQuery.complete.value"
+    :disabled="busy || locked"
     :items="rows?.items ?? []"
     @open="
       (row) => {
@@ -227,7 +227,7 @@ directoryQuery.onClear(() => {
       ><VBtn :disabled="busy || !canRead" @click="load()">{{ t('gap.load') }}</VBtn
       ><VBtn :disabled="locked || !canWrite" @click="fresh">{{ t('gap.newDraft') }}</VBtn>
       <ul>
-        <li v-for="key in rows?.items" :key="key.id">
+        <li v-for="key in directoryQuery.complete.value ? rows?.items : []" :key="key.id">
           <VBtn
             :disabled="locked"
             @click="
