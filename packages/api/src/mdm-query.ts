@@ -1,3 +1,5 @@
+import { parseFilter } from './mdm-filter'
+
 function closed(
   value: unknown,
   keys: readonly string[],
@@ -135,7 +137,11 @@ export function comparison(
 }
 export function allOf(...terms: (string | undefined)[]): string | undefined {
   const present = terms.filter((term): term is string => term !== undefined && term !== '')
-  return present.length ? present.map((term) => `(${term})`).join(';') : undefined
+  if (!present.length) return undefined
+  present.forEach(parseFilter)
+  const filter = present.map((term) => `(${term})`).join(';')
+  parseFilter(filter)
+  return filter
 }
 
 export type WindowQuery = Pick<DirectoryQuery, 'limit' | 'cursor'>

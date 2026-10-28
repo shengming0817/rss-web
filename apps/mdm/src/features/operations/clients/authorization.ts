@@ -377,13 +377,13 @@ export function createAuthorizationClient(
       (value) => {
         const v = closed(value, ['id', 'revision', 'items', 'nextCursor'])
         if (uuid(v['id']) !== id || !count(v['revision'])) throw new Error('Wrong member page')
+        const items = array(v['items'], (m) => projectedRow(m, memberFields, query.fields))
+        if (query.fields === undefined || query.fields.includes('principalId' as F))
+          unique(items, (m) => String(Reflect.get(m, 'principalId')))
         return {
           id,
           revision: count(v['revision']),
-          items: unique(
-            array(v['items'], (m) => projectedRow(m, memberFields, query.fields)),
-            (m) => ('principalId' in m ? String(m.principalId) : JSON.stringify(m)),
-          ),
+          items,
           nextCursor: nextCursor(v['nextCursor']),
         }
       },

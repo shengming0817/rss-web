@@ -364,3 +364,51 @@ it('uses current reauthorization eligibility and replays a lost response with th
     wrapper.unmount()
   }
 })
+
+it('shows invalid query drafts without dispatching either execution rows or statistics', async () => {
+  const directory = vi.fn().mockResolvedValue({ items: [], nextCursor: 'YQ' })
+  const statistics = vi
+    .fn()
+    .mockResolvedValue({
+      statistics: { total: 0, commands: 0, actionRuns: 0, unknown: 0 },
+      asOf: 1,
+    })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: ExecutionsView }],
+  })
+  await router.push('/')
+  const wrapper = mount(ExecutionsView, {
+    global: {
+      plugins: [router, mdmI18n()],
+      provide: {
+        [mdmKey as symbol]: {
+          tenant: 'tenant',
+          session: { state: ref({ status: 'authenticated' }) },
+          policies: { executions: { directory, statistics } },
+        },
+      },
+    },
+  })
+  try {
+    await flushPromises()
+    const q = wrapper.findAll('.directory-query')[0]!
+    await q.findAll('input')[1]!.setValue('id,')
+    await q
+      .findAll('button')
+      .find((b) => b.text() === '应用查询')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('输入')
+    expect(directory).toHaveBeenCalledTimes(1)
+    expect(statistics).toHaveBeenCalledTimes(1)
+    expect(
+      q
+        .findAll('button')
+        .find((b) => b.text() === '下一页')!
+        .attributes('disabled'),
+    ).toBeUndefined()
+  } finally {
+    wrapper.unmount()
+  }
+})

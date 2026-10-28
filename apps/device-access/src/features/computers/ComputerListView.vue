@@ -26,6 +26,7 @@ const directory = useDirectory(
 )
 const { data, busy, error, reload } = directory
 const rows = computed(() => data.value?.summaries ?? [])
+const pageCount = computed(() => data.value?.summaries?.length ?? data.value?.items.length ?? 0)
 const selectedReference = ref<{ kind: 'endpoint' | 'association'; id: string }>()
 const view = useRead(
   (signal) => r.client.viewComputers(selectedReference.value!, signal),
@@ -104,7 +105,7 @@ function listQuery() {
     />
     <ReadState :busy="view.busy.value" :error="view.error.value" @retry="view.reload" />
     <v-btn v-for="c in view.data.value ?? []" :key="c.id" @click="open(c.id)">{{ c.name }}</v-btn>
-    <v-table
+    <v-table v-if="data?.summaries"
       ><thead>
         <tr>
           <th>{{ $t('da.m2273cdb3af') }}</th>
@@ -135,12 +136,12 @@ function listQuery() {
         </tr>
       </tbody></v-table
     >
-    <div v-if="!busy && !error && !rows.length" class="empty">
+    <div v-if="!busy && !error && !pageCount" class="empty">
       <h3>{{ $t('da.mce4f267739') }}</h3>
       <p>{{ $t('da.m13d5ec0dbb') }}</p>
     </div>
     <div class="table-footer">
-      <span>当前页 {{ rows.length }} 条，不代表组织总量</span>
+      <span>当前页 {{ pageCount }} 条，不代表组织总量</span>
     </div>
   </section>
   <v-navigation-drawer

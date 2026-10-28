@@ -65,3 +65,18 @@ describe('current directory protocol', () => {
       expect(() => projectedPage({ items: [row], nextCursor: null }, codecs, ['id'])).toThrow()
   })
 })
+
+it('validates each filter independently so user syntax cannot escape fixed selector conditions', () => {
+  for (const fixed of ["kind=='relying_party'", "platform=='windows'", "status=='active'"]) {
+    for (const input of [
+      "id=='x'),(id=='other'",
+      "id=='x');(id=='other'",
+      "id=='unclosed",
+      "id=='x'),assetContext=='associated_device';(id!='x'",
+    ]) {
+      expect(() => allOf(fixed, input)).toThrow()
+    }
+    expect(allOf(fixed, "id=='x',id=='other'")).toBe(`(${fixed});(id=='x',id=='other')`)
+    expect(allOf(fixed, comparison('id', '==', "x'),(id=='other"))).toContain(fixed)
+  }
+})

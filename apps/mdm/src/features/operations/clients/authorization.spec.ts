@@ -188,3 +188,25 @@ it('accepts current enterprise application grants without accepting device scope
     ).toThrow()
   }
 })
+
+it('preserves equal nonidentity projections for distinct members and checks duplicates only with principal identity', async () => {
+  let reply: unknown = {
+    id: group,
+    revision: 7,
+    items: [{ tenantId: tenant }, { tenantId: tenant }],
+    nextCursor: null,
+  }
+  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
+  const client = createAuthorizationClient({ request } as unknown as HttpTransport, tenant)
+  expect((await client.members(group, { fields: ['tenantId'] })).items).toEqual([
+    { tenantId: tenant },
+    { tenantId: tenant },
+  ])
+  reply = {
+    id: group,
+    revision: 7,
+    items: [{ principalId: group }, { principalId: group }],
+    nextCursor: null,
+  }
+  await expect(client.members(group, { fields: ['principalId'] })).rejects.toThrow()
+})

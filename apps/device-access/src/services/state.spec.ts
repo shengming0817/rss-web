@@ -1,7 +1,10 @@
+import { zh } from '../i18n/zh-CN'
+import { createRouter, createMemoryHistory } from 'vue-router'
+import ComputerListView from '../features/computers/ComputerListView.vue'
 import { afterEach, expect, it, vi } from 'vitest'
 import { defineComponent, ref, nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
-import { createSession } from '@rss/auth'
+import { createSession, identityI18n } from '@rss/auth'
 import { decodeIdentityError, type HttpTransport, type RequestOptions } from '@rss/api/identity'
 import { decodeMdmError } from '@rss/api/mdm'
 import { CapabilityUnavailable, CredentialWriteNotDispatched } from '@rss/device-access/model'
@@ -375,4 +378,86 @@ it('does not adopt absent, failed or stale revision reads', async () => {
   await reading
   expect(pending.current.value).toBeUndefined()
   expect(pending.busy.value).toBe(false)
+})
+
+it('handles invalid directory drafts through the read owner without dispatching or advancing navigation', async () => {
+  const r = await runtime(),
+    load = vi.fn().mockResolvedValue({ items: [{ id: 'a' }], summaries: null, nextCursor: 'YQ' })
+  const d = use(r, () => useDirectory(['id'], 100, load)).output
+  await flushPromises()
+  const accepted = d.applied.value
+  d.draft.sort = 'id,'
+  await expect(d.apply()).resolves.toBeUndefined()
+  expect(d.error.value).toBeTruthy()
+  expect(d.data.value).toBeUndefined()
+  expect(load).toHaveBeenCalledTimes(1)
+  expect(d.applied.value).toBe(accepted)
+  expect(d.trail.value).toEqual([])
+  d.draft.sort = ''
+  d.draft.filter = "id=='x'),(id=='other'"
+  await d.apply()
+  expect(d.error.value).toBeTruthy()
+  expect(load).toHaveBeenCalledTimes(1)
+  d.draft.filter = ''
+  await d.apply()
+  expect(d.error.value).toBe('')
+  expect(load).toHaveBeenCalledTimes(2)
+  const failed = use(r, () =>
+    useDirectory(['id'], 100, vi.fn().mockRejectedValue(new Error('offline'))),
+  ).output
+  await flushPromises()
+  failed.draft.sort = 'id,'
+  await expect(failed.first()).resolves.toBeUndefined()
+  expect(failed.error.value).toBeTruthy()
+  expect(failed.applied.value).toBeUndefined()
+})
+
+it('shows nonempty sparse computer rows with the actual page count and reserves empty state for empty pages', async () => {
+  const r = await runtime()
+  const computers = vi.fn().mockResolvedValue({ items: [], summaries: [], nextCursor: null })
+  r.client = { computers } as unknown as typeof r.client
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: ComputerListView }],
+  })
+  await router.push('/')
+  const i18n = identityI18n()
+  i18n.global.mergeLocaleMessage('zh-CN', { da: zh })
+  const wrapper = mount(ComputerListView, {
+    global: {
+      plugins: [router, i18n],
+      provide: { [daKey as symbol]: r },
+      stubs: {
+        'v-btn': { template: '<button><slot/></button>' },
+        'v-table': { template: '<table><slot/></table>' },
+        'v-navigation-drawer': true,
+        'v-chip': true,
+      },
+    },
+  })
+  cleanups.push(() => wrapper.unmount())
+  await flushPromises()
+  computers.mockResolvedValue({
+    items: [{ key: 'endpoint:pc' }],
+    summaries: null,
+    nextCursor: null,
+  })
+  const q = wrapper.get('.directory-query')
+  await q.get('select').setValue(['key'])
+  await q
+    .findAll('button')
+    .find((b) => b.text() === '应用查询')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain('endpoint:pc')
+  expect(wrapper.text()).toContain('当前页 1 条')
+  expect(wrapper.find('.empty').exists()).toBe(false)
+  computers.mockResolvedValue({ items: [], summaries: null, nextCursor: null })
+  await q
+    .findAll('button')
+    .find((b) => b.text() === '首页 / 重新查询')!
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain('当前页 0 条')
+  expect(wrapper.find('.empty').exists()).toBe(true)
 })

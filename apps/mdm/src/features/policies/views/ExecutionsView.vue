@@ -105,7 +105,6 @@ function selectQueue(value: Queue) {
 }
 function load(cursor?: string) {
   if (busy.value) return
-  records.value = undefined
   const selection = directoryQuery.continues(cursor)
     ? applied.value
     : {
@@ -117,28 +116,35 @@ function load(cursor?: string) {
         authorizationState: authorizationState.value || undefined,
         authorizationReason: authorizationReason.value || undefined,
       }
-  const filter = allOf(
-    ...(['device', 'policy', 'kind', 'status'] as const).map((key) =>
-      selection[key] ? comparison(key, '==', selection[key]!) : undefined,
-    ),
-    selection.queue === 'waiting'
-      ? allOf(
-          comparison('kind', '==', 'command'),
-          `(${comparison('status', '==', 'queued')}),(${comparison('status', '==', 'published')})`,
-        )
-      : selection.queue === 'blocked'
-        ? comparison('authorization.state', '==', 'blocked')
-        : selection.queue === 'unknown'
-          ? comparison('status', '==', 'unknown')
-          : undefined,
-    selection.authorizationState
-      ? comparison('authorization.state', '==', selection.authorizationState)
-      : undefined,
-    selection.authorizationReason
-      ? comparison('authorization.reason', '==', selection.authorizationReason)
-      : undefined,
-  )
-  const query = directoryQuery.parameters(cursor, { filter })
+  let query: ReturnType<typeof directoryQuery.parameters>
+  try {
+    const filter = allOf(
+      ...(['device', 'policy', 'kind', 'status'] as const).map((key) =>
+        selection[key] ? comparison(key, '==', selection[key]!) : undefined,
+      ),
+      selection.queue === 'waiting'
+        ? allOf(
+            comparison('kind', '==', 'command'),
+            `(${comparison('status', '==', 'queued')}),(${comparison('status', '==', 'published')})`,
+          )
+        : selection.queue === 'blocked'
+          ? comparison('authorization.state', '==', 'blocked')
+          : selection.queue === 'unknown'
+            ? comparison('status', '==', 'unknown')
+            : undefined,
+      selection.authorizationState
+        ? comparison('authorization.state', '==', selection.authorizationState)
+        : undefined,
+      selection.authorizationReason
+        ? comparison('authorization.reason', '==', selection.authorizationReason)
+        : undefined,
+    )
+    query = directoryQuery.parameters(cursor, { filter })
+  } catch {
+    failure.value = 'invalidRequest'
+    return
+  }
+  records.value = undefined
   activeFilter.value = query.filter
   commandDetails.value = {}
   if (!cursor) {

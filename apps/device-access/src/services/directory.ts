@@ -99,10 +99,13 @@ export function useDirectory<T>(
   }
   function apply() {
     if (reader!.busy.value) return
-    return run(snapshot(), [])
+    initialError = undefined
+    candidate = undefined
+    attempt = undefined
+    return reader.reload()
   }
   function first() {
-    return run(applied.value ?? snapshot(), [])
+    return applied.value ? run(applied.value, []) : apply()
   }
   function previous() {
     if (!trail.value.length) return
