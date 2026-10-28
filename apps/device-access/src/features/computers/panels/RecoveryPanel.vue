@@ -194,6 +194,25 @@ async function prove() {
           <strong>{{ device.name }} · {{ selected.subject.kind }} · v{{ selected.version }}</strong>
         </div>
         <RecoveryMetadataSummary :materials="[selected]" />
+        <template v-if="modal === 'inspect'">
+          <v-btn
+            :disabled="
+              selected.subject.kind !== 'rss_login' || !selected.current || disclosure.locked.value
+            "
+            @click="modal = 'reveal'"
+            >{{ $t('da.m5e0a4efc9e') }}</v-btn
+          >
+          <v-btn
+            :disabled="
+              selected.subject.kind !== 'rss_login' ||
+              !selected.current ||
+              !r.client.capabilities.rotation.available ||
+              rotation.locked.value
+            "
+            @click="modal = 'rotate'"
+            >{{ $t('da.mf4b0208c22') }}</v-btn
+          >
+        </template>
         <template v-if="modal === 'reveal'"
           ><v-alert type="warning" :icon="false" class="my-5">{{ $t('da.mec73dbb549') }}</v-alert>
           <div v-if="secret" class="secret-preview">{{ secret }}</div>

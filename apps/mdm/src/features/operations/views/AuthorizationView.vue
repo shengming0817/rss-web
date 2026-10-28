@@ -66,8 +66,8 @@ const page = ref<Awaited<ReturnType<typeof client.rules>>>(),
   baseline = ref<Rule | null>(null),
   preview = ref<'save' | 'delete'>(),
   remote = ref<Revision<Rule> | null>(),
-  selectedDeleted = ref(false),
-  directoryDenied = ref(false)
+  selectedDeleted = ref(false)
+const directoryDenied = computed(() => accountDirectory.error.value === 'insufficient_privilege')
 const bound = computed(() => {
     const s = runtime.session.state.value
     return (
@@ -121,7 +121,6 @@ function clearFacts() {
   accounts.value = []
   accountCursor.value = null
   accountsRead.value = false
-  directoryDenied.value = false
   clearDraft()
 }
 function intentDocument(value: unknown) {
@@ -208,7 +207,6 @@ async function loadAccounts(more = false) {
   await accountDirectory.run(() =>
     more ? accountDirectory.navigate(accountCursor.value ?? undefined) : accountDirectory.load(),
   )
-  directoryDenied.value = accountDirectory.error.value === 'insufficient_privilege'
 }
 function definition(): Rule {
   if (!effective.value || !bound.value) throw new Error('No current binding')
@@ -622,6 +620,9 @@ ruleQuery.restrict(canRead)
           "
           @next="loadAccounts(true)"
         />
+        <p v-if="accountDirectory.error.value" role="alert">
+          {{ accountDirectory.errorMessage.value }}
+        </p>
         <PrincipalChoice
           v-if="platform"
           v-model="subjectId"

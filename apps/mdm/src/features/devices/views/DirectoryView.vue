@@ -43,7 +43,7 @@ const page = ref<Awaited<ReturnType<typeof runtime.devices.views.list>>>(),
   rsql = ref(''),
   platform = ref(''),
   assetState = ref(''),
-  limit = ref('20'),
+  limit = ref('50'),
   status = ref(''),
   channel = ref(''),
   source = ref(''),
@@ -159,7 +159,7 @@ async function load(query: LocationQueryRaw = route.query) {
         filter,
         sort: [query['descending'] === 'true' ? '-key' : 'key'],
         fields,
-        limit: Number(queryText(query, 'limit') || '20'),
+        limit: Number(queryText(query, 'limit') || '50'),
       }),
     (value) => {
       page.value = value
@@ -181,9 +181,7 @@ function loadRoute() {
   search.value = typeof route.query['search'] === 'string' ? route.query['search'] : ''
   platform.value = typeof route.query['platform'] === 'string' ? route.query['platform'] : ''
   assetState.value = typeof route.query['assetState'] === 'string' ? route.query['assetState'] : ''
-  limit.value = ['20', '50', '100'].includes(String(route.query['limit']))
-    ? String(route.query['limit'])
-    : '20'
+  limit.value = typeof route.query['limit'] === 'string' ? route.query['limit'] : '50'
   status.value = typeof route.query['status'] === 'string' ? route.query['status'] : ''
   channel.value = typeof route.query['channel'] === 'string' ? route.query['channel'] : ''
   source.value = typeof route.query['source'] === 'string' ? route.query['source'] : ''
@@ -347,11 +345,14 @@ const sourceOptions = computed(() => [
             item-title="label"
             :disabled="busy"
           />
-          <v-select
+          <v-text-field
             v-model="limit"
+            type="number"
+            min="1"
+            max="100"
+            required
             data-testid="directory-limit"
             :label="t('devices.pageSize')"
-            :items="['20', '50', '100']"
             :disabled="busy"
           />
           <v-select

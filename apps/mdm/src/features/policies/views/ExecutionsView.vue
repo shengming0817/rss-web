@@ -22,6 +22,10 @@ import NativeTaskFacts from '../components/NativeTaskFacts.vue'
 import OperationStages from '../components/OperationStages.vue'
 import type { NativeOperation } from '../clients/native'
 import type { EndpointDetail } from '../../devices/clients/endpoint-model'
+const deviceQuery = useDirectoryQuery(
+  ['id', 'status', 'primaryMdmRegistration', 'channels', 'enrollments', 'inventoryAvailable'],
+  100,
+)
 const directoryQuery = useDirectoryQuery(
   [
     'id',
@@ -81,6 +85,13 @@ const selected = ref<EndpointDetail>(),
   name = ref('')
 const selectedDevice = ref(''),
   choosingDevice = ref(false)
+deviceQuery.onClear(() => {
+  devices.value = undefined
+})
+function openProjectedDevice(row: Record<string, unknown>) {
+  selectedDevice.value = String(row['id'])
+  void choose()
+}
 function beginRemote() {
   choosingDevice.value = true
   loadDevices()
@@ -161,7 +172,7 @@ function inspect(device: string, id: string) {
 }
 function loadDevices(after?: string) {
   void picker.run(
-    () => runtime.devices.directory.list({ cursor: after }),
+    () => deviceQuery.read(after, (query) => runtime.devices.directory.list(query)),
     (value) => {
       devices.value = value
     },
@@ -387,10 +398,22 @@ function readProjected(row: Record<string, unknown>) {
       :close-label="t('console.close')"
     >
       <h2>{{ t('policies.nativeAction') }}</h2>
+      <DirectoryControls
+        :query="deviceQuery"
+        :busy="picker.busy.value || pinned"
+        hint="筛选 id、status、channel、source、platform、inventoryAvailable；按 id 排序。"
+        @load="loadDevices"
+      />
+      <DirectoryResults
+        v-if="!deviceQuery.complete.value"
+        :disabled="picker.busy.value || pinned"
+        :items="devices?.items ?? []"
+        @open="openProjectedDevice"
+      />
       <VBtn :disabled="picker.busy.value || pinned" @click="loadDevices()">{{
         t('console.chooseLoaded')
       }}</VBtn>
-      <template v-if="devices"
+      <template v-if="devices && deviceQuery.complete.value"
         ><p>{{ t('console.pageNotTotal') }}</p>
         <label
           >{{ t('policies.device')
@@ -408,13 +431,7 @@ function readProjected(row: Record<string, unknown>) {
             density="comfortable"
             hide-details="auto"
             @update:model-value="choose()" /></label
-        ><VBtn
-          v-if="devices.nextCursor"
-          :disabled="picker.busy.value || pinned"
-          @click="loadDevices(devices.nextCursor)"
-          >{{ t('policies.next') }}</VBtn
-        ></template
-      >
+      ></template>
       <p v-if="picker.failure.value" role="alert">{{ t(`devices.${picker.failure.value}`) }}</p>
     </PolicyDialog>
     <DeviceControlPanel

@@ -63,7 +63,7 @@ function edit(value: Application | null) {
   <DirectoryControls
     :query="directory"
     :busy="busy"
-    hint="筛选 id、kind、enabled、callback；按 id 排序。"
+    hint="筛选及排序 id、kind；value 仅作投影。"
   /><ReadState :busy="busy" :error="error" @retry="reload" /><ReadState
     :busy="detail.busy.value"
     :error="detail.error.value"
