@@ -6,7 +6,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./composables": "./src/composables/index.ts",
-    "./components": "./src/components/index.ts",
     "./styles/tokens.css": "./src/styles/tokens.css"
   },
   "files": [
@@ -20,8 +19,7 @@
   "dependencies": {
     "vue": "catalog:",
     "pinia": "catalog:",
-    "vue-i18n": "catalog:",
-    "reka-ui": "catalog:"
+    "vue-i18n": "catalog:"
   },
   "devDependencies": {
     "vitest": "catalog:",

@@ -2172,3 +2172,9 @@ code {
     padding-top: 16px;
   }
 }
+
+.access-button {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 550;
+}

@@ -16,7 +16,7 @@ const { t } = useI18n(),
           ? t('operations.ruleUi.permissions.' + g.operation)
           : g.operation
       }}
-      <span class="ui-help"> · {{ t('operations.ruleUi.scopes.' + g.scope.kind) }}</span>
+      <span class="device-help"> · {{ t('operations.ruleUi.scopes.' + g.scope.kind) }}</span>
       <VBtn
         v-if="g.scope.kind === 'device' && runtime.realm === 'tenant'"
         variant="text"

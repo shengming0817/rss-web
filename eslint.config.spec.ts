@@ -149,9 +149,9 @@ it('allows the shared upload limit in feature views while keeping transport fact
 
 it('isolates the component preview from product and authentication clients', async () => {
   const file = 'apps/ui-preview/src/main.ts'
-  expect(
-    await ruleIds("import { x } from '@rss/core/components'; export const y = x", file),
-  ).not.toContain('no-restricted-imports')
+  expect(await ruleIds("import { x } from '@rss/core'; export const y = x", file)).not.toContain(
+    'no-restricted-imports',
+  )
   for (const dependency of [
     '@rss/auth',
     '@rss/api/mdm',
@@ -227,4 +227,36 @@ it('keeps the standalone DA and its HTTP demo separate', async () => {
   expect(
     await ruleIds("import {useDa} from './context'\nexport const x=useDa", file),
   ).not.toContain('da-boundary/contained')
+})
+
+it('allows only the shared stylesheet generator from application build configs', async () => {
+  for (const app of ['identity', 'mdm']) {
+    expect(
+      await ruleIds(
+        "import { vuetifyStyles } from '../../build/vuetify-styles.mjs'; export const x = vuetifyStyles",
+        `apps/${app}/vite.config.ts`,
+      ),
+    ).not.toContain('identity-boundary/contained')
+    expect(
+      await ruleIds(
+        "import { vuetifyStyles } from '../../../build/vuetify-styles.mjs'; export const x = vuetifyStyles",
+        `apps/${app}/src/main.ts`,
+      ),
+    ).toContain('identity-boundary/contained')
+  }
+})
+
+it('keeps the DA stylesheet build helper out of product source imports', async () => {
+  expect(
+    await ruleIds(
+      "import { vuetifyStyles } from '../../build/vuetify-styles.mjs'; export const x = vuetifyStyles",
+      'apps/device-access/vite.config.ts',
+    ),
+  ).not.toContain('da-boundary/contained')
+  expect(
+    await ruleIds(
+      "import { vuetifyStyles } from '../../../build/vuetify-styles.mjs'; export const x = vuetifyStyles",
+      'apps/device-access/src/main.ts',
+    ),
+  ).toContain('da-boundary/contained')
 })

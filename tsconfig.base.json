@@ -25,7 +25,6 @@
     "paths": {
       "@rss/core": ["packages/core/src/index.ts"],
       "@rss/core/composables": ["packages/core/src/composables/index.ts"],
-      "@rss/core/components": ["packages/core/src/components/index.ts"],
       "@rss/api/testing": ["packages/api/src/testing.ts"],
       "@rss/api/identity": ["packages/api/src/identity.ts"],
       "@rss/auth": ["packages/auth/src/index.ts"],

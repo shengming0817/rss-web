@@ -173,7 +173,7 @@ it('pages and reloads only the current tenant sessions and requires confirmation
   expect(
     f.request.mock.calls.filter(([o]) => o.path.endsWith('/sessions/logout-all')),
   ).toHaveLength(0)
-  f.runtime.flows.save({ kind: 'step-up', tenant })
+  f.runtime.flows.save({ kind: 'link', tenant })
   await click(wrapper, '退出全部会话')
   f.replies.push(undefined)
   await click(new DOMWrapper(document.body).get('[role=alertdialog]'), '确认')
@@ -239,16 +239,8 @@ it('swipes to trusted authentication facts and binds OIDC controls to the chosen
   })
   expect(wrapper.text()).toContain('已验证 MFA')
   expect(wrapper.text()).toContain('多因素认证 · 密码')
-  f.replies.push(decodeIdentityError(403, { code: 'insufficient_privilege' }))
-  await click(wrapper, '增强认证 · Mock directory A')
-  expect(f.request.mock.lastCall?.[0]).toMatchObject({
-    method: 'POST',
-    path: `/api/v1/identity/tenants/{tenant}/oidc/${first}/step-up`,
-    pathParams: { tenant },
-    headers: { 'X-Identity-Request': '1', 'X-CSRF-Token': sessionFact.csrfToken },
-    body: { returnTarget: 'resume' },
-  })
-  expect(f.runtime.flows.take()).toBeNull()
+  expect(wrapper.text()).toContain('敏感操作需要验证身份时，请从该操作发起认证。')
+  expect(wrapper.findAll('button').some((button) => button.text().includes('增强认证'))).toBe(false)
   await click(wrapper, '关联组织身份')
   await wrapper.get('#link-provider').trigger('mousedown')
   await flushPromises()

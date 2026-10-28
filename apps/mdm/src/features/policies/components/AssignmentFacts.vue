@@ -27,7 +27,7 @@ const { t, te } = useI18n(),
 </script>
 <template>
   <div class="assignment-summary">
-    <ObjectLink :object="item.object" /><span v-if="item.channel" class="ui-help">{{
+    <ObjectLink :object="item.object" /><span v-if="item.channel" class="device-help">{{
       item.channel === 'agent' ? 'Agent' : 'MDM'
     }}</span
     ><VChip

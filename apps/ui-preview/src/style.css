@@ -43,3 +43,26 @@
     flex-direction: column;
   }
 }
+
+.preview > .v-application__wrap {
+  gap: 24px;
+}
+.preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.preview-stack {
+  display: grid;
+  gap: 16px;
+}
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 24px;
+}
+.preview .v-btn {
+  text-transform: none;
+  letter-spacing: 0;
+}

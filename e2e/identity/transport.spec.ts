@@ -66,7 +66,35 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
     task.meta['step'] = 'step-up'
     await session.loadSecurity()
     expect(session.state.value.security?.eligibleStepUpProviders).toEqual([])
-    await expect(api.stepUp(provider.id)).rejects.toMatchObject({
+    // The session page has no generic upgrade operation. Probe the producer contract
+    // through the existing owner: reject missing/unknown purposes before provider eligibility.
+    const beginStepUp = (body: unknown) =>
+      session!.business((headers) =>
+        transport.request({
+          method: 'POST',
+          path: `/api/v1/identity/tenants/{tenant}/oidc/${provider.id}/step-up`,
+          pathParams: { tenant },
+          headers,
+          body,
+          successStatus: 200,
+          decode: (value) => value,
+        }),
+      )
+    for (const body of [
+      { returnTarget: 'resume' },
+      { returnTarget: 'resume', operation: { kind: 'session' } },
+      { returnTarget: 'resume', operation: { kind: 'host' } },
+    ]) {
+      await expect(beginStepUp(body)).rejects.toMatchObject({
+        status: 400,
+        code: 'malformed_request',
+        cause: 'wire',
+      })
+      expect(session.state.value.status).toBe('authenticated')
+    }
+    await expect(
+      beginStepUp({ returnTarget: 'resume', operation: { kind: 'register' } }),
+    ).rejects.toMatchObject({
       status: 401,
       code: 'invalid_credential',
       cause: 'wire',

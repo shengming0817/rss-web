@@ -216,7 +216,7 @@ watch(
         :receipt="native.observation.progress"
         :effect="native.observation.effect"
       />
-      <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
+      <p class="device-help">{{ t('policies.ux.stagesHint') }}</p>
       <h2>{{ native.observation.protocol }}</h2>
       <NativeTaskFacts :operation="native" :device="String(route.query['device'])" />
       <MdmDisclosure v-if="native.dispatchFailure" open>
@@ -332,7 +332,7 @@ watch(
         :receipt="software.state.execution"
         :effect="software.effect"
       />
-      <p class="ui-help">{{ t('policies.ux.stagesHint') }}</p>
+      <p class="device-help">{{ t('policies.ux.stagesHint') }}</p>
       <PolicyRunFacts :run="software" />
     </template>
   </MdmPage>

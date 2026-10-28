@@ -56,7 +56,7 @@ function label(id: string) {
     :label="t('operations.ruleUi.existingPrincipal')"
   />
   <p v-if="denied" role="alert">{{ t('operations.ruleUi.directoryDenied') }}</p>
-  <p class="ui-help">
+  <p class="device-help">
     {{ t(loaded ? 'operations.ruleUi.directoryRead' : 'operations.ruleUi.directoryBoundary') }}
   </p>
   <VExpansionPanels

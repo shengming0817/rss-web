@@ -803,7 +803,7 @@ watch(
             >{{ t('telemetry.parameters')
             }}<VTextarea
               v-model="parameters"
-              class="ui-input telemetry-code"
+              class="telemetry-code"
               variant="outlined"
               density="comfortable"
               hide-details="auto"

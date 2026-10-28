@@ -103,24 +103,6 @@ export function useAccountSecurity() {
         void run(() => session.loadSecurity())
     },
   )
-  async function stepUp(id: string) {
-    await run(async () => {
-      const tenant = session.state.value.tenant
-      if (!tenant) return
-      flows.save({
-        kind: 'step-up',
-        tenant,
-      })
-      try {
-        const location = await api.stepUp(id)
-        checkpoint()
-        window.location.assign(location)
-      } catch (failure) {
-        flows.clear()
-        throw failure
-      }
-    })
-  }
   async function change() {
     const old = current.value
     const value = password.value
@@ -191,7 +173,6 @@ export function useAccountSecurity() {
     owner,
     load,
     reloadSessions,
-    stepUp,
     change,
     logout,
     reauthenticate,

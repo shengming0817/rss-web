@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useTheme } from 'vuetify'
 import { useDa } from '../context'
 import Icon from '../ui/Icon.vue'
+const props = defineProps<{ theme: string }>()
+const emit = defineEmits<{ theme: [value: string] }>()
 const r = useDa(),
   route = useRoute(),
-  router = useRouter(),
-  theme = useTheme(),
-  dark = ref(false)
+  router = useRouter()
 const links = [
   { path: '/', name: '访问总览', icon: 'overview' },
   { path: '/computers', name: '计算机', icon: 'devices' },
@@ -22,8 +21,7 @@ const title = computed(
       ?.name ?? '账户安全',
 )
 function toggleTheme() {
-  dark.value = !dark.value
-  theme.change(dark.value ? 'night' : 'access')
+  emit('theme', props.theme === 'access' ? 'night' : 'access')
 }
 async function logout() {
   try {

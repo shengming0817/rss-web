@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiButton } from '@rss/core/components'
+import { VBtn, VTextField } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import { useLoginFlow } from '../useLoginFlow'
 const { t } = useI18n()
@@ -29,45 +29,43 @@ const {
     <template
       v-if="session.state.value.status === 'authenticated' && session.state.value.tenant === tenant"
     >
-      <UiButton class="btn btn-primary" :disabled="!!busy" type="submit" @click="run(continueFlow)">
+      <VBtn color="primary" :disabled="!!busy" type="submit" @click="run(continueFlow)">
         {{ t('identity.continue') }}
-      </UiButton>
+      </VBtn>
     </template>
     <form v-else-if="tenant" @submit.prevent="submit">
-      <label for="login-name">{{ t('identity.username') }}</label
-      ><input
+      <VTextField
         id="login-name"
         v-model="login"
-        class="ui-input"
         autocomplete="username"
         required
         :disabled="busy"
+        :label="t('identity.username')"
       />
-      <label for="login-password">{{ t('identity.password') }}</label
-      ><input
+      <VTextField
         id="login-password"
         v-model="password"
-        class="ui-input"
         type="password"
         autocomplete="current-password"
         required
         :disabled="busy"
+        :label="t('identity.password')"
       />
-      <UiButton class="btn btn-primary" type="submit" :disabled="!!busy">
+      <VBtn color="primary" type="submit" :disabled="!!busy">
         {{ t('identity.login') }}
-      </UiButton>
+      </VBtn>
     </form>
     <div class="auth-actions">
-      <UiButton
+      <VBtn
         v-for="p in providers"
         :key="p.id"
-        class="btn"
+        variant="outlined"
         :disabled="!!busy"
         type="submit"
         @click="sso(p.id)"
       >
         {{ t('identity.sso') }} · {{ p.label }}
-      </UiButton>
+      </VBtn>
     </div>
     <p v-if="host" class="auth-muted">{{ host.origin }}</p>
     <a v-if="host" :href="host.switchHref">{{ t(host.switchLabelKey) }}</a>
