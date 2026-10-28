@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import {
   VAlert,
   VBtn,
@@ -32,6 +36,22 @@ type CredentialDraft = Omit<CredentialInput, 'action'> & {
 const props = defineProps<{ endpoint: EndpointDetail }>(),
   runtime = useMdm(),
   { t } = useI18n()
+
+const credentialQuery = useDirectoryQuery(
+  [
+    'id',
+    'version',
+    'current',
+    'validity',
+    'escrowed',
+    'operation',
+    'createdAt',
+    'invalidatedAt',
+    'binding',
+  ],
+  100,
+)
+
 const client = runtime.security.credentials
 const { run, submit, pending, locked, busy, failure, confirmOriginal, resolvedConflict } =
   useOriginalOperation(() => 'credentials/' + props.endpoint.id)
@@ -75,16 +95,24 @@ watch(
     resultId.value = ''
   },
 )
-async function load(next = false) {
+const projectedRows = ref<object[]>([])
+async function readProjected(row: Record<string, unknown>) {
+  if (typeof row['id'] !== 'string' || typeof row['version'] !== 'number') return
+  await run(
+    () => client.read(props.endpoint.id, row['id'] as string, row['version'] as number),
+    (value) => {
+      rows.value = [value]
+    },
+  )
+}
+async function load(after?: string) {
   clear()
   await run(
-    () =>
-      client.list(props.endpoint.id, {
-        cursor: next ? (nextCursor.value ?? undefined) : undefined,
-      }),
-    (value) => {
-      rows.value = next ? [...rows.value, ...value.items] : value.items
-      nextCursor.value = value.nextCursor
+    () => credentialQuery.read(after, (query) => client.list(props.endpoint.id, query)),
+    (page) => {
+      projectedRows.value = page.items
+      rows.value = credentialQuery.complete.value ? page.items : []
+      nextCursor.value = page.nextCursor
     },
   )
   if (failure.value) {
@@ -218,8 +246,30 @@ async function query() {
       },
     )
 }
+credentialQuery.onClear(() => {
+  rows.value = []
+  projectedRows.value = []
+})
 </script>
 <template>
+  <DirectoryControls
+    :query="credentialQuery"
+    :busy="busy"
+    hint="id / version / current / validity / escrowed / operation / createdAt / invalidatedAt"
+    @load="load"
+  />
+  <DirectoryResults
+    v-if="!credentialQuery.complete.value"
+    :disabled="busy || locked"
+    :required="['id', 'version']"
+    :items="projectedRows"
+    @open="
+      (row) => {
+        readProjected(row)
+      }
+    "
+  />
+
   <v-card :title="t('gap.credentials')" data-panel="recovery-credentials" :aria-busy="busy"
     ><v-card-text>
       <p class="mb-4">{{ t('gap.escrowHint') }}</p>
@@ -268,9 +318,7 @@ async function query() {
           </div></v-card-text
         ></v-card
       >
-      <v-btn v-if="nextCursor" variant="text" :disabled="busy" @click="load(true)">{{
-        t('gap.next')
-      }}</v-btn>
+
       <v-alert v-if="secret" type="warning" variant="tonal" class="my-4"
         ><output aria-live="polite">{{ secret }}</output
         ><v-btn variant="text" @click="clear">{{ t('gap.clear') }}</v-btn></v-alert

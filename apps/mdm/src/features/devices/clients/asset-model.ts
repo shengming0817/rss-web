@@ -1,7 +1,7 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import { checked } from '../../../contracts/collection/check'
 import { validateFieldView } from '@rss/api/mdm-validators'
-import { parseFilter } from '../../../services/query-filter'
+import { parseFilter } from '@rss/api/mdm-filter'
 import {
   array,
   boolean,
@@ -195,6 +195,31 @@ export function inventory(value: unknown) {
 }
 export type Inventory = ReturnType<typeof inventory>
 export type ResolvedField = ReturnType<typeof resolvedField>
+function fieldProperty<
+  K extends keyof wireSchemas.getApiV1AssetFieldsResponse200.Projection_FieldView,
+>(key: K) {
+  return (value: unknown) => {
+    const row: unknown = { [key]: value }
+    if (!wireSchemas.getApiV1AssetFieldsResponse200.validateProjection_FieldView(row))
+      throw new Error('Invalid asset field property')
+    return row[key]!
+  }
+}
+export const assetFieldCodecs = {
+  itemKey: fieldProperty('itemKey'),
+  key: fieldProperty('key'),
+  manual: fieldProperty('manual'),
+  nullable: fieldProperty('nullable'),
+  operations: fieldProperty('operations'),
+  platforms: fieldProperty('platforms'),
+  searchable: fieldProperty('searchable'),
+  sensitivity: fieldProperty('sensitivity'),
+  sources: fieldProperty('sources'),
+  timeSeries: fieldProperty('timeSeries'),
+  unit: fieldProperty('unit'),
+  valueType: fieldProperty('valueType'),
+  version: fieldProperty('version'),
+}
 export function fieldDefinition(value: unknown) {
   const definition = checked(validateFieldView, value)
   const kind = definition.valueType.kind

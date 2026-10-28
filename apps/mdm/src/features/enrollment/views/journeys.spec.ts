@@ -296,12 +296,12 @@ it('keeps null Unknown locked, finds metadata without secrets and revokes before
   const real = runtime.onboarding.configurations.operation,
     lookup = vi.spyOn(runtime.onboarding.configurations, 'operation').mockResolvedValueOnce(null)
   await click('查询原操作结果')
-  expect(wrapper.find('fieldset').attributes('disabled')).toBeDefined()
+  expect(wrapper.find('form fieldset').attributes('disabled')).toBeDefined()
   lookup.mockImplementation(real)
   await click('查询原操作结果')
   expect(wrapper.text()).toContain('后端剩余数量')
   await click('确认撤销配置')
-  expect(wrapper.find('fieldset').attributes('disabled')).toBeUndefined()
+  expect(wrapper.find('form fieldset').attributes('disabled')).toBeUndefined()
   expect(calls.filter((p) => p === 'POST /api/v1/agent-configurations')).toHaveLength(1)
   expect(calls.some((p) => p.endsWith('/revoke'))).toBe(true)
 })
@@ -422,12 +422,12 @@ it('explicitly retries an uncommitted unknown revocation with the original targe
   await flushPromises()
   await click('查询原操作结果')
   expect(wrapper.text()).toContain('available')
-  expect(wrapper.find('fieldset').attributes('disabled')).toBeDefined()
+  expect(wrapper.find('form fieldset').attributes('disabled')).toBeDefined()
   await click('显式重试原撤销操作')
   expect(revoke.mock.calls).toHaveLength(2)
   expect(revoke.mock.calls[1]).toEqual(revoke.mock.calls[0])
   expect(wrapper.text()).toContain('revoked')
-  expect(wrapper.find('fieldset').attributes('disabled')).toBeUndefined()
+  expect(wrapper.find('form fieldset').attributes('disabled')).toBeUndefined()
 })
 it('discards a rejected revocation before reading and revoking a different configuration', async () => {
   const { wrapper, runtime, click } = await setup(ConfigurationsView)
@@ -529,6 +529,22 @@ it('preserves explicit ADE profile choices and records sync and assignment as in
   await click('查询原操作结果')
   expect(wrapper.text()).toContain('不代表已注册')
   expect(wrapper.text()).toContain('external_outcome_unknown')
+  const queries = wrapper.findAll('.directory-query')
+  for (const [index, key] of ['serial', 'id', 'id'].entries()) {
+    const query = queries[index]!
+    await query.get('select').setValue([key])
+    await query
+      .findAll('button')
+      .find((b) => b.text() === '应用查询')!
+      .trigger('click')
+    await flushPromises()
+  }
+  const partial = wrapper.findAll('.directory-results').filter((v) => v.find('button').exists())
+  await partial[0]!.get('button').trigger('click')
+  await flushPromises()
+  expect((name.element as HTMLInputElement).value).toBe('Custom Setup')
+  await partial.at(-1)!.get('button').trigger('click')
+  await flushPromises()
 })
 
 it('blocks paused configuration creates in the handler while preserving settings reads and queries', async () => {

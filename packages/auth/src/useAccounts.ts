@@ -1,13 +1,26 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useIdentity } from './context'
-import { useOperation } from './services/operation'
+import { useAccountDirectory } from './useAccountDirectory'
 import type { Account } from './services/decode'
 export function useAccounts() {
-  const { api, session } = useIdentity()
-  const { busy, error, errorMessage, run, checkpoint } = useOperation()
-  const rows = ref<Account[]>([])
-  const loaded = ref(false)
-  const next = ref<string | null>(null)
+  const directory = useAccountDirectory()
+  const {
+    api,
+    session,
+    run,
+    detail,
+    load,
+    busy,
+    error,
+    errorMessage,
+    rows,
+    loaded,
+    next,
+    query,
+    applied,
+    trail,
+    previous,
+    navigate,
+  } = directory
   const login = ref('')
   const password = ref('')
   const resetPassword = ref('')
@@ -35,9 +48,6 @@ export function useAccounts() {
       () => session.state.value.session?.id,
     ],
     () => {
-      rows.value = []
-      loaded.value = false
-      next.value = null
       login.value = ''
       closeCreate()
       closeReset()
@@ -46,12 +56,32 @@ export function useAccounts() {
     },
     { flush: 'sync' },
   )
-  async function load(cursor?: string) {
-    const value = await api.accounts(cursor)
-    checkpoint()
-    rows.value = cursor ? [...rows.value, ...value.accounts] : value.accounts
-    next.value = value.next
-    loaded.value = true
+  watch(
+    () => session.state.value.navigation === 'ready' && !session.managementHint.value,
+    (denied) => {
+      if (denied) {
+        closeCreate()
+        closeReset()
+        profileTarget.value = null
+        pending.value = null
+      }
+    },
+    { flush: 'sync' },
+  )
+  function openChange(row: { principalId: string }, field: 'enabled' | 'membership') {
+    return run(async () => {
+      const account = await detail(row)
+      pending.value = {
+        account,
+        field,
+        enabled: !(field === 'enabled' ? account.enabled : account.memberActive),
+      }
+    })
+  }
+  function openProfile(row: { principalId: string }) {
+    return run(async () => {
+      profileTarget.value = await detail(row)
+    })
   }
   onMounted(() => {
     if (session.managementHint.value) void run(() => load())
@@ -75,10 +105,14 @@ export function useAccounts() {
         if (session.state.value.status === 'authenticated') await load()
       })
   }
-  function openReset(account: Account) {
-    closeCreate()
-    resetPassword.value = ''
-    resetTarget.value = account
+  function openReset(row: { principalId: string }) {
+    return run(async () => {
+      const account = await detail(row)
+      if (!account.hasLocalPassword) return
+      closeCreate()
+      resetPassword.value = ''
+      resetTarget.value = account
+    })
   }
   function closeReset() {
     resetTarget.value = null
@@ -97,6 +131,13 @@ export function useAccounts() {
   }
 
   return {
+    query,
+    applied,
+    trail,
+    previous,
+    navigate,
+    openChange,
+    openProfile,
     api,
     session,
     busy,

@@ -3,17 +3,37 @@ import { ref } from 'vue'
 import type { Application } from '@rss/device-access/model'
 import { useDa } from '../../context'
 import { useRead } from '../../services/read'
+import { useDirectory } from '../../services/directory'
+import { applicationColumns } from '@rss/device-access/client'
+import { QueryRows } from '@rss/core'
+import DirectoryControls from '../../ui/DirectoryControls.vue'
 import ReadState from '../../ui/ReadState.vue'
 import Icon from '../../ui/Icon.vue'
 import ApplicationEditor from './ApplicationEditor.vue'
 const r = useDa(),
-  cursor = ref<string | null>(null),
+  locator = ref(''),
   editing = ref<Application | null>(null),
   open = ref(false)
-const { data, busy, error, reload } = useRead(
-  (signal) => r.client.applications(cursor.value, signal),
-  () => cursor.value,
+const directory = useDirectory(applicationColumns, 100, (query, signal) =>
+  r.client.applications(query, signal),
 )
+const { data, busy, error, reload } = directory
+const detail = useRead(
+  (signal) => r.client.readApplication(locator.value, signal),
+  () => locator.value,
+  {
+    enabled: () => !!locator.value,
+    accepted(value) {
+      editing.value = value
+      open.value = true
+    },
+  },
+)
+function inspect(record: string) {
+  if (locator.value === record) void detail.reload()
+  else locator.value = record
+}
+
 function edit(value: Application | null) {
   editing.value = value
   open.value = true
@@ -40,9 +60,23 @@ function edit(value: Application | null) {
     class="mb-5"
     >当前正式服务仅开放读取。原操作恢复合同未就绪前不提交配置写入；演示入口可体验候选编辑流程。</v-alert
   >
-  <ReadState :busy="busy" :error="error" @retry="reload" />
+  <DirectoryControls
+    :query="directory"
+    :busy="busy"
+    hint="筛选及排序 id、kind；value 仅作投影。"
+  /><ReadState :busy="busy" :error="error" @retry="reload" /><ReadState
+    :busy="detail.busy.value"
+    :error="detail.error.value"
+    @retry="detail.reload"
+  /><QueryRows
+    v-if="data && !data.summaries"
+    :items="data.items"
+    :fields="directory.applied.value?.fields ?? applicationColumns"
+    :required="['id']"
+    @open="(row) => inspect(String(row.id))"
+  />
   <div v-if="data" class="application-grid">
-    <section v-for="a in data.items" :key="a.id" class="panel application">
+    <section v-for="a in data.summaries ?? []" :key="a.id" class="panel application">
       <div class="app-card-top">
         <span class="app-mark"><Icon name="apps" /></span
         ><v-chip :color="a.enabled ? 'success' : 'secondary'">{{
@@ -54,15 +88,12 @@ function edit(value: Application | null) {
       <p class="small muted mt-5">
         {{ a.capabilities.map((c) => (c === 'native_key' ? '平台密钥' : '密码')).join(' / ') }}
       </p>
-      <v-btn variant="outlined" block class="mt-6" @click="edit(a)">{{
+      <v-btn variant="outlined" block class="mt-6" @click="inspect('rp:' + a.id)">{{
         $t('da.mfa96692279')
       }}</v-btn>
     </section>
     <p v-if="!data.items.length" class="empty">{{ $t('da.m140314fdb4') }}</p>
   </div>
-  <v-btn v-if="data?.nextCursor" class="mt-5" @click="cursor = data!.nextCursor">{{
-    $t('da.m67a246a344')
-  }}</v-btn
-  ><v-alert type="info" :icon="false" class="mt-6">{{ $t('da.m2972256e46') }}</v-alert
+  <v-alert type="info" :icon="false" class="mt-6">{{ $t('da.m2972256e46') }}</v-alert
   ><ApplicationEditor v-if="open" :existing="editing" @close="open = false" @saved="reload" />
 </template>

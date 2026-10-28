@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import {
   VBtn,
   VDialog,
@@ -21,6 +25,12 @@ import MdmPage from '../../../ui/MdmPage.vue'
 import TenantUserSelect from './TenantUserSelect.vue'
 import { groupMessages } from '../group-i18n'
 const emit = defineEmits<{ locked: [value: boolean] }>()
+
+const directoryQuery = useDirectoryQuery(
+  ['id', 'revision', 'deleted', 'name', 'enabled', 'memberCount', 'value'],
+  1000,
+)
+
 const confirmingAction = ref<'delete'>()
 function confirmAction() {
   const action = confirmingAction.value
@@ -60,7 +70,7 @@ let pending: (() => Promise<boolean>) | undefined
 async function load(after?: string) {
   page.value = undefined
   await run(
-    () => client.groups({ cursor: after }),
+    () => directoryQuery.read(after, (query) => client.groups(query), {}),
     (v) => (page.value = v),
   )
 }
@@ -207,6 +217,9 @@ async function initialize() {
   await load()
   await routeTarget()
 }
+directoryQuery.onClear(() => {
+  page.value = undefined
+})
 </script>
 <template>
   <MdmPage
@@ -215,13 +228,30 @@ async function initialize() {
     :busy="busy"
     :failure="failure"
   >
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="id / revision / deleted / name / enabled / memberCount"
+      @load="load"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="page?.items ?? []"
+      @open="
+        (row) => {
+          open(String(row.id))
+        }
+      "
+    />
+
     <template #actions
       ><v-btn :disabled="busy" variant="outlined" @click="load()">{{ t('devices.reload') }}</v-btn
       ><v-btn :disabled="busy || uncertain" color="primary" @click="beginCreate()">{{
         t('operations.newGroup')
       }}</v-btn></template
     >
-    <v-table :aria-label="t('groupModule.user-static')"
+    <v-table v-if="directoryQuery.complete.value" :aria-label="t('groupModule.user-static')"
       ><thead>
         <tr>
           <th>{{ t('operations.name') }}</th>
@@ -250,9 +280,7 @@ async function initialize() {
         </tr>
       </tbody></v-table
     >
-    <v-btn v-if="page?.nextCursor" :disabled="busy" @click="load(page.nextCursor)">{{
-      t('devices.next')
-    }}</v-btn>
+
     <v-dialog
       :model-value="editorOpen || uncertain"
       max-width="800"

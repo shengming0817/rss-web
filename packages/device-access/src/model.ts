@@ -5,6 +5,10 @@ export interface Page<T> {
   items: T[]
   nextCursor: string | null
 }
+/** Real selected metadata and an optional complete presentation summary are distinct. */
+export interface DirectoryPage<T> extends Page<Record<string, unknown>> {
+  summaries: T[] | null
+}
 export interface Computer {
   id: string
   name: string

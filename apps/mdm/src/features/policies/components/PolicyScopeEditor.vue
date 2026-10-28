@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from './PolicyFieldset.vue'
 import PolicyDialog from '../components/PolicyDialog.vue'
@@ -18,6 +22,12 @@ import ObjectLink from '../../devices/components/ObjectLink.vue'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import ReferenceEditor from '../components/ReferenceEditor.vue'
 const props = defineProps<{ disabled?: boolean }>()
+
+const directoryQuery = useDirectoryQuery(
+  ['id', 'revision', 'deleted', 'calculationRevision', 'resolution', 'resolutionRevision'],
+  1000,
+)
+
 const selected = defineModel<string>({ default: '' })
 const scopeOpen = ref(false)
 const { t } = useI18n(),
@@ -71,7 +81,7 @@ function closeScope() {
 }
 function load(cursor?: string) {
   void run(
-    () => runtime.policies.scopes.list({ cursor }),
+    () => directoryQuery.read(cursor, (query) => runtime.policies.scopes.list(query), {}),
     (v) => (list.value = v),
   )
 }
@@ -209,8 +219,28 @@ watch(
   { immediate: true, flush: 'sync' },
 )
 if (route.query['device'] || route.query['group']) scopeOpen.value = true
+directoryQuery.onClear(() => {
+  list.value = undefined
+})
 </script>
 <template>
+  <DirectoryControls
+    :query="directoryQuery"
+    :busy="busy"
+    hint="id / revision / deleted / calculationRevision / resolutionRevision；ready 可筛选。"
+    @load="load"
+  />
+  <DirectoryResults
+    v-if="!directoryQuery.complete.value"
+    :disabled="busy || uncertain"
+    :items="list?.items ?? []"
+    @open="
+      (row) => {
+        open(String(row.id))
+      }
+    "
+  />
+
   <VBtn type="button" variant="tonal" :disabled="props.disabled" @click="scopeOpen = true">{{
     t('policies.scopeEditor.manage')
   }}</VBtn>
@@ -234,6 +264,7 @@ if (route.query['device'] || route.query['group']) scopeOpen.value = true
         ><span>{{ t('policies.ux.memberBoundary') }}</span>
       </div>
       <VDataTable
+        v-if="directoryQuery.complete.value"
         :aria-label="t('policies.scopes')"
         :items-per-page="-1"
         hide-default-footer
@@ -258,9 +289,6 @@ if (route.query['device'] || route.query['group']) scopeOpen.value = true
           }}</VChip></template
         ></VDataTable
       >
-      <VBtn v-if="list?.nextCursor" :disabled="!!busy" type="submit" @click="load(list.nextCursor)">
-        {{ t('policies.next') }}
-      </VBtn>
     </template>
     <VBtn v-if="current" variant="text" :disabled="busy || uncertain" @click="closeScope"
       >← {{ t('policies.ux.backScopes') }}</VBtn

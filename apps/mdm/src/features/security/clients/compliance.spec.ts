@@ -124,3 +124,30 @@ it('rejects task phases that contradict native completion and failure facts', ()
   expect(() => complianceTask({ ...value, failure: null }, id, task)).toThrow()
   expect(() => complianceTask({ ...value, ruleId: task }, id, task)).toThrow()
 })
+
+it('decodes complete and sparse rule directories separately before reading the full selected rule', async () => {
+  const row = {
+    id,
+    revision: 2,
+    name: 'Baseline',
+    enabled: true,
+    deleted: false,
+    severity: 'high',
+    platform: 'all',
+    targetKind: 'all',
+    definition,
+  }
+  let reply: unknown = { items: [row], nextCursor: 'YQ' }
+  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
+  const client = createComplianceClient({ request } as unknown as HttpTransport)
+  expect((await client.list({ limit: 1, sort: ['-name'] })).items).toEqual([row])
+  reply = { items: [{ id, enabled: false }], nextCursor: null }
+  expect((await client.list({ fields: ['id', 'enabled'], cursor: 'YQ', limit: 1 })).items).toEqual([
+    { id, enabled: false },
+  ])
+  expect(request.mock.lastCall![0].query).toMatchObject({ fields: 'id,enabled', cursor: 'YQ' })
+  reply = { id, revision: 2, definition }
+  expect(await client.read(id)).toEqual(reply)
+  reply = { id: task, revision: 2, definition }
+  await expect(client.read(id)).rejects.toThrow()
+})

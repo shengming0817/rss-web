@@ -21,7 +21,7 @@ it('filters Resource kinds through the formal directory and opens software impor
       },
       { id: 'unnamed', presentation: {}, kind: 'configuration', activeVersion: null, revision: 1 },
     ],
-    nextCursor: 'next',
+    nextCursor: 'bmV4dA',
   })
   const router = createRouter({
     history: createMemoryHistory(),
@@ -54,18 +54,29 @@ it('filters Resource kinds through the formal directory and opens software impor
   expect(wrapper.text()).toContain('尚无激活版本')
   await selectControl(wrapper, '.task-filterbar select').setValue('configuration')
   await flushPromises()
-  expect(list.mock.calls.at(-1)).toEqual([{ filter: "kind=='configuration'", cursor: undefined }])
+  expect(list.mock.lastCall?.[0]).toMatchObject({
+    filter: "(kind=='configuration')",
+    cursor: undefined,
+    limit: 50,
+  })
   await wrapper
     .findAll('button')
     .find((button) => button.text() === '下一页')!
     .trigger('click')
   await flushPromises()
-  expect(list.mock.calls.at(-1)).toEqual([{ filter: "kind=='configuration'", cursor: 'next' }])
+  expect(list.mock.lastCall?.[0]).toMatchObject({
+    filter: "(kind=='configuration')",
+    cursor: 'bmV4dA',
+    limit: 50,
+  })
   list.mockRejectedValueOnce(new Error('directory unavailable'))
   await selectControl(wrapper, '.task-filterbar select').setValue('script')
   await flushPromises()
-  expect(wrapper.findAll('button').some((button) => button.text() === '下一页')).toBe(false)
-  expect(list.mock.lastCall).toEqual([{ filter: "kind=='script'", cursor: undefined }])
+  expect(list.mock.lastCall?.[0]).toMatchObject({
+    filter: "(kind=='script')",
+    cursor: undefined,
+    limit: 50,
+  })
   await wrapper
     .findAll('button')
     .find((button) => button.text() === '新建')!

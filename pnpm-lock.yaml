@@ -197,6 +197,9 @@ importers:
       '@rss/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@rss/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@rss/device-access':
         specifier: workspace:*
         version: link:../../packages/device-access

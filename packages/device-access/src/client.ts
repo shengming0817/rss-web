@@ -1,7 +1,9 @@
+import type { DirectoryQuery } from '@rss/api/mdm-query'
 import type { Challenge } from './clients/security'
 import type { HttpTransport } from '@rss/api/mdm'
 import type {
   Application,
+  DirectoryPage,
   ApplicationInput,
   Assignment,
   AuditEntry,
@@ -32,9 +34,18 @@ export interface BindingInput {
 }
 export interface DeviceAccessClient {
   capabilities: Capabilities
-  computers(cursor: string | null, signal: AbortSignal): Promise<Page<Computer>>
+  computers(query: DirectoryQuery, signal: AbortSignal): Promise<DirectoryPage<Computer>>
+  viewComputers(
+    reference: { kind: 'endpoint' | 'association'; id: string },
+    signal: AbortSignal,
+  ): Promise<Computer[]>
   computer(device: string, signal: AbortSignal): Promise<Computer>
-  bindings(device: string, cursor: string | null, signal: AbortSignal): Promise<Page<Binding>>
+  bindings(
+    device: string,
+    query: DirectoryQuery,
+    signal: AbortSignal,
+  ): Promise<DirectoryPage<Binding>>
+  binding(device: string, id: string, signal: AbortSignal): Promise<Binding>
   changeBinding(
     device: string,
     id: string,
@@ -55,7 +66,12 @@ export interface DeviceAccessClient {
     signal: AbortSignal,
   ): Promise<Assignment>
   passkeys(device: string, cursor: string | null, signal: AbortSignal): Promise<Page<PasskeyRecord>>
-  materials(device: string, cursor: string | null, signal: AbortSignal): Promise<Page<Material>>
+  materials(
+    device: string,
+    query: DirectoryQuery,
+    signal: AbortSignal,
+  ): Promise<DirectoryPage<Material>>
+  material(device: string, id: string, version: number, signal: AbortSignal): Promise<Material>
   materialChallenge(
     device: string,
     material: Material,
@@ -87,9 +103,11 @@ export interface DeviceAccessClient {
     signal: AbortSignal,
   ): Promise<OriginalOperation | null>
   configurations(cursor: string | null, signal: AbortSignal): Promise<Page<Configuration>>
+  readConfiguration(id: string, signal: AbortSignal): Promise<Configuration>
   configuration(input: ConfigurationInput, signal: AbortSignal): Promise<Configuration>
   scopes(signal: AbortSignal): Promise<Person[]>
-  applications(cursor: string | null, signal: AbortSignal): Promise<Page<Application>>
+  applications(query: DirectoryQuery, signal: AbortSignal): Promise<DirectoryPage<Application>>
+  readApplication(record: string, signal: AbortSignal): Promise<Application>
   application(input: ApplicationInput, signal: AbortSignal): Promise<Application>
   audit(
     device: string | null,
@@ -114,3 +132,14 @@ export { createLiveClient } from './clients/live'
 export { createSecurityClient } from './clients/security'
 
 export type { Challenge } from './clients/security'
+
+export {
+  bindingColumns,
+  materialColumns,
+  applicationColumns,
+  computerColumns,
+  bindingDirectory,
+  materialDirectory,
+  applicationDirectory,
+  computerDirectory,
+} from './clients/directory'

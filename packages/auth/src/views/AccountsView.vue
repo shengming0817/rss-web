@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AccountQueryControls from './AccountQueryControls.vue'
+
 import {
   VBtn,
   VCard,
@@ -20,6 +22,12 @@ const changeActivator = ref<HTMLElement>()
 const resetActivator = ref<HTMLElement>()
 const { t } = useI18n()
 const {
+  query,
+  trail,
+  previous,
+  navigate,
+  openChange,
+  openProfile,
   session,
   busy,
   error,
@@ -55,6 +63,17 @@ const {
       {{ t('identity.errors.insufficient_privilege') }}
     </p>
     <template v-else>
+      <AccountQueryControls
+        :query="query"
+        :busy="busy"
+        :previous="!!trail.length"
+        :next="!!next"
+        @change="Object.assign(query, $event)"
+        @apply="run(() => load())"
+        @first="run(() => navigate())"
+        @previous="run(() => navigate(previous))"
+        @next="run(() => navigate(next ?? undefined))"
+      />
       <VBtn :disabled="!!busy" type="submit" @click="run(() => load())">
         {{ t(loaded ? 'identity.reload' : 'identity.loadList') }}
       </VBtn>
@@ -73,10 +92,30 @@ const {
               <tr v-for="a in rows" :key="a.principalId">
                 <td>
                   {{ a.login ?? a.principalId }}<small>{{ a.principalId }}</small>
+                  <p v-if="'displayName' in a">{{ a.displayName ?? '—' }}</p>
+                  <p v-if="'email' in a">{{ a.email ?? '—' }}</p>
+                  <p v-if="a.profileStatus">{{ a.profileStatus }}</p>
+                  <p v-if="a.departmentStatus">
+                    {{ a.departmentStatus }} ·
+                    {{
+                      a.departmentSnapshot
+                        ? a.departmentSnapshot.memberships.join(', ') || t('identity.noDepartments')
+                        : '—'
+                    }}
+                  </p>
                 </td>
                 <td>
-                  {{ t(a.enabled ? 'identity.enabled' : 'identity.disabled') }} ·
-                  {{ t(a.memberActive ? 'identity.memberActive' : 'identity.memberInactive') }}
+                  {{
+                    a.enabled === undefined
+                      ? '—'
+                      : t(a.enabled ? 'identity.enabled' : 'identity.disabled')
+                  }}
+                  ·
+                  {{
+                    a.memberActive === undefined
+                      ? '—'
+                      : t(a.memberActive ? 'identity.memberActive' : 'identity.memberInactive')
+                  }}
                 </td>
                 <td class="auth-actions">
                   <VBtn
@@ -84,7 +123,7 @@ const {
                     @click="
                       ($event: MouseEvent) => {
                         profileActivator = $event.currentTarget as HTMLElement
-                        profileTarget = a
+                        openProfile(a)
                       }
                     "
                     >{{ t('identity.localProfile') }}</VBtn
@@ -96,11 +135,19 @@ const {
                     @click="
                       ($event: MouseEvent) => {
                         changeActivator = $event.currentTarget as HTMLElement
-                        pending = { account: a, field: 'enabled', enabled: !a.enabled }
+                        openChange(a, 'enabled')
                       }
                     "
                   >
-                    {{ t(a.enabled ? 'identity.disable' : 'identity.enable') }}
+                    {{
+                      t(
+                        a.enabled === undefined
+                          ? 'identity.changeAccountState'
+                          : a.enabled
+                            ? 'identity.disable'
+                            : 'identity.enable',
+                      )
+                    }}
                   </VBtn>
                   <VBtn
                     :disabled="!!busy"
@@ -109,15 +156,23 @@ const {
                     @click="
                       ($event: MouseEvent) => {
                         changeActivator = $event.currentTarget as HTMLElement
-                        pending = { account: a, field: 'membership', enabled: !a.memberActive }
+                        openChange(a, 'membership')
                       }
                     "
                   >
-                    {{ t(a.memberActive ? 'identity.disableMember' : 'identity.enableMember') }}
+                    {{
+                      t(
+                        a.memberActive === undefined
+                          ? 'identity.changeMemberState'
+                          : a.memberActive
+                            ? 'identity.disableMember'
+                            : 'identity.enableMember',
+                      )
+                    }}
                   </VBtn>
                   <VBtn
                     v-if="
-                      a.hasLocalPassword &&
+                      a.hasLocalPassword !== false &&
                       a.principalId !== session.state.value.identity?.principalId
                     "
                     :disabled="!!busy"
@@ -137,14 +192,6 @@ const {
           </VTable>
         </div>
       </div>
-      <VBtn
-        v-if="next"
-        :disabled="!!busy"
-        type="submit"
-        @click="run(() => load(next ?? undefined))"
-      >
-        {{ t('identity.more') }}
-      </VBtn>
       <VBtn
         type="button"
         :disabled="busy"
@@ -246,7 +293,7 @@ const {
         ><VCardText
           ><p :id="`${dialogId}-3`">
             {{
-              `${pending?.account.login ?? pending?.account.principalId ?? ''} · ${t('identity.changeHelp')}`
+              `${pending?.account.login ?? pending?.account.principalId ?? ''} · ${t(pending?.field === 'enabled' ? (pending.enabled ? 'identity.enable' : 'identity.disable') : pending?.enabled ? 'identity.enableMember' : 'identity.disableMember')}`
             }}
           </p></VCardText
         ><VCardActions class="auth-actions">

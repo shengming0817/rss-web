@@ -2,12 +2,7 @@ import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import type { HttpTransport } from '@rss/api/mdm'
 import { array, count, identifier, integer, nullable, uuid } from '../../../services/decode'
-import {
-  nextCursor,
-  pageCursor,
-  windowParameters,
-  type WindowQuery,
-} from '../../../services/directory-query'
+import { nextCursor, pageCursor, windowParameters, type WindowQuery } from '@rss/api/mdm-query'
 import { operationReference } from '../../policies/clients/events'
 export interface ActivityQuery extends WindowQuery {
   from?: number

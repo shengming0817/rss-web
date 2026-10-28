@@ -1,8 +1,23 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
-import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
+import {
+  queryParameters,
+  projectedPage,
+  comparison,
+  allOf,
+  type DirectoryQuery,
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import { count, identifier, integer, nullable, uuid } from '../../../services/decode'
+import {
+  boolean,
+  enumeration,
+  closed,
+  count,
+  identifier,
+  integer,
+  nullable,
+  uuid,
+} from '../../../services/decode'
 export const appleCredentialActions = [
   'configure_filevault',
   'collect_filevault',
@@ -84,16 +99,63 @@ export type CredentialInput = Omit<
   Parameters<typeof api.postApiV1DevicesByDeviceRecoveryCredentialsOperations>[1]['body'],
   'operationId'
 >
+function materialFields(device: string) {
+  return {
+    id: uuid,
+    version: count,
+    current: boolean,
+    validity: (v: unknown) =>
+      enumeration(v, ['unverified', 'verified', 'unknown', 'superseded', 'revoked'] as const),
+    escrowed: boolean,
+    operation: uuid,
+    createdAt: integer,
+    invalidatedAt: (v: unknown) => nullable(v, integer),
+    binding: (value: unknown) => {
+      const v = closed(value, ['device', 'registration', 'generation', 'subject'])
+      if (v['device'] !== device || !count(v['generation']))
+        throw new Error('Wrong material binding')
+      return {
+        device,
+        registration: uuid(v['registration']),
+        generation: count(v['generation']),
+        subject: subject(v['subject']),
+      }
+    },
+  }
+}
 export function createCredentialsClient(transport: HttpTransport) {
   function versionPath(device: string, entry: Material) {
     return { device: identifier(device), id: entry.id, version: entry.version }
   }
   return {
-    list: (device: string, query: DirectoryQuery = {}) =>
+    list: <
+      F extends keyof ReturnType<typeof materialFields> = keyof ReturnType<typeof materialFields>,
+    >(
+      device: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       api.getApiV1DevicesByDeviceRecoveryCredentials(
         transport,
         { pathParams: { device }, query: queryParameters({ limit: 100, ...query }) },
-        (v) => windowPage(v, (x) => material(x, device)),
+        (v) => projectedPage(v, materialFields(device), query.fields, ['id', 'version']),
+      ),
+    read: (device: string, id: string, version: number) =>
+      api.getApiV1DevicesByDeviceRecoveryCredentials(
+        transport,
+        {
+          pathParams: { device },
+          query: queryParameters({
+            filter: allOf(comparison('id', '==', uuid(id)), comparison('version', '==', version)),
+            limit: 1,
+          }),
+        },
+        (value) => {
+          const page = projectedPage(value, materialFields(device))
+          const row = page.items[0]
+          if (!row || row.id !== id || row.version !== version || page.nextCursor)
+            throw new Error('Wrong material')
+          return material(row, device)
+        },
       ),
     reveal: (device: string, entry: Material) =>
       api.getApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionSecret(

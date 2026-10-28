@@ -1,3 +1,10 @@
+import {
+  directoryPage,
+  computerRecord,
+  bindingRecord,
+  materialRecord,
+  applicationRecord,
+} from './directory'
 import { randomUUID } from 'node:crypto'
 import { viewDecoders as d } from '@rss/device-access/model'
 import type { Application, Configuration, OriginalOperation } from '@rss/device-access/model'
@@ -123,6 +130,19 @@ export function createDemoServer() {
           nextCursor: next < filtered.length ? String(next) : null,
         })
       }
+      const directory = (items: Record<string, unknown>[]) => {
+        try {
+          return ok(
+            directoryPage(
+              scenario === 'empty' ? [] : items,
+              parsed.searchParams,
+              session.id + ':' + path,
+            ),
+          )
+        } catch {
+          return fail(400, 'malformed_request')
+        }
+      }
       const denyWrite = () =>
         session.reader || scenario === 'readonly'
           ? fail(403, 'permission_denied')
@@ -203,7 +223,8 @@ export function createDemoServer() {
       if (route[0] === 'scopes' && method === 'GET') return ok(data.scopes)
       if (route[0] === 'audit' && method === 'GET') return paginate(data.audit)
       if (route[0] === 'computers') {
-        if (route.length === 1 && method === 'GET') return paginate(data.computers)
+        if (route.length === 1 && method === 'GET')
+          return directory(data.computers.map(computerRecord))
         const computer = data.computers.find((c) => c.id === route[1])
         if (!computer) return fail(404, 'management_device_not_found')
         const id = computer.id
@@ -246,7 +267,13 @@ export function createDemoServer() {
           return paginate(data.audit.filter((a) => a.device === id))
         if (route[2] === 'bindings') {
           const bindings = data.bindings[id]!
-          if (method === 'GET') return paginate(bindings)
+          if (method === 'GET') {
+            if (route[3]) {
+              const entry = bindings.find((v) => v.id === route[3])
+              return entry ? ok(entry) : fail(404, 'inventory_not_found')
+            }
+            return directory(bindings.map((v) => bindingRecord(v, computer)))
+          }
           const v = d.closed(body, ['operationId', 'expectedRevision', 'action']),
             entry = bindings.find((b) => b.id === route[3])
           if (!entry) return fail(404, 'inventory_not_found')
@@ -269,9 +296,14 @@ export function createDemoServer() {
         }
         if (route[2] === 'materials') {
           const materials = data.materials[id] ?? []
-          if (route.length === 3 && method === 'GET') return paginate(materials)
+          if (route.length === 3 && method === 'GET')
+            return directory(materials.map(materialRecord))
           const entry = materials.find((m) => m.id === route[3])
           if (!entry) return fail(404, 'recovery_credential_not_found')
+          if (method === 'GET')
+            return entry.version === Number(parsed.searchParams.get('version'))
+              ? ok(entry)
+              : fail(404, 'inventory_not_found')
           const v = d.closed(body, ['operationId', 'version'])
           d.uuid(v['operationId'])
           if (entry.version !== v['version']) return fail(409, 'operation_conflict')
@@ -290,7 +322,13 @@ export function createDemoServer() {
         }
       }
       if (route[0] === 'configurations') {
-        if (method === 'GET') return paginate(data.configurations)
+        if (method === 'GET') {
+          if (route[1]) {
+            const entry = data.configurations.find((v) => v.id === route[1])
+            return entry ? ok(entry) : fail(404, 'inventory_not_found')
+          }
+          return paginate(data.configurations)
+        }
         const v = d.closed(body, [
           'id',
           'name',
@@ -332,7 +370,13 @@ export function createDemoServer() {
         })
       }
       if (route[0] === 'applications') {
-        if (method === 'GET') return paginate(data.applications)
+        if (method === 'GET') {
+          if (route[1]) {
+            const entry = data.applications.find((v) => 'rp:' + v.id === route[1])
+            return entry ? ok(entry) : fail(404, 'inventory_not_found')
+          }
+          return directory(data.applications.map(applicationRecord))
+        }
         const v = d.closed(body, [
             'id',
             'enabled',

@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VBtn, VDataTable, VSelect, VTextField } from 'vuetify/components'
-import { comparison as queryComparison } from '../../../services/directory-query'
+import { comparison as queryComparison } from '@rss/api/mdm-query'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -11,6 +15,11 @@ import { deviceBinding } from '../../devices/useDeviceBinding'
 import MdmPage from '../../../ui/MdmPage.vue'
 import { sha256 } from '@noble/hashes/sha2.js'
 import VersionLifecycle from '../components/VersionLifecycle.vue'
+const directoryQuery = useDirectoryQuery(
+  ['id', 'revision', 'kind', 'activeVersion', 'presentation'],
+  1000,
+)
+
 const runtime = useMdm(),
   route = useRoute(),
   { t } = useI18n(),
@@ -25,7 +34,7 @@ const page = ref<Awaited<ReturnType<typeof client.list>>>(),
   version = ref('')
 const rows = computed(() =>
   (page.value?.items ?? []).filter((v) =>
-    `${v.id} ${v.presentation['name'] ?? ''}`
+    `${v.id} ${v.presentation?.['name'] ?? ''}`
       .toLocaleLowerCase()
       .includes((query.value ?? '').toLocaleLowerCase()),
   ),
@@ -81,7 +90,10 @@ function close() {
 function list(after?: string) {
   if (busy.value || locked.value) return
   void run(
-    () => client.list({ filter: queryComparison('kind', '==', 'software'), cursor: after }),
+    () =>
+      directoryQuery.read(after, (query) => client.list(query), {
+        filter: queryComparison('kind', '==', 'software'),
+      }),
     (v) => {
       page.value = v
     },
@@ -128,6 +140,9 @@ watch(
   },
   { flush: 'sync' },
 )
+directoryQuery.onClear(() => {
+  page.value = undefined
+})
 </script>
 <template>
   <MdmPage
@@ -136,6 +151,23 @@ watch(
     :busy="busy"
     :failure="failure"
   >
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选 id / revision / kind / active；排序 id / revision / kind。名称仅搜索当前页。"
+      @load="list"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy || locked"
+      :items="page?.items ?? []"
+      @open="
+        (row) => {
+          open(String(row.id))
+        }
+      "
+    />
+
     <p v-if="failure === 'unsupported'" role="alert">
       {{ t('software.ux.contentPrerequisite') }}
       <RouterLink
@@ -158,7 +190,7 @@ watch(
     <template v-if="!current">
       <VTextField
         v-model="query"
-        :label="t('software.ux.search')"
+        :label="t('console.currentPageSearch')"
         clearable
         :placeholder="t('software.ux.search')"
         @click:clear="query = ''"
@@ -166,6 +198,7 @@ watch(
       <VBtn :disabled="busy" @click="list()">{{ t('policies.reload') }}</VBtn>
       <p>{{ t('console.pageNotTotal') }}</p>
       <VDataTable
+        v-if="directoryQuery.complete.value"
         :headers="[
           { key: 'name', title: t('software.package') },
           { key: 'version', title: t('software.version') },
@@ -197,9 +230,7 @@ watch(
         >
       </VDataTable>
       <p v-if="page && !rows.length">{{ t('policies.empty') }}</p>
-      <VBtn v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">{{
-        t('devices.next')
-      }}</VBtn>
+
       <MdmDisclosure>
         <template #title>{{ t('policies.ux.technical') }}</template>
         <form @submit.prevent="open()">

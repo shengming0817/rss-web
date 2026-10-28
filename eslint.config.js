@@ -273,7 +273,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-limits|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
+              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-limits|mdm-query|mdm-filter|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
             message: 'Use public product boundaries.',
           },
         ],
@@ -289,7 +289,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/profile-json)?$|api/(?:mdm|mdm-limits|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
+              '^@rss/(?!core(?:/|$)|auth(?:/(?:profile-json|account-query))?$|api/(?:mdm|mdm-limits|mdm-query|mdm-filter|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
             message: 'Features consume injected clients and public UI.',
           },
         ],
@@ -316,7 +316,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-demo|mdm-limits|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
+              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-demo|mdm-limits|mdm-query|mdm-filter|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
             message: 'Demo uses explicit public boundaries.',
           },
         ],
@@ -441,7 +441,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!api/(?:identity|mdm|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
+              '^@rss/(?!api/(?:identity|mdm|mdm-query|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
             message: 'The domain owns no session or application composition.',
           },
         ],
@@ -461,7 +461,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
+              '^@rss/(?!core$|auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm|mdm-query|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
             message: 'Features consume injected clients.',
           },
         ],
@@ -489,7 +489,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^@rss/(?!auth$|device-access/(?:client|model)$|api/(?:identity|mdm|device-access-demo)$)',
+              '^@rss/(?!auth$|device-access/(?:client|model)$|api/(?:identity|mdm|mdm-query|mdm-filter|device-access-demo)$)',
             message: 'Demo is explicit and uses the existing executor.',
           },
         ],

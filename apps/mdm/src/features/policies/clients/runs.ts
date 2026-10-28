@@ -1,6 +1,6 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
-import { windowParameters, windowPage, type WindowQuery } from '../../../services/directory-query'
+import { windowParameters, windowPage, type WindowQuery } from '@rss/api/mdm-query'
 import { subject } from '../../security/clients/credentials'
 import { jsonValue } from '../../../services/json'
 import type { HttpTransport } from '@rss/api/mdm'

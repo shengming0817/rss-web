@@ -1,12 +1,20 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
+import { queryParameters, comparison, allOf } from '@rss/api/mdm-query'
+import {
+  bindingDirectory,
+  materialDirectory,
+  applicationDirectory,
+  computerDirectory,
+  bindingDetail,
+  applicationDetail,
+} from './directory'
 import type { HttpTransport } from '@rss/api/mdm'
-import { CapabilityUnavailable } from '../model'
-import type { Computer, OriginalOperation } from '../model'
+import { CapabilityUnavailable, type OriginalOperation } from '../model'
 import type { DeviceAccessClient } from '../client'
-import { text, count, uuid, nullable, list, page, same, unique } from '../model/decode'
+import { object, closed, text, count, uuid, nullable, list, same } from '../model/decode'
 import { challenge } from './security'
-import { application, nativeBinding, nativeComputer, nativeMaterial } from './native'
+import { nativeComputer, nativeMaterial } from './native'
 export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
   const ready = { available: true, reason: null, source: 'service' as const }
   const missing = (reason: string) => ({ available: false, reason, source: 'service' as const })
@@ -26,25 +34,20 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       security: ready,
       audit: ready,
     },
-    computers: async (cursor, signal) =>
+    computers: (query, signal) =>
       api.getApiV1DeviceViews(
         transport,
-        {
-          query: { fields: 'key,reference,endpoints', limit: 20, ...(cursor ? { cursor } : {}) },
-          signal,
-        },
-        (value) => {
-          const p = page(value, (v) => {
-            if (!wireSchemas.getApiV1DeviceViewsResponse.validateProjection_DirectoryRow(v))
-              throw new Error('Invalid device row')
-            const r = v
-            return list(r['endpoints'], nativeComputer)
-          })
-          const byId = new Map<string, Computer>()
-          for (const c of p.items.flat()) byId.set(c.id, c)
-          return { items: [...byId.values()], nextCursor: p.nextCursor }
-        },
+        { query: queryParameters({ limit: 50, ...query }), signal },
+        (value) => computerDirectory(value, query),
       ),
+    viewComputers: (reference, signal) =>
+      api.getApiV1DeviceViewsByKindById(transport, { pathParams: reference, signal }, (value) => {
+        const row = object(value)
+        const actual = closed(row['reference'], ['kind', 'id'])
+        same(actual['kind'], reference.kind)
+        same(actual['id'], reference.id)
+        return list(row['endpoints'], nativeComputer)
+      }),
     computer: (device, signal) =>
       api.getApiV1DeviceViewsByKindById(
         transport,
@@ -59,14 +62,20 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
           return rows[0]
         },
       ),
-    bindings: (device, cursor, signal) =>
+    bindings: (device, query, signal) =>
       api.getApiV1DevicesByDeviceDeviceAccess(
         transport,
-        { pathParams: { device }, query: { limit: 50, ...(cursor ? { cursor } : {}) }, signal },
-        (v) => {
-          const p = page(v, (x) => nativeBinding(x, device))
-          unique(p.items, (x) => x.id)
-          return p
+        { pathParams: { device }, query: queryParameters({ limit: 50, ...query }), signal },
+        (value) => bindingDirectory(value, device, query),
+      ),
+    binding: (device, id, signal) =>
+      api.getApiV1DevicesByDeviceDeviceAccessBindingsById(
+        transport,
+        { pathParams: { device, id: uuid(id) }, signal },
+        (value) => {
+          const row = bindingDetail(value, device)
+          same(row.id, id)
+          return row
         },
       ),
     changeBinding: (device, id, input, signal) =>
@@ -74,7 +83,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         transport,
         { pathParams: { device, id: uuid(id) }, body: input, signal },
         (v) => {
-          const b = nativeBinding(v, device)
+          const b = bindingDetail(v, device)
           same(b.id, id)
           if (b.revision <= input.expectedRevision) throw new Error('Wrong revision')
           return b
@@ -84,7 +93,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       api.getApiV1DevicesByDeviceDeviceAccessOperationsById(
         transport,
         { pathParams: { device, id: uuid(id) }, signal },
-        (v) => nativeBinding(v, device),
+        (v) => bindingDetail(v, device),
       ),
     assignment: async () => unavailable('asset_contract'),
     people: async () => unavailable('asset_contract'),
@@ -92,12 +101,35 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
     passkeys: async () => unavailable('passkey_contract'),
     configurations: async () => unavailable('configuration_projection'),
     configuration: async () => unavailable('configuration_projection'),
+    readConfiguration: async () => unavailable('configuration_projection'),
     scopes: async () => unavailable('configuration_projection'),
-    materials: (device, cursor, signal) =>
+    materials: (device, query, signal) =>
       api.getApiV1DevicesByDeviceRecoveryCredentials(
         transport,
-        { pathParams: { device }, query: { limit: 100, ...(cursor ? { cursor } : {}) }, signal },
-        (value) => page(value, (v) => nativeMaterial(v, device)),
+        { pathParams: { device }, query: queryParameters({ limit: 50, ...query }), signal },
+        (value) => materialDirectory(value, device, query),
+      ),
+    material: (device, id, version, signal) =>
+      api.getApiV1DevicesByDeviceRecoveryCredentials(
+        transport,
+        {
+          pathParams: { device },
+          query: queryParameters({
+            filter: allOf(
+              comparison('id', '==', uuid(id)),
+              comparison('version', '==', count(version)),
+            ),
+            limit: 1,
+          }),
+          signal,
+        },
+        (value) => {
+          const page = materialDirectory(value, device, {})
+          const row = page.summaries?.[0]
+          if (!row || row.id !== id || row.version !== version || page.nextCursor)
+            throw new Error('Wrong material')
+          return row
+        },
       ),
     materialChallenge: (device, material, operationId, signal) =>
       api.postApiV1DevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionStepUp(
@@ -154,27 +186,23 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         },
       )
     },
-    applications: (cursor, signal) =>
-      api.getApiV1DeviceAccessEnterpriseConfiguration(
+    applications: (query, signal) => {
+      const selection = {
+        limit: 50,
+        ...query,
+        filter: allOf("kind=='relying_party'", query.filter),
+      }
+      return api.getApiV1DeviceAccessEnterpriseConfiguration(
         transport,
-        {
-          query: { filter: 'kind==relying_party', limit: 50, ...(cursor ? { cursor } : {}) },
-          signal,
-        },
-        (v) =>
-          page(v, (raw) => {
-            if (
-              !wireSchemas.getApiV1DeviceAccessEnterpriseConfigurationResponse.validateProjection_RecordView(
-                raw,
-              )
-            )
-              throw new Error('Invalid application row')
-            const row = raw
-            same(row['kind'], 'relying_party')
-            const result = application(row['value'])
-            same(row['id'], 'rp:' + result.id)
-            return result
-          }),
+        { query: queryParameters(selection), signal },
+        (value) => applicationDirectory(value, selection),
+      )
+    },
+    readApplication: (record, signal) =>
+      api.getApiV1DeviceAccessEnterpriseConfigurationById(
+        transport,
+        { pathParams: { id: record }, signal },
+        (value) => applicationDetail(value, record),
       ),
     application: async () => unavailable('application_operation_query'),
     audit: (device, cursor, signal) => {

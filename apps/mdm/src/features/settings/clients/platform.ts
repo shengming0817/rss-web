@@ -1,9 +1,9 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
-import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
+import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import { operationReceipt, origin, positive, sha256 } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
-import { count, nullable, string, uuid } from '../../../services/decode'
+import { boolean, count, enumeration, nullable, string, uuid } from '../../../services/decode'
 
 export function tenant(value: unknown) {
   if (!wireSchemas.getApiV1TenantAdministrationProvisioningsResponse.validateTenant(value))
@@ -100,6 +100,21 @@ export function registryReceipt(value: unknown) {
   }
   return { operationId, action, result: tenant(v['result']) }
 }
+const tenantFields = {
+  tenantId: (value: unknown) => uuid(value),
+  management: (value: unknown) => boolean(value),
+  initialEpoch: (value: unknown) => positive(value),
+  currentEpoch: (value: unknown) => positive(value),
+  name: (value: unknown) => nullable(value, string),
+  notes: (value: unknown) => nullable(value, string),
+  revision: (value: unknown) => positive(value),
+  deletable: (value: unknown) => boolean(value),
+}
+const provisioningFields = {
+  operationId: uuid,
+  action: (v: unknown) => enumeration(v, ['provision'] as const),
+  result: provisioning,
+}
 export function createPlatformClient(transport: HttpTransport) {
   return {
     registryOperation(id: string) {
@@ -156,21 +171,25 @@ export function createPlatformClient(transport: HttpTransport) {
         },
       )
     },
-    async tenants(query: DirectoryQuery = {}) {
+    async tenants<F extends keyof typeof tenantFields = keyof typeof tenantFields>(
+      query: DirectoryQuery<F> = {},
+    ) {
       return api.getApiV1TenantAdministrationTenants(
         transport,
         { query: queryParameters({ limit: 100, ...query }) },
         (value) => {
-          return windowPage(value, tenant)
+          return projectedPage(value, tenantFields, query.fields, ['tenantId'])
         },
       )
     },
-    async provisionings(query: DirectoryQuery = {}) {
+    async provisionings<
+      F extends keyof typeof provisioningFields = keyof typeof provisioningFields,
+    >(query: DirectoryQuery<F> = {}) {
       return api.getApiV1TenantAdministrationProvisionings(
         transport,
         { query: queryParameters({ limit: 100, ...query }) },
         (value) => {
-          return windowPage(value, provisionReceipt)
+          return projectedPage(value, provisioningFields, query.fields, ['operationId'])
         },
       )
     },

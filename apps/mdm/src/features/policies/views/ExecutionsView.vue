@@ -1,12 +1,16 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyDialog from '../components/PolicyDialog.vue'
 
 import { VBtn, VTextField, VSelect, VDataTable, VChip } from 'vuetify/components'
 
-import { comparison, allOf } from '../../../services/directory-query'
+import { comparison, allOf } from '@rss/api/mdm-query'
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
@@ -18,6 +22,29 @@ import NativeTaskFacts from '../components/NativeTaskFacts.vue'
 import OperationStages from '../components/OperationStages.vue'
 import type { NativeOperation } from '../clients/native'
 import type { EndpointDetail } from '../../devices/clients/endpoint-model'
+const deviceQuery = useDirectoryQuery(
+  ['id', 'status', 'primaryMdmRegistration', 'channels', 'enrollments', 'inventoryAvailable'],
+  100,
+)
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'kind',
+    'device',
+    'policy',
+    'status',
+    'registrationId',
+    'generation',
+    'origin',
+    'deadline',
+    'authorization',
+    'reauthorization',
+    'evidence',
+    'detailUrl',
+  ],
+  1000,
+)
+const router = useRouter()
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute()
@@ -58,6 +85,13 @@ const selected = ref<EndpointDetail>(),
   name = ref('')
 const selectedDevice = ref(''),
   choosingDevice = ref(false)
+deviceQuery.onClear(() => {
+  devices.value = undefined
+})
+function openProjectedDevice(row: Record<string, unknown>) {
+  selectedDevice.value = String(row['id'])
+  void choose()
+}
 function beginRemote() {
   choosingDevice.value = true
   loadDevices()
@@ -71,8 +105,7 @@ function selectQueue(value: Queue) {
 }
 function load(cursor?: string) {
   if (busy.value) return
-  records.value = undefined
-  const selection = cursor
+  const selection = directoryQuery.continues(cursor)
     ? applied.value
     : {
         device: device.value || undefined,
@@ -83,34 +116,41 @@ function load(cursor?: string) {
         authorizationState: authorizationState.value || undefined,
         authorizationReason: authorizationReason.value || undefined,
       }
-  const filter = allOf(
-    ...(['device', 'policy', 'kind', 'status'] as const).map((key) =>
-      selection[key] ? comparison(key, '==', selection[key]!) : undefined,
-    ),
-    selection.queue === 'waiting'
-      ? allOf(
-          comparison('kind', '==', 'command'),
-          `(${comparison('status', '==', 'queued')}),(${comparison('status', '==', 'published')})`,
-        )
-      : selection.queue === 'blocked'
-        ? comparison('authorization.state', '==', 'blocked')
-        : selection.queue === 'unknown'
-          ? comparison('status', '==', 'unknown')
-          : undefined,
-    selection.authorizationState
-      ? comparison('authorization.state', '==', selection.authorizationState)
-      : undefined,
-    selection.authorizationReason
-      ? comparison('authorization.reason', '==', selection.authorizationReason)
-      : undefined,
-  )
-  activeFilter.value = filter
+  let query: ReturnType<typeof directoryQuery.parameters>
+  try {
+    const filter = allOf(
+      ...(['device', 'policy', 'kind', 'status'] as const).map((key) =>
+        selection[key] ? comparison(key, '==', selection[key]!) : undefined,
+      ),
+      selection.queue === 'waiting'
+        ? allOf(
+            comparison('kind', '==', 'command'),
+            `(${comparison('status', '==', 'queued')}),(${comparison('status', '==', 'published')})`,
+          )
+        : selection.queue === 'blocked'
+          ? comparison('authorization.state', '==', 'blocked')
+          : selection.queue === 'unknown'
+            ? comparison('status', '==', 'unknown')
+            : undefined,
+      selection.authorizationState
+        ? comparison('authorization.state', '==', selection.authorizationState)
+        : undefined,
+      selection.authorizationReason
+        ? comparison('authorization.reason', '==', selection.authorizationReason)
+        : undefined,
+    )
+    query = directoryQuery.parameters(cursor, { filter })
+  } catch {
+    failure.value = 'invalidRequest'
+    return
+  }
+  records.value = undefined
+  activeFilter.value = query.filter
   commandDetails.value = {}
-  const query = { filter, cursor }
   if (!cursor) {
     statistics.value = undefined
     void statisticsOperation.run(
-      () => runtime.policies.executions.statistics(filter),
+      () => runtime.policies.executions.statistics(query.filter),
       (v) => {
         statistics.value = v
       },
@@ -119,12 +159,13 @@ function load(cursor?: string) {
   void run(
     () => runtime.policies.executions.directory(query),
     (value) => {
+      directoryQuery.accept(cursor, value.nextCursor)
       records.value = value
       applied.value = selection
       commandDetails.value = {}
     },
   ).then((ok) => {
-    if (!ok && activeFilter.value === filter) statistics.value = undefined
+    if (!ok && activeFilter.value === query.filter) statistics.value = undefined
   })
 }
 function inspect(device: string, id: string) {
@@ -137,7 +178,7 @@ function inspect(device: string, id: string) {
 }
 function loadDevices(after?: string) {
   void picker.run(
-    () => runtime.devices.directory.list({ cursor: after }),
+    () => deviceQuery.read(after, (query) => runtime.devices.directory.list(query)),
     (value) => {
       devices.value = value
     },
@@ -208,6 +249,26 @@ watch(
   },
   { immediate: true, flush: 'sync' },
 )
+directoryQuery.onClear(() => {
+  records.value = undefined
+  statistics.value = undefined
+  commandDetails.value = {}
+})
+function readProjected(row: Record<string, unknown>) {
+  if (typeof row['detailUrl'] !== 'string') return
+  const command = /^\/api\/v1\/devices\/([^/]+)\/operations\/([0-9a-f-]{36})$/.exec(
+    row['detailUrl'],
+  )
+  const action = /^\/api\/v1\/policies\/([0-9a-f-]{36})\/runs\/([0-9a-f-]{36})$/.exec(
+    row['detailUrl'],
+  )
+  if (command || action)
+    void router.push({
+      name: 'policy-execution',
+      params: { tenant: runtime.tenant, execution: (command ?? action)![2]! },
+      query: command ? { device: command[1] } : { policy: action![1] },
+    })
+}
 </script>
 <template>
   <MdmPage
@@ -216,6 +277,20 @@ watch(
     :busy="busy"
     :failure="failure"
   >
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="id / kind / device / policy / status / registrationId / generation / origin / deadline；authorization.state / authorization.reason / reauthorization.state 只筛选。"
+      @load="load"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy"
+      :required="['detailUrl']"
+      :items="records?.items ?? []"
+      @open="readProjected"
+    />
+
     <template #actions
       ><VBtn :disabled="picker.busy.value || pinned" @click="beginRemote">{{
         t('policies.ux.remote')
@@ -329,10 +404,22 @@ watch(
       :close-label="t('console.close')"
     >
       <h2>{{ t('policies.nativeAction') }}</h2>
+      <DirectoryControls
+        :query="deviceQuery"
+        :busy="picker.busy.value || pinned"
+        hint="筛选 id、status、channel、source、platform、inventoryAvailable；按 id 排序。"
+        @load="loadDevices"
+      />
+      <DirectoryResults
+        v-if="!deviceQuery.complete.value"
+        :disabled="picker.busy.value || pinned"
+        :items="devices?.items ?? []"
+        @open="openProjectedDevice"
+      />
       <VBtn :disabled="picker.busy.value || pinned" @click="loadDevices()">{{
         t('console.chooseLoaded')
       }}</VBtn>
-      <template v-if="devices"
+      <template v-if="devices && deviceQuery.complete.value"
         ><p>{{ t('console.pageNotTotal') }}</p>
         <label
           >{{ t('policies.device')
@@ -350,13 +437,7 @@ watch(
             density="comfortable"
             hide-details="auto"
             @update:model-value="choose()" /></label
-        ><VBtn
-          v-if="devices.nextCursor"
-          :disabled="picker.busy.value || pinned"
-          @click="loadDevices(devices.nextCursor)"
-          >{{ t('policies.next') }}</VBtn
-        ></template
-      >
+      ></template>
       <p v-if="picker.failure.value" role="alert">{{ t(`devices.${picker.failure.value}`) }}</p>
     </PolicyDialog>
     <DeviceControlPanel
@@ -370,6 +451,8 @@ watch(
         {{ t('policies.ux.observedAt') }} · {{ utc(statistics.asOf) }}
       </p>
       <VDataTable
+        v-if="directoryQuery.complete.value"
+        disable-sort
         :aria-label="t('policies.executions')"
         :items-per-page="-1"
         hide-default-footer
@@ -460,9 +543,6 @@ watch(
           </MdmDisclosure>
         </template>
       </VDataTable>
-      <VBtn v-if="records.nextCursor" :disabled="busy" @click="load(records.nextCursor)">{{
-        t('policies.next')
-      }}</VBtn>
     </section>
   </MdmPage>
 </template>

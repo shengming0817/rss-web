@@ -29,6 +29,7 @@ export const consoleZh = {
   pendingRequests: '有待处理请求',
   emptyPage: '当前页没有条目',
   pageNotTotal: '仅展示当前返回页，不作为全量计数。',
+  currentPageSearch: '当前页搜索',
   configuredDeployments: '查看软件分配策略',
   deploymentEvidence: '策略启用不代表设备执行成功；进入策略查看独立回执与效果。',
   selectPage: '选择当前页',
@@ -112,6 +113,7 @@ export const consoleEn: typeof consoleZh = {
   pendingRequests: 'Requests to review',
   emptyPage: 'No items on this page',
   pageNotTotal: 'Shows the returned page only, not a global count.',
+  currentPageSearch: 'Search this page',
   configuredDeployments: 'View deployment policies',
   deploymentEvidence:
     'Enabled configuration does not prove execution. Open a deployment for receipts and independently observed effects.',

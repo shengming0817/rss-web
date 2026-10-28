@@ -42,6 +42,12 @@ const zh = {
   logoutUnconfirmed:
     '退出结果尚未确认。重新读取只检查当前会话，不证明全部会话已撤销。你也可以前往登录页。',
   more: '加载更多',
+  pageSize: '每页数量',
+  apply: '应用',
+  first: '首页',
+  previous: '上一页',
+  next: '下一页',
+  cursor_invalidated: '查询游标已失效，请重新查询首页。',
   changePassword: '修改密码',
   currentPassword: '当前密码',
   newPassword: '新密码（至少 15 个字符）',
@@ -62,6 +68,9 @@ const zh = {
   createAccount: '创建本地账户',
   create: '创建',
   confirmChange: '确认账户变更',
+  changeAccountState: '修改账户状态',
+  changeMemberState: '修改成员状态',
+  noDepartments: '无部门',
   changeHelp: '此操作将使目标账户已有会话失效；账户启用、成员资格分别管理。',
   cancel: '取消',
   confirm: '确认',
@@ -110,6 +119,7 @@ const zh = {
   navigation: '身份管理导航',
   footer: '本地认证与会话管理 · RSS Identity',
   errors: {
+    account_cursor_invalidated: '查询游标已失效，请重新查询首页。',
     revision_conflict: '资料版本已变化，请重新读取后编辑。',
     operation_conflict: '操作 ID 与原始输入不一致，请查询原操作。',
     invalid_request: '资料输入无效，请检查格式和范围。',
@@ -175,6 +185,12 @@ const en = {
   logoutUnconfirmed:
     'The sign-out outcome is unconfirmed. Reload checks only the current session and does not confirm that all sessions were revoked. You can also go to sign in.',
   more: 'Load more',
+  pageSize: 'Page size',
+  apply: 'Apply',
+  first: 'First',
+  previous: 'Previous',
+  next: 'Next',
+  cursor_invalidated: 'The query cursor expired. Requery the first page.',
   changePassword: 'Change password',
   currentPassword: 'Current password',
   newPassword: 'New password (at least 15 characters)',
@@ -196,6 +212,9 @@ const en = {
   createAccount: 'Create local account',
   create: 'Create',
   confirmChange: 'Confirm account change',
+  changeAccountState: 'Change account state',
+  changeMemberState: 'Change membership state',
+  noDepartments: 'No departments',
   changeHelp:
     'This invalidates existing sessions. Account status, and membership are separate states.',
   cancel: 'Cancel',
@@ -250,6 +269,7 @@ const en = {
   navigation: 'Identity navigation',
   footer: 'Central identity and session management · RSS Identity',
   errors: {
+    account_cursor_invalidated: 'The query cursor expired. Requery the first page.',
     revision_conflict: 'The profile revision changed. Reload before editing.',
     operation_conflict:
       'This operation ID belongs to different input. Look up the original operation.',

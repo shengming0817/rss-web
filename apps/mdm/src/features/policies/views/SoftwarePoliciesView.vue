@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import {
@@ -16,7 +20,7 @@ import PolicyUtcDateTimeInput from '../components/PolicyUtcDateTimeInput.vue'
 
 import type { PreviewInput } from '../../policies/clients/policies'
 
-import { comparison as queryComparison, allOf } from '../../../services/directory-query'
+import { comparison as queryComparison, allOf } from '@rss/api/mdm-query'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import PolicyIdentityEditor from '../../policies/components/PolicyIdentityEditor.vue'
 import PolicyEntry from '../../policies/components/PolicyEntry.vue'
@@ -46,6 +50,25 @@ import NativeScheduleEditor from '../../software/components/NativeScheduleEditor
 import { rolloutStageState } from '../../software/clients/rollout'
 import type { Publication } from '../../software/clients/publication'
 import PolicyRunFacts from '../../policies/components/PolicyRunFacts.vue'
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'toolName',
+    'alias',
+    'customEvent',
+    'revision',
+    'version',
+    'versionId',
+    'state',
+    'definition',
+    'action',
+    'scope',
+    'resource',
+    'category',
+  ],
+  1000,
+)
+
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -113,25 +136,46 @@ const mdmChannelDisabled = computed(
 )
 const rolloutMode = ref<'full' | 'staged'>('full')
 const published = ref<Awaited<ReturnType<typeof runtime.software.publication.list>>>()
-const nativeChoices = computed(
-  () => published.value?.items.filter((v) => v.outcome === 'published' && !v.withdrawn) ?? [],
+const publicationQuery = useDirectoryQuery(
+  [
+    'id',
+    'target',
+    'resource',
+    'version',
+    'revision',
+    'publication',
+    'contentDigest',
+    'manifestDigest',
+    'targetDigest',
+    'attempt',
+    'outcome',
+    'withdrawn',
+    'withdrawal',
+  ],
+  100,
+)
+const nativeChoices = computed(() =>
+  publicationQuery.complete.value ? (published.value?.items ?? []) : [],
 )
 function loadPublications(after?: string) {
-  const r = draft.value.action.resource
+  const resource = draft.value.action.resource
   void run(
     () =>
-      runtime.software.publication.list({
-        cursor: after,
+      publicationQuery.read(after, (query) => runtime.software.publication.list(query), {
         filter: allOf(
-          queryComparison('resource', '==', r.id),
-          queryComparison('version', '==', r.version),
+          queryComparison('resource', '==', resource.id),
+          queryComparison('version', '==', resource.version),
         ),
       }),
-    (v) => {
-      published.value = v
+    (value) => {
+      published.value = value
     },
   )
 }
+publicationQuery.bind(() => JSON.stringify(draft.value.action.resource))
+publicationQuery.onClear(() => {
+  published.value = undefined
+})
 function delivery(event: Event) {
   draft.value.action.delivery =
     (event.target as HTMLSelectElement).value === 'native'
@@ -139,8 +183,21 @@ function delivery(event: Event) {
       : { kind: 'direct' }
   published.value = undefined
 }
-function choosePublication(value: Publication) {
-  draft.value.action.delivery = { kind: 'native', target: value.target }
+function choosePublication(value: Pick<Publication, 'id'>) {
+  void run(
+    () => runtime.software.publication.read(value.id),
+    (current) => {
+      const expected = draft.value.action.resource
+      if (
+        current.resource !== expected.id ||
+        current.version !== expected.version ||
+        current.outcome !== 'published' ||
+        current.withdrawn
+      )
+        throw new Error('Publication unavailable')
+      draft.value.action.delivery = { kind: 'native', target: current.target }
+    },
+  )
 }
 function changeRolloutMode(event: Event) {
   rolloutMode.value = (event.target as HTMLSelectElement).value as 'full' | 'staged'
@@ -290,7 +347,10 @@ function cancelEdit() {
 }
 function list(after?: string) {
   void run(
-    () => client.list({ cursor: after, filter: queryComparison('action', '==', 'software') }),
+    () =>
+      directoryQuery.read(after, (query) => client.list(query), {
+        filter: queryComparison('action', '==', 'software'),
+      }),
     (v) => {
       page.value = v
     },
@@ -517,9 +577,29 @@ watch(
   },
   { immediate: true },
 )
+directoryQuery.onClear(() => {
+  page.value = undefined
+})
 </script>
 <template>
   <MdmPage :title="t('policies.software')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选和排序：id / revision / version / state / action / category / scope。"
+      @load="list"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="page?.items ?? []"
+      @open="
+        (row) => {
+          read(String(row.id))
+        }
+      "
+    />
+
     <template #actions
       ><VBtn variant="flat" :disabled="busy || uncertain" @click="beginCreate">{{
         t('policies.create')
@@ -529,7 +609,7 @@ watch(
     <p class="console-page-description">{{ t('software.deploymentHint') }}</p>
     <p v-if="page && !page.items.length">{{ t('policies.empty') }}</p>
     <ul v-if="!editing" class="console-data-list">
-      <li v-for="p in page?.items" :key="p.id">
+      <li v-for="p in directoryQuery.complete.value ? page?.items : []" :key="p.id">
         <VBtn :disabled="!!(busy || uncertain)" type="submit" @click="read(p.id)">
           {{ p.definition.action.kind === 'software' ? p.definition.action.resource.id : p.id }} /
           {{ p.definition.action.kind === 'software' ? p.definition.action.resource.version : '—' }}
@@ -538,9 +618,7 @@ watch(
         </VBtn>
       </li>
     </ul>
-    <VBtn v-if="page?.nextCursor" :disabled="!!busy" type="submit" @click="list(page.nextCursor)">
-      {{ t('policies.next') }}
-    </VBtn>
+
     <section v-show="editing" class="console-panel console-wizard">
       <header class="console-page-header">
         <div>
@@ -679,24 +757,32 @@ watch(
                 @click="loadPublications()"
                 >{{ t('software.publishedVersions') }}</VBtn
               >
+              <DirectoryControls
+                :query="publicationQuery"
+                :busy="busy || uncertain"
+                hint="id / target / resource / version；operationId 可筛选。"
+                @load="loadPublications"
+              />
+              <DirectoryResults
+                v-if="!publicationQuery.complete.value"
+                :items="published?.items ?? []"
+                :disabled="busy || uncertain"
+                @open="(row) => choosePublication({ id: String(row.id) })"
+              />
               <p v-if="published && !nativeChoices.length">
                 {{ t('software.noPublishedVersion') }}
               </p>
               <label v-for="item in nativeChoices" :key="item.id">
                 <VRadio
                   name="native-publication"
+                  :disabled="item.outcome !== 'published' || item.withdrawn || busy || uncertain"
                   :model-value="draft.action.delivery.target === item.target"
                   hide-details="auto"
                   @update:model-value="choosePublication(item)"
                 />
-                {{ item.target }} · {{ item.resource }} / {{ item.version }}
+                {{ item.target }} · {{ item.resource }} / {{ item.version }} · {{ item.outcome }} ·
+                {{ item.withdrawn }}
               </label>
-              <VBtn
-                v-if="published?.nextCursor"
-                type="button"
-                @click="loadPublications(published.nextCursor)"
-                >{{ t('devices.next') }}</VBtn
-              >
             </section>
             <label for="deployment-intent">{{ t('software.intent') }}</label
             ><VSelect

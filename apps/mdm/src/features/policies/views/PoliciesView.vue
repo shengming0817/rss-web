@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import { VBtn, VSelect, VTextField, VDataTable, VChip, VCheckbox } from 'vuetify/components'
@@ -7,7 +11,7 @@ import { controlEvent } from '../control-event'
 import type { PreviewInput } from '../clients/policies'
 
 import { jsonObject } from '../../../services/json'
-import { comparison as queryComparison, allOf } from '../../../services/directory-query'
+import { comparison as queryComparison, allOf } from '@rss/api/mdm-query'
 import type { Json } from '../../../services/json'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -38,6 +42,25 @@ import PolicyIdentityEditor from '../components/PolicyIdentityEditor.vue'
 import PolicyEntry from '../components/PolicyEntry.vue'
 import PolicyDelete from '../components/PolicyDelete.vue'
 import { policyDestination } from '../policy-destination'
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'toolName',
+    'alias',
+    'customEvent',
+    'revision',
+    'version',
+    'versionId',
+    'state',
+    'definition',
+    'action',
+    'scope',
+    'resource',
+    'category',
+  ],
+  1000,
+)
+
 const { t } = useI18n(),
   runtime = useMdm(),
   client = runtime.policies.policies,
@@ -335,8 +358,7 @@ function load(after?: string) {
   list.value = undefined
   return run(
     () =>
-      client.list({
-        cursor: after,
+      directoryQuery.read(after, (query) => client.list(query), {
         filter: allOf(
           queryState.value ? queryComparison('state', '==', queryState.value) : undefined,
           queryCategory.value ? queryComparison('category', '==', queryCategory.value) : undefined,
@@ -602,9 +624,29 @@ onMounted(async () => {
     }
   }
 })
+directoryQuery.onClear(() => {
+  list.value = undefined
+})
 </script>
 <template>
   <MdmPage :title="t('policies.policies')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选和排序：id / revision / version / state / action / category / scope；其它字段只作投影。"
+      @load="load"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="list?.items ?? []"
+      @open="
+        (row) => {
+          open(String(row.id))
+        }
+      "
+    />
+
     <p>{{ t('policies.policyHint') }}</p>
     <RouterLink :to="{ name: 'policy-tools', params: { tenant: runtime.tenant } }">{{
       t('policies.entry.title')
@@ -682,6 +724,7 @@ onMounted(async () => {
     </div>
     <p v-if="list && !list.items.length">{{ t('policies.empty') }}</p>
     <VDataTable
+      v-if="directoryQuery.complete.value"
       :aria-label="t('policies.policies')"
       :items-per-page="-1"
       hide-default-footer
@@ -715,9 +758,7 @@ onMounted(async () => {
         row.definition.action.kind
       }}</template></VDataTable
     >
-    <VBtn v-if="list?.nextCursor" :disabled="!!busy" type="submit" @click="load(list.nextCursor)">
-      {{ t('policies.next') }}
-    </VBtn>
+
     <p v-if="current?.state === 'archived'" role="status">{{ t('policies.archivedHint') }}</p>
     <div v-if="current && current.state !== 'archived' && !editing" class="console-toolbar">
       <VBtn type="button" :disabled="busy || uncertain" @click="editing = true">{{
@@ -1037,6 +1078,7 @@ onMounted(async () => {
     </VBtn>
     <VDataTable
       v-if="progress"
+      disable-sort
       :aria-label="t('policies.refreshProgress')"
       :items-per-page="-1"
       hide-default-footer

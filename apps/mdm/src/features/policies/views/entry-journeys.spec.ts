@@ -230,12 +230,12 @@ it('edits alias and event without inventing a display-name or executing anything
 it('queries event members on the server, preserves applied pagination, and resolves exact aliases', async () => {
   const { wrapper, runtime } = await setup(ToolsView, '/endpoint?event=support.event')
   expect(runtime.policies.policies.list).toHaveBeenCalledWith(
-    expect.objectContaining({ filter: "customEvent=='support.event'" }),
+    expect.objectContaining({ filter: "(customEvent=='support.event')" }),
   )
   await button(wrapper, '下一页').trigger('click')
   await flushPromises()
   expect(runtime.policies.policies.list).toHaveBeenLastCalledWith(
-    expect.objectContaining({ cursor: 'YQ', filter: "customEvent=='support.event'" }),
+    expect.objectContaining({ cursor: 'YQ', filter: "(customEvent=='support.event')" }),
   )
   await selectControl(wrapper, 'select').setValue('alias')
   await wrapper.get('input:not([type=hidden]):not([role=combobox])').setValue('support')
@@ -285,15 +285,19 @@ it('shows frozen admission separately, follows original owners, and pages batch 
   expect(wrapper.find('a[href*="operations-audit"]').attributes('href')).toContain(id)
   await button(wrapper, '下一页').trigger('click')
   await flushPromises()
-  expect(runtime.policies.events.members).toHaveBeenLastCalledWith('endpoint', id, { cursor: 'YQ' })
+  expect(runtime.policies.events.members).toHaveBeenLastCalledWith(
+    'endpoint',
+    id,
+    expect.objectContaining({ cursor: 'YQ', limit: 50 }),
+  )
   wrapper.unmount()
   const list = await setup(EventBatchesView, '/endpoint?event=support.event')
   await button(list.wrapper, '下一页').trigger('click')
   await flushPromises()
-  expect(list.runtime.policies.events.list).toHaveBeenLastCalledWith('endpoint', {
-    filter: "event=='support.event'",
-    cursor: 'YQ',
-  })
+  expect(list.runtime.policies.events.list).toHaveBeenLastCalledWith(
+    'endpoint',
+    expect.objectContaining({ filter: "(event=='support.event')", cursor: 'YQ', limit: 50 }),
+  )
   list.wrapper.unmount()
 })
 it('shows partial coverage and independent facts, then clears denied or stale reads', async () => {

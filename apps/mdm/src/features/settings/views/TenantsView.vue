@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import '../settings.css'
 import { VAlert, VBtn, VCard, VCheckbox, VForm, VTextField } from 'vuetify/components'
 import { onMounted, ref } from 'vue'
@@ -10,6 +14,22 @@ import type { Tenant, Provisioning } from '../clients/platform'
 import MdmPage from '../../../ui/MdmPage.vue'
 import TenantEditor from '../components/TenantEditor.vue'
 import OperationNotice from '../components/OperationNotice.vue'
+const provisioningQuery = useDirectoryQuery(['operationId', 'action', 'result'], 1000)
+
+const tenantQuery = useDirectoryQuery(
+  [
+    'tenantId',
+    'name',
+    'notes',
+    'revision',
+    'initialEpoch',
+    'management',
+    'deletable',
+    'currentEpoch',
+  ],
+  1000,
+)
+
 const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.settings.platform
@@ -47,32 +67,53 @@ function generate() {
 async function load() {
   if (runtime.realm !== 'platform') return false
   return run(
-    async () => ({ tenants: await client.tenants(), page: await client.provisionings() }),
+    async () => ({
+      tenants: await tenantQuery.read(undefined, (query) => client.tenants(query)),
+      page: await provisioningQuery.read(undefined, (query) => client.provisionings(query)),
+    }),
     (v) => {
-      tenants.value = v.tenants.items
+      projectedTenants.value = v.tenants.items
+      tenants.value = tenantQuery.complete.value ? v.tenants.items : []
       tenantCursor.value = v.tenants.nextCursor
-      provisionings.value = v.page.items.map((v) => v.result)
+      projectedProvisionings.value = v.page.items
+      provisionings.value = provisioningQuery.complete.value
+        ? v.page.items.map((v) => v.result)
+        : []
       nextCursor.value = v.page.nextCursor
     },
   )
 }
-async function more() {
-  if (!nextCursor.value) return
+const projectedTenants = ref<object[]>([]),
+  projectedProvisionings = ref<object[]>([]),
+  selectedTenant = ref<Tenant>(),
+  currentProvisioning = ref<Provisioning>()
+async function readTenant(id: string) {
   await run(
-    () => client.provisionings({ cursor: nextCursor.value! }),
-    (v) => {
-      provisionings.value.push(...v.items.map((v) => v.result))
-      nextCursor.value = v.nextCursor
+    () => client.tenant(id),
+    (value) => {
+      selectedTenant.value = value
     },
   )
 }
-async function moreTenants() {
-  if (!tenantCursor.value) return
-  await run(
-    () => client.tenants({ cursor: tenantCursor.value! }),
+async function loadTenants(after?: string) {
+  return run(
+    () => tenantQuery.read(after, (query) => client.tenants(query)),
     (page) => {
-      tenants.value.push(...page.items)
+      projectedTenants.value = page.items
+      tenants.value = tenantQuery.complete.value ? page.items : []
       tenantCursor.value = page.nextCursor
+    },
+  )
+}
+async function loadProvisionings(after?: string) {
+  return run(
+    () => provisioningQuery.read(after, (query) => client.provisionings(query)),
+    (page) => {
+      projectedProvisionings.value = page.items
+      provisionings.value = provisioningQuery.complete.value
+        ? page.items.map((row) => row.result)
+        : []
+      nextCursor.value = page.nextCursor
     },
   )
 }
@@ -82,7 +123,7 @@ async function lookup(id = pending.value?.id ?? original.value) {
     id,
     () => client.operation(id),
     (v) => {
-      provisionings.value = [v.result, ...provisionings.value.filter((p) => p.operationId !== id)]
+      currentProvisioning.value = v.result
     },
   )
 }
@@ -102,10 +143,7 @@ async function create(replay = false) {
     (id) => client.provision(id, input),
     (v) => {
       original.value = v.operationId
-      provisionings.value = [
-        v.result,
-        ...provisionings.value.filter((p) => p.operationId !== v.operationId),
-      ]
+      currentProvisioning.value = v.result
       queueMicrotask(() => void load())
     },
     replay,
@@ -121,10 +159,49 @@ useSettingsFacts(() => {
   tenantCursor.value = null
   nextCursor.value = null
 })
+tenantQuery.onClear(() => {
+  tenants.value = []
+  projectedTenants.value = []
+})
+provisioningQuery.onClear(() => {
+  provisionings.value = []
+  projectedProvisionings.value = []
+})
 </script>
 <template>
-  <MdmPage :title="t('settings.tenants')" :busy="busy" :failure="failure"
-    ><template v-if="runtime.realm === 'platform'"
+  <MdmPage :title="t('settings.tenants')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="provisioningQuery"
+      :busy="busy"
+      hint="operationId"
+      @load="loadProvisionings" />
+    <DirectoryResults
+      v-if="!provisioningQuery.complete.value"
+      :disabled="busy"
+      :required="['operationId']"
+      :items="projectedProvisionings"
+      @open="
+        (row) => {
+          lookup(String(row.operationId))
+        }
+      " />
+
+    <DirectoryControls
+      :query="tenantQuery"
+      :busy="busy"
+      hint="tenantId / name / notes / revision / initialEpoch / management / deletable"
+      @load="loadTenants" />
+    <DirectoryResults
+      v-if="!tenantQuery.complete.value"
+      :disabled="busy"
+      :required="['tenantId']"
+      :items="projectedTenants"
+      @open="
+        (row) => {
+          readTenant(String(row.tenantId))
+        }
+      " />
+    <template v-if="runtime.realm === 'platform'"
       ><VAlert type="info" :title="t('settings.scopeHint')" variant="tonal">{{
         t('settings.capacityHint')
       }}</VAlert
@@ -224,14 +301,21 @@ useSettingsFacts(() => {
         ><VBtn v-if="p.phase === 'enabled' && p.origin" :href="p.origin"
           >{{ t('settings.businessEntry') }} · {{ p.origin }}</VBtn
         ></VCard
-      ><VBtn v-if="nextCursor" :disabled="busy" @click="more">{{ t('settings.next') }}</VBtn
-      ><VBtn v-if="tenantCursor" :disabled="busy" @click="moreTenants">{{
-        t('settings.next')
-      }}</VBtn
-      ><TenantEditor
-        v-for="tenant in tenants"
-        :key="tenant.tenantId"
-        :tenant="tenant"
+      ><VCard v-if="currentProvisioning" class="console-panel"
+        ><p>{{ t('settings.queryOperation') }} · {{ currentProvisioning.operationId }}</p>
+        <p>
+          {{ t('settings.phases.' + currentProvisioning.phase) }} ·
+          {{ currentProvisioning.tenantId }}
+        </p></VCard
+      >
+      <section v-for="tenant in tenants" :key="tenant.tenantId">
+        <p>{{ tenant.name ?? tenant.tenantId }}</p>
+        <VBtn :disabled="busy" @click="readTenant(tenant.tenantId)">{{ t('policies.open') }}</VBtn>
+      </section>
+      <TenantEditor
+        v-if="selectedTenant"
+        :key="selectedTenant.tenantId"
+        :tenant="selectedTenant"
         @changed="load" /></template
     ><VAlert v-else type="warning" :title="t('settings.scopeHint')" variant="tonal"
   /></MdmPage>

@@ -15,7 +15,7 @@ import {
   projectedRow,
   queryParameters,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import { jsonValue } from '../../../services/json'
 import { policyName } from './model'
 export function operationReference(value: unknown) {
@@ -126,11 +126,8 @@ export function createEventsClient(transport: HttpTransport) {
     list: (device: string, query: DirectoryQuery<keyof typeof batchFields> = {}) =>
       api.getApiV1DevicesByDevicePolicyEventBatches(
         transport,
-        {
-          pathParams: { device },
-          query: queryParameters({ limit: 20, ...query, fields: Object.keys(batchFields) }),
-        },
-        (v) => projectedPage(v, batchFields, undefined, ['id']),
+        { pathParams: { device }, query: queryParameters({ limit: 20, ...query }) },
+        (v) => projectedPage(v, batchFields, query.fields, ['id']),
       ),
     read: (device: string, batch: string) =>
       api.getApiV1DevicesByDevicePolicyEventBatchesByBatch(
@@ -154,17 +151,16 @@ export function createEventsClient(transport: HttpTransport) {
     ) =>
       api.getApiV1DevicesByDevicePolicyEventBatchesByBatchMembers(
         transport,
-        {
-          pathParams: { device, batch },
-          query: queryParameters({ limit: 20, ...query, fields: Object.keys(memberFields) }),
-        },
+        { pathParams: { device, batch }, query: queryParameters({ limit: 20, ...query }) },
         (value) => {
-          const page = projectedPage(value, memberFields, undefined, ['id'])
+          const page = projectedPage(value, memberFields, query.fields, ['id'])
           for (const item of page.items)
             if (
-              item.state !== item.decision.state ||
-              JSON.stringify(item.operations.map((o) => o.reference)) !==
-                JSON.stringify(item.decision.operations)
+              ('state' in item && 'decision' in item && item.state !== item.decision.state) ||
+              ('operations' in item &&
+                'decision' in item &&
+                JSON.stringify(item.operations.map((o) => o.reference)) !==
+                  JSON.stringify(item.decision.operations))
             )
               throw new Error('Wrong member operations')
           return page

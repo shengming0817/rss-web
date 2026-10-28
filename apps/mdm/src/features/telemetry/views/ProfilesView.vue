@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../../policies/components/PolicyFieldset.vue'
 import PolicyDialog from '../../policies/components/PolicyDialog.vue'
@@ -9,7 +13,7 @@ import type { PreviewInput } from '../../policies/clients/policies'
 
 import { telemetryBytes } from '../../../contracts/collection/canonical'
 
-import { comparison as queryComparison, allOf } from '../../../services/directory-query'
+import { comparison as queryComparison, allOf } from '@rss/api/mdm-query'
 import { computed, ref, shallowRef, watch, toRaw } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -25,6 +29,40 @@ import type { PolicyRead, PolicyChange, PolicyDefinition } from '../../policies/
 import type { FieldDefinition } from '../../devices/clients/assets'
 import WriteRecovery from '../components/WriteRecovery.vue'
 import '../telemetry.css'
+const usageQuery = useDirectoryQuery(
+  [
+    'id',
+    'toolName',
+    'alias',
+    'customEvent',
+    'revision',
+    'version',
+    'versionId',
+    'state',
+    'definition',
+    'action',
+    'scope',
+    'resource',
+    'category',
+  ],
+  1000,
+)
+
+const scopeQuery = useDirectoryQuery(
+  ['id', 'revision', 'deleted', 'calculationRevision', 'resolution', 'resolutionRevision'],
+  1000,
+)
+
+const templateQuery = useDirectoryQuery(
+  ['id', 'revision', 'kind', 'activeVersion', 'presentation'],
+  1000,
+)
+
+const directoryQuery = useDirectoryQuery(
+  ['id', 'revision', 'kind', 'activeVersion', 'presentation'],
+  1000,
+)
+
 const runtime = useMdm(),
   route = useRoute(),
   { t } = useI18n(),
@@ -130,34 +168,48 @@ const locked = computed(() => busy.value || !!pending.value || !!frozen.value ||
 async function load(after?: string) {
   list.value = undefined
   await run(
-    () => rc.list({ cursor: after, filter: queryComparison('kind', '==', 'telemetry_profile') }),
+    () =>
+      directoryQuery.read(after, (query) => rc.list(query), {
+        filter: queryComparison('kind', '==', 'telemetry_profile'),
+      }),
     (v) => (list.value = v),
   )
 }
+const templateRows = ref<object[]>([]),
+  scopeRows = ref<object[]>([]),
+  usageRows = ref<object[]>([])
+async function chooseTemplate(row: Record<string, unknown>) {
+  if (typeof row['id'] !== 'string') return
+  templateId.value = row['id']
+  await selectTemplate()
+}
 async function sources(after?: string) {
-  const old = after ? templates.value : []
   templates.value = []
   await run(
     () =>
-      rc.list({
-        cursor: after,
+      templateQuery.read(after, (query) => rc.list(query), {
         filter: allOf(
           queryComparison('kind', '==', templateKind.value),
           queryComparison('active', '==', true),
         ),
       }),
     (v) => {
-      templates.value = [...old, ...v.items]
+      templateRows.value = v.items
+      templates.value = templateQuery.complete.value ? v.items : []
       templateAfter.value = v.nextCursor
     },
   )
 }
 async function scopes(after?: string) {
-  const old = after ? (scopeOptions.value?.items ?? []) : []
   await run(
     () =>
-      runtime.policies.scopes.list({ cursor: after, filter: queryComparison('ready', '==', true) }),
-    (v) => (scopeOptions.value = { ...v, items: [...old, ...v.items] }),
+      scopeQuery.read(after, (query) => runtime.policies.scopes.list(query), {
+        filter: queryComparison('ready', '==', true),
+      }),
+    (v) => {
+      scopeRows.value = v.items
+      scopeOptions.value = scopeQuery.complete.value ? v : undefined
+    },
   )
 }
 async function selectTemplate() {
@@ -174,19 +226,18 @@ async function selectTemplate() {
   )
 }
 async function references(after?: string) {
-  const old = after ? usages.value : []
   usages.value = []
   await run(
     () =>
-      pc.list({
-        cursor: after,
+      usageQuery.read(after, (query) => pc.list(query), {
         filter: allOf(
           queryComparison('action', '==', 'telemetry_profile'),
           queryComparison('resource', '==', id.value),
         ),
       }),
     (v) => {
-      usages.value = [...old, ...v.items]
+      usageRows.value = v.items
+      usages.value = usageQuery.complete.value ? v.items : []
       usageNext.value = v.nextCursor
     },
   )
@@ -590,7 +641,6 @@ async function publish() {
     !confirmed.value ||
     !preview.value ||
     preview.value.nextCursor ||
-    usageNext.value ||
     pending.value ||
     !canWrite.value
   )
@@ -694,10 +744,95 @@ watch(
     if (typeof v === 'string') void edit(v)
   },
 )
+directoryQuery.onClear(() => {
+  list.value = undefined
+})
+templateQuery.onClear(() => {
+  templates.value = []
+  templateRows.value = []
+})
+scopeQuery.onClear(() => {
+  scopeOptions.value = undefined
+  scopeRows.value = []
+})
+usageQuery.onClear(() => {
+  usages.value = []
+  usageRows.value = []
+})
+templateQuery.bind(templateKind)
+usageQuery.bind(id)
 </script>
 <template>
-  <MdmPage :title="t('telemetry.profiles')" :busy="busy" :failure="failure"
-    ><template #actions
+  <MdmPage :title="t('telemetry.profiles')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="usageQuery"
+      :busy="busy"
+      hint="id / toolName / alias / customEvent / revision / version / state / action / scope / resource / category"
+      @load="references"
+    />
+    <DirectoryResults
+      v-if="!usageQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="usageRows"
+      @open="
+        (row) => {
+          policyId = String(row.id)
+          selectPolicy()
+        }
+      "
+    />
+
+    <DirectoryControls
+      :query="scopeQuery"
+      :busy="busy"
+      hint="id / revision / deleted / calculationRevision / resolutionRevision；ready 可筛选"
+      @load="scopes"
+    />
+    <DirectoryResults
+      v-if="!scopeQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="scopeRows"
+      @open="
+        (row) => {
+          scope = String(row.id)
+        }
+      "
+    />
+
+    <DirectoryControls
+      :query="templateQuery"
+      :busy="busy"
+      hint="id / revision / kind / active；sort: id / revision / kind"
+      @load="sources"
+    />
+    <DirectoryResults
+      v-if="!templateQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="templateRows"
+      @open="
+        (row) => {
+          chooseTemplate(row)
+        }
+      "
+    />
+
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选 id / revision / kind / active；排序 id / revision / kind。"
+      @load="load"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="list?.items ?? []"
+      @open="
+        (row) => {
+          edit(String(row.id))
+        }
+      "
+    />
+    <template #actions
       ><RouterLink :to="{ name: 'policy-resources', params: { tenant: runtime.tenant } }">{{
         t('telemetry.resourceLibrary')
       }}</RouterLink
@@ -711,7 +846,7 @@ watch(
     <p>{{ t('telemetry.profilesHint') }}</p>
     <div class="telemetry-profile-grid">
       <article
-        v-for="item in list?.items"
+        v-for="item in directoryQuery.complete.value ? list?.items : []"
         :key="item.id"
         class="console-panel telemetry-profile-card"
       >
@@ -726,9 +861,7 @@ watch(
       </article>
     </div>
     <p v-if="list && !list.items.length" class="telemetry-empty">{{ t('telemetry.noProfiles') }}</p>
-    <VBtn v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">{{
-      t('devices.next')
-    }}</VBtn>
+
     <PolicyDialog
       :open="open"
       :title="t('telemetry.profileEditor')"
@@ -776,7 +909,6 @@ watch(
               density="comfortable"
               hide-details="auto"
               @update:model-value="selectTemplate()" /></label
-          ><VBtn v-if="templateAfter" @click="sources(templateAfter)">{{ t('devices.next') }}</VBtn
           ><label
             >{{ t('telemetry.variant')
             }}<VSelect
@@ -881,10 +1013,8 @@ watch(
               ]"
               variant="outlined"
               density="comfortable"
-              hide-details="auto" /></label
-          ><VBtn v-if="scopeOptions?.nextCursor" @click="scopes(scopeOptions.nextCursor)">{{
-            t('devices.next')
-          }}</VBtn>
+              hide-details="auto"
+          /></label>
           <MdmDisclosure>
             <template #title>{{ t('telemetry.budget') }}</template>
             <label
@@ -1038,7 +1168,7 @@ watch(
             ><label class="telemetry-pick"
               ><VCheckbox
                 v-model="confirmed"
-                :disabled="!!preview.nextCursor || !!usageNext"
+                :disabled="!!preview.nextCursor"
                 hide-details="auto"
               />{{ t('telemetry.confirmPublish') }}</label
             ><VBtn :disabled="busy || !confirmed || !!pending || !canWrite" @click="publish">{{

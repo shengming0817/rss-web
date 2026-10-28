@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import { VSelect, VTextField, VBtn, VDataTable } from 'vuetify/components'
 
 import { ref, watch } from 'vue'
@@ -8,42 +12,52 @@ import MdmPage from '../../../ui/MdmPage.vue'
 import CopyDeepLink from '../../../components/CopyDeepLink.vue'
 import { useMdm } from '../../../context'
 import { useOperation } from '../../../services/useOperation'
-import { comparison } from '../../../services/directory-query'
+import { comparison } from '@rss/api/mdm-query'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import { policyName, type PolicyRead } from '../clients/model'
 import { policyDestination } from '../policy-destination'
 import PolicyEntry from '../components/PolicyEntry.vue'
+const policyQuery = useDirectoryQuery(
+  [
+    'id',
+    'toolName',
+    'alias',
+    'customEvent',
+    'revision',
+    'version',
+    'versionId',
+    'state',
+    'definition',
+    'action',
+    'scope',
+    'resource',
+    'category',
+  ],
+  1000,
+)
+
 const runtime = useMdm(),
   route = useRoute(),
   { t } = useI18n()
 const mode = ref<'alias' | 'tool_name' | 'id' | 'event'>('event'),
   term = ref(''),
   applied = ref('')
-const op = useOperation([], () => [
-  ...deviceBinding(runtime),
-  applied.value,
-  mode.value,
-  term.value,
-])
+const op = useOperation([], () => [...deviceBinding(runtime), mode.value])
 const client = runtime.policies.policies
 const rows = ref<Awaited<ReturnType<typeof query>>>(),
   selected = ref<PolicyRead>()
 function query(event: string, cursor?: string) {
-  return client.list({
-    fields: [
-      'id',
-      'toolName',
-      'alias',
-      'customEvent',
-      'revision',
-      'version',
-      'versionId',
-      'state',
-      'definition',
-    ],
+  return policyQuery.read(cursor, (selection) => client.list(selection), {
     filter: event ? comparison('customEvent', '==', event) : undefined,
-    cursor,
   })
+}
+function readPolicy(id: string) {
+  void op.run(
+    () => client.read(id),
+    (value) => {
+      selected.value = value
+    },
+  )
 }
 function load(cursor?: string) {
   if (op.busy.value) return
@@ -74,18 +88,18 @@ function load(cursor?: string) {
   }
   let event: string
   try {
-    event = cursor ? applied.value : term.value ? policyName(term.value) : ''
+    event = policyQuery.continues(cursor) ? applied.value : term.value ? policyName(term.value) : ''
   } catch {
     op.failure.value = 'invalidRequest'
     return
   }
-  if (!cursor) applied.value = event
   rows.value = undefined
   selected.value = undefined
   void op.run(
     () => query(event, cursor),
     (value) => {
       rows.value = value
+      applied.value = event
     },
   )
 }
@@ -109,9 +123,31 @@ watch([mode, term], () => {
   rows.value = undefined
   selected.value = undefined
 })
+policyQuery.onClear(() => {
+  rows.value = undefined
+})
+policyQuery.bind(mode)
 </script>
 <template>
   <MdmPage :title="t('policies.entry.title')" :busy="op.busy.value" :failure="op.failure.value">
+    <DirectoryControls
+      v-if="mode === 'event'"
+      :query="policyQuery"
+      :busy="op.busy.value"
+      hint="id / toolName / alias / customEvent / revision / version / state / action / scope / resource / category"
+      @load="load"
+    />
+    <DirectoryResults
+      v-if="mode === 'event' && !policyQuery.complete.value"
+      :disabled="op.busy.value"
+      :items="rows?.items ?? []"
+      @open="
+        (row) => {
+          readPolicy(String(row.id))
+        }
+      "
+    />
+
     <p>{{ t('policies.entry.identityHint') }}</p>
     <form class="console-toolbar" @submit.prevent="load()">
       <label
@@ -150,7 +186,8 @@ watch([mode, term], () => {
     />
     <p v-if="rows">{{ t('console.pageNotTotal') }}</p>
     <VDataTable
-      v-if="rows"
+      v-if="rows && policyQuery.complete.value"
+      disable-sort
       :items="rows.items"
       item-value="id"
       :aria-label="t('policies.entry.members')"
@@ -190,9 +227,7 @@ watch([mode, term], () => {
           }"
       /></template>
     </VDataTable>
-    <VBtn v-if="rows?.nextCursor" :disabled="op.busy.value" @click="load(rows.nextCursor)">{{
-      t('devices.next')
-    }}</VBtn>
+
     <template v-if="selected"
       ><PolicyEntry :policy="selected" /><RouterLink
         v-if="policyDestination(selected, runtime.tenant)"

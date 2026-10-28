@@ -565,3 +565,49 @@ it('reads valid collection rows without converting invalid rows into a complete 
     }),
   ).toThrow()
 })
+it('decodes field-directory projections independently from complete descriptors', async () => {
+  const descriptor = {
+    key: 'custom.is_loaner',
+    timeSeries: null,
+    version: 1,
+    valueType: { kind: 'boolean' },
+    platforms: ['windows', 'macos'],
+    sensitivity: 'standard',
+    unit: null,
+    searchable: true,
+    itemKey: null,
+    nullable: true,
+    manual: true,
+    sources: { manual: 0 },
+    operations: ['eq', 'is_null'],
+  }
+  const calls: RequestOptions<unknown>[] = []
+  const client = createAssetsClient(
+    {
+      request: async (o: RequestOptions<unknown>) => {
+        calls.push(o)
+        return o.decode(
+          o.path.includes('{field}')
+            ? { tenantId: tenant, asset: { kind: 'field_descriptor', field: descriptor } }
+            : {
+                tenantId: tenant,
+                asset: {
+                  kind: 'field_list',
+                  dictionary: 'assets-v1',
+                  items: [o.query?.['fields'] === 'key' ? { key: descriptor.key } : descriptor],
+                  nextCursor: null,
+                },
+              },
+        )
+      },
+    } as HttpTransport,
+    tenant,
+  )
+  expect((await client.fields({ fields: ['key'], limit: 1 })).items).toEqual([
+    { key: descriptor.key },
+  ])
+  expect((await client.fields()).items[0]).toEqual(descriptor)
+  expect((await client.field(descriptor.key)).kind).toBe('boolean')
+  expect(calls[0]?.query).toMatchObject({ fields: 'key', limit: 1 })
+  expect(calls[2]?.pathParams).toEqual({ field: descriptor.key })
+})

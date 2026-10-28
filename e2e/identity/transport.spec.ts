@@ -30,6 +30,25 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
     expect((await api.accounts()).accounts.some((a) => a.principalId === account.principalId)).toBe(
       true,
     )
+    const first = await api.accounts({ fields: ['principalId'], sort: ['principalId'], limit: 1 })
+    expect(first.accounts).toHaveLength(1)
+    expect(Object.keys(first.accounts[0]!)).toEqual(['principalId'])
+    expect(first.next).toBeTruthy()
+    const second = await api.accounts({
+      fields: ['principalId'],
+      sort: ['principalId'],
+      limit: 1,
+      cursor: first.next!,
+    })
+    expect(second.accounts[0]?.principalId).not.toBe(first.accounts[0]?.principalId)
+    const selected = await api.accounts({
+      filter: "login=='joint-member'",
+      fields: ['principalId', 'login', 'email', 'profileStatus'],
+      source: 'local',
+      limit: 1,
+    })
+    expect(selected.accounts[0]?.principalId).toBe(account.principalId)
+    expect((await api.account(account.principalId)).login).toBe('joint-member')
     await api.setAccount(account, 'enabled', false)
     await api.resetPassword(account.principalId, 'private joint reset password')
     expect(

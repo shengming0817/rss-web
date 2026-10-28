@@ -43,18 +43,23 @@ export function nativeComputer(value: unknown): Computer {
     lastObservedAt: times.length ? Math.max(...times) : null,
   }
 }
-export function nativeBinding(value: unknown, device: string): Binding {
-  if (!wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateRoot(value))
-    throw new Error('Invalid MDM contract')
-
-  const v = value
-  same(v['device'], device)
-  const account = v['account'] === null ? null : v['account']
+export function nativeAccountLabel(value: unknown) {
+  if (
+    value !== null &&
+    !wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateAccessAccount(
+      value,
+    )
+  )
+    throw new Error('Invalid account')
+  const account = value
   let accountLabel = 'unknown'
   if (account) {
     const platform = account.platform
     accountLabel = platform === 'windows' ? text(account['sid']) : uuid(account['generatedUid'])
   }
+  return accountLabel
+}
+export function nativeBindingObservations(value: unknown): Observation[] {
   const observations: Observation[] = []
   const native = (key: string, value: unknown) => {
     const v = choice(value, ['present', 'absent', 'unknown', 'needs_administrator'])
@@ -64,8 +69,14 @@ export function nativeBinding(value: unknown, device: string): Binding {
       value: v,
     })
   }
-  if (v['effect'] !== null) {
-    const e = v['effect'],
+  if (value !== null) {
+    if (
+      !wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateAccessEffect(
+        value,
+      )
+    )
+      throw new Error('Invalid effect')
+    const e = value,
       effect = e.state
     observations.push({
       key: 'effect',
@@ -98,6 +109,15 @@ export function nativeBinding(value: unknown, device: string): Binding {
         value: e['reason'],
       })
   }
+  return observations
+}
+export function nativeBinding(value: unknown, device: string): Binding {
+  if (!wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateRoot(value))
+    throw new Error('Invalid binding')
+  const v = value
+  same(v['device'], device)
+  const accountLabel = nativeAccountLabel(v['account'])
+  const observations = nativeBindingObservations(v['effect'])
   return {
     id: uuid(v['id']),
     device,

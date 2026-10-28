@@ -1,69 +1,162 @@
-import { ref, shallowRef, watch, onBeforeUnmount } from 'vue'
-import type { Page } from '@rss/device-access/model'
+import { reactive, ref, shallowRef, watch, computed, type WatchSource } from 'vue'
+import type { DirectoryQuery } from '@rss/api/mdm-query'
+import { allOf, queryParameters } from '@rss/api/mdm-query'
+import type { DirectoryPage } from '@rss/device-access/model'
 import { useDa, identityKey } from '../context'
-import { errorMessage } from './status'
-/** Explicit one-page-at-a-time reads; incomplete directories cannot authorize a review step. */
-export function useDirectory<T extends { id: string }>(
-  load: (cursor: string | null, signal: AbortSignal) => Promise<Page<T>>,
-) {
-  const runtime = useDa(),
-    items = shallowRef<T[]>([]),
-    busy = ref(false),
-    error = ref(''),
-    complete = ref(false),
-    blocked = ref(false)
-  let cursor: string | null = null,
-    epoch = 0,
-    controller: AbortController | undefined
-  const seen = new Set<string>()
-  async function loadMore() {
-    if (busy.value || complete.value || blocked.value || !identityKey(runtime.session)) return
-    const version = epoch
-    controller = new AbortController()
-    busy.value = true
-    error.value = ''
-    try {
-      const page = await load(cursor, controller.signal)
-      if (version !== epoch) return
-      if (
-        (page.nextCursor && (page.nextCursor === cursor || seen.has(page.nextCursor))) ||
-        items.value.length + page.items.length > 10000
-      ) {
-        blocked.value = true
-        error.value = '设备目录分页异常或超出本次读取上限，请缩小服务端目录范围后重试。'
-        return
-      }
-      if (cursor) seen.add(cursor)
-      items.value = [
-        ...new Map([...items.value, ...page.items].map((item) => [item.id, item])).values(),
-      ]
-      cursor = page.nextCursor
-      complete.value = cursor === null
-    } catch (e) {
-      if (version === epoch) error.value = errorMessage(e)
-    } finally {
-      if (version === epoch) busy.value = false
-    }
-  }
-  function reset() {
-    epoch++
-    controller?.abort()
-    cursor = null
-    seen.clear()
-    items.value = []
-    busy.value = false
-    error.value = ''
-    complete.value = false
-    blocked.value = false
-  }
-  watch(
-    () => identityKey(runtime.session),
-    () => {
-      reset()
-      void loadMore()
-    },
-    { immediate: true, flush: 'sync' },
-  )
-  onBeforeUnmount(reset)
-  return { items, busy, error, complete, blocked, loadMore }
+import { useRead } from './read'
+export interface DirectoryLocation {
+  query: DirectoryQuery
+  trail: (string | undefined)[]
+  error?: string | undefined
 }
+/** The existing read owner fences responses; this object owns accepted page navigation only. */
+export function useDirectory<T>(
+  columns: readonly string[],
+  maximum: number,
+  fetch: (query: DirectoryQuery, signal: AbortSignal) => Promise<DirectoryPage<T>>,
+  scope: WatchSource = () => '',
+  initial?: DirectoryLocation,
+  fixed: () => DirectoryQuery = () => ({}),
+) {
+  const runtime = useDa()
+  const draft = reactive({
+    filter: initial?.query.filter ?? '',
+    sort: initial?.query.sort?.join(',') ?? '',
+    fields: [...(initial?.query.fields ?? columns)],
+    limit: initial?.query.limit ?? 50,
+  })
+  const applied = shallowRef<DirectoryQuery>(),
+    cursor = ref<string>(),
+    trail = ref<(string | undefined)[]>([]),
+    next = ref<string | null>(null)
+  type Attempt = { query: DirectoryQuery; trail: (string | undefined)[] }
+  let candidate: Attempt | undefined = initial
+    ? { query: initial.query, trail: initial.trail }
+    : undefined
+  let attempt: Attempt | undefined,
+    initialError = initial?.error
+  function reset() {
+    candidate = undefined
+    attempt = undefined
+    applied.value = undefined
+    cursor.value = undefined
+    trail.value = []
+    next.value = null
+    reader?.reset()
+  }
+  watch([() => identityKey(runtime.session), scope], reset, { flush: 'sync' })
+  function snapshot(): DirectoryQuery {
+    if (
+      !draft.fields.length ||
+      draft.fields.some((field) => !columns.includes(field)) ||
+      draft.limit > maximum
+    )
+      throw new Error('Invalid query')
+    const base = fixed()
+    const query: DirectoryQuery = {
+      filter: allOf(base.filter, draft.filter.trim() || undefined),
+      sort: draft.sort.trim() ? draft.sort.split(',').map((v) => v.trim()) : base.sort,
+      fields:
+        columns.length > 16 &&
+        draft.fields.length === columns.length &&
+        columns.every((field) => draft.fields.includes(field))
+          ? undefined
+          : [...draft.fields],
+      limit: draft.limit,
+    }
+    queryParameters(query)
+    return query
+  }
+  const reader = useRead(
+    async (signal) => {
+      if (initialError) throw new Error(initialError)
+      const request = candidate ?? attempt ?? { query: snapshot(), trail: [] }
+      candidate = undefined
+      attempt = request
+      return fetch(request.query, signal)
+    },
+    scope,
+    {
+      accepted(value) {
+        if (!attempt) return
+        if (
+          value.nextCursor &&
+          (value.nextCursor === attempt.query.cursor || attempt.trail.includes(value.nextCursor))
+        )
+          throw new Error('Repeated cursor')
+        applied.value = { ...attempt.query, cursor: undefined }
+        cursor.value = attempt.query.cursor
+        trail.value = [...attempt.trail]
+        next.value = value.nextCursor
+      },
+    },
+  )
+  function run(query: DirectoryQuery, history: (string | undefined)[]) {
+    if (reader!.busy.value) return
+    initialError = undefined
+    candidate = { query, trail: history }
+    return reader!.reload()
+  }
+  function apply() {
+    if (reader!.busy.value) return
+    initialError = undefined
+    candidate = undefined
+    attempt = undefined
+    return reader.reload()
+  }
+  function first() {
+    return applied.value ? run(applied.value, []) : apply()
+  }
+  function previous() {
+    if (!trail.value.length) return
+    return run({ ...applied.value, cursor: trail.value.at(-1) }, trail.value.slice(0, -1))
+  }
+  function following() {
+    if (!next.value) return
+    return run({ ...applied.value, cursor: next.value }, [...trail.value, cursor.value])
+  }
+  function restore(location: DirectoryLocation) {
+    reset()
+    Object.assign(draft, {
+      filter: location.query.filter ?? '',
+      sort: location.query.sort?.join(',') ?? '',
+      fields: [...(location.query.fields ?? columns)],
+      limit: location.query.limit ?? 50,
+    })
+    initialError = location.error
+    candidate = { query: location.query, trail: location.trail }
+    return reader!.reload()
+  }
+  return {
+    ...reader,
+    updateDraft: (values: Partial<typeof draft>) => Object.assign(draft, values),
+    draft,
+    columns,
+    maximum,
+    applied,
+    cursor,
+    trail,
+    next,
+    apply,
+    first,
+    previous,
+    following,
+    restore,
+    projectionComplete: computed(() =>
+      columns.every((field) => applied.value?.fields?.includes(field) ?? true),
+    ),
+  }
+}
+export type DirectoryNavigation = Pick<
+  ReturnType<typeof useDirectory>,
+  | 'updateDraft'
+  | 'draft'
+  | 'columns'
+  | 'maximum'
+  | 'trail'
+  | 'next'
+  | 'apply'
+  | 'first'
+  | 'previous'
+  | 'following'
+>

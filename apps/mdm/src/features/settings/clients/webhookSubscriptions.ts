@@ -1,6 +1,6 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
-import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
+import { queryParameters, windowPage, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
@@ -93,6 +93,28 @@ export type WebhookIntent =
     }
   | { kind: 'test'; id: string; deviceId: string }
   | { kind: 'replay' | 'redrive'; id: string; expectedVersion: number }
+const subscriptionFields = {
+  id: (value: unknown) => uuid(value),
+  revision: (value: unknown) => count(value),
+  targetVersion: (value: unknown) => count(value),
+  enabled: (value: unknown) => boolean(value),
+  deleted: (value: unknown) => boolean(value),
+  settings: (value: unknown) => webhookSettings(value),
+}
+const deliveryFields = {
+  id: (value: unknown) => uuid(value),
+  eventId: (value: unknown) => uuid(value),
+  subscriptionId: (value: unknown) => uuid(value),
+  targetVersion: (value: unknown) => count(value),
+  sourceDelivery: (value: unknown) => nullable(value, uuid),
+  recoveryVersion: (value: unknown) => count(value),
+  redriveWindowOpen: (value: unknown) => boolean(value),
+  attempts: (value: unknown) => count(value),
+  status: (value: unknown) => identifier(value),
+  transportObservation: (value: unknown) => nullable(value, identifier),
+  failureStage: (value: unknown) => nullable(value, identifier),
+  failureReason: (value: unknown) => nullable(value, identifier),
+}
 export function createWebhookSubscriptions(transport: HttpTransport) {
   function page(value: unknown) {
     if (!wireSchemas.getApiV1WebhooksDeliveriesResponse.validateRoot(value))
@@ -107,12 +129,14 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
         if (v['version'] !== 1) throw new Error('Invalid event contract')
         return array(v['items'], (x) => x)
       }),
-    list: (query: DirectoryQuery = {}) =>
+    list: <F extends keyof typeof subscriptionFields = keyof typeof subscriptionFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       api.getApiV1WebhooksSubscriptions(
         transport,
         { query: queryParameters({ limit: 32, ...query }) },
         (value) => {
-          return windowPage(value, subscription)
+          return projectedPage(value, subscriptionFields, query.fields, ['id'])
         },
       ),
     read: (id: string) =>
@@ -121,11 +145,13 @@ export function createWebhookSubscriptions(transport: HttpTransport) {
         if (s.id !== id) throw new Error('Wrong subscription')
         return s
       }),
-    deliveries: (query: DirectoryQuery = {}) =>
+    deliveries: <F extends keyof typeof deliveryFields = keyof typeof deliveryFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       api.getApiV1WebhooksDeliveries(
         transport,
         { query: queryParameters({ limit: 32, ...query }) },
-        page,
+        (value) => projectedPage(value, deliveryFields, query.fields, ['id']),
       ),
     delivery: (id: string) =>
       api.getApiV1WebhooksDeliveriesById(transport, { pathParams: { id } }, (value) => {

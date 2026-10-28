@@ -1,6 +1,6 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
-import { windowParameters, windowPage } from '../../../services/directory-query'
+import { windowParameters, windowPage } from '@rss/api/mdm-query'
 import { operationReceipt, positive } from './value'
 import type { HttpTransport } from '@rss/api/mdm'
 import { count, enumeration, nullable, uuid, string } from '../../../services/decode'

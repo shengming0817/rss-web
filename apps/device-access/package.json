@@ -18,7 +18,8 @@
     "vuetify": "catalog:",
     "@rss/auth": "workspace:*",
     "@rss/api": "workspace:*",
-    "@rss/device-access": "workspace:*"
+    "@rss/device-access": "workspace:*",
+    "@rss/core": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "catalog:",

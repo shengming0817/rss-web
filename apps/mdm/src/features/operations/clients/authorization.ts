@@ -3,12 +3,15 @@ import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
   nextCursor,
-  windowPage,
+  projectedPage,
+  projectedRow,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   record,
+  closed,
+  boolean,
   array,
   count,
   enumeration,
@@ -231,7 +234,7 @@ export function groupDefinition(value: unknown, tenant: string) {
     throw new Error('Invalid group members')
   const members = unique(
     v['members'].map((m) => user(m, tenant)),
-    (m) => m.principalId,
+    (m) => ('principalId' in m ? String(m.principalId) : JSON.stringify(m)),
   )
   if (new Set(members.map((m) => m.instanceId)).size > 1) throw new Error('Mixed instances')
   return { name: identifier(v['name']), enabled: v['enabled'], members }
@@ -306,10 +309,31 @@ export function createAuthorizationClient(
   function tenantOnly() {
     if (realm === 'platform') throw new Error('Directory is not available in the management realm')
   }
-  const rows =
-    <T>(decode: (v: unknown) => T) =>
-    (value: unknown) =>
-      windowPage(value, (v) => revision(v, decode))
+  const ruleFields = {
+    id: uuid,
+    revision: count,
+    deleted: boolean,
+    subjectKind: (v: unknown) => nullable(v, identifier),
+    value: (v: unknown) => nullable(v, decodeRule),
+  }
+  const groupFields = {
+    id: uuid,
+    revision: count,
+    deleted: boolean,
+    name: (v: unknown) => nullable(v, identifier),
+    enabled: (v: unknown) => nullable(v, boolean),
+    memberCount: (v: unknown) => nullable(v, count),
+    value: (v: unknown) => nullable(v, summary),
+  }
+  const memberFields = {
+    principalId: uuid,
+    tenantId: (v: unknown) => {
+      const id = uuid(v)
+      if (id !== tenant) throw new Error('Wrong tenant')
+      return id
+    },
+    instanceId: uuid,
+  }
   const detail =
     <T>(id: string, decode: (v: unknown) => T) =>
     (value: unknown) => {
@@ -336,7 +360,10 @@ export function createAuthorizationClient(
         throw new Error('Wrong authorization receipt')
       return result
     }
-  function memberPage(id: string, query: DirectoryQuery = {}) {
+  function memberPage<F extends keyof typeof memberFields = keyof typeof memberFields>(
+    id: string,
+    query: DirectoryQuery<F> = {},
+  ) {
     tenantOnly()
     return api.getApiV1AuthorizationUserGroupsByIdMembers(
       transport,
@@ -345,19 +372,18 @@ export function createAuthorizationClient(
         query: queryParameters({
           limit: 100,
           ...query,
-          fields: ['principalId', 'tenantId', 'instanceId'],
         }),
       },
       (value) => {
-        const v = value
+        const v = closed(value, ['id', 'revision', 'items', 'nextCursor'])
         if (uuid(v['id']) !== id || !count(v['revision'])) throw new Error('Wrong member page')
+        const items = array(v['items'], (m) => projectedRow(m, memberFields, query.fields))
+        if (query.fields === undefined || query.fields.includes('principalId' as F))
+          unique(items, (m) => String(Reflect.get(m, 'principalId')))
         return {
           id,
           revision: count(v['revision']),
-          items: unique(
-            array(v['items'], (m) => user(m, tenant)),
-            (m) => m.principalId,
-          ),
+          items,
           nextCursor: nextCursor(v['nextCursor']),
         }
       },
@@ -415,20 +441,24 @@ export function createAuthorizationClient(
         detail(id, (v) => groupDefinition(v, tenant)),
       )
     },
-    rules: (query: DirectoryQuery = {}) =>
+    rules: <F extends keyof typeof ruleFields = keyof typeof ruleFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       (realm === 'platform'
         ? api.getApiV1TenantAdministrationAuthorizationRules
         : api.getApiV1AuthorizationRules)(
         transport,
-        { query: queryParameters({ limit: 100, ...query, fields: ['id', 'revision', 'value'] }) },
-        rows(decodeRule),
+        { query: queryParameters({ limit: 50, ...query }) },
+        (value) => projectedPage(value, ruleFields, query.fields, ['id']),
       ),
-    groups: (query: DirectoryQuery = {}) => {
+    groups: <F extends keyof typeof groupFields = keyof typeof groupFields>(
+      query: DirectoryQuery<F> = {},
+    ) => {
       tenantOnly()
       return api.getApiV1AuthorizationUserGroups(
         transport,
-        { query: queryParameters({ limit: 100, ...query, fields: ['id', 'revision', 'value'] }) },
-        rows(summary),
+        { query: queryParameters({ limit: 50, ...query }) },
+        (value) => projectedPage(value, groupFields, query.fields, ['id']),
       )
     },
     departments: () => {

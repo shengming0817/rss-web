@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import { VSelect, VBtn, VTextField, VCheckbox } from 'vuetify/components'
 
-import { comparison as queryComparison } from '../../../services/directory-query'
+import { comparison as queryComparison } from '@rss/api/mdm-query'
 import { onBeforeUnmount, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -23,6 +27,25 @@ import MdmPage from '../../../ui/MdmPage.vue'
 import PolicyIdentityEditor from '../../policies/components/PolicyIdentityEditor.vue'
 import PolicyEntry from '../../policies/components/PolicyEntry.vue'
 import PolicyDelete from '../../policies/components/PolicyDelete.vue'
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'toolName',
+    'alias',
+    'customEvent',
+    'revision',
+    'version',
+    'versionId',
+    'state',
+    'definition',
+    'action',
+    'scope',
+    'resource',
+    'category',
+  ],
+  1000,
+)
+
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -70,7 +93,10 @@ function apply(p: PolicyRead) {
 }
 function list(cursor?: string) {
   void run(
-    () => client.list({ cursor, filter: queryComparison('action', '==', action.value) }),
+    () =>
+      directoryQuery.read(cursor, (query) => client.list(query), {
+        filter: queryComparison('action', '==', action.value),
+      }),
     (v) => {
       page.value = v
     },
@@ -227,10 +253,29 @@ watch(
   },
   { flush: 'sync' },
 )
+directoryQuery.onClear(() => {
+  page.value = undefined
+})
 </script>
 <template>
-  <MdmPage :title="t('software.bootstrap')" :busy="busy" :failure="failure"
-    ><p>{{ t('software.bootstrapPolicyHint') }}</p>
+  <MdmPage :title="t('software.bootstrap')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选和排序：id / revision / version / state / action / category / scope。"
+      @load="list"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="page?.items ?? []"
+      @open="
+        (row) => {
+          read(String(row.id))
+        }
+      "
+    />
+    <p>{{ t('software.bootstrapPolicyHint') }}</p>
     <label
       >{{ t('policies.kind')
       }}<VSelect
@@ -246,13 +291,11 @@ watch(
     ><VBtn :disabled="busy || uncertain" @click="create">{{ t('policies.create') }}</VBtn
     ><VBtn :disabled="busy" @click="list()">{{ t('policies.reload') }}</VBtn>
     <ul class="console-object-list">
-      <li v-for="item in page?.items" :key="item.id">
+      <li v-for="item in directoryQuery.complete.value ? page?.items : []" :key="item.id">
         <VBtn :disabled="busy || uncertain" @click="read(item.id)">{{ item.id }}</VBtn>
       </li>
     </ul>
-    <VBtn v-if="page?.nextCursor" :disabled="busy" @click="list(page.nextCursor)">{{
-      t('devices.next')
-    }}</VBtn>
+
     <section v-if="current" class="console-panel">
       <h2 data-testid="onboarding-policy-locator">{{ current.id }} · {{ current.revision }}</h2>
       <p>

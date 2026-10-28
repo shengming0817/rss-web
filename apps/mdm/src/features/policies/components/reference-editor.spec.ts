@@ -13,7 +13,7 @@ it('paginates authorized references without discarding saved references and clea
     .fn()
     .mockResolvedValueOnce({
       items: [{ id: 'g1', revision: 7, presentation: { name: 'First' } }],
-      nextCursor: 'g1',
+      nextCursor: 'ZzE',
     })
     .mockResolvedValueOnce({
       items: [{ id: 'g2', revision: 8, presentation: { name: 'Second' } }],
@@ -47,7 +47,7 @@ it('paginates authorized references without discarding saved references and clea
   )
   await button('下一页').trigger('click')
   await flushPromises()
-  expect(groups.mock.calls[1]?.[0]).toEqual({ cursor: 'g1' })
+  expect(groups.mock.calls[1]?.[0]).toMatchObject({ cursor: 'ZzE', limit: 50 })
   expect(JSON.stringify(selectControl(wrapper, 'select[id$="-choice"]').props('items'))).toContain(
     'Second',
   )

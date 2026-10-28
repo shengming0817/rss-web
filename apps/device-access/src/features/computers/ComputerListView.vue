@@ -3,6 +3,10 @@ import { computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDa } from '../../context'
 import { useRead } from '../../services/read'
+import { useDirectory } from '../../services/directory'
+import { computerColumns } from '@rss/device-access/client'
+import { QueryRows } from '@rss/core'
+import DirectoryControls from '../../ui/DirectoryControls.vue'
 import { readListLocation, listLocation } from './list-location'
 import { utc, label } from '../../services/status'
 import ReadState from '../../ui/ReadState.vue'
@@ -12,23 +16,56 @@ const r = useDa(),
   router = useRouter(),
   route = useRoute(),
   initial = readListLocation(route.query),
-  cursor = ref<string | null>(initial.cursor),
-  search = ref(initial.search),
-  platform = ref(initial.platform),
   quick = ref<string | null>(null)
-const { data, busy, error, reload } = useRead(
-  (signal) => r.client.computers(cursor.value, signal),
-  () => cursor.value,
+const directory = useDirectory(
+  computerColumns,
+  100,
+  (query, signal) => r.client.computers(query, signal),
+  () => route.path,
+  initial,
 )
-const rows = computed(
-  () =>
-    data.value?.items.filter(
-      (c) =>
-        (platform.value === 'all' || c.platform === platform.value) &&
-        c.name.toLowerCase().includes(search.value.toLowerCase()),
-    ) ?? [],
+const { data, busy, error, reload } = directory
+const rows = computed(() => data.value?.summaries ?? [])
+const pageCount = computed(() => data.value?.summaries?.length ?? data.value?.items.length ?? 0)
+const selectedReference = ref<{ kind: 'endpoint' | 'association'; id: string }>()
+const view = useRead(
+  (signal) => r.client.viewComputers(selectedReference.value!, signal),
+  () => JSON.stringify(selectedReference.value),
+  { enabled: () => !!selectedReference.value },
 )
-watch([cursor, platform], persist)
+function inspect(row: Record<string, unknown>) {
+  const reference = row.reference as { kind: 'endpoint' | 'association'; id: string }
+  if (JSON.stringify(selectedReference.value) === JSON.stringify(reference)) void view.reload()
+  else selectedReference.value = reference
+}
+let persisted = route.fullPath,
+  persisting = false
+watch(directory.data, (page) => {
+  if (page && directory.applied.value) {
+    persisting = true
+    void router
+      .replace({ query: listQuery() })
+      .then(() => {
+        persisted = route.fullPath
+      })
+      .finally(() => {
+        persisting = false
+      })
+  }
+})
+watch(
+  () => route.fullPath,
+  () => {
+    const location = listQuery()
+    if (
+      !persisting &&
+      route.fullPath !== persisted &&
+      JSON.stringify(route.query) !== JSON.stringify(location)
+    )
+      void directory.restore(readListLocation(route.query))
+  },
+)
+
 function open(id: string, tab = 'status') {
   void router.push({
     name: 'computer',
@@ -37,10 +74,10 @@ function open(id: string, tab = 'status') {
   })
 }
 function listQuery() {
-  return listLocation(search.value, platform.value, cursor.value)
-}
-function persist() {
-  void router.replace({ query: listQuery() })
+  return listLocation(
+    { ...directory.applied.value, cursor: directory.cursor.value },
+    directory.trail.value,
+  )
 }
 </script>
 <template>
@@ -54,22 +91,21 @@ function persist() {
   </div>
   <ReadState :busy="busy" :error="error" @retry="reload" />
   <section class="panel">
-    <div class="filters">
-      <v-text-field
-        v-model="search"
-        :label="$t('da.m558cf8be1a')"
-        @update:model-value="persist"
-      /><v-select
-        v-model="platform"
-        :items="[
-          { title: '全部平台', value: 'all' },
-          { title: 'Windows', value: 'windows' },
-          { title: 'macOS', value: 'macos' },
-        ]"
-        :label="$t('da.m21d108bac0')"
-      />
-    </div>
-    <v-table
+    <DirectoryControls
+      :query="directory"
+      :busy="busy"
+      hint="筛选 key、status、assetState、channel、source、platform、search；按 key 排序。"
+    />
+    <QueryRows
+      v-if="data && !data.summaries"
+      :items="data.items"
+      :fields="directory.applied.value?.fields ?? computerColumns"
+      :required="['reference']"
+      @open="inspect"
+    />
+    <ReadState :busy="view.busy.value" :error="view.error.value" @retry="view.reload" />
+    <v-btn v-for="c in view.data.value ?? []" :key="c.id" @click="open(c.id)">{{ c.name }}</v-btn>
+    <v-table v-if="data?.summaries"
       ><thead>
         <tr>
           <th>{{ $t('da.m2273cdb3af') }}</th>
@@ -100,24 +136,12 @@ function persist() {
         </tr>
       </tbody></v-table
     >
-    <div v-if="!busy && !error && !rows.length" class="empty">
+    <div v-if="!busy && !error && !pageCount" class="empty">
       <h3>{{ $t('da.mce4f267739') }}</h3>
       <p>{{ $t('da.m13d5ec0dbb') }}</p>
     </div>
     <div class="table-footer">
-      <span>当前页 {{ rows.length }} 条，不代表组织总量</span>
-      <div>
-        <v-btn v-if="cursor" variant="text" size="small" @click="cursor = null">{{
-          $t('da.m851d093dde')
-        }}</v-btn
-        ><v-btn
-          v-if="data?.nextCursor"
-          variant="text"
-          size="small"
-          @click="cursor = data!.nextCursor"
-          >{{ $t('da.m67a246a344') }}</v-btn
-        >
-      </div>
+      <span>当前页 {{ pageCount }} 条，不代表组织总量</span>
     </div>
   </section>
   <v-navigation-drawer

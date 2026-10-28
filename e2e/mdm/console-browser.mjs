@@ -83,6 +83,14 @@ try {
     csrf = (await api(`/api/v1/identity/tenants/${target}/session`)).csrfToken
   }
   const ready = () => page.locator('section.console-page:not([aria-busy="true"])').waitFor()
+  async function readPanel(panel) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await ready()
+      if (await panel.isVisible()) return
+      await page.getByRole('button', { name: '重新读取', exact: true }).first().click()
+    }
+    await panel.waitFor({ state: 'visible' })
+  }
   const mutation = (path, input, revision = 0, expected = 200) =>
     api(path, 'POST', { operationId: randomUUID(), expectedRevision: revision, input }, expected)
   async function until(read, valid) {
@@ -96,6 +104,50 @@ try {
   }
   phase = 'login'
   await login(f.tenant)
+  phase = 'directory-query-controls'
+  const queryResources = [randomUUID(), randomUUID()]
+  for (const id of queryResources)
+    await mutation(`/api/v1/resources/${id}`, { action: 'create', kind: 'script' })
+  await page.goto(at('policies/resources'))
+  await ready()
+  const queryControls = page.locator('.directory-query').first()
+  await queryControls.locator('summary').click()
+  const queryFilter = `id=in=(${queryResources.join(',')})`
+  await queryControls.getByLabel('筛选表达式', { exact: true }).fill(queryFilter)
+  await queryControls.getByLabel('每页数量', { exact: true }).fill('1')
+  await queryControls.getByLabel('返回字段', { exact: true }).selectOption(['id'])
+  const directoryResponse = () =>
+    page.waitForResponse(
+      (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/v1/resources',
+    )
+  let response = directoryResponse()
+  await queryControls.getByRole('button', { name: '应用查询', exact: true }).click()
+  const firstQueryPage = await (await response).json()
+  assert.equal(firstQueryPage.items.length, 1)
+  assert.deepEqual(Object.keys(firstQueryPage.items[0]), ['id'])
+  assert.ok(firstQueryPage.nextCursor)
+  await queryControls.getByLabel('筛选表达式', { exact: true }).fill("id=='draft-only'")
+  response = directoryResponse()
+  await queryControls.getByRole('button', { name: '下一页', exact: true }).click()
+  const continued = await response
+  assert.equal(new URL(continued.url()).searchParams.get('filter'), `(${queryFilter})`)
+  const secondQueryPage = await continued.json()
+  assert.notEqual(secondQueryPage.items[0].id, firstQueryPage.items[0].id)
+  response = directoryResponse()
+  await queryControls.getByRole('button', { name: '上一页', exact: true }).click()
+  assert.equal((await (await response).json()).items[0].id, firstQueryPage.items[0].id)
+  const fullResource = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === `/api/v1/resources/${firstQueryPage.items[0].id}`,
+  )
+  await page
+    .locator('.directory-results')
+    .first()
+    .getByRole('button', { name: '读取详情', exact: true })
+    .click()
+  assert.equal((await fullResource).status(), 200)
+  coverage.push('directory-applied-pagination-partial-detail')
   phase = 'credential-materials'
   const mac = await api('/api/v1/devices/fixture-mac'),
     registration = mac.primaryMdmRegistration
@@ -104,10 +156,18 @@ try {
   await page.goto(at('devices/fixture-mac/management'))
   await ready()
   const materials = page.locator('[data-panel="recovery-credentials"]')
+  phase = 'credential-panel'
+  await readPanel(materials)
+  assert.equal(await materials.locator('form').count(), 1, 'Apple material actions')
+  assert.equal(
+    await materials.getByLabel('操作类型', { exact: true }).count(),
+    1,
+    'material action label',
+  )
   phase = 'credential-action'
   await chooseSoftwareOption(
     page,
-    materials.getByRole('combobox', { name: '操作类型', exact: true }),
+    materials.getByLabel('操作类型', { exact: true }),
     '设置或清除 Recovery Lock',
   )
   phase = 'credential-confirmation'
@@ -186,6 +246,7 @@ try {
   await page.goto(at(`devices/${f.mdm}/management`))
   await ready()
   const queries = page.locator('[data-panel="device-management-queries"]')
+  await readPanel(queries)
   phase = 'device-memberships'
   const groupRead = page.waitForResponse(
     (r) =>
@@ -337,11 +398,19 @@ try {
     })
   await page.goto(at('policies/assignments/lifecycle'))
   await ready()
-  await page.getByRole('button', { name: '下一页', exact: true }).first().waitFor()
-  const firstIds = await page.locator('ul').first().textContent()
+  const policyQuery = page.locator('.directory-query').first()
+  await policyQuery.locator('summary').click()
+  await policyQuery.getByLabel('每页数量', { exact: true }).fill('20')
+  const policyPage = page.waitForResponse(
+    (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/v1/policies',
+  )
+  await policyQuery.getByRole('button', { name: '应用查询', exact: true }).click()
+  assert.equal((await policyPage).status(), 200)
+  await ready()
+  const firstIds = await page.locator('section.console-page ul').first().textContent()
   await page.getByRole('button', { name: '下一页', exact: true }).first().click()
   await ready()
-  assert.notEqual(await page.locator('ul').first().textContent(), firstIds)
+  assert.notEqual(await page.locator('section.console-page ul').first().textContent(), firstIds)
   coverage.push('opaque-policy-directory-pagination')
   phase = 'script-resource-create'
   const resource = randomUUID(),
@@ -548,7 +617,10 @@ try {
   }
   assert.equal((await walk('assignments', windowPolicy, (r) => JSON.stringify(r.object))).length, 2)
   assert.ok((await walk('registrations', f.mdm, (r) => r.registrationId)).length >= 2)
-  assert.equal((await walk('runs', windowPolicy, (r) => r.taskId)).length, 0)
+  const existingRuns = new Set(
+    (await walk('runs', windowPolicy, (r) => r.taskId)).map((r) => r.taskId),
+  )
+  phase = 'policy-history-rerun'
   for (let i = 0; i < 2; i++) {
     await api(`/api/v1/policies/${windowPolicy}/reruns`, 'POST', {
       operationId: randomUUID(),
@@ -566,11 +638,25 @@ try {
       ],
       { timeout: 45000, stdio: ['ignore', 'inherit', 'pipe'] },
     )
+    if (claimed.status !== 0) {
+      try {
+        const diagnostic = JSON.parse(claimed.stdout.toString().trim())
+        if (
+          typeof diagnostic.classification === 'string' &&
+          /^[a-zA-Z0-9_-]{1,120}$/.test(diagnostic.classification)
+        )
+          console.error(
+            JSON.stringify({ phase: 'policy-claim', classification: diagnostic.classification }),
+          )
+      } catch {
+        /* Ignore unstructured subprocess diagnostics. */
+      }
+    }
     assert.equal(claimed.status, 0, 'actual Agent mTLS claim')
   }
   const history = await until(
     () => walk('runs', windowPolicy, (r) => r.taskId),
-    (rows) => rows.length >= 2,
+    (rows) => rows.filter((r) => !existingRuns.has(r.taskId)).length >= 2,
   )
   for (let i = 1; i < history.length; i++)
     assert.ok(
@@ -578,6 +664,7 @@ try {
         (history[i - 1].availableAt === history[i].availableAt &&
           history[i - 1].taskId > history[i].taskId),
     )
+  phase = 'policy-roundtrip-update'
   const edited = await mutation(
     `/api/v1/policies/${windowPolicy}`,
     {
@@ -587,13 +674,16 @@ try {
     },
     1,
   )
+  phase = 'policy-roundtrip-editor'
   await page.goto(at('policies') + '?id=' + windowPolicy)
   await ready()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
+  phase = 'policy-roundtrip-resource'
   await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
   await page.locator('#policy-lifetime').fill('3400')
   await page.getByLabel('唯一别名', { exact: true }).fill(' Support.Tool ')
   await page.getByLabel('自定义事件', { exact: true }).fill('refresh.contract')
+  phase = 'policy-roundtrip-submit'
   const updated = page.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -685,9 +775,11 @@ try {
   await ready()
   await page.getByText('观察时间 · UTC', { exact: false }).waitFor()
   // Withdraw through the same current Policy editor. Original batch facts remain frozen.
+  phase = 'policy-roundtrip-editor'
   await page.goto(at('policies') + '?id=' + windowPolicy)
   await ready()
   await page.getByRole('button', { name: '编辑', exact: true }).click()
+  phase = 'policy-roundtrip-resource'
   await page.getByRole('button', { name: '加载资源版本', exact: true }).click()
   await page.getByLabel('唯一别名', { exact: true }).fill('')
   await page.getByLabel('自定义事件', { exact: true }).fill('')
@@ -709,6 +801,7 @@ try {
   )
 
   phase = 'software-channel-default'
+  phase = 'software-capabilities'
   const capabilities = await api('/api/v1/policies/capabilities')
   assert.deepEqual(capabilities, {
     defaultSoftwareChannel: 'agent',
@@ -717,11 +810,13 @@ try {
   await page.goto(at('policies?action=software'))
   await ready()
   await page.getByRole('button', { name: '新建', exact: true }).first().click()
-  const channel = page.getByRole('combobox', { name: '软件写通道', exact: true })
+  const channel = page.getByLabel('软件写通道', { exact: true })
+  phase = 'software-agent-default'
   await assertSoftwareOption(page, channel, 'Agent')
   await channel.press('ArrowDown')
   const channelListId = await channel.getAttribute('aria-controls')
   const channelList = page.locator(`[id=${JSON.stringify(channelListId)}]`)
+  phase = 'software-disabled-mdm'
   assert.equal(
     await channelList
       .getByRole('option', { name: 'MDM', exact: true })

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import { VBtn, VCheckbox, VSelect, VStepper, VTextField, VTextarea } from 'vuetify/components'
 import { computed, onMounted, ref, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -7,6 +11,11 @@ import { operation, useOperation } from '../../../services/useOperation'
 import { importRequest } from '../clients/imports'
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import MdmPage from '../../../ui/MdmPage.vue'
+const sourceQuery = useDirectoryQuery(
+  ['id', 'revision', 'protocol', 'state', 'source', 'snapshot', 'lifecycle'],
+  100,
+)
+
 const { t } = useI18n(),
   runtime = useMdm(),
   { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
@@ -56,21 +65,44 @@ const step = ref(0),
   nativeExport = ref(false),
   result = ref<Awaited<ReturnType<typeof runtime.software.imports.import>>>(),
   observed = ref<Awaited<ReturnType<typeof runtime.policies.resources.read>>>()
-const chosen = computed(() =>
-  sources.value?.items.find((v) => `${v.source.id}/${v.source.revision}` === chosenSource.value),
-)
+const chosenDetail = ref<Awaited<ReturnType<typeof runtime.software.lifecycle.source>>>()
+const chosen = computed(() => {
+  const value = chosenDetail.value
+  return value
+    ? {
+        ...value,
+        id: value.source.id,
+        revision: value.source.revision,
+        protocol: value.source.protocol.kind,
+        state: value.lifecycle.state,
+      }
+    : undefined
+})
+function chooseProjected(row: Record<string, unknown>) {
+  if (typeof row['id'] !== 'string' || typeof row['revision'] !== 'string') return
+  chosenDetail.value = undefined
+  void run(
+    () => runtime.software.lifecycle.source(String(row['id']), String(row['revision'])),
+    (value) => {
+      chosenDetail.value = value
+      source.value = value.source.id
+      sourceRevision.value = value.source.revision
+      platform.value = value.source.protocol.kind === 'brew_tap' ? 'macos' : 'windows'
+    },
+  )
+}
 function loadSources(after?: string) {
   void run(
-    () => runtime.software.lifecycle.sources({ cursor: after }),
+    () => sourceQuery.read(after, (query) => runtime.software.lifecycle.sources(query)),
     (v) => {
       sources.value = v
     },
   )
 }
 watch(chosenSource, () => {
-  source.value = chosen.value?.source.id ?? ''
-  sourceRevision.value = chosen.value?.source.revision ?? ''
-  platform.value = chosen.value?.source.protocol.kind === 'brew_tap' ? 'macos' : 'windows'
+  const row = sources.value?.items.find((v) => `${v.id}/${v.revision}` === chosenSource.value)
+  if (row) chooseProjected(row)
+  else chosenDetail.value = undefined
 })
 onMounted(() => loadSources())
 function writeOriginal() {
@@ -94,7 +126,7 @@ async function submit() {
   let input: ReturnType<typeof importRequest> | undefined
   try {
     const selected =
-        chosen.value?.source.protocol.kind === 'brew_tap'
+        chosen.value?.protocol === 'brew_tap'
           ? {
               kind: 'brew',
               path: brewPath.value,
@@ -167,6 +199,7 @@ watch(
     confirmedReplay.value = false
     sources.value = undefined
     chosenSource.value = ''
+    chosenDetail.value = undefined
     step.value = 0
     result.value = undefined
     observed.value = undefined
@@ -175,10 +208,30 @@ watch(
   },
   { flush: 'sync' },
 )
+sourceQuery.onClear(() => {
+  sources.value = undefined
+})
 </script>
 <template>
-  <MdmPage :title="t('software.imports')" :busy="busy" :failure="failure"
-    ><p>{{ t('software.importDirectHint') }}</p>
+  <MdmPage :title="t('software.imports')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="sourceQuery"
+      :busy="busy"
+      hint="id / revision / protocol / state"
+      @load="loadSources"
+    />
+    <DirectoryResults
+      v-if="!sourceQuery.complete.value"
+      :disabled="busy || uncertain"
+      :required="['id', 'revision']"
+      :items="sources?.items ?? []"
+      @open="
+        (row) => {
+          chooseProjected(row)
+        }
+      "
+    />
+    <p>{{ t('software.importDirectHint') }}</p>
     <p v-if="failure === 'unsupported'" role="alert">
       {{ t('software.ux.contentPrerequisite') }}
       <RouterLink
@@ -205,7 +258,7 @@ watch(
         :label="t('software.source')"
         :disabled="busy || uncertain"
         :items="
-          (sources?.items ?? []).map((item) => ({
+          (sourceQuery.complete.value ? (sources?.items ?? []) : []).map((item) => ({
             title: `${item.source.id} / ${item.source.revision} · ${item.source.protocol.kind} · ${t(`software.lifecycle_${item.lifecycle.state}`)}`,
             value: `${item.source.id}/${item.source.revision}`,
             props: {

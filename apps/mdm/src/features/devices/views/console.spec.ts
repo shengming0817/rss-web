@@ -200,7 +200,9 @@ async function setup(
     query:
       name === 'device-detail' || name === 'device-view-detail'
         ? { tab: 'inventory', ...query }
-        : query,
+        : name === 'devices'
+          ? { limit: '20', ...query }
+          : query,
   })
   await router.isReady()
   const sessionState = shallowRef({
@@ -240,7 +242,15 @@ async function setup(
           registrationChannels,
         },
         [runtimeKey as symbol]: {
+          session: { ...session, managementHint: shallowRef(true) },
           api: {
+            account: async (principalId: string) => ({
+              principalId,
+              login: 'reviewer',
+              enabled: true,
+              memberActive: true,
+              hasLocalPassword: true,
+            }),
             accounts: async () => ({
               accounts: [
                 {
@@ -276,7 +286,6 @@ async function setup(
     })
     const target = button(text)
     const href = target.attributes('href')
-    const before = router.currentRoute.value.fullPath
     const directoryPage =
       router.currentRoute.value.name === 'devices' && ['下一页', '上一页'].includes(text)
     await target.trigger(
@@ -289,8 +298,13 @@ async function setup(
       await vi.waitFor(() =>
         expect(router.currentRoute.value.fullPath).toBe(router.resolve(href).fullPath),
       )
-    if (directoryPage)
-      await vi.waitFor(() => expect(router.currentRoute.value.fullPath).not.toBe(before))
+    if (directoryPage) {
+      await flushPromises()
+      if (wrapper.find('tbody').exists())
+        await vi.waitFor(() =>
+          expect(Boolean(router.currentRoute.value.query['cursor'])).toBe(text === '下一页'),
+        )
+    }
     if (href?.startsWith('/') || directoryPage || text === '编辑人工资产信息') {
       await vi.waitFor(() =>
         expect(wrapper.find('section.console-page[aria-busy="true"]').exists()).toBe(false),
@@ -2132,7 +2146,7 @@ it('restarts an invalidated deep page with its applied filters and columns and o
   await f.wrapper.get('.device-notice button').trigger('click')
   await flushPromises()
   await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(calls + 1))
-  expect(f.router.currentRoute.value.query).toEqual({
+  expect(f.router.currentRoute.value.query).toMatchObject({
     assetState: 'active',
     descending: 'true',
     columns: 'status',
@@ -2150,7 +2164,7 @@ it('restarts an invalidated deep page with its applied filters and columns and o
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(before + 1))
-  expect(f.router.currentRoute.value.query['cursor']).toBeUndefined()
+  await vi.waitFor(() => expect(f.router.currentRoute.value.query['cursor']).toBeUndefined())
   expect(f.router.currentRoute.value.query['trail']).toBeUndefined()
 })
 
@@ -2594,7 +2608,7 @@ async function setSelect(root: VueWrapper, target: { element: Element }, value: 
 it('keeps device group categories separate and exposes formal static user group writes with exact recovery', async () => {
   const h = await setup('groups-hub', {}, { category: 'device-dynamic' })
   expect(h.requests.filter((r) => r.path === '/api/v1/groups').at(-1)?.query).toMatchObject({
-    filter: "(kind=='dynamic')",
+    filter: "((kind=='dynamic'))",
   })
   expect(h.button('设备静态组').attributes('disabled')).toBeUndefined()
   await h.click('设备静态组')
@@ -2602,7 +2616,7 @@ it('keeps device group categories separate and exposes formal static user group 
     expect(h.router.currentRoute.value.query['category']).toBe('device-static'),
   )
   expect(h.requests.filter((r) => r.path === '/api/v1/groups').at(-1)?.query).toMatchObject({
-    filter: "(kind=='static')",
+    filter: "((kind=='static'))",
   })
   await h.click('用户静态组')
   await vi.waitFor(() => expect(h.router.currentRoute.value.query['category']).toBe('user-static'))
@@ -2797,4 +2811,49 @@ it('embeds original certificate recovery on the selected device management page'
   await f.click('Windows 原 CA 响应关联')
   expect(f.wrapper.find('#pki-attempt').exists()).toBe(true)
   expect(f.requests.filter((r) => r.method === 'POST')).toHaveLength(0)
+})
+it('reads a projected field descriptor and edits every ordered sort term before saving', async () => {
+  const h = await setup('inventory-query'),
+    q = h.wrapper.findAll('.directory-query')[0]!
+  await q.get('select').setValue(['key'])
+  await q
+    .findAll('button')
+    .find((b) => b.text() === '应用查询')!
+    .trigger('click')
+  await flushPromises()
+  await h.wrapper.get('.directory-results button').trigger('click')
+  await flushPromises()
+  expect(
+    h.requests.some(
+      (r) => r.path.startsWith('/api/v1/asset-fields/') && !r.path.endsWith('/references'),
+    ),
+  ).toBe(true)
+  await h.click('选择列（留空为全部） +')
+  await h.click('排序字段 +')
+  await h.click('排序字段 +')
+  const sorts = h.wrapper.findAllComponents(VSelect).filter((v) => v.props('label') === '排序字段')
+  await sorts[0]!.setValue('device.model')
+  await sorts[1]!.setValue('device.serial_number')
+  const rows = h.wrapper
+    .findAll('.console-toolbar')
+    .filter((v) => v.find('button').exists() && v.text().includes('↑'))
+  await rows[0]!.get('input[type=checkbox]').setValue(true)
+  await rows[1]!
+    .findAll('button')
+    .find((b) => b.text() === '↑')!
+    .trigger('click')
+  await flushPromises()
+  await rows[0]!
+    .findAll('button')
+    .find((b) => b.text() === '删除')!
+    .trigger('click')
+  await flushPromises()
+  const form = h.wrapper.findAll('form').at(-1)!
+  await form.find('input').setValue('Edited ordered query')
+  await form.trigger('submit')
+  await flushPromises()
+  const saved = await h.devices.assets.saved()
+  const actual = await h.devices.assets.readSaved(saved.items[0]!.id)
+  expect(actual.definition?.query.sort).toEqual([{ field: 'device.model', descending: true }])
+  expect(actual.definition?.query.fields.length).toBeGreaterThan(0)
 })

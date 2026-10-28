@@ -15,8 +15,8 @@ const r = useDa(),
   capabilities = ref<Application['capabilities']>(props.existing?.capabilities ?? ['native_key']),
   proofBusy = ref(false),
   proofMessage = ref('')
-const baseline = useRevisionReview(props.existing, (cursor, signal) =>
-  r.client.applications(cursor, signal),
+const baseline = useRevisionReview(props.existing, (id, signal) =>
+  r.client.readApplication('rp:' + id, signal),
 )
 const op = useMutation(() => '/application/' + (props.existing?.id ?? 'new'))
 let active = true,

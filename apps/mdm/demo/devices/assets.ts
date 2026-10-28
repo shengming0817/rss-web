@@ -133,6 +133,13 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
             savedQueries: 0,
           },
         })
+      if (method === 'GET' && !fieldPath[2])
+        return old
+          ? asset({
+              kind: 'field_descriptor',
+              field: { ...fieldInput(old), operations: old.operations },
+            })
+          : error('inventory_not_found', 404)
       if (method === 'PUT') {
         const op = operation(request.body)
         return receipts.write(request, op.operationId, () => {

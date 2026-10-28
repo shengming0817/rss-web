@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import PolicyFieldset from '../components/PolicyFieldset.vue'
 import PolicyDialog from '../components/PolicyDialog.vue'
@@ -15,7 +19,7 @@ import {
   VTable,
 } from 'vuetify/components'
 
-import { comparison as queryComparison } from '../../../services/directory-query'
+import { comparison as queryComparison } from '@rss/api/mdm-query'
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -44,6 +48,11 @@ import ScriptDefinitionEditor from '../components/ScriptDefinitionEditor.vue'
 import PublishedSoftware from '../components/PublishedSoftware.vue'
 import CollectionVersionEditor from '../components/CollectionVersionEditor.vue'
 import { agentBytes, nativeBytes } from '../../../contracts/collection/canonical'
+const directoryQuery = useDirectoryQuery(
+  ['id', 'revision', 'kind', 'activeVersion', 'presentation'],
+  1000,
+)
+
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -56,12 +65,11 @@ const creating = ref(false),
   resourceFilter = ref<'' | ResourceKind>('')
 const visibleResources = computed(() =>
   (list.value?.items ?? []).filter((item) =>
-    `${item.presentation['name'] ?? ''} ${item.id}`
+    `${item.presentation?.['name'] ?? ''} ${item.id}`
       .toLocaleLowerCase()
       .includes(query.value.toLocaleLowerCase()),
   ),
 )
-let appliedKind: ResourceKind | undefined
 const kindLabel = (value: ResourceKind) =>
   t(
     value === 'script'
@@ -245,17 +253,14 @@ const hashText = (bytes: number[]) => bytes.map((n) => n.toString(16).padStart(2
 function load(cursor?: string) {
   list.value = undefined
   if (busy.value) return
-  const selection = cursor ? appliedKind : resourceFilter.value || undefined
+  const selection = resourceFilter.value || undefined
   void run(
     () =>
-      client.list({
+      directoryQuery.read(cursor, (query) => client.list(query), {
         filter: selection ? queryComparison('kind', '==', selection) : undefined,
-        cursor,
       }),
     (v) => {
-      if ((resourceFilter.value || undefined) !== selection) return
       list.value = v
-      appliedKind = selection
     },
   )
 }
@@ -635,6 +640,9 @@ watch(
   },
   { immediate: true },
 )
+directoryQuery.onClear(() => {
+  list.value = undefined
+})
 </script>
 <template>
   <MdmPage
@@ -643,6 +651,23 @@ watch(
     :busy="busy"
     :failure="failure"
   >
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选 id / revision / kind / active；排序 id / revision / kind。名称仅搜索当前页。"
+      @load="load"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="list?.items ?? []"
+      @open="
+        (row) => {
+          open(String(row.id))
+        }
+      "
+    />
+
     <template #actions
       ><VBtn
         variant="tonal"
@@ -692,6 +717,7 @@ watch(
       </div>
       <p class="device-help">{{ t('policies.ux.pageOnly') }}</p>
       <VDataTable
+        v-if="directoryQuery.complete.value"
         :aria-label="t('policies.resources')"
         :items-per-page="-1"
         hide-default-footer
@@ -728,9 +754,6 @@ watch(
           row.activeVersion ?? t('policies.ux.noActiveVersion')
         }}</template>
       </VDataTable>
-      <VBtn v-if="list?.nextCursor" :disabled="busy" @click="load(list.nextCursor)">{{
-        t('policies.next')
-      }}</VBtn>
     </template>
     <PolicyDialog
       v-model:open="creating"

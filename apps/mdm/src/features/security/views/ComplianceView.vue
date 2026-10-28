@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
 import {
   VAlert,
   VBtn,
@@ -24,6 +27,10 @@ import type { HistoryFilter } from '../clients/compliance'
 import { currentStatuses, type CurrentCompliance } from '../clients/compliance-model'
 import AssessmentFacts from '../components/AssessmentFacts.vue'
 import MdmPage from '../../../ui/MdmPage.vue'
+const deviceQuery = useDirectoryQuery(
+  ['id', 'status', 'primaryMdmRegistration', 'channels', 'enrollments', 'inventoryAvailable'],
+  100,
+)
 const { t } = useI18n(),
   runtime = useMdm(),
   route = useRoute(),
@@ -91,7 +98,8 @@ function devices(cursor?: string) {
   directory.value = undefined
   void run(
     async () => {
-      const page = await runtime.devices.directory.list({ cursor })
+      const page = await deviceQuery.read(cursor, (query) => runtime.devices.directory.list(query))
+      if (!deviceQuery.complete.value) return { page, rows: [] }
       const results = await Promise.allSettled(page.items.map((item) => client.current(item.id)))
       return {
         page,
@@ -110,6 +118,10 @@ function devices(cursor?: string) {
     },
   )
 }
+deviceQuery.onClear(() => {
+  directory.value = undefined
+  assessments.value = []
+})
 function loadHistory(cursor?: string) {
   if (!current.value || busy.value) return
   if (
@@ -222,14 +234,15 @@ onMounted(routeDevice)
             </tr>
           </tbody></v-table
         >
-        <v-btn
-          v-if="directory?.nextCursor"
-          :disabled="busy"
-          @click="devices(directory.nextCursor)"
-          >{{ t('devices.next') }}</v-btn
-        >
       </v-card-text>
     </v-card>
+    <DirectoryControls :query="deviceQuery" :busy="busy" @load="devices" />
+    <DirectoryResults
+      v-if="!deviceQuery.complete.value"
+      :items="directory?.items ?? []"
+      :disabled="busy"
+      @open="(row) => open(String(row.id))"
+    />
     <v-card :title="t('security.assessmentDetails')" class="mb-4"
       ><v-card-text
         ><form data-testid="open-device" @submit.prevent="open()">

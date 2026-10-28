@@ -11,6 +11,8 @@
     "./mdm-limits": "./src/mdm-limits.ts",
     "./device-access": "./src/device-access.ts",
     "./device-access-demo": "./src/device-access-demo.ts",
+    "./mdm-query": "./src/mdm-query.ts",
+    "./mdm-filter": "./src/mdm-filter.ts",
     "./mdm-operations": "./src/generated/mdm/index.ts",
     "./mdm-types": "./src/generated/mdm/owners.ts",
     "./mdm-validators": "./src/generated/mdm/owner-validators.ts",

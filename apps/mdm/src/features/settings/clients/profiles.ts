@@ -1,14 +1,17 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
-import {
-  queryParameters,
-  projectedRow,
-  nextCursor,
-  type DirectoryQuery,
-} from '../../../services/directory-query'
+import { queryParameters, projectedRow, nextCursor, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { profileJson, type ProfileJson } from '@rss/auth/profile-json'
-import { string, uuid, count, boolean, nullable, array } from '../../../services/decode'
+import {
+  enumeration,
+  string,
+  uuid,
+  count,
+  boolean,
+  nullable,
+  array,
+} from '../../../services/decode'
 export type ProfileSource = { kind: 'identity_local' } | { kind: 'idp'; provider: string }
 export function source(value: unknown): ProfileSource {
   if (!wireSchemas.getApiV1UserProfilesMeResponse.validateProfileSource(value))
@@ -169,6 +172,16 @@ export type SourceMetadata = {
   maxAgeSeconds: number
 }
 const definitionFields = {
+  key: string,
+  displayName: string,
+  sourceKind: (v: unknown) => enumeration(v, ['identity_local', 'idp'] as const),
+  provider: (v: unknown) => nullable(v, uuid),
+  valueType: (v: unknown) => enumeration(v, types),
+  enabled: boolean,
+  sensitive: boolean,
+  required: boolean,
+  visibility: (v: unknown) => enumeration(v, visibility),
+  displayUse: (v: unknown) => enumeration(v, uses),
   fieldId: uuid,
   revision: (value: unknown) => {
     const n = count(value)
@@ -189,7 +202,6 @@ export function createProfilesClient(transport: HttpTransport) {
           query: queryParameters({
             limit: 20,
             ...query,
-            fields: query.fields ?? Object.keys(definitionFields),
           }),
         },
         (value) => {

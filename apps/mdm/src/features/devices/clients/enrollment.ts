@@ -1,6 +1,11 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
-import { windowParameters, windowPage, type WindowQuery } from '../../../services/directory-query'
+import {
+  queryParameters,
+  projectedPage,
+  projectedRow,
+  type DirectoryQuery,
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   count,
@@ -9,7 +14,6 @@ import {
   enumeration,
   integer,
   nullable,
-  unique,
   uuid,
 } from '../../../services/decode'
 export const enrollmentSources = ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const
@@ -141,20 +145,17 @@ function receipt(value: unknown, operationId: string, id?: string) {
     throw new Error('Wrong enrollment receipt')
   return { operationId, ...result }
 }
+const registrationFields = {
+  registrationId: uuid,
+  enrollmentId: (v: unknown) => nullable(v, uuid),
+  agentGrantId: (v: unknown) => nullable(v, uuid),
+  userContextId: (v: unknown) => nullable(v, uuid),
+  source: (v: unknown) => enumeration(v, enrollmentSources),
+  generation: count,
+  status: (v: unknown) => enumeration(v, ['active', 'superseded', 'revoked'] as const),
+}
 export function registration(value: unknown) {
-  if (!wireSchemas.getApiV1DevicesByDeviceRegistrationsResponse.validateProjection_Row(value))
-    throw new Error('Invalid contract value')
-
-  const v = value
-  return {
-    registrationId: uuid(v['registrationId']),
-    enrollmentId: nullable(v['enrollmentId'], uuid),
-    agentGrantId: nullable(v['agentGrantId'], uuid),
-    userContextId: v['userContextId'] === undefined ? null : nullable(v['userContextId'], uuid),
-    source: enumeration(v['source'], enrollmentSources),
-    generation: count(v['generation']),
-    status: enumeration(v['status'], ['active', 'superseded', 'revoked'] as const),
-  }
+  return projectedRow(value, registrationFields)
 }
 export function generateEnrollmentPassword(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
@@ -226,14 +227,14 @@ export function createEnrollmentClient(transport: HttpTransport) {
         { pathParams: { id }, headers: { 'Idempotency-Key': operation }, body: {} },
         (v) => receipt(v, operation, id),
       ),
-    registrations: (device: string, page: WindowQuery = {}) =>
+    registrations: <F extends keyof typeof registrationFields = keyof typeof registrationFields>(
+      device: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       api.getApiV1DevicesByDeviceRegistrations(
         transport,
-        { pathParams: { device }, query: windowParameters({ limit: 20, ...page }, 1000) },
-        (value) => {
-          const page = windowPage(value, registration)
-          return { ...page, items: unique(page.items, (r) => r.registrationId) }
-        },
+        { pathParams: { device }, query: queryParameters({ limit: 50, ...query }) },
+        (value) => projectedPage(value, registrationFields, query.fields, ['registrationId']),
       ),
     revoke: (device: string, registration: string, operation: string) =>
       api.postApiV1DevicesByDeviceRegistrationsByRegistrationRevoke(

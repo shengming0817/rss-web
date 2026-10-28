@@ -7,7 +7,7 @@ import { INSTANCE, ADMIN } from '../../../../demo/operations/authorization'
 import { createOnboardingClients } from '../client'
 import { generateEnrollmentPassword } from '../../devices/clients/enrollment'
 import { quantity, readConfiguration } from './configurations'
-import { adeOperation, adeStatus, appleOrganizations, setup } from './apple'
+import { createAppleClient, adeOperation, adeStatus, appleOrganizations, setup } from './apple'
 import { entraPolicy, termsContext, text } from './entra'
 let domain: ReturnType<typeof createOnboardingDemo>,
   client: ReturnType<typeof createOnboardingClients>,
@@ -320,4 +320,31 @@ it('discovers only configuration metadata and keeps signed delivery outside list
   expect((await client.configurations.list({ filter: 'state==revoked' })).items[0]?.state).toBe(
     'revoked',
   )
+})
+
+it('queries ADE device projections without implying registration from an assigned profile', async () => {
+  const organization = '11111111-1111-4111-8111-111111111111'
+  const row = {
+    serial: 'SERIAL-01',
+    deleted: false,
+    profileUuid: null,
+    observedAt: 1,
+    registration: 'not_implied',
+  }
+  let reply: unknown = { items: [row], nextCursor: 'YQ' }
+  const calls: RequestOptions<unknown>[] = []
+  const apple = createAppleClient({
+    request: async (o: RequestOptions<unknown>) => {
+      calls.push(o)
+      return o.decode(reply)
+    },
+  } as HttpTransport)
+  expect((await apple.devices(organization, { limit: 1, sort: ['-serial'] })).items).toEqual([row])
+  reply = { items: [{ serial: 'SERIAL-01', profileUuid: null }], nextCursor: null }
+  expect(
+    (await apple.devices(organization, { fields: ['serial', 'profileUuid'], cursor: 'YQ' })).items,
+  ).toEqual([{ serial: 'SERIAL-01', profileUuid: null }])
+  expect(calls.at(-1)?.query).toMatchObject({ fields: 'serial,profileUuid', cursor: 'YQ' })
+  reply = { items: [{ ...row, registration: 'registered' }], nextCursor: null }
+  await expect(apple.devices(organization)).rejects.toThrow()
 })

@@ -1,3 +1,4 @@
+import { decodeIdentityError } from '@rss/api/identity'
 import { afterEach, expect, it, vi } from 'vitest'
 import { shallowRef } from 'vue'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
@@ -53,7 +54,7 @@ async function fixture(
       identity: { principalId: actor },
       session: { id: instance },
     }),
-    session = { state } as unknown as IdentitySession
+    session = { state, managementHint: shallowRef(true) } as unknown as IdentitySession
   const operations = createSettingsOperations(session)
   disposers.push(() => operations.dispose())
   const rows = new Map(
@@ -97,8 +98,15 @@ async function fixture(
             .sort((a, b) => a.id.localeCompare(b.id))
             .filter((r) => !after || r.id > atob(after as string))
           return {
-            items: sorted.slice(0, 100),
-            nextCursor: sorted.length > 100 ? btoa(sorted[99]!.id).replace(/=/g, '') : null,
+            items: sorted.slice(0, Number(o.query?.['limit'] ?? 50)).map((row) => ({
+              ...row,
+              deleted: row.value === null,
+              subjectKind: row.value?.subject.kind ?? null,
+            })),
+            nextCursor:
+              sorted.length > Number(o.query?.['limit'] ?? 50)
+                ? btoa(sorted[Number(o.query?.['limit'] ?? 50) - 1]!.id).replace(/=/g, '')
+                : null,
           }
         }
         const id = o.pathParams!['id'] as string,
@@ -121,7 +129,7 @@ async function fixture(
     },
   } as HttpTransport
   const accounts = vi.fn(
-    async (): Promise<Awaited<ReturnType<Runtime['api']['accounts']>>> => ({
+    async (): Promise<{ accounts: import('@rss/auth').Account[]; next: string | null }> => ({
       accounts: [
         {
           principalId: target,
@@ -191,7 +199,7 @@ async function fixture(
     },
   }
 }
-async function click(label: string, scope = body()) {
+async function click(label: string, scope: Pick<DOMWrapper<HTMLElement>, 'findAll'> = body()) {
   const b = scope
     .findAll('button')
     .find((b) => b.text() === label || b.attributes('aria-label') === label)
@@ -259,7 +267,7 @@ it('preserves a rule draft for unchanged identity facts and clears it when the s
 })
 it('keeps authorization maintenance usable when account listing returns 403', async () => {
   const f = await fixture()
-  f.accounts.mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
+  f.accounts.mockRejectedValueOnce(decodeIdentityError(403, { code: 'insufficient_privilege' }))
   await newRule()
   await click('读取已有管理账户')
   expect(body().text()).toContain('账户目录拒绝访问')
@@ -345,7 +353,7 @@ it('keeps the server protection denial and draft without inventing an immutable 
   await click(target)
   await click('确认撤销规则')
   f.setIntercept((o, next) => {
-    if (o.method === 'PUT') throw decodeMdmError(403, { code: 'permission_denied' })
+    if (o.method === 'PUT') throw decodeIdentityError(403, { code: 'insufficient_privilege' })
     return next()
   })
   await body().get('[data-testid=save-rule]').trigger('click')
@@ -388,10 +396,12 @@ it('uses opaque directory cursors for next and previous pages and presents tombs
     value: i === 100 ? null : definition(),
   }))
   const f = await fixture({ rows })
+  await f.wrapper.get('.directory-query input[type=number]').setValue(100)
+  await click('应用查询')
   await click('下一页')
   expect(f.calls.at(-1)?.query).toEqual({
     limit: 100,
-    fields: 'id,revision,value',
+    fields: 'id,revision,deleted,subjectKind,value',
     cursor: btoa(rows[99]!.id).replace(/=/g, ''),
   })
   expect(f.wrapper.text()).toContain('已删除')
@@ -399,8 +409,11 @@ it('uses opaque directory cursors for next and previous pages and presents tombs
   expect(body().find('[data-testid=review-rule]').exists()).toBe(false)
   await click('关闭')
   await click('上一页')
-  expect(f.calls.at(-1)?.query).toEqual({ limit: 100, fields: 'id,revision,value' })
-  expect(f.wrapper.text()).toContain('当前页 1')
+  expect(f.calls.at(-1)?.query).toEqual({
+    limit: 100,
+    fields: 'id,revision,deleted,subjectKind,value',
+  })
+  expect(f.calls.at(-1)?.query?.['cursor']).toBeUndefined()
 })
 it.each(['anonymous', 'principal', 'tenant', 'session'] as const)(
   'clears pending writes, account names and rules on %s changes and discards late errors',
@@ -526,8 +539,8 @@ it('clears cached account names and next cursor when a later directory page is d
   })
   await click('读取已有管理账户')
   expect(body().text()).toContain('Revoked directory name')
-  f.accounts.mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
-  await click('下一页管理账户')
+  f.accounts.mockRejectedValueOnce(decodeIdentityError(403, { code: 'insufficient_privilege' }))
+  await click('下一页', body().get('[role=dialog]'))
   expect(body().text()).not.toContain('Revoked directory name')
   expect(body().text()).toContain('账户目录拒绝访问')
   expect(

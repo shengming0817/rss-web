@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { comparison } from '../services/directory-query'
+import { comparison } from '@rss/api/mdm-query'
 import { ref, watch } from 'vue'
 import { isRssApiError } from '@rss/api/mdm'
 import { VBtn, VChip, VAlert, VCard } from 'vuetify/components'

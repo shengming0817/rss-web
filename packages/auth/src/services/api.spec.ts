@@ -16,12 +16,12 @@ describe('Identity operations use one protected transport without replay', () =>
     await f.login()
     f.replies.push({
       accounts: [accountValue],
-      nextCursor: OTHER,
+      nextCursor: 'YWJjZGVm',
     })
-    expect((await f.api.accounts()).next).toBe(OTHER)
+    expect((await f.api.accounts()).next).toBe('YWJjZGVm')
     f.replies.push({ accounts: [], nextCursor: null })
-    await f.api.accounts(OTHER)
-    expect(f.request.mock.calls.at(-1)?.[0].query).toEqual({ cursor: OTHER })
+    await f.api.accounts({ cursor: 'YWJjZGVm' })
+    expect(f.request.mock.calls.at(-1)?.[0].query).toEqual({ cursor: 'YWJjZGVm' })
     f.replies.push({ sessions: [], nextCursor: null })
     await f.api.sessions()
     f.replies.push({ sessions: [], nextCursor: ID })

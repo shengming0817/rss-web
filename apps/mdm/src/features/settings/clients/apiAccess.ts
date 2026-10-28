@@ -1,8 +1,17 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
-import { queryParameters, windowPage, type DirectoryQuery } from '../../../services/directory-query'
+import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import { array, count, identifier, nullable, string, unique, uuid } from '../../../services/decode'
+import {
+  array,
+  boolean,
+  count,
+  identifier,
+  nullable,
+  string,
+  unique,
+  uuid,
+} from '../../../services/decode'
 import { grant, permissions, user } from '../../operations/clients/authorization'
 export const keyPermissions = permissions.filter(
   (p) =>
@@ -64,30 +73,28 @@ export function networkPolicy(value: unknown) {
   const v = value
   return { revision: count(v['revision']), networks: array(v['networks'], identifier) }
 }
+function keyFields(tenant: string) {
+  return {
+    id: uuid,
+    revision: count,
+    authorityRevision: count,
+    credentialRevision: count,
+    metadata: keyMetadata,
+    createdBy: (v: unknown) => user(v, tenant),
+    createdAt: count,
+    revoked: boolean,
+    name: identifier,
+    enabled: boolean,
+    expiresAt: (v: unknown) => nullable(v, count),
+  }
+}
 export function createApiAccess(transport: HttpTransport, tenant: string) {
   return {
-    keys: (query: Omit<DirectoryQuery, 'fields'> = {}) =>
-      api.getApiV1ApiKeys(
-        transport,
-        {
-          query: queryParameters({
-            limit: 100,
-            ...query,
-            fields: [
-              'id',
-              'revision',
-              'authorityRevision',
-              'credentialRevision',
-              'metadata',
-              'createdBy',
-              'createdAt',
-              'revoked',
-            ],
-          }),
-        },
-        (value) => {
-          return windowPage(value, (x) => keyRecord(x, tenant))
-        },
+    keys: <F extends keyof ReturnType<typeof keyFields> = keyof ReturnType<typeof keyFields>>(
+      query: DirectoryQuery<F> = {},
+    ) =>
+      api.getApiV1ApiKeys(transport, { query: queryParameters({ limit: 50, ...query }) }, (value) =>
+        projectedPage(value, keyFields(tenant), query.fields, ['id']),
       ),
     key: (id: string) =>
       api.getApiV1ApiKeysById(transport, { pathParams: { id } }, (v) => {

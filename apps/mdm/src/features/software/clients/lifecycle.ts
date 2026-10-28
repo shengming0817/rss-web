@@ -1,15 +1,12 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
-import {
-  queryParameters,
-  projectedPage,
-  type DirectoryQuery,
-} from '../../../services/directory-query'
+import { queryParameters, projectedPage, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import { jsonObject } from '../../../services/json'
 import type { Operation } from '../../../services/useOperation'
 import {
   count,
+  enumeration,
   digest,
   identifier,
   integer,
@@ -112,7 +109,16 @@ function mutationReceipt<T extends { lifecycle: ReturnType<typeof lifecycle> }>(
   if (receipt.lifecycle.operation !== operation) throw new Error('Wrong lifecycle receipt')
   return receipt
 }
-const sourceFields = { source: sourceDefinition, snapshot: softwareSource, lifecycle }
+const sourceFields = {
+  id: identifier,
+  revision: identifier,
+  protocol: (v: unknown) =>
+    enumeration(v, ['private', 'winget_rest', 'winget_community', 'brew_tap'] as const),
+  state: (v: unknown) => enumeration(v, ['enabled', 'disabled'] as const),
+  source: sourceDefinition,
+  snapshot: softwareSource,
+  lifecycle,
+}
 export function createLifecycleClient(transport: HttpTransport) {
   return {
     sources: <F extends keyof typeof sourceFields = keyof typeof sourceFields>(
@@ -124,16 +130,25 @@ export function createLifecycleClient(transport: HttpTransport) {
           query: queryParameters({
             limit: 20,
             ...query,
-            fields: query.fields ?? Object.keys(sourceFields),
           }),
         },
         (value) => {
           const page = projectedPage(value, sourceFields, query.fields)
           if (!query.fields)
             page.items.forEach((item) => {
-              if ('source' in item && 'snapshot' in item && item.source && item.snapshot) {
+              if (
+                'source' in item &&
+                'snapshot' in item &&
+                'lifecycle' in item &&
+                item.source &&
+                item.snapshot
+              ) {
                 const source = item.source as SourceDefinition
-                sourceRead(item, source.id, source.revision)
+                sourceRead(
+                  { source: item.source, snapshot: item.snapshot, lifecycle: item.lifecycle },
+                  source.id,
+                  source.revision,
+                )
               }
             })
           return page

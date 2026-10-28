@@ -1,3 +1,4 @@
+import { directoryPage } from './directory'
 // Demo-only injected events. No timers or browser-owned scheduling authority.
 export interface DemoEvent {
   kind:
@@ -344,31 +345,66 @@ export function createScenario(
         return { status: 200, body: session() }
       }
     }
-    if (path === `/api/v1/identity/tenants/${sessionTenant}/accounts` && method === 'GET')
-      return principalId === PRINCIPAL
-        ? {
-            status: 200,
-            body: {
-              accounts: [
-                {
-                  principalId: PRINCIPAL,
-                  login: 'demo',
-                  enabled: true,
-                  memberActive: true,
-                  hasLocalPassword: true,
-                },
-                {
-                  principalId: REVIEWER,
-                  login: 'reviewer',
-                  enabled: true,
-                  memberActive: true,
-                  hasLocalPassword: true,
-                },
-              ],
-              nextCursor: null,
-            },
-          }
-        : { status: 403, body: { code: 'permission_denied' } }
+    const accountPath = `/api/v1/identity/tenants/${sessionTenant}/accounts`
+    if ((path === accountPath || path.startsWith(accountPath + '/')) && method === 'GET') {
+      if (principalId !== PRINCIPAL)
+        return { status: 403, body: { code: 'insufficient_privilege' } }
+      const accounts = [
+        {
+          principalId: PRINCIPAL,
+          login: 'demo',
+          enabled: true,
+          memberActive: true,
+          hasLocalPassword: true,
+        },
+        {
+          principalId: REVIEWER,
+          login: 'reviewer',
+          enabled: true,
+          memberActive: true,
+          hasLocalPassword: true,
+        },
+      ]
+      if (path !== accountPath) {
+        const entry = accounts.find((v) => v.principalId === path.slice(accountPath.length + 1))
+        return entry
+          ? { status: 200, body: entry }
+          : { status: 404, body: { code: 'account_not_found' } }
+      }
+      const source = parsed.searchParams.get('source')
+      const rows = accounts.map((v) => ({
+        ...v,
+        displayName: source === 'local' ? v.login : null,
+        email: null,
+        profileStatus: source === 'local' ? 'available' : 'missing',
+        departmentStatus: source === 'local' ? 'unavailable' : 'missing',
+        departmentSnapshot: null,
+      }))
+      try {
+        const page = directoryPage(
+          rows,
+          {
+            method,
+            path,
+            query: parsed.searchParams,
+            body: undefined,
+            actor: { principalId, sessionId, tenantId: sessionTenant },
+            headers: {},
+            authorization: sessionId,
+          },
+          ['principalId'],
+          {
+            maxLimit: 100,
+            defaultLimit: 50,
+            context: ['source'],
+            output: ['principalId', 'login', 'enabled', 'memberActive', 'hasLocalPassword'],
+          },
+        )
+        return { status: 200, body: { accounts: page.items, nextCursor: page.nextCursor } }
+      } catch {
+        return { status: 400, body: { code: 'malformed_request' } }
+      }
+    }
     if (path === `/api/v1/identity/tenants/${sessionTenant}/sessions`)
       return { status: 200, body: { sessions: [session().session], nextCursor: null } }
     const expected = epoch

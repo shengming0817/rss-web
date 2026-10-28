@@ -17,3 +17,7 @@ export { useProviders } from './useProviders'
 
 export { useAccountSecurity } from './useAccountSecurity'
 export { useIdentityError } from './useIdentityError'
+
+export type { Account } from './services/decode'
+export { useAccountDirectory } from './useAccountDirectory'
+export type { AccountRow } from './services/account-query'

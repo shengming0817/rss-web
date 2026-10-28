@@ -1,4 +1,4 @@
-import { formatFilter, parseFilter, type Filter } from '../../../services/query-filter'
+import { formatFilter, parseFilter, type Filter } from '@rss/api/mdm-filter'
 import {
   inventoryCondition,
   queryInput,

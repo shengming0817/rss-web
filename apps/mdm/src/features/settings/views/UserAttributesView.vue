@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import { VBtn, VForm, VTable, VTextField } from 'vuetify/components'
 import OperationDialog from '../../operations/components/OperationDialog.vue'
 import { ref, computed, onMounted, watch } from 'vue'
@@ -10,6 +14,26 @@ import { useSettingsAction, useSettingsFacts } from '../useSettingsAction'
 import { type Definition, type SourceMetadata } from '../clients/profiles'
 import UserAttributeEditor from '../components/UserAttributeEditor.vue'
 import ProfilePanel from '../components/ProfilePanel.vue'
+const directoryQuery = useDirectoryQuery(
+  [
+    'fieldId',
+    'revision',
+    'key',
+    'displayName',
+    'sourceKind',
+    'provider',
+    'valueType',
+    'enabled',
+    'sensitive',
+    'required',
+    'visibility',
+    'displayUse',
+    'collectedAfterMicros',
+    'value',
+  ],
+  128,
+)
+
 const { t } = useI18n(),
   runtime = useMdm(),
   { canRead, canWrite } = usePermission(
@@ -45,9 +69,9 @@ async function load(after?: string) {
     sources.value = []
   }
   await run(
-    () => runtime.settings.profiles.definitions({ cursor: after }),
+    () => directoryQuery.read(after, (query) => runtime.settings.profiles.definitions(query), {}),
     (v) => {
-      rows.value = after ? [...rows.value, ...v.items] : v.items
+      rows.value = v.items
       sources.value = v.sources
       next.value = v.nextCursor
     },
@@ -60,6 +84,14 @@ function create() {
     collectedAfterMicros: 0,
     value: null,
   }
+}
+function edit(id: string) {
+  return run(
+    () => runtime.settings.profiles.definition(id),
+    (value) => {
+      selected.value = value
+    },
+  )
 }
 function recover(id: string) {
   selected.value = rows.value.find((v) => v.fieldId === id) ?? {
@@ -80,9 +112,31 @@ watch(canRead, (v) => {
 onMounted(() => {
   if (canRead.value) void load()
 })
+directoryQuery.onClear(() => {
+  rows.value = []
+})
+directoryQuery.restrict(canRead)
 </script>
 <template>
   <MdmPage :title="t('profiles.title')" :busy="busy" :failure="failure">
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="fieldId / revision / key / displayName / sourceKind / provider / valueType / enabled / sensitive / required / visibility / displayUse"
+      @load="load"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy"
+      :required="['fieldId']"
+      :items="rows"
+      @open="
+        (row) => {
+          edit(String(row.fieldId))
+        }
+      "
+    />
+
     <p>{{ t('profiles.help') }}</p>
     <div class="settings-actions">
       <VBtn :disabled="busy || !canRead" @click="load()">{{ t('profiles.reload') }}</VBtn
@@ -118,16 +172,14 @@ onMounted(() => {
             <td>{{ row.value ? t('profiles.' + row.value.valueType) : '—' }}</td>
             <td>{{ t(row.value?.enabled ? 'profiles.true' : 'profiles.false') }}</td>
             <td>
-              <VBtn @click="selected = row">{{ t('profiles.edit') }}</VBtn>
+              <VBtn @click="edit(row.fieldId)">{{ t('profiles.edit') }}</VBtn>
             </td>
           </tr>
         </tbody>
       </VTable>
     </div>
     <p v-if="!rows.length && !busy">{{ t('profiles.unconfigured') }}</p>
-    <VBtn v-if="next" :disabled="busy" @click="load(next ?? undefined)">{{
-      t('profiles.next')
-    }}</VBtn>
+
     <section v-if="preview && profilePermission.canRead.value">
       <h2>{{ t('profiles.preview') }}</h2>
       <VForm class="settings-actions" @submit.prevent="sample = principal.trim()">

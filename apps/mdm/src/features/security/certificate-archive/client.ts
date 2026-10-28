@@ -4,11 +4,13 @@ import {
   windowParameters,
   windowPage,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 
 import {
+  type entryFields,
   page,
+  entry,
   vault,
   settings,
   receipt,
@@ -41,11 +43,23 @@ export function createCertificateArchiveClient(transport: HttpTransport, tenant:
         { headers: { 'Idempotency-Key': operation }, body: { oldPassword, newPassword } },
         (v) => receipt(v, operation),
       ),
-    list: (query: DirectoryQuery = {}) =>
+    list: <F extends keyof typeof entryFields = keyof typeof entryFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       api.getApiV1CertificateArchiveEntries(
         transport,
         { query: queryParameters({ limit: 50, ...query }) },
-        (v) => page(v, tenant),
+        (v) => page(v, tenant, query.fields),
+      ),
+    read: (id: string) =>
+      api.getApiV1CertificateArchiveEntriesByEntry(
+        transport,
+        { pathParams: { entry: id } },
+        (value) => {
+          const row = entry(value)
+          if (row.id !== id) throw new Error('Wrong entry')
+          return row
+        },
       ),
     history: (entry: string, query: { limit?: number; cursor?: string } = {}) =>
       api.getApiV1CertificateArchiveEntriesByEntryVersions(

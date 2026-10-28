@@ -5,8 +5,7 @@ import { array, count, identifier, integer, nullable, uuid } from '../../../serv
 import { deviceObject, type ObjectRef } from './objects'
 export function retirement(value: unknown, id: string) {
   if (!wireSchemas.getApiV1DeviceRetirementsByIdResponse.validateRoot(value))
-    throw new Error('Invalid contract value')
-
+    throw new Error('Invalid retirement')
   const v = value
   if (v['id'] !== id) throw new Error('Wrong retirement')
   return {

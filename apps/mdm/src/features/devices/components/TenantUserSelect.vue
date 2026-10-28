@@ -1,50 +1,65 @@
 <script setup lang="ts">
 import { VAlert, VAutocomplete, VBtn } from 'vuetify/components'
-import { ref, computed, watch } from 'vue'
-import { useIdentity } from '@rss/auth'
+import { computed, onMounted } from 'vue'
+import { useAccountDirectory } from '@rss/auth'
+import AccountQueryControls from '@rss/auth/account-query'
 import { useI18n } from 'vue-i18n'
-import { useMdm } from '../../../context'
-import { deviceBinding } from '../useDeviceBinding'
-import { useOperation } from '../../../services/useOperation'
 const props = defineProps<{ modelValue: string; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
-const { t } = useI18n(),
-  { api } = useIdentity(),
-  runtime = useMdm(),
-  { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
-const accounts = ref<Awaited<ReturnType<typeof api.accounts>>['accounts']>([])
-const cursor = ref<string | null>(null)
-function load(more = false) {
-  void run(
-    () => api.accounts(more ? (cursor.value ?? undefined) : undefined),
-    (v) => {
-      accounts.value = more ? [...accounts.value, ...v.accounts] : v.accounts
-      cursor.value = v.next
-    },
-  )
-}
+const { t } = useI18n()
+const {
+  rows,
+  query,
+  busy,
+  error,
+  errorMessage,
+  trail,
+  previous,
+  next,
+  load,
+  navigate,
+  run,
+  detail,
+} = useAccountDirectory()
 const options = computed(() => [
-  ...(props.modelValue && !accounts.value.some((a) => a.principalId === props.modelValue)
+  ...(props.modelValue && !rows.value.some((a) => a.principalId === props.modelValue)
     ? [{ value: props.modelValue, label: t('devices.linkedPerson'), disabled: false }]
     : []),
-  ...accounts.value.map((a) => ({
+  ...rows.value.map((a) => ({
     value: a.principalId,
-    label: a.login ?? t('devices.linkedPerson'),
-    disabled: !a.enabled || !a.memberActive,
+    label: `${a.displayName ?? a.email ?? a.login ?? a.principalId}${a.profileStatus ? ' · ' + a.profileStatus : ''}${a.departmentStatus ? ' · ' + a.departmentStatus : ''}`,
+    disabled: a.enabled === false || a.memberActive === false,
   })),
 ])
-watch(
-  () => JSON.stringify(deviceBinding(runtime)),
-  () => {
-    accounts.value = []
-    cursor.value = null
-    load()
-  },
-  { immediate: true, flush: 'sync' },
-)
+async function choose(value: unknown) {
+  if (typeof value !== 'string' || !value) {
+    emit('update:modelValue', '')
+    return
+  }
+  await run(async () => {
+    const account = await detail({ principalId: value })
+    if (account.enabled && account.memberActive) emit('update:modelValue', value)
+  })
+}
+onMounted(() => {
+  void run(() => load())
+})
 </script>
 <template>
-  <v-autocomplete
+  <AccountQueryControls
+    :query="query"
+    departments
+    :busy="busy || !!disabled"
+    :previous="!!trail.length"
+    :next="!!next"
+    @change="Object.assign(query, $event)"
+    @apply="run(() => load())"
+    @first="run(() => navigate())"
+    @previous="run(() => navigate(previous))"
+    @next="run(() => navigate(next ?? undefined))"
+  />
+  <VAutocomplete
+    no-filter
     :model-value="modelValue"
     :label="t('registration.user')"
     :items="options"
@@ -53,21 +68,10 @@ watch(
     :item-props="(item) => ({ disabled: !!item.disabled })"
     :no-data-text="t('devices.empty')"
     :disabled="!!disabled || busy"
-    @update:model-value="emit('update:modelValue', typeof $event === 'string' ? $event : '')"
+    @update:model-value="choose"
   />
-  <p class="device-help">{{ t('devices.loadedPeopleOnly') }}</p>
-  <v-alert v-if="failure" type="error" variant="tonal" role="alert">{{
-    t('devices.' + failure)
-  }}</v-alert>
-  <div class="console-toolbar">
-    <v-btn type="button" :disabled="!!disabled || busy" @click="emit('update:modelValue', '')">{{
-      t('registration.empty')
-    }}</v-btn
-    ><v-btn type="button" :disabled="!!disabled || busy" @click="load()">{{
-      t('devices.reload')
-    }}</v-btn
-    ><v-btn v-if="cursor" type="button" :disabled="!!disabled || busy" @click="load(true)">{{
-      t('registration.more')
-    }}</v-btn>
-  </div>
+  <VAlert v-if="error" type="error" variant="tonal" role="alert">{{ errorMessage }}</VAlert>
+  <VBtn type="button" :disabled="!!disabled || busy" @click="emit('update:modelValue', '')">{{
+    t('registration.empty')
+  }}</VBtn>
 </template>

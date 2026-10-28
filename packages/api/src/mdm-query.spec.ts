@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { count, identifier, nullable } from './decode'
-import { allOf, comparison, pageCursor, projectedPage, queryParameters } from './directory-query'
+const count = (value: unknown) => {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
+    throw new Error('Invalid count')
+  return value
+}
+const identifier = (value: unknown) => {
+  if (typeof value !== 'string' || !value) throw new Error('Invalid identifier')
+  return value
+}
+const nullable = <T>(value: unknown, decode: (value: unknown) => T) =>
+  value === null ? null : decode(value)
+import { allOf, comparison, pageCursor, projectedPage, queryParameters } from './mdm-query'
 
 describe('current directory protocol', () => {
   it('encodes literal filters and current continuation parameters without losing false or zero', () => {
@@ -54,4 +64,19 @@ describe('current directory protocol', () => {
     for (const row of [{}, { id: 'resource', revision: 1 }])
       expect(() => projectedPage({ items: [row], nextCursor: null }, codecs, ['id'])).toThrow()
   })
+})
+
+it('validates each filter independently so user syntax cannot escape fixed selector conditions', () => {
+  for (const fixed of ["kind=='relying_party'", "platform=='windows'", "status=='active'"]) {
+    for (const input of [
+      "id=='x'),(id=='other'",
+      "id=='x');(id=='other'",
+      "id=='unclosed",
+      "id=='x'),assetContext=='associated_device';(id!='x'",
+    ]) {
+      expect(() => allOf(fixed, input)).toThrow()
+    }
+    expect(allOf(fixed, "id=='x',id=='other'")).toBe(`(${fixed});(id=='x',id=='other')`)
+    expect(allOf(fixed, comparison('id', '==', "x'),(id=='other"))).toContain(fixed)
+  }
 })

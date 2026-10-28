@@ -1,4 +1,24 @@
-import { array, closed } from './decode'
+import { parseFilter } from './mdm-filter'
+
+function closed(
+  value: unknown,
+  keys: readonly string[],
+  optional: readonly string[] = [],
+): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw new Error('Invalid object')
+  const row = value as Record<string, unknown>
+  if (
+    keys.some((key) => !(key in row)) ||
+    Object.keys(row).some((key) => !keys.includes(key) && !optional.includes(key))
+  )
+    throw new Error('Invalid fields')
+  return row
+}
+function array<T>(value: unknown, decode: (item: unknown) => T): T[] {
+  if (!Array.isArray(value) || value.length > 1000) throw new Error('Invalid list')
+  return value.map(decode)
+}
 
 /** Current management directory wire. Resource capabilities remain with each client. */
 export interface DirectoryQuery<F extends string = string> {
@@ -117,7 +137,11 @@ export function comparison(
 }
 export function allOf(...terms: (string | undefined)[]): string | undefined {
   const present = terms.filter((term): term is string => term !== undefined && term !== '')
-  return present.length ? present.map((term) => `(${term})`).join(';') : undefined
+  if (!present.length) return undefined
+  present.forEach(parseFilter)
+  const filter = present.map((term) => `(${term})`).join(';')
+  parseFilter(filter)
+  return filter
 }
 
 export type WindowQuery = Pick<DirectoryQuery, 'limit' | 'cursor'>

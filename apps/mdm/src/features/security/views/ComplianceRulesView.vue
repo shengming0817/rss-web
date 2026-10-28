@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import { deviceBinding } from '../../devices/useDeviceBinding'
 import {
   VAlert,
@@ -32,6 +36,38 @@ import {
 } from '../clients/compliance-model'
 import ConditionEditor from '../../devices/components/ConditionEditor.vue'
 import MdmPage from '../../../ui/MdmPage.vue'
+const groupQuery = useDirectoryQuery(
+  [
+    'id',
+    'kind',
+    'systemSelector',
+    'assetContext',
+    'calculationRevision',
+    'presentation',
+    'revision',
+    'memberVersion',
+    'memberCount',
+    'ruleVersion',
+    'deleted',
+  ],
+  1000,
+)
+
+const directoryQuery = useDirectoryQuery(
+  [
+    'id',
+    'revision',
+    'definition',
+    'name',
+    'enabled',
+    'deleted',
+    'severity',
+    'platform',
+    'targetKind',
+  ],
+  50,
+)
+
 const editorOpen = ref(false)
 function beginCreate() {
   if (busy.value || uncertain.value) return
@@ -64,7 +100,7 @@ let pending: (() => Promise<void>) | undefined
 function load(after?: string) {
   list.value = undefined
   void run(
-    () => client.list({ cursor: after }),
+    () => directoryQuery.read(after, (query) => client.list(query), {}),
     (v) => (list.value = v),
   )
 }
@@ -182,16 +218,22 @@ function loadVersion() {
 }
 function groupPage(cursor?: string) {
   void run(
-    () => runtime.devices.groups.list({ cursor }),
-    (v) =>
-      (groups.value = {
-        ...v,
-        items: v.items.filter((group) => group.assetContext === 'endpoint'),
+    () =>
+      groupQuery.read(cursor, (query) => runtime.devices.groups.list(query), {
+        filter: "assetContext=='endpoint'",
       }),
+    (v) => (groups.value = v),
   )
 }
-function addGroup(group: string) {
-  if (!groups.value?.items.some((g) => g.id === group && g.assetContext === 'endpoint')) return
+async function addGroup(group: string) {
+  let allowed = false
+  const ok = await run(
+    () => runtime.devices.groups.read(group),
+    (value) => {
+      allowed = value.group.assetContext === 'endpoint'
+    },
+  )
+  if (!ok || !allowed) return
   groupIds.value = [...new Set([...groupIds.value.split(/\s+/).filter(Boolean), group])].join('\n')
 }
 function routeRule() {
@@ -232,6 +274,12 @@ onMounted(async () => {
   )
   if (route.fullPath === initial) routeRule()
 })
+directoryQuery.onClear(() => {
+  list.value = undefined
+})
+groupQuery.onClear(() => {
+  groups.value = undefined
+})
 </script>
 <template>
   <MdmPage
@@ -240,6 +288,40 @@ onMounted(async () => {
     :busy="busy"
     :failure="failure"
   >
+    <DirectoryControls
+      :query="groupQuery"
+      :busy="busy"
+      hint="id / revision / kind / assetContext / deleted / name / memberCount / calculationRevision / memberVersion"
+      @load="groupPage"
+    />
+    <DirectoryResults
+      v-if="!groupQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="groups?.items ?? []"
+      @open="
+        (row) => {
+          addGroup(String(row.id))
+        }
+      "
+    />
+
+    <DirectoryControls
+      :query="directoryQuery"
+      :busy="busy"
+      hint="筛选和排序：id / revision / name / enabled。"
+      @load="load"
+    />
+    <DirectoryResults
+      v-if="!directoryQuery.complete.value"
+      :disabled="busy || uncertain"
+      :items="list?.items ?? []"
+      @open="
+        (row) => {
+          open(String(row.id))
+        }
+      "
+    />
+
     <template #actions
       ><v-btn :disabled="busy || uncertain" data-testid="new-rule" @click="beginCreate">{{
         t('devices.create')
@@ -249,7 +331,7 @@ onMounted(async () => {
       }}</v-btn></template
     >
     <v-card class="mb-4"
-      ><v-table :aria-label="t('security.rules')"
+      ><v-table v-if="directoryQuery.complete.value" :aria-label="t('security.rules')"
         ><thead>
           <tr>
             <th>{{ t('devices.name') }}</th>
@@ -262,23 +344,17 @@ onMounted(async () => {
           <tr v-for="rule in list?.items" :key="rule.id">
             <td>
               <v-btn variant="text" :disabled="busy || uncertain" @click="open(rule.id)">{{
-                rule.definition.presentation.name
+                rule.definition?.presentation.name
               }}</v-btn>
             </td>
             <td>{{ rule.revision }}</td>
-            <td>{{ t(`security.severity.${rule.definition.severity}`) }}</td>
-            <td>{{ t(rule.definition.enabled ? 'security.enabled' : 'security.disabled') }}</td>
+            <td>{{ t(`security.severity.${rule.definition?.severity}`) }}</td>
+            <td>{{ t(rule.definition?.enabled ? 'security.enabled' : 'security.disabled') }}</td>
           </tr>
           <tr v-if="list && !list.items.length">
             <td colspan="4">{{ t('security.empty') }}</td>
           </tr>
         </tbody></v-table
-      ><v-btn
-        v-if="list?.nextCursor"
-        variant="text"
-        :disabled="busy"
-        @click="load(list.nextCursor)"
-        >{{ t('devices.next') }}</v-btn
       ></v-card
     >
     <v-expansion-panels class="mb-4"

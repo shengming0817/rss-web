@@ -8,12 +8,7 @@ import {
   validateFieldReferenceQuery,
 } from '@rss/api/mdm-validators'
 import type { FieldWrite } from '@rss/api/mdm-types'
-import {
-  queryParameters,
-  nextCursor,
-  projectedRow,
-  type DirectoryQuery,
-} from '../../../services/directory-query'
+import { queryParameters, nextCursor, projectedRow, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { Operation } from '../../../services/useOperation'
 /** Current rss-mdm asset contract. */
 import type { HttpTransport } from '@rss/api/mdm'
@@ -33,6 +28,7 @@ import {
   assetEnvelope,
   cursor,
   fieldDefinition,
+  assetFieldCodecs,
   fieldKey,
   inventory,
   savedQuery,
@@ -167,6 +163,13 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
     if (result.id !== id) throw new Error('Wrong saved query')
     return result
   }
+  function fieldRequest<T>(
+    query: DirectoryQuery<keyof typeof assetFieldCodecs>,
+    decode: (value: unknown) => T,
+  ) {
+    return api.getApiV1AssetFields(transport, { query: queryParameters(query) }, decode)
+  }
+
   return {
     fieldLayout: () =>
       api.getApiV1AssetFieldLayout(transport, {}, (v) => decodeFieldLayout(v, tenant)),
@@ -175,15 +178,34 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         const v = assetEnvelope(value, tenant, 'field_layout_written')
         return { revision: count(v['revision']) }
       }),
+    fields: <F extends keyof typeof assetFieldCodecs = keyof typeof assetFieldCodecs>(
+      query: DirectoryQuery<F> = {},
+    ) =>
+      fieldRequest({ limit: 50, ...query }, (value) => {
+        const page = assetEnvelope(value, tenant, 'field_list')
+        if (page['dictionary'] !== 'assets-v1') throw new Error('Wrong asset dictionary')
+        return {
+          items: array(page['items'], (item) => projectedRow(item, assetFieldCodecs, query.fields)),
+          nextCursor: nextCursor(page['nextCursor']),
+        }
+      }),
+    field: (key: string) =>
+      api.getApiV1AssetFieldsByField(
+        transport,
+        { pathParams: { field: fieldKey(key) } },
+        (value) => {
+          const row = fieldDefinition(assetEnvelope(value, tenant, 'field_descriptor')['field'])
+          if (row.key !== key) throw new Error('Wrong field')
+          return row
+        },
+      ),
     async catalog() {
       const fields: ReturnType<typeof fieldDefinition>[] = [],
         seen = new Set<string>()
       let cursor: string | undefined
       do {
-        const page = await api.getApiV1AssetFields(
-          transport,
-          { query: queryParameters({ limit: 100, cursor }) },
-          (v) => decodeCatalog(v, tenant),
+        const page = await fieldRequest({ limit: 100, cursor }, (value) =>
+          decodeCatalog(value, tenant),
         )
         fields.push(...page.items)
         if (fields.length > 1024) throw new Error('Invalid field catalog budget')

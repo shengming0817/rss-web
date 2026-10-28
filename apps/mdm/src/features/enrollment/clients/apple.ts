@@ -2,13 +2,16 @@ import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import {
   queryParameters,
-  windowPage,
-  nextCursor,
+  projectedPage,
+  projectedRow,
+  comparison,
   type DirectoryQuery,
-} from '../../../services/directory-query'
+} from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   array,
+  closed,
+  record,
   boolean,
   count,
   enumeration,
@@ -88,33 +91,64 @@ export function adeStatus(value: unknown, id: string) {
     externalDeviceVerification: 'not_observed' as const,
   }
 }
-export function appleOrganizations(value: unknown) {
-  if (!wireSchemas.getApiV1AppleOrganizationsResponse.validateRoot(value))
-    throw new Error('Invalid contract value')
-
-  return windowPage(value, (value) => {
-    const v = value,
-      id = uuid(v['id'])
-    const accountEnrollment = nullable(v['accountEnrollment'], (value) => {
-      if (!wireSchemas.getApiV1AppleOrganizationsResponse.validateAccountConfiguration(value))
-        throw new Error('Invalid account configuration')
-      const a = value
-      if (a['externalOrganizationVerification'] !== 'not_observed')
-        throw new Error('Invalid verification')
-      const d = domain(a['domain'])
-      return {
-        domain: d,
-        serverUuid: uuid(a['serverUuid']),
-        signingKey: bounded(a['signingKey'], 128),
-        enabled: a['enabled'],
-        revision: count(a['revision']),
-        signingKeyConfigured: a['signingKeyConfigured'],
-        externalOrganizationVerification: 'not_observed' as const,
-      }
-    })
-    return { id, accountEnrollment, ade: nullable(v['ade'], (value) => adeStatus(value, id)) }
+function accountEnrollment(value: unknown) {
+  return nullable(value, (value) => {
+    const a = closed(value, [
+      'domain',
+      'serverUuid',
+      'signingKey',
+      'enabled',
+      'revision',
+      'signingKeyConfigured',
+      'externalOrganizationVerification',
+    ])
+    if (a['externalOrganizationVerification'] !== 'not_observed')
+      throw new Error('Invalid verification')
+    const d = domain(a['domain'])
+    return {
+      domain: d,
+      serverUuid: uuid(a['serverUuid']),
+      signingKey: bounded(a['signingKey'], 128),
+      enabled: boolean(a['enabled']),
+      revision: count(a['revision']),
+      signingKeyConfigured: boolean(a['signingKeyConfigured']),
+      externalOrganizationVerification: 'not_observed' as const,
+    }
   })
 }
+const organizationFields = {
+  id: uuid,
+  accountEnrollment,
+  ade: (value: unknown) =>
+    nullable(value, (v) => {
+      const r = record(v)
+      return adeStatus(v, uuid(r['organizationId']))
+    }),
+}
+const accountFields = {
+  account,
+  principalId: uuid,
+  instanceId: uuid,
+  revision: count,
+  enabled: boolean,
+}
+const profileFields = {
+  id: uuid,
+  revision: count,
+  configuration: setup,
+  remoteUuid: (v: unknown) => nullable(v, uuid),
+}
+const deviceFields = {
+  serial: (v: unknown) => bounded(v, 128),
+  deleted: boolean,
+  profileUuid: (v: unknown) => nullable(v, uuid),
+  observedAt: count,
+  registration: (v: unknown) => enumeration(v, ['not_implied'] as const),
+}
+export function appleOrganizations(value: unknown) {
+  return projectedPage(value, organizationFields, undefined, ['id'])
+}
+
 export function setup(value: unknown) {
   if (!wireSchemas.getApiV1AppleOrganizationsByIdAdeProfilesResponse.validateSetup(value))
     throw new Error('Invalid contract value')
@@ -203,34 +237,56 @@ export function createAppleClient(transport: HttpTransport) {
     return result
   }
   return {
-    organizations: (query: DirectoryQuery = {}) =>
+    organizations: <F extends keyof typeof organizationFields = keyof typeof organizationFields>(
+      query: DirectoryQuery<F> = {},
+    ) =>
       api.getApiV1AppleOrganizations(
         transport,
         { query: queryParameters({ limit: 100, ...query }) },
-        appleOrganizations,
+        (v) => projectedPage(v, organizationFields, query.fields, ['id']),
       ),
-    accounts: (id: string, query: DirectoryQuery = {}) =>
+    accounts: <F extends keyof typeof accountFields = keyof typeof accountFields>(
+      id: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       api.getApiV1AppleOrganizationsByIdAccountEnrollmentAccounts(
         transport,
         { pathParams: params(id), query: queryParameters({ limit: 100, ...query }) },
-        (v) =>
-          windowPage(v, (value) => {
-            if (
-              !wireSchemas.getApiV1AppleOrganizationsByIdAccountEnrollmentAccountsResponse.validateProjection_Account(
-                value,
-              )
-            )
-              throw new Error('Invalid contract value')
-
-            const a = value
-            return {
-              account: account(a['account']),
-              principalId: uuid(a['principalId']),
-              instanceId: uuid(a['instanceId']),
-              revision: count(a['revision']),
-              enabled: boolean(a['enabled']),
-            }
-          }),
+        (v) => projectedPage(v, accountFields, query.fields, ['account']),
+      ),
+    accountConfiguration: (id: string) =>
+      api.getApiV1AppleOrganizationsByIdAccountEnrollment(
+        transport,
+        { pathParams: params(id) },
+        (value) => {
+          const result = accountEnrollment(value)
+          if (!result) throw new Error('Missing organization')
+          return result
+        },
+      ),
+    account: (id: string, name: string) =>
+      api.getApiV1AppleOrganizationsByIdAccountEnrollmentAccountsByAccount(
+        transport,
+        { pathParams: { ...params(id), account: account(name) } },
+        (value) => {
+          const row = projectedRow(value, accountFields)
+          if (row.account !== name) throw new Error('Wrong account')
+          return row
+        },
+      ),
+    profile: (id: string, profile: string) =>
+      api.getApiV1AppleOrganizationsByIdAdeProfiles(
+        transport,
+        {
+          pathParams: params(id),
+          query: queryParameters({ filter: comparison('id', '==', uuid(profile)), limit: 1 }),
+        },
+        (value) => {
+          const page = projectedPage(value, profileFields)
+          const row = page.items[0]
+          if (!row || row.id !== profile || page.nextCursor) throw new Error('Wrong profile')
+          return row
+        },
       ),
     accountOrganization: (id: string, operation: string, body: AccountOrganization) =>
       api.putApiV1AppleOrganizationsByIdAccountEnrollment(
@@ -294,46 +350,24 @@ export function createAppleClient(transport: HttpTransport) {
         { pathParams: { ...params(id), operation: uuid(operation) } },
         (v) => adeOperation(v, operation),
       ),
-    profiles: (id: string, query: DirectoryQuery = {}) =>
+    profiles: <F extends keyof typeof profileFields = keyof typeof profileFields>(
+      id: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       api.getApiV1AppleOrganizationsByIdAdeProfiles(
         transport,
         { pathParams: params(id), query: queryParameters({ limit: 100, ...query }) },
-        (v) =>
-          windowPage(v, (item) => {
-            const p = item
-            return {
-              id: uuid(p['id']),
-              revision: count(p['revision']),
-              configuration: setup(p['configuration']),
-              remoteUuid: nullable(p['remoteUuid'], uuid),
-            }
-          }),
+        (v) => projectedPage(v, profileFields, query.fields, ['id']),
       ),
-    devices: (id: string, query: DirectoryQuery = {}) =>
+    devices: <F extends keyof typeof deviceFields = keyof typeof deviceFields>(
+      id: string,
+      query: DirectoryQuery<F> = {},
+    ) =>
       api.getApiV1AppleOrganizationsByIdAdeDevices(
         transport,
-        { pathParams: params(id), query: queryParameters({ limit: 100, ...query }) },
-        (v) => {
-          const p = v
-          return {
-            items: unique(
-              array(p['items'], (value) => {
-                const d = value
-                if (d['registration'] !== 'not_implied') throw new Error('Invented registration')
-                return {
-                  serial: bounded(d['serial'], 128),
-                  deleted: boolean(d['deleted']),
-                  profileUuid: nullable(d['profileUuid'], uuid),
-                  observedAt: count(d['observedAt']),
-                  registration: 'not_implied' as const,
-                }
-              }),
-              (v) => v.serial,
-            ),
-            nextCursor: nextCursor(p['nextCursor']),
-          }
-        },
+        { pathParams: params(id), query: queryParameters({ limit: 50, ...query }) },
+        (value) => projectedPage(value, deviceFields, query.fields, ['serial']),
       ),
-    bridge: api.getApiV1AppleAccountEnrollmentAuthenticate.url({}),
+    bridge: '/api/v1/apple/account-enrollment/authenticate',
   }
 }

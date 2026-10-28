@@ -110,20 +110,26 @@ describe('native public DA adapters', () => {
     const f = setup()
     f.replies.push({
       items: [
-        { key: 'endpoint:pc', reference: { kind: 'endpoint', id: 'pc' }, endpoints: [endpoint()] },
         {
+          association: null,
+          key: 'endpoint:pc',
+          reference: { kind: 'endpoint', id: 'pc' },
+          endpoints: [endpoint()],
+        },
+        {
+          association: null,
           key: 'association:a',
           reference: { kind: 'association', id },
           endpoints: [endpoint()],
         },
       ],
-      nextCursor: 'next',
+      nextCursor: 'bmV4dA',
     })
-    const p = await f.client.computers(null, signal)
-    expect(p.items).toHaveLength(1)
-    expect(p.items[0]?.name).toBe('Office PC')
-    expect(p.nextCursor).toBe('next')
-    expect(f.requests[0]?.query?.['fields']).toBe('key,reference,endpoints')
+    const p = await f.client.computers({}, signal)
+    expect(p.summaries).toHaveLength(1)
+    expect(p.summaries?.[0]?.name).toBe('Office PC')
+    expect(p.nextCursor).toBe('bmV4dA')
+    expect(f.requests[0]?.query?.['fields']).toBeUndefined()
     f.replies.push({
       reference: { kind: 'endpoint', id: 'pc' },
       endpoints: [endpoint()],
@@ -223,7 +229,7 @@ describe('native public DA adapters', () => {
     const f = setup(),
       input = { operationId: id, expectedRevision: 1, action: { kind: 'reset_factors' as const } }
     f.replies.push({ items: [binding()], nextCursor: null }, binding(), binding(), binding())
-    expect((await f.client.bindings('pc', 'cursor', signal)).items).toHaveLength(1)
+    expect((await f.client.bindings('pc', { cursor: 'YWJj' }, signal)).items).toHaveLength(1)
     await f.client.changeBinding('pc', id, input, signal)
     expect(f.requests[1]?.body).toEqual(input)
     await f.client.bindingOperation('pc', id, signal)
@@ -241,7 +247,7 @@ describe('native public DA adapters', () => {
       { material: material(), secret: 'sensitive fixture' },
       { material: { ...material(), version: 5 }, secret: 'wrong' },
     )
-    expect((await f.client.materials('pc', null, signal)).items[0]).toEqual(m)
+    expect((await f.client.materials('pc', {}, signal)).summaries?.[0]).toEqual(m)
     expect(await f.client.reveal('pc', m, id, signal)).toBe('sensitive fixture')
     expect(f.requests[1]?.method).toBe('POST')
     expect(f.requests[1]?.path).toContain('/device-access/materials/')
@@ -327,7 +333,7 @@ describe('native public DA adapters', () => {
         },
       },
     )
-    expect((await f.client.applications(null, signal)).items[0]?.id).toBe('app')
+    expect((await f.client.applications({}, signal)).summaries?.[0]?.id).toBe('app')
     await expect(f.client.application(input, signal)).rejects.toBeInstanceOf(CapabilityUnavailable)
     await expect(f.client.applicationChallenge(input, signal)).rejects.toBeInstanceOf(
       CapabilityUnavailable,

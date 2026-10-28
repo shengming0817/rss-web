@@ -20,6 +20,10 @@ import { useAccountSecurity } from '@rss/auth'
 import MdmPage from '../../../ui/MdmPage.vue'
 const { t } = useI18n()
 const {
+  limit,
+  trail,
+  previous,
+  navigate,
   session,
   host,
   busy,
@@ -102,14 +106,18 @@ const {
             </VTable>
           </div>
         </div>
-        <VBtn
-          v-if="next"
-          :disabled="!!busy"
-          type="submit"
-          @click="run(() => load(next ?? undefined))"
-        >
-          {{ t('identity.more') }}
-        </VBtn></VWindowItem
+        <label
+          >{{ t('identity.pageSize')
+          }}<input v-model.number="limit" type="number" min="1" max="100" :disabled="busy"
+        /></label>
+        <VBtn :disabled="busy" @click="run(() => load())">{{ t('identity.apply') }}</VBtn>
+        <VBtn :disabled="busy" @click="run(() => navigate())">{{ t('identity.first') }}</VBtn>
+        <VBtn :disabled="busy || !trail.length" @click="run(() => navigate(previous))">{{
+          t('identity.previous')
+        }}</VBtn>
+        <VBtn :disabled="busy || !next" @click="run(() => navigate(next ?? undefined))">{{
+          t('identity.next')
+        }}</VBtn></VWindowItem
       ><VWindowItem value="security" eager
         ><section v-if="session.config.oidcEnabled" aria-labelledby="security-title">
           <h2 id="security-title">{{ t('identity.authentication') }}</h2>

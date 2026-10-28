@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { objectRef } from '../clients/objects'
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
-import { comparison, allOf } from '../../../services/directory-query'
+import { comparison, allOf } from '@rss/api/mdm-query'
 import { ref, watch, computed } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -29,18 +31,24 @@ const { t } = useI18n({ useScope: 'local', messages: groupMessages }),
   route = useRoute(),
   router = useRouter(),
   { run, busy, failure } = useOperation([], () => deviceBinding(runtime))
-const statisticsOperation = useOperation([], () => deviceBinding(runtime))
+const statisticsBinding = ref('')
+const statisticsOperation = useOperation(
+  [],
+  () => [...deviceBinding(runtime), statisticsBinding.value],
+  () => route.path,
+)
 const statistics = ref<Awaited<ReturnType<typeof runtime.devices.views.statistics>>>()
-let statisticsBinding = ''
 const page = ref<Awaited<ReturnType<typeof runtime.devices.views.list>>>(),
   search = ref(''),
   rsql = ref(''),
   platform = ref(''),
   assetState = ref(''),
-  limit = ref('20'),
+  limit = ref('50'),
   status = ref(''),
   channel = ref(''),
   source = ref(''),
+  serverFields = ref<string[]>(['key', 'reference', 'association', 'endpoints']),
+  acceptedFields = ref<string[]>(['key', 'reference', 'association', 'endpoints']),
   descending = ref(false),
   visibleColumns = ref([
     'reference',
@@ -60,19 +68,18 @@ const trail = computed(() => {
       ? [v]
       : []
 })
-function navigate(direction: number | 'previous' | 'next') {
+async function navigate(direction: number | 'previous' | 'next') {
   if (typeof direction === 'number') return
   const next =
     direction === 'next'
       ? [...trail.value, String(route.query['cursor'] ?? '')]
       : trail.value.slice(0, -1)
-  void router.push({
-    query: {
-      ...route.query,
-      cursor: direction === 'next' ? page.value?.nextCursor : trail.value.at(-1) || undefined,
-      trail: next,
-    },
-  })
+  const query = {
+    ...route.query,
+    cursor: direction === 'next' ? page.value?.nextCursor : trail.value.at(-1) || undefined,
+    trail: next,
+  }
+  if (await load(query)) await commitRoute(query)
 }
 async function applyFilters() {
   if (new TextEncoder().encode(search.value.trim()).length > 256 || /\p{Cc}/u.test(search.value)) {
@@ -90,62 +97,91 @@ async function applyFilters() {
     source: source.value || undefined,
     descending: descending.value ? 'true' : undefined,
     columns: visibleColumns.value,
+    fields: serverFields.value,
   })
+}
+let navigating = false
+async function commitRoute(query: LocationQueryRaw, replace = false) {
+  navigating = true
+  try {
+    await (replace ? router.replace({ query }) : router.push({ query }))
+  } finally {
+    navigating = false
+  }
 }
 async function queryFirstPage(query: LocationQueryRaw, replace = false) {
   if (busy.value) return
-  const before = route.fullPath
-  const location = { query: { ...query, cursor: undefined, trail: undefined } }
-  await (replace ? router.replace(location) : router.push(location))
-  if (route.fullPath === before) await loadRoute()
+  const candidate = { ...query, cursor: undefined, trail: undefined }
+  if (await load(candidate)) await commitRoute(candidate, replace)
 }
-async function load(cursor?: string) {
+function queryText(query: LocationQueryRaw, key: string) {
+  const value = query[key]
+  return typeof value === 'string' ? value : ''
+}
+function fieldsFor(query: LocationQueryRaw) {
+  const fields = query['fields']
+  return fields === undefined
+    ? (['key', 'reference', 'association', 'endpoints'] as const)
+    : (Array.isArray(fields) ? fields : [fields]).filter(
+        (field): field is 'key' | 'reference' | 'association' | 'endpoints' =>
+          ['key', 'reference', 'association', 'endpoints'].includes(String(field)),
+      )
+}
+async function load(query: LocationQueryRaw = route.query) {
+  if (busy.value) return false
   page.value = undefined
+  const cursor = queryText(query, 'cursor') || undefined
   const filter = allOf(
-    rsql.value.trim() || undefined,
-    search.value.trim() ? comparison('search', '=icontains=', search.value.trim()) : undefined,
-    ...(['platform', 'assetState', 'status', 'channel', 'source'] as const).map((key) => {
-      const value = { platform, assetState, status, channel, source }[key].value
-      return value ? comparison(key, '==', value) : undefined
-    }),
+    queryText(query, 'filter') || undefined,
+    queryText(query, 'search')
+      ? comparison('search', '=icontains=', queryText(query, 'search'))
+      : undefined,
+    ...(['platform', 'assetState', 'status', 'channel', 'source'] as const).map((key) =>
+      queryText(query, key) ? comparison(key, '==', queryText(query, key)) : undefined,
+    ),
   )
   const binding = JSON.stringify([deviceBinding(runtime), filter])
-  if (!cursor || !statistics.value || binding !== statisticsBinding) {
-    statisticsBinding = binding
+  if (!cursor || !statistics.value || binding !== statisticsBinding.value) {
+    statisticsBinding.value = binding
     statistics.value = undefined
     void statisticsOperation.run(
       () => runtime.devices.views.statistics(filter),
-      (v) => {
-        if (binding === statisticsBinding) statistics.value = v
+      (value) => {
+        if (binding === statisticsBinding.value) statistics.value = value
       },
     )
   }
-  await run(
+  const fields = fieldsFor(query)
+  const ok = await run(
     () =>
       runtime.devices.views.list({
         cursor,
         filter,
-        sort: [descending.value ? '-key' : 'key'],
-        fields: ['key', 'reference', 'association', 'endpoints'],
-        limit: Number(limit.value),
+        sort: [query['descending'] === 'true' ? '-key' : 'key'],
+        fields,
+        limit: Number(queryText(query, 'limit') || '50'),
       }),
-    (v) => {
-      page.value = v
+    (value) => {
+      page.value = value
+      acceptedFields.value = [...fields]
     },
   )
-  if (['denied', 'cursorInvalidated', 'conflict'].includes(failure.value ?? '')) {
-    statisticsBinding = ''
+  if (!ok) {
+    statisticsBinding.value = ''
     statistics.value = undefined
   }
+  return ok
+}
+function readProjected(row: Record<string, unknown>) {
+  if (!row['reference']) return
+  void router.push(detail({ reference: objectRef(row['reference']) }))
 }
 function loadRoute() {
   rsql.value = typeof route.query['filter'] === 'string' ? route.query['filter'] : ''
   search.value = typeof route.query['search'] === 'string' ? route.query['search'] : ''
   platform.value = typeof route.query['platform'] === 'string' ? route.query['platform'] : ''
   assetState.value = typeof route.query['assetState'] === 'string' ? route.query['assetState'] : ''
-  limit.value = ['20', '50', '100'].includes(String(route.query['limit']))
-    ? String(route.query['limit'])
-    : '20'
+  limit.value = typeof route.query['limit'] === 'string' ? route.query['limit'] : '50'
   status.value = typeof route.query['status'] === 'string' ? route.query['status'] : ''
   channel.value = typeof route.query['channel'] === 'string' ? route.query['channel'] : ''
   source.value = typeof route.query['source'] === 'string' ? route.query['source'] : ''
@@ -168,13 +204,20 @@ function loadRoute() {
         ),
       ]),
     ]
+  serverFields.value = [...fieldsFor(route.query)]
   page.value = undefined
-  return load(typeof route.query['cursor'] === 'string' ? route.query['cursor'] : undefined)
+  return load(route.query)
 }
-watch(() => [route.fullPath, ...deviceBinding(runtime)], loadRoute, {
-  immediate: true,
-  flush: 'sync',
-})
+watch(
+  () => [route.fullPath, ...deviceBinding(runtime)],
+  () => {
+    if (!navigating) void loadRoute()
+  },
+  {
+    immediate: true,
+    flush: 'sync',
+  },
+)
 type Row = NonNullable<typeof page.value>['items'][number]
 const columns = computed(() =>
   [
@@ -189,7 +232,7 @@ const columns = computed(() =>
   ].filter((c) => visibleColumns.value.includes(c.key)),
 )
 const rowKey = (item: Row) => `${item.reference.kind}:${item.reference.id}`
-function detail(item: Row) {
+function detail(item: Pick<Row, 'reference'>) {
   return item.reference.kind === 'endpoint'
     ? {
         name: 'device-detail',
@@ -302,11 +345,21 @@ const sourceOptions = computed(() => [
             item-title="label"
             :disabled="busy"
           />
-          <v-select
+          <v-text-field
             v-model="limit"
+            type="number"
+            min="1"
+            max="100"
+            required
             data-testid="directory-limit"
             :label="t('devices.pageSize')"
-            :items="['20', '50', '100']"
+            :disabled="busy"
+          />
+          <v-select
+            v-model="serverFields"
+            multiple
+            :items="['key', 'reference', 'association', 'endpoints']"
+            :label="t('devices.columns')"
             :disabled="busy"
           />
           <v-checkbox v-model="descending" :label="t('devices.descending')" :disabled="busy" />
@@ -355,7 +408,17 @@ const sourceOptions = computed(() => [
       </article>
     </div>
     <div class="console-results device-directory">
-      <v-table v-if="page || busy" :aria-label="t('devices.directory')">
+      <DirectoryResults
+        v-if="page && acceptedFields.length < 4"
+        :disabled="busy"
+        :required="['reference']"
+        :items="page.items"
+        @open="readProjected"
+      />
+      <v-table
+        v-if="acceptedFields.length === 4 && (page || busy)"
+        :aria-label="t('devices.directory')"
+      >
         <thead>
           <tr>
             <th v-for="column in columns" :key="column.key" scope="col">{{ column.label }}</th>
@@ -459,6 +522,9 @@ const sourceOptions = computed(() => [
       class="device-pagination"
       :aria-label="t('devices.directory')"
     >
+      <v-btn variant="outlined" :disabled="busy" @click="queryFirstPage(route.query)">{{
+        t('devices.reload')
+      }}</v-btn>
       <v-btn variant="outlined" :disabled="busy || !trail.length" @click="navigate('previous')">{{
         t('devices.previous')
       }}</v-btn>

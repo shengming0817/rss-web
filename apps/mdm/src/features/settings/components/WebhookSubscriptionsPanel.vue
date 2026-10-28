@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import MdmDisclosure from '../../../ui/MdmDisclosure.vue'
 import { VBtn, VCard, VCheckbox, VForm, VSelect, VTextField, VTextarea } from 'vuetify/components'
 import { ref, toRaw } from 'vue'
@@ -14,6 +18,29 @@ import {
   type Subscription,
   type Delivery,
 } from '../clients/webhookSubscriptions'
+const deliveryQuery = useDirectoryQuery(
+  [
+    'id',
+    'eventId',
+    'subscriptionId',
+    'targetVersion',
+    'recoveryVersion',
+    'attempts',
+    'status',
+    'sourceDelivery',
+    'redriveWindowOpen',
+    'transportObservation',
+    'failureStage',
+    'failureReason',
+  ],
+  1000,
+)
+
+const subscriptionQuery = useDirectoryQuery(
+  ['id', 'revision', 'targetVersion', 'enabled', 'deleted', 'settings'],
+  1000,
+)
+
 const runtime = useMdm(),
   client = runtime.settings.subscriptions,
   { t } = useI18n()
@@ -59,9 +86,19 @@ function apply(s: Subscription) {
   keyReference.value = s.settings.keyReference
   networkReference.value = s.settings.networkReference
 }
+function openSubscription(row: Record<string, unknown>) {
+  if (typeof row['id'] === 'string') {
+    id.value = row['id']
+    void read()
+  }
+}
 async function load(after?: string) {
   await run(
-    async () => ({ rows: await client.list({ cursor: after }), types: await client.types() }),
+    async () => {
+      const types = await client.types()
+      const rows = await subscriptionQuery.read(after, (query) => client.list(query))
+      return { rows, types }
+    },
     (v) => {
       rows.value = v.rows.items
       nextCursor.value = v.rows.nextCursor
@@ -142,7 +179,7 @@ function transition(kind: 'enabled' | 'delete') {
 async function loadDeliveries(after?: string) {
   deliveries.value = undefined
   await run(
-    () => client.deliveries({ cursor: after }),
+    () => deliveryQuery.read(after, (query) => client.deliveries(query)),
     (v) => {
       deliveries.value = v
     },
@@ -178,8 +215,48 @@ async function compare() {
 function restore() {
   if (pending.value?.state === 'unknown') void execute(pending.value.input as WebhookIntent, true)
 }
+subscriptionQuery.onClear(() => {
+  rows.value = []
+})
+deliveryQuery.onClear(() => {
+  deliveries.value = undefined
+})
 </script>
 <template>
+  <DirectoryControls
+    :query="deliveryQuery"
+    :busy="busy"
+    hint="id / eventId / subscriptionId / targetVersion / recoveryVersion / attempts / status"
+    @load="loadDeliveries"
+  />
+  <DirectoryResults
+    v-if="!deliveryQuery.complete.value"
+    :disabled="busy || locked"
+    :items="deliveries?.items ?? []"
+    @open="
+      (row) => {
+        readDelivery(String(row.id))
+      }
+    "
+  />
+
+  <DirectoryControls
+    :query="subscriptionQuery"
+    :busy="busy"
+    hint="id / revision / targetVersion / enabled / deleted"
+    @load="load"
+  />
+  <DirectoryResults
+    v-if="!subscriptionQuery.complete.value"
+    :disabled="busy || locked"
+    :items="rows"
+    @open="
+      (row) => {
+        openSubscription(row)
+      }
+    "
+  />
+
   <VCard
     class="console-panel"
     data-panel="webhooks"
@@ -192,7 +269,7 @@ function restore() {
     <VBtn :disabled="busy || !canRead" @click="load()">{{ t('gap.load') }}</VBtn
     ><VBtn :disabled="locked || !canWrite" @click="fresh">{{ t('gap.create') }}</VBtn>
     <ul>
-      <li v-for="s in rows" :key="s.id">
+      <li v-for="s in subscriptionQuery.complete.value ? rows : []" :key="s.id">
         <VBtn
           :disabled="locked"
           @click="
@@ -205,8 +282,7 @@ function restore() {
         >
       </li>
     </ul>
-    <VBtn v-if="nextCursor" :disabled="busy" @click="load(nextCursor!)">{{ t('gap.next') }}</VBtn
-    ><VForm :novalidate="false" @submit.prevent="save"
+    <VForm :novalidate="false" @submit.prevent="save"
       ><fieldset :disabled="locked || !canWrite || !!selected?.deleted">
         <VTextField
           v-model="id"
@@ -310,18 +386,13 @@ function restore() {
     <h3>{{ t('gap.deliveries') }}</h3>
     <VBtn :disabled="busy || !canRead" @click="loadDeliveries()">{{ t('gap.load') }}</VBtn>
     <ul>
-      <li v-for="d in deliveries?.items" :key="d.id">
+      <li v-for="d in deliveryQuery.complete.value ? deliveries?.items : []" :key="d.id">
         <VBtn :disabled="busy" @click="readDelivery(d.id)"
           >{{ d.id }} · {{ d.status }} · {{ d.transportObservation ?? '—' }}</VBtn
         >
       </li>
     </ul>
-    <VBtn
-      v-if="deliveries?.nextCursor"
-      :disabled="busy"
-      @click="loadDeliveries(deliveries.nextCursor)"
-      >{{ t('gap.next') }}</VBtn
-    >
+
     <article v-if="currentDelivery">
       <h4>{{ currentDelivery.id }} · {{ currentDelivery.status }}</h4>
       <p>

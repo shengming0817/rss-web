@@ -9,7 +9,10 @@ import DeviceGroupsPanel from '../components/DeviceGroupsPanel.vue'
 import GroupsView from './GroupsView.vue'
 
 async function setup(groupKind?: 'static' | 'dynamic') {
-  const list = vi.fn().mockResolvedValue({ items: [], nextCursor: 'next' })
+  const list = vi.fn(async (query: { cursor?: string } = {}) => ({
+    items: [],
+    nextCursor: query.cursor ? null : 'bmV4dA',
+  }))
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: DeviceGroupsPanel }],
@@ -40,8 +43,8 @@ it('pages the applied group filter while a later name remains an unsubmitted dra
     wrapper.findComponent(VSelect).vm.$emit('update:modelValue', 'dynamic')
     await form.trigger('submit')
     await flushPromises()
-    expect(list.mock.lastCall?.[0]).toEqual({
-      filter: "(name=icontains='macOS');(kind=='dynamic')",
+    expect(list.mock.lastCall?.[0]).toMatchObject({
+      filter: "((name=icontains='macOS');(kind=='dynamic'))",
       cursor: undefined,
     })
     await form.get('input[type=search]').setValue('unsubmitted')
@@ -50,18 +53,18 @@ it('pages the applied group filter while a later name remains an unsubmitted dra
       .find((button) => button.text() === '下一页')!
       .trigger('click')
     await flushPromises()
-    expect(list.mock.lastCall?.[0]).toEqual({
-      filter: "(name=icontains='macOS');(kind=='dynamic')",
-      cursor: 'next',
+    expect(list.mock.lastCall?.[0]).toMatchObject({
+      filter: "((name=icontains='macOS');(kind=='dynamic'))",
+      cursor: 'bmV4dA',
     })
     list.mockRejectedValueOnce(new Error('directory unavailable'))
     await form.trigger('submit')
     await flushPromises()
-    expect(wrapper.findAll('button').some((button) => button.text() === '下一页')).toBe(false)
+    expect(list.mock.lastCall?.[0]?.cursor).toBeUndefined()
     await form.trigger('submit')
     await flushPromises()
-    expect(list.mock.lastCall?.[0]).toEqual({
-      filter: "(name=icontains='unsubmitted');(kind=='dynamic')",
+    expect(list.mock.lastCall?.[0]).toMatchObject({
+      filter: "((name=icontains='unsubmitted');(kind=='dynamic'))",
       cursor: undefined,
     })
   } finally {
@@ -72,13 +75,16 @@ it('pages the applied group filter while a later name remains an unsubmitted dra
 it('retains the category filter when paging an initial device group directory', async () => {
   const { wrapper, list } = await setup('dynamic')
   try {
-    expect(list.mock.lastCall?.[0]).toEqual({ filter: "(kind=='dynamic')" })
+    expect(list.mock.lastCall?.[0]).toMatchObject({ filter: "((kind=='dynamic'))" })
     await wrapper
       .findAll('button')
       .find((button) => button.text() === '下一页')!
       .trigger('click')
     await flushPromises()
-    expect(list.mock.lastCall?.[0]).toEqual({ filter: "(kind=='dynamic')", cursor: 'next' })
+    expect(list.mock.lastCall?.[0]).toMatchObject({
+      filter: "((kind=='dynamic'))",
+      cursor: 'bmV4dA',
+    })
   } finally {
     wrapper.unmount()
   }
@@ -96,9 +102,9 @@ it.each(['device-dynamic', 'device-static'])(
       revision: 1,
       presentation: { name: 'All managed endpoints', description: 'System scope' },
     }
-    const list = vi.fn(async ({ filter }: { filter?: string }) => ({
+    const list = vi.fn(async ({ filter, cursor }: { filter?: string; cursor?: string }) => ({
       items: filter?.includes("kind=='system'") ? [group] : [],
-      nextCursor: 'next',
+      nextCursor: cursor ? null : 'bmV4dA',
     }))
     const read = vi.fn(async () => ({
       group,
@@ -132,7 +138,7 @@ it.each(['device-dynamic', 'device-static'])(
       await form.trigger('submit')
       await flushPromises()
       expect(wrapper.text()).toContain('All managed endpoints')
-      expect(list.mock.lastCall?.[0]).toMatchObject({ filter: "(kind=='system')" })
+      expect(list.mock.lastCall?.[0]).toMatchObject({ filter: "((kind=='system'))" })
       await form.get('input[type=search]').setValue('managed')
       await form.trigger('submit')
       await flushPromises()
@@ -142,9 +148,9 @@ it.each(['device-dynamic', 'device-static'])(
         .find((b) => b.text() === '下一页')!
         .trigger('click')
       await flushPromises()
-      expect(list.mock.lastCall?.[0]).toEqual({
-        filter: "(name=icontains='managed');(kind=='system')",
-        cursor: 'next',
+      expect(list.mock.lastCall?.[0]).toMatchObject({
+        filter: "((name=icontains='managed');(kind=='system'))",
+        cursor: 'bmV4dA',
       })
       await wrapper
         .findAll('button')

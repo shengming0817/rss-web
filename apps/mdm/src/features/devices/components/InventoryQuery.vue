@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import { encodeAssetQuery, decodeAssetCondition } from '../clients/asset-query'
 import { deviceBinding } from '../useDeviceBinding'
 import {
@@ -22,6 +26,27 @@ import { groupMessages } from '../group-i18n'
 import ConditionEditor from '../components/ConditionEditor.vue'
 import { type InventoryCondition } from '../clients/asset-model'
 import AssetValue from '../components/AssetValue.vue'
+const fieldQuery = useDirectoryQuery(
+  [
+    'itemKey',
+    'key',
+    'manual',
+    'nullable',
+    'operations',
+    'platforms',
+    'searchable',
+    'sensitivity',
+    'sources',
+    'timeSeries',
+    'unit',
+    'valueType',
+    'version',
+  ],
+  1000,
+)
+
+const directoryQuery = useDirectoryQuery(['id', 'revision', 'name', 'deleted', 'definition'], 100)
+
 const { t } = useI18n({ useScope: 'local', messages: groupMessages }),
   runtime = useMdm(),
   route = useRoute(),
@@ -32,27 +57,28 @@ const { t } = useI18n({ useScope: 'local', messages: groupMessages }),
     () => route.path,
   )
 onBeforeRouteLeave(() => !uncertain.value && !(busy.value && pending))
+const fieldPage = ref<Awaited<ReturnType<typeof client.fields>>>(),
+  selectedField = ref<FieldDefinition>()
+function loadFields(after?: string) {
+  void run(
+    () => fieldQuery.read(after, (query) => client.fields(query)),
+    (page) => {
+      fieldPage.value = page
+    },
+  )
+}
+function readField(key: string) {
+  void run(
+    () => client.field(key),
+    (field) => {
+      selectedField.value = field
+    },
+  )
+}
 const fields = ref<FieldDefinition[]>([]),
   criteria = ref<InventoryCondition | null>(null),
   select = ref<string[]>([]),
   sortTerms = ref<QueryInput['sort']>([])
-const sort = computed({
-    get: () => sortTerms.value[0]?.field ?? '',
-    set: (field: string) => {
-      sortTerms.value = field
-        ? [
-            { field, descending: descending.value },
-            ...sortTerms.value.slice(1).filter((term) => term.field !== field),
-          ]
-        : []
-    },
-  }),
-  descending = computed({
-    get: () => sortTerms.value[0]?.descending ?? false,
-    set: (value: boolean) => {
-      if (sortTerms.value[0]) sortTerms.value[0].descending = value
-    },
-  })
 const encodedFilter = computed(() => {
   try {
     return encodeAssetQuery(criteria.value, [...select.value], sortTerms.value).filter ?? ''
@@ -131,11 +157,11 @@ function loadFacets(next?: string) {
 function loadSaved(after?: string) {
   saved.value = undefined
   void run(
-    () => client.saved({ cursor: after }),
+    () => directoryQuery.read(after, (query) => client.saved(query), {}),
     (v) => (saved.value = v),
   )
 }
-function load(item: SavedQuery) {
+function load(item: Pick<SavedQuery, 'id'>) {
   if (busy.value || uncertain.value) return
   void run(
     () => client.readSaved(item.id),
@@ -208,8 +234,58 @@ function newSaved() {
   current.value = undefined
   name.value = ''
 }
+directoryQuery.onClear(() => {
+  saved.value = undefined
+})
+fieldQuery.onClear(() => {
+  fieldPage.value = undefined
+  selectedField.value = undefined
+})
 </script>
 <template>
+  <p v-if="selectedField">
+    {{ selectedField.key }} · {{ selectedField.kind }} · {{ selectedField.operations.join(', ')
+    }}<VBtn
+      :disabled="busy || uncertain"
+      @click="select = [...new Set([...select, selectedField!.key])]"
+      >{{ t('devices.columns') }} +</VBtn
+    >
+  </p>
+  <DirectoryControls
+    :query="fieldQuery"
+    :busy="busy"
+    hint="key / version / nullable / manual / searchable / sensitivity"
+    @load="loadFields"
+  />
+  <DirectoryResults
+    v-if="fieldPage"
+    :disabled="busy || uncertain"
+    :required="['key']"
+    :items="fieldPage?.items ?? []"
+    @open="
+      (row) => {
+        readField(String(row.key))
+      }
+    "
+  />
+
+  <DirectoryControls
+    :query="directoryQuery"
+    :busy="busy"
+    hint="id / revision / name / deleted"
+    @load="loadSaved"
+  />
+  <DirectoryResults
+    v-if="!directoryQuery.complete.value"
+    :disabled="busy || uncertain"
+    :items="saved?.items ?? []"
+    @open="
+      (row) => {
+        load({ id: String(row.id) })
+      }
+    "
+  />
+
   <section :aria-label="t('groupModule.advanced')" :aria-busy="busy">
     <p>{{ t('groupModule.advancedHint') }}</p>
     <p>{{ t('devices.noTtl') }}</p>
@@ -218,15 +294,36 @@ function newSaved() {
       <fieldset :disabled="busy || uncertain">
         <ConditionEditor v-model="criteria" :fields="fields" />
         <v-text-field :model-value="encodedFilter" label="RSQL" readonly />
-        <v-select
-          v-model="sort"
-          :label="t('devices.sort')"
-          :items="[
-            { value: '', title: '—' },
-            ...fields.map((field) => ({ value: field.key, title: field.key })),
-          ]"
-        />
-        <v-checkbox v-model="descending" :label="t('devices.descending')" />
+        <div v-for="(term, index) in sortTerms" :key="index" class="console-toolbar">
+          <v-select
+            v-model="term.field"
+            :label="t('devices.sort')"
+            :items="fields.map((field) => ({ value: field.key, title: field.key }))"
+          />
+          <v-checkbox v-model="term.descending" :label="t('devices.descending')" />
+          <v-btn
+            type="button"
+            :disabled="index === 0"
+            @click="sortTerms.splice(index - 1, 0, sortTerms.splice(index, 1)[0]!)"
+            >↑</v-btn
+          >
+          <v-btn type="button" @click="sortTerms.splice(index, 1)">{{
+            t('policies.remove')
+          }}</v-btn>
+        </div>
+        <v-btn
+          type="button"
+          :disabled="sortTerms.length >= 16"
+          @click="
+            sortTerms.push({
+              field:
+                fields.find((field) => !sortTerms.some((term) => term.field === field.key))?.key ??
+                '',
+              descending: false,
+            })
+          "
+          >{{ t('devices.sort') }} +</v-btn
+        >
         <v-select
           v-model="select"
           multiple
@@ -326,15 +423,13 @@ function newSaved() {
         ><v-expansion-panel-text eager>
           <v-btn :disabled="busy" @click="loadSaved()">{{ t('devices.reload') }}</v-btn>
           <ul>
-            <li v-for="item in saved?.items" :key="item.id">
+            <li v-for="item in directoryQuery.complete.value ? saved?.items : []" :key="item.id">
               <v-btn :disabled="busy || uncertain" @click="load(item)"
                 >{{ item.definition?.name }} · {{ item.revision }}</v-btn
               >
             </li>
           </ul>
-          <v-btn v-if="saved?.nextCursor" :disabled="busy" @click="loadSaved(saved.nextCursor)">{{
-            t('devices.next')
-          }}</v-btn>
+
           <p v-if="current">
             {{ current.id }} · {{ t('devices.revision') }} {{ current.revision }} ·
             {{ current.definition ? '' : t('devices.state.deleted') }}

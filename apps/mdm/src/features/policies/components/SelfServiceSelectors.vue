@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import DirectoryControls from '../../../ui/DirectoryControls.vue'
+import { QueryRows as DirectoryResults } from '@rss/core'
+import { useDirectoryQuery } from '../../../services/useDirectoryQuery'
+
 import PolicyFieldset from './PolicyFieldset.vue'
 import { VBtn, VSelect, VTextField } from 'vuetify/components'
 
 import { ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMdm } from '../../../context'
+import { deviceBinding } from '../../devices/useDeviceBinding'
 import { useOperation } from '../../../services/useOperation'
 import TenantUserSelect from '../../devices/components/TenantUserSelect.vue'
 import {
@@ -12,12 +17,16 @@ import {
   selfServiceSelector,
   type SelfServiceSelector,
 } from '../clients/self-service-access'
+const groupQuery = useDirectoryQuery(
+  ['id', 'revision', 'deleted', 'name', 'enabled', 'memberCount', 'value'],
+  1000,
+)
+
 const model = defineModel<SelfServiceSelector[]>({ required: true })
 const { t } = useI18n(),
   id = useId(),
   runtime = useMdm(),
   client = runtime.operations.authorization
-const { run, busy, failure } = useOperation()
 const kind = ref<SelfServiceSelector['kind']>('user'),
   principal = ref(''),
   selectedId = ref(''),
@@ -25,11 +34,12 @@ const kind = ref<SelfServiceSelector['kind']>('user'),
   issuer = ref(''),
   configurationVersion = ref(1),
   matching = ref<'exact' | 'subtree'>('exact')
+const { run, busy, failure } = useOperation([], () => [...deviceBinding(runtime), kind.value])
 const instance = ref(''),
   groups = ref<Awaited<ReturnType<typeof client.groups>>['items']>([]),
   cursor = ref<string | null>(null),
   departments = ref<Awaited<ReturnType<typeof client.departments>>>()
-function load(more = false) {
+function load(after?: string) {
   const selected = kind.value
   void run(
     async () => {
@@ -37,7 +47,7 @@ function load(more = false) {
       if (selected === 'user_group')
         return {
           kind: selected,
-          value: await client.groups({ cursor: more ? (cursor.value ?? undefined) : undefined }),
+          value: await groupQuery.read(after, (query) => client.groups(query)),
         }
       if (selected === 'department') return { kind: selected, value: await client.departments() }
       return { kind: 'idp_group' as const, value: undefined }
@@ -46,7 +56,8 @@ function load(more = false) {
       if (selected !== kind.value) return
       if (result.kind === 'user') instance.value = result.value.instanceId
       else if (result.kind === 'user_group') {
-        groups.value = more ? [...groups.value, ...result.value.items] : result.value.items
+        projectedGroups.value = result.value.items
+        groups.value = groupQuery.complete.value ? result.value.items : []
         cursor.value = result.value.nextCursor
       } else if (result.kind === 'department') departments.value = result.value
     },
@@ -63,7 +74,21 @@ watch(
   },
   { immediate: true },
 )
-function add() {
+const projectedGroups = ref<object[]>([])
+async function add() {
+  let availableGroup = false
+  if (kind.value === 'user_group') {
+    const ok = await run(
+      () => client.group(selectedId.value),
+      (group) => {
+        availableGroup = group.value?.enabled === true
+      },
+    )
+    if (!ok || !availableGroup) {
+      failure.value = 'invalidRequest'
+      return
+    }
+  }
   try {
     let value: unknown
     if (kind.value === 'user')
@@ -74,8 +99,7 @@ function add() {
         principalId: principal.value,
       }
     else if (kind.value === 'user_group') {
-      if (!groups.value.some((g) => g.id === selectedId.value && g.value?.enabled))
-        throw new Error('Unavailable group')
+      if (!availableGroup) throw new Error('Unavailable group')
       value = { kind: 'user_group', id: selectedId.value }
     } else if (kind.value === 'department') {
       const d = departments.value
@@ -120,8 +144,31 @@ function label(s: SelfServiceSelector) {
       : ''
   return `${t(`policies.selfService.selector_${s.kind}`)}: ${coordinate}${origin}${s.kind === 'department' ? ` (${t(`policies.selfService.${s.matching}`)})` : ''}`
 }
+groupQuery.onClear(() => {
+  groups.value = []
+  projectedGroups.value = []
+})
+groupQuery.bind(kind)
 </script>
 <template>
+  <DirectoryControls
+    v-if="kind === 'user_group'"
+    :query="groupQuery"
+    :busy="busy"
+    hint="id / revision / deleted / name / enabled / memberCount"
+    @load="load"
+  />
+  <DirectoryResults
+    v-if="kind === 'user_group' && !groupQuery.complete.value"
+    :disabled="busy"
+    :items="projectedGroups"
+    @open="
+      (row) => {
+        selectedId = String(row.id)
+      }
+    "
+  />
+
   <PolicyFieldset>
     <legend>{{ t('policies.selfService.users') }}</legend>
     <p>{{ t('policies.selfService.anySelector') }}</p>
@@ -172,7 +219,7 @@ function label(s: SelfServiceSelector) {
         density="comfortable"
         hide-details="auto"
       />
-      <VBtn v-if="cursor" type="button" :disabled="!!busy" @click="load(true)">
+      <VBtn v-if="cursor" type="button" :disabled="!!busy" @click="load(cursor ?? undefined)">
         {{ t('policies.next') }}
       </VBtn>
     </template>
