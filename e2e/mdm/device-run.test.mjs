@@ -16,8 +16,9 @@ async function waitFor(predicate) {
   }
 }
 async function exercise(failure, feature) {
-  const backendEnv = `MDM_${feature.toUpperCase()}_BACKEND`,
-    group = `${feature}-browser`
+  const react = feature === 'react-devices-enrollment',
+    backendEnv = react ? 'MDM_REACT_DEVICES_BACKEND' : `MDM_${feature.toUpperCase()}_BACKEND`,
+    group = react ? 'react-devices-browser' : `${feature}-browser`
   const backend = mkdtempSync(resolve(tmpdir(), `mdm-${feature}-lifecycle-`))
   const bin = resolve(backend, 'bin'),
     recovery = resolve(backend, `artifacts/dev-environment/${group}`)
@@ -30,7 +31,7 @@ async function exercise(failure, feature) {
 const fs = require('node:fs'), path = require('node:path')
 const args = process.argv.slice(2), base = process.env['${backendEnv}']
 const compose = '${feature}' === 'settings' && args.includes('--cleanup-compose')
-const device = '${feature}' === 'device' && args.some((arg) => arg.endsWith('/device-cleanup.py'))
+const device = ['device', 'react-devices-enrollment'].includes('${feature}') && args.some((arg) => arg.endsWith('/device-cleanup.py'))
 if (args.includes('reset') || device || compose || ('${feature}' === 'settings' && args.includes('-c'))) {
   const target = args.includes('-c')
   if (device ? args.at(-2) !== new URL('./device-cleanup.py', 'file://' + process.env.WEB_ROOT + '/e2e/mdm/').pathname || args.at(-1) !== process.env.WEB_ROOT : compose ? args.at(-1) !== '--cleanup-compose' || !args.at(-3).endsWith('/settings-fixture.py') : target ? !args.at(-1).includes("group='settings-browser-target'") : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
@@ -56,7 +57,7 @@ if (args.includes('reset') || device || compose || ('${feature}' === 'settings' 
   )
   const child = spawn(
     process.execPath,
-    [fileURLToPath(new URL(`./${feature}-run.mjs`, import.meta.url))],
+    [fileURLToPath(new URL(`./${feature}-run.mjs`, import.meta.url)), ...(react ? ['device'] : [])],
     {
       env: {
         ...process.env,
@@ -116,7 +117,7 @@ if (args.includes('reset') || device || compose || ('${feature}' === 'settings' 
     rmSync(backend, { recursive: true, force: true })
   }
 }
-for (const feature of ['device', 'software', 'settings']) {
+for (const feature of ['device', 'software', 'settings', 'react-devices-enrollment']) {
   test(
     `${feature}: waits for independent cleanup after cancellation and a second signal`,
     { timeout: feature === 'settings' ? 40000 : 30000 },
@@ -275,5 +276,65 @@ console.log(JSON.stringify({result:'failed',classification:'collector-pki-readba
   } finally {
     process.env.PATH = originalPath
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('enrollment cleanup stops all three CAs before deleting their host inputs and fails closed', async () => {
+  const { spawnSync } = await import('node:child_process')
+  const { createHash } = await import('node:crypto')
+  const backend = mkdtempSync(resolve(tmpdir(), 'mdm-enrollment-cleanup-')),
+    web = resolve(fileURLToPath(new URL('../..', import.meta.url))),
+    log = resolve(backend, 'actions')
+  mkdirSync(resolve(backend, 'hack'))
+  writeFileSync(
+    resolve(backend, 'hack/t2_environment.py'),
+    `from pathlib import Path
+class Environment:
+    def __init__(self, root, group): self.root = root; self.group = group
+    def reset(self):
+        with (self.root/'actions').open('a') as f: f.write(self.group+'\\n')
+        if self.group.startswith('t2-pki-') and (self.root/'fail').exists(): raise RuntimeError('CA is still live')
+        if self.group == 'react-enrollment-browser': (self.root/'host-inputs').unlink()
+    def host_ports(self, release=False):
+        with (self.root/'actions').open('a') as f: f.write(self.group+':ports\\n')
+`,
+  )
+  const groups = ['windows', 'agent', 'agent:next'].map(
+    (purpose) =>
+      't2-pki-' +
+      createHash('sha256')
+        .update(web + ':enrollment-browser:' + purpose)
+        .digest('hex')
+        .slice(0, 20),
+  )
+  try {
+    for (const failed of [true, false]) {
+      writeFileSync(resolve(backend, 'host-inputs'), 'private fixture material')
+      if (failed) writeFileSync(resolve(backend, 'fail'), '')
+      else rmSync(resolve(backend, 'fail'))
+      writeFileSync(log, '')
+      const result = spawnSync(
+        'python3',
+        [fileURLToPath(new URL('./enrollment-cleanup.py', import.meta.url)), web],
+        {
+          cwd: backend,
+          encoding: 'utf8',
+          timeout: 10000,
+          env: { ...process.env, MDM_ENROLLMENT_BROWSER_MODULE: 'react-enrollment-browser.mjs' },
+        },
+      )
+      assert.equal(result.status, failed ? 1 : 0)
+      const actions = readFileSync(log, 'utf8').trim().split('\n')
+      assert.deepEqual(actions.slice(0, 3), groups)
+      assert.equal(existsSync(resolve(backend, 'host-inputs')), failed)
+      assert.deepEqual(
+        actions.slice(3),
+        failed
+          ? []
+          : ['enrollment-native:ports', 'enrollment-agent:ports', 'react-enrollment-browser'],
+      )
+    }
+  } finally {
+    rmSync(backend, { recursive: true, force: true })
   }
 })

@@ -30,7 +30,11 @@ from windows_fixtures import generate
 from candidate_installation_driver import Browser
 from pki_fixtures import running as pki
 
-environment = Environment(BACKEND, group='enrollment-browser')
+browser_module = os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE', 'enrollment-browser.mjs')
+if browser_module not in {'enrollment-browser.mjs', 'react-enrollment-browser.mjs'}:
+    raise RuntimeError('unsupported browser module')
+group = 'react-enrollment-browser' if browser_module == 'react-enrollment-browser.mjs' else 'enrollment-browser'
+environment = Environment(BACKEND, group=group)
 processes = []
 providers = ExitStack()
 phase = 'environment'
@@ -120,7 +124,7 @@ def prepare_signer(origin, reader_password):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT'] = str(WEB/'apps/mdm-old/dist')
+    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module == 'react-enrollment-browser.mjs' else 'apps/mdm-old/dist'))
     initialized = environment.initialize()
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     config_path = Path(initialized['configuration'])
@@ -135,6 +139,9 @@ try:
               ['registration_configuration_read','registration_configuration_write','agent_enrollment_read',
                'agent_enrollment_write','authorization_read','authorization_write','identity_accounts_manage']]
     grants += [dict(operation=p,scope=dict(kind='all_devices')) for p in ['inventory_read','inventory_assign','enrollment','credentials']]
+    if browser_module == 'react-enrollment-browser.mjs':
+        grants += [dict(operation=p,scope=dict(kind='tenant')) for p in ['storage_configuration_read','storage_configuration_write','runtime_diagnostics_read','resource_read','resource_write','software_read','software_write','release_publish','software_withdraw']]
+
     rule = json.dumps(dict(subject=dict(kind='user',user=admin),grants=grants)).replace("'", "''")
     environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{TENANTS[0]}','{INSTANCE}','{uuid.uuid4()}',1,'{rule}'::jsonb)", 'mdm_dev')
     # Established device input for management-read continuity, not protocol/OS proof.
@@ -179,6 +186,10 @@ try:
         operator = Browser(initialized['origin'],environment.root/'ca.crt',urlsplit(initialized['origin']).port)
         operator.login(TENANTS[0],'admin',(environment.root/'account-password').read_text())
         configuration_prerequisite(environment, WEB, config_path, agent['endpoint']['origin'], TENANTS[0])
+        installer_release = None
+        if browser_module == 'react-enrollment-browser.mjs':
+            from agent_installer_fixture import publish
+            installer_release = publish(operator)
         module = importlib.util.spec_from_file_location('enrollment_device_agent',WEB/'e2e/mdm/device-agent.py')
         collector = importlib.util.module_from_spec(module); module.loader.exec_module(collector)
         agent_fixture = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0])
@@ -192,11 +203,11 @@ try:
             origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,
             admin=dict(login='admin',passwordFile=str(environment.root/'account-password')),
             reader=dict(login='reader',passwordFile=str(reader_password)),
-            configurationReady=True, organizationReadRoutes=[], admission=True, existingDevice='enrollment-existing'))
-        browser = subprocess.Popen(['node',str(WEB/'e2e/mdm/enrollment-browser.mjs')],cwd=WEB,
+            installerRelease=installer_release, configurationReady=True, organizationReadRoutes=[], admission=True, existingDevice='enrollment-existing'))
+        browser = subprocess.Popen(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,
             env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
         processes.append(browser)
-        if browser.wait(timeout=360):
+        if browser.wait(timeout=780 if browser_module == 'react-enrollment-browser.mjs' else 360):
             raise RuntimeError('browser')
     result = 'passed'
 except BaseException as error:

@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "node scripts/ensure-contracts.mjs && vitest run",
-    "test:coverage": "node scripts/ensure-contracts.mjs && pnpm -r --no-bail --filter @rss/api --filter @rss/auth --filter @rss/mdm-old-app --filter @rss/auth-core --filter @rss/auth-http --filter @rss/mdm-authorization --filter @rss/mdm-tenant-administration --filter @rss/mdm-user-profiles --filter @rss/mdm-http --filter @rss/core --filter @rss/device-access --filter @rss/device-access-app run test:coverage",
+    "test:coverage": "node scripts/ensure-contracts.mjs && pnpm -r --no-bail --filter @rss/api --filter @rss/auth --filter @rss/mdm-old-app --filter @rss/auth-core --filter @rss/auth-http --filter @rss/mdm-authorization --filter @rss/mdm-tenant-administration --filter @rss/mdm-user-profiles --filter @rss/mdm-devices --filter @rss/mdm-enrollment --filter @rss/mdm-connections --filter @rss/mdm-http --filter @rss/core --filter @rss/device-access --filter @rss/device-access-app run test:coverage",
     "test:boundary": "node scripts/ensure-contracts.mjs && vitest run --project root && node --test e2e/mdm/enrollment-callback.test.mjs e2e/mdm/device-run.test.mjs",
     "prepare": "husky && node scripts/ensure-contracts.mjs",
     "test:mdm:joint": "node scripts/ensure-contracts.mjs && vitest run --config e2e/mdm/vitest.config.ts",
@@ -50,7 +50,8 @@
     "build:mdm:old": "pnpm -F @rss/mdm-old-app build && node scripts/check-mdm-app-build.mjs",
     "dev:mdm": "pnpm -F @rss/mdm-app dev",
     "test:mdm:react-auth-browser": "node e2e/mdm/react-auth-run.mjs",
-    "test:mdm:react-administration-browser": "node e2e/mdm/react-administration-run.mjs"
+    "test:mdm:react-administration-browser": "node e2e/mdm/react-administration-run.mjs",
+    "test:mdm:react-devices-enrollment-browser": "node e2e/mdm/react-devices-enrollment-run.mjs"
   },
   "lint-staged": {
     "*.{ts,vue}": [

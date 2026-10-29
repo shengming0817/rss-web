@@ -14,6 +14,12 @@ MDM 无后端演示：`pnpm dev:mdm:old:demo`；生产构建：`pnpm build:mdm:o
 
 新 React 授权、租户和资料的真实 HTTPS Chromium 验证：`MDM_REACT_ADMIN_BACKEND=/absolute/rss-mdm IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:mdm:react-administration-browser`。复用现有资料 fixture 的隔离 PG、Keycloak、MDM 宿主、构建租约与清理，以新应用运行代表旅程；不代替业务租户宿主完整启用或设备实际效果验收。
 
+新 React 的 `/devices` 保留终端与关联身份，`/devices/:kind/:id` 提供人员、注册、关系和退管事实；`/enroll` 管理原生注册、通道准入、配额、Apple 组织、Entra 和管理员 Agent 安装配置；`/connections` 分别管理存储、邮件、WNS、Apple 材料与 Agent 连接。匿名固定安装包入口为 `/downloads/agent`，Windows 系统条款入口为 `/enrollment/windows/entra/terms`，均不要求控制台登录。
+
+管理员安装配置只交付一份 `rss-agent-enrollment.json`；隐藏、关闭或离开页面会清除秘密下载。签发结果未知时查询原操作元数据，不能恢复秘密文件；确认撤销后才能显式开始新的签发。刷新和重认证不会自动重放写入。配额和通道读取仅供展示，新注册是否准入由服务端决定；暂停不停止已有设备维护或公开下载。
+
+新设备、注册与连接代表旅程：`MDM_REACT_DEVICES_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-devices-enrollment-browser`。入口构建新应用，复用既有设备与注册 HTTPS 夹具、构建租约和隔离清理。浏览器覆盖目录、关联原请求恢复、后台准入拒绝、单 JSON 交付及连接版本观察；输出无秘密的桌面、移动和暗色页面截图目录。合成注册与测试 PKI 只证明 HTTP 接缝；真实 Windows/macOS 安装、ADE/Entra 组织资格及设备效果分别验收。
+
 ## Web 组件开发
 
 `pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。直接展示当前 Vuetify 组件；主题与语言基础见 [@rss/core](packages/core/README.md)。

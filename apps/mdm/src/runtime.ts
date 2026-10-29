@@ -1,6 +1,17 @@
 import { createAuthorization } from '@rss/mdm-authorization'
 import { createTenantAdministration } from '@rss/mdm-tenant-administration'
 import { createProfiles } from '@rss/mdm-user-profiles'
+import { createDevices } from '@rss/mdm-devices'
+import {
+  createEnrollment,
+  createAppleEnrollment,
+  createPublicEnrollment,
+} from '@rss/mdm-enrollment'
+import { createConnections } from '@rss/mdm-connections'
+import { createDevicesAdapter } from '@rss/mdm-http/devices'
+import { createEnrollmentAdapter, createPublicEnrollmentAdapter } from '@rss/mdm-http/enrollment'
+import { createAppleEnrollmentAdapter } from '@rss/mdm-http/apple-enrollment'
+import { createConnectionsAdapters } from '@rss/mdm-http/connections'
 import { createAuthorizationAdapter } from '@rss/mdm-http/authorization'
 import { createTenantAdministrationAdapter } from '@rss/mdm-http/tenant-administration'
 import { createProfilesAdapter } from '@rss/mdm-http/user-profiles'
@@ -34,6 +45,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
     tenant,
     management,
     oidcEnabled,
+    onboarding: createPublicEnrollment(createPublicEnrollmentAdapter(mdm, host.tenant)),
     administration() {
       const state = owner.getSnapshot()
       if (
@@ -62,6 +74,18 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         ),
         tenants: createTenantAdministration(createTenantAdministrationAdapter(transport)),
         profiles: createProfiles(createProfilesAdapter(transport), state.identity.principalId),
+        devices: createDevices(createDevicesAdapter(transport, tenant), tenant),
+        enrollment: createEnrollment(
+          createEnrollmentAdapter(transport, mdm, tenant, host.serviceId),
+          tenant,
+          state.identity.principalId,
+        ),
+        appleEnrollment: createAppleEnrollment(createAppleEnrollmentAdapter(transport)),
+        connections: createConnections(
+          createConnectionsAdapters(transport, tenant, host.serviceId),
+          tenant,
+          host.serviceId,
+        ),
       })
     },
     passkeys: createPasskeyClient(identity, owner),

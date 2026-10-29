@@ -19,7 +19,10 @@
     "@ant-design/cssinjs": "catalog:",
     "@rss/mdm-authorization": "workspace:*",
     "@rss/mdm-tenant-administration": "workspace:*",
-    "@rss/mdm-user-profiles": "workspace:*"
+    "@rss/mdm-user-profiles": "workspace:*",
+    "@rss/mdm-devices": "workspace:*",
+    "@rss/mdm-enrollment": "workspace:*",
+    "@rss/mdm-connections": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

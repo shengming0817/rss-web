@@ -7,6 +7,7 @@ from contextlib import ExitStack
 import importlib.util
 import os
 import re
+import secrets
 from pathlib import Path
 import signal
 import ssl
@@ -31,7 +32,7 @@ from runtime_fixture import storage, readiness as readiness_status
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
-environment = Environment(BACKEND, group={'software-browser.mjs': 'software-browser', 'console-browser.mjs': 'console-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser'))
+environment = Environment(BACKEND, group={'software-browser.mjs': 'software-browser', 'console-browser.mjs': 'console-browser', 'react-devices-browser.mjs': 'react-devices-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser'))
 processes = []
 providers = ExitStack()
 phase = 'environment'
@@ -52,7 +53,7 @@ def q(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 browser_module = os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'device-browser.mjs')
-if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs', 'software-browser.mjs', 'console-browser.mjs'}:
+if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs', 'software-browser.mjs', 'console-browser.mjs', 'react-devices-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
 
 def seed_authority():
@@ -63,7 +64,7 @@ def seed_authority():
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write','webhook_replay','audit_read']] + [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_unmanage','device_control','security_operate','configuration_write','software_deploy']]
     if browser_module == 'software-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['release_read','release_recover','release_withdraw']] + [dict(operation='software_deploy', scope=dict(kind='all_devices'))]
-    if browser_module == 'device-browser.mjs':
+    if browser_module in {'device-browser.mjs', 'react-devices-browser.mjs'}:
         rule['grants'].append(dict(operation='user_profiles_read', scope=dict(kind='tenant')))
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['user_attribute_definitions_read','user_attribute_definitions_write','compliance_write','compliance_rule_read']]
         rule['grants'].append(dict(operation='compliance_read', scope=dict(kind='all_devices')))
@@ -156,7 +157,7 @@ def start(binary, initialized, log, expected=200):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT'] = str(WEB/'apps/mdm-old/dist')
+    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module == 'react-devices-browser.mjs' else 'apps/mdm-old/dist'))
     initialized = environment.initialize()
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
@@ -276,7 +277,7 @@ try:
     status, _ = operator.call('PUT', '/api/v1/authorization/rules/'+initial['id'], dict(operationId=str(uuid.uuid4()),expectedRevision=initial['revision'],value=value))
     if status != 200:
         raise RuntimeError('initializer-rule-scope')
-    if browser_module == 'device-browser.mjs':
+    if browser_module in {'device-browser.mjs', 'react-devices-browser.mjs'}:
         # Real local profile writes precede the browser login that observes them.
         profile_path = f'/api/v1/identity/tenants/{TENANTS[0]}/accounts/{ADMIN}/profile'
         status, profile = operator.call('GET', profile_path)
@@ -288,12 +289,18 @@ try:
     if browser_module == 'console-browser.mjs':
         phase = 'console-prerequisites'
         console_fixture.prepare(operator, console, environment)
+    person_b = None
+    if browser_module == 'react-devices-browser.mjs':
+        status, account_b = operator.call('POST', f'/api/v1/identity/tenants/{TENANTS[0]}/accounts',
+            dict(login='fixture-person-b', password=secrets.token_urlsafe(32)))
+        if status != 201: raise RuntimeError('personnel-candidate-create')
+        person_b = dict(principalId=account_b['principalId'], login='fixture-person-b')
     phase = 'collector-registration'
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)
     module.loader.exec_module(collector)
     agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module in {'telemetry-browser.mjs','console-browser.mjs'} else None)
-    fixture=private(environment.root/'browser.json',dict(console=console, backendRevision=backend_revision, devices=['fixture-agent','fixture-alone'], target='internal', upstream=upstream if browser_module == 'software-browser.mjs' else None, collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
+    fixture=private(environment.root/'browser.json',dict(personB=person_b, console=console, backendRevision=backend_revision, devices=['fixture-agent','fixture-alone'], target='internal', upstream=upstream if browser_module == 'software-browser.mjs' else None, collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
     browser=subprocess.run(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture), 'MDM_SOFTWARE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')

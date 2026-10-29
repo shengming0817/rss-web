@@ -286,8 +286,15 @@ it('keeps the DA stylesheet build helper out of product source imports', async (
   ).toContain('da-boundary/contained')
 })
 
-it('keeps the three administration cores independent and their adapters out of feature composition', async () => {
-  for (const name of ['mdm-authorization', 'mdm-tenant-administration', 'mdm-user-profiles']) {
+it('keeps the MDM domain cores independent and their adapters out of feature composition', async () => {
+  for (const name of [
+    'mdm-authorization',
+    'mdm-tenant-administration',
+    'mdm-user-profiles',
+    'mdm-devices',
+    'mdm-enrollment',
+    'mdm-connections',
+  ]) {
     for (const dependency of ['@rss/api/mdm-operations', 'react', '@rss/auth-core'])
       expect(
         await ruleIds(`export * from '${dependency}'`, `packages/${name}/src/index.ts`),

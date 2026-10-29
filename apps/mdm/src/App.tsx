@@ -16,7 +16,15 @@ import {
 } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import enUS from 'antd/locale/en_US'
-import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  matchPath,
+  useLocation,
+} from 'react-router-dom'
 import type { Provider } from '@rss/auth-core'
 import type { Runtime } from './runtime'
 import { Authorization } from './Authorization'
@@ -24,6 +32,11 @@ import { Tenants } from './Tenants'
 import { UserProfiles } from './UserProfiles'
 import { IdentityAdministration } from './IdentityAdministration'
 import { Passkeys } from './Passkeys'
+import { Devices } from './Devices'
+import { DeviceDetail } from './DeviceDetail'
+import { Enrollment } from './Enrollment'
+import { Connections } from './Connections'
+import { EntraTerms, PublicDownloads } from './PublicEnrollment'
 import { StyleProvider } from '@ant-design/cssinjs'
 import { mdmTheme } from './theme'
 import { messages, type Locale, type MessageKey } from './i18n'
@@ -192,11 +205,27 @@ export interface FeatureRoute {
   path: string
   label: MessageKey
   realm?: 'tenant' | 'management'
+  navigation?: boolean
   render: (ui: Ui) => ReactNode
 }
 /** Product features register implemented routes here; they do not assemble authentication. */
 const featureRoutes: readonly FeatureRoute[] = [
   { path: '/', label: 'workspace', render: (ui) => <Workspace {...ui} /> },
+  { path: '/devices', label: 'devices', realm: 'tenant', render: (ui) => <Devices {...ui} /> },
+  {
+    path: '/devices/:kind/:id',
+    label: 'devices',
+    realm: 'tenant',
+    navigation: false,
+    render: (ui) => <DeviceDetail {...ui} />,
+  },
+  { path: '/enroll', label: 'enrollment', realm: 'tenant', render: (ui) => <Enrollment {...ui} /> },
+  {
+    path: '/connections',
+    label: 'connections',
+    realm: 'tenant',
+    render: (ui) => <Connections {...ui} />,
+  },
   { path: '/authorization', label: 'authorization', render: (ui) => <Authorization {...ui} /> },
   {
     path: '/tenants',
@@ -437,18 +466,22 @@ function Navigation({ runtime, locale, close }: Ui & { close: () => void }) {
         {featureRoutes
           .filter(
             (route) =>
-              !route.realm || route.realm === (runtime.management ? 'management' : 'tenant'),
+              route.navigation !== false &&
+              (!route.realm || route.realm === (runtime.management ? 'management' : 'tenant')),
           )
           .map((route) => {
             const href =
               route.path === '/'
                 ? runtime.home
                 : `${runtime.management ? '/platform' : ''}${route.path}`
+            const active =
+              location.pathname === href ||
+              (route.path === '/devices' && location.pathname.startsWith(`${href}/`))
             return (
               <Link
                 key={route.path}
-                className={`nav-item ${location.pathname === href ? 'active' : ''}`}
-                aria-current={location.pathname === href ? 'page' : undefined}
+                className={`nav-item ${active ? 'active' : ''}`}
+                aria-current={active ? 'page' : undefined}
                 to={href}
                 onClick={close}
               >
@@ -542,6 +575,28 @@ function Shell({
       </Button>
     </Space>
   )
+  if (
+    location.pathname === '/downloads/agent' ||
+    location.pathname === '/enrollment/windows/entra/terms'
+  )
+    return (
+      <>
+        <a className="skip" href="#main">
+          {t.skip}
+        </a>
+        <header className="public-utility">
+          <Brand />
+          {utility}
+        </header>
+        <main id="main" className="public-main" tabIndex={-1}>
+          {location.pathname === '/downloads/agent' ? (
+            <PublicDownloads runtime={runtime} locale={locale} />
+          ) : (
+            <EntraTerms runtime={runtime} locale={locale} />
+          )}
+        </main>
+      </>
+    )
   if (!ready)
     return (
       <div className="center-state" role="status">
@@ -613,12 +668,13 @@ function Shell({
             <strong>
               {
                 t[
-                  featureRoutes.find(
-                    (route) =>
-                      (route.path === '/'
+                  featureRoutes.find((route) =>
+                    matchPath(
+                      route.path === '/'
                         ? runtime.home
-                        : `${runtime.management ? '/platform' : ''}${route.path}`) ===
+                        : `${runtime.management ? '/platform' : ''}${route.path}`,
                       location.pathname,
+                    ),
                   )?.label ?? 'workspace'
                 ]
               }

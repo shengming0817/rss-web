@@ -515,7 +515,7 @@ export default tseslint.config(
   {
     files: [
       'apps/mdm/**/*.{ts,tsx}',
-      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles}/**/*.ts',
+      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections}/**/*.ts',
     ],
     languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
     plugins: {
@@ -569,7 +569,7 @@ export default tseslint.config(
   },
   {
     files: [
-      'packages/{auth-core,mdm-authorization,mdm-tenant-administration,mdm-user-profiles}/**/*.ts',
+      'packages/{auth-core,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections}/**/*.ts',
     ],
     rules: {
       'no-restricted-imports': boundaryRule([
@@ -587,7 +587,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|api/))',
+              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|api/))',
             message: 'Adapters depend only on core ports and the API executor.',
           },
         ],
@@ -617,7 +617,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$))',
+              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$))',
             message: 'Feature pages consume domain use cases; only runtime assembles adapters.',
           },
         ],

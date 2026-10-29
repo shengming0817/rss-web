@@ -41,3 +41,14 @@ export function enumeration<T extends string>(value: unknown, choices: readonly 
   if (typeof value !== 'string' || !choices.includes(value as T)) throw new Error('Invalid enum')
   return value as T
 }
+export function base64url(value: unknown, length: number): string {
+  const encoded = text(value)
+  if (!/^[A-Za-z0-9_-]+$/.test(encoded)) throw new Error('Invalid encoding')
+  const decoded = atob(encoded.replaceAll('-', '+').replaceAll('_', '/'))
+  if (
+    decoded.length !== length ||
+    btoa(decoded).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '') !== encoded
+  )
+    throw new Error('Invalid encoding')
+  return encoded
+}

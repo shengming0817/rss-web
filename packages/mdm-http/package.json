@@ -8,7 +8,11 @@
     ".": "./src/index.ts",
     "./authorization": "./src/authorization.ts",
     "./tenant-administration": "./src/tenant-administration.ts",
-    "./user-profiles": "./src/user-profiles.ts"
+    "./user-profiles": "./src/user-profiles.ts",
+    "./devices": "./src/devices.ts",
+    "./enrollment": "./src/enrollment.ts",
+    "./apple-enrollment": "./src/apple-enrollment.ts",
+    "./connections": "./src/connections.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,7 +24,10 @@
     "@rss/api": "workspace:*",
     "@rss/mdm-authorization": "workspace:*",
     "@rss/mdm-tenant-administration": "workspace:*",
-    "@rss/mdm-user-profiles": "workspace:*"
+    "@rss/mdm-user-profiles": "workspace:*",
+    "@rss/mdm-devices": "workspace:*",
+    "@rss/mdm-enrollment": "workspace:*",
+    "@rss/mdm-connections": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",
