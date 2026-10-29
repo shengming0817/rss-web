@@ -1,3 +1,4 @@
+import { createCeremonyHandoff } from './ceremony-handoff'
 import { createAuthorization } from '@rss/mdm-authorization'
 import { createTenantAdministration } from '@rss/mdm-tenant-administration'
 import { createProfiles } from '@rss/mdm-user-profiles'
@@ -15,6 +16,12 @@ import { createSoftware } from '@rss/mdm-software'
 import { createPublications } from '@rss/mdm-software/publications'
 import { createGroups } from '@rss/mdm-groups'
 import { createCompliance } from '@rss/mdm-compliance'
+import { createDevicePki } from '@rss/mdm-certificates/device-pki'
+import { createCertificateArchive } from '@rss/mdm-certificates/archive'
+import { createRecoveryCredentials } from '@rss/mdm-recovery-credentials'
+import { createDevicePkiAdapter } from '@rss/mdm-http/device-pki'
+import { createCertificateArchiveAdapter } from '@rss/mdm-http/certificate-archive'
+import { createRecoveryCredentialsAdapter } from '@rss/mdm-http/recovery-credentials'
 import { createInventoryAdapter } from '@rss/mdm-http/inventory'
 import { createResourceMappingsAdapter } from '@rss/mdm-http/resource-mappings'
 import { createResourcesAdapter } from '@rss/mdm-http/resources'
@@ -30,12 +37,18 @@ import { createConnectionsAdapters } from '@rss/mdm-http/connections'
 import { createAuthorizationAdapter } from '@rss/mdm-http/authorization'
 import { createTenantAdministrationAdapter } from '@rss/mdm-http/tenant-administration'
 import { createProfilesAdapter } from '@rss/mdm-http/user-profiles'
-import { createFlows, createSession, createIdentityAdministration } from '@rss/auth-core'
+import {
+  createFlows,
+  createSession,
+  createIdentityAdministration,
+  createMaterialAuthorization,
+} from '@rss/auth-core'
 import {
   createAuthPort,
   createIdentityAdministrationAdapter,
   createIdentityTransport,
   createPasskeyClient,
+  createOperationAuthorizationPort,
   loadHostConfig,
 } from '@rss/auth-http'
 import { bindSession, createMdmTransport, loadMdmHostConfig } from '@rss/mdm-http'
@@ -54,8 +67,20 @@ export async function createRuntime(origin: string, pathname: string, storage: S
   const tenant = management ? host.managementTenant : host.tenant
   const oidcEnabled = !management && identityHost.oidcEnabled
   const owner = createSession(createAuthPort(identity), { oidcEnabled })
+  const materialAuthorization = createMaterialAuthorization(
+    createOperationAuthorizationPort(identity, owner),
+    () => {
+      const state = owner.getSnapshot()
+      return state.status === 'authenticated' && state.tenant && state.identity && state.session
+        ? `${state.tenant}/${state.identity.principalId}/${state.session.id}`
+        : null
+    },
+  )
+  const passkeys = createPasskeyClient(identity, owner)
   return Object.freeze({
     owner,
+    materialAuthorization,
+    ...createCeremonyHandoff(materialAuthorization, passkeys.cancelAuthorization),
     host,
     tenant,
     management,
@@ -99,6 +124,16 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         publications: createPublications(createPublicationsAdapter(transport)),
         groups: createGroups(createGroupsAdapter(transport)),
         compliance: createCompliance(createComplianceAdapter(transport)),
+        devicePki: createDevicePki(
+          createDevicePkiAdapter(transport, tenant, host.serviceId),
+          tenant,
+          host.serviceId,
+        ),
+        certificateArchive: createCertificateArchive(
+          createCertificateArchiveAdapter(transport, tenant),
+          tenant,
+        ),
+        recoveryCredentials: createRecoveryCredentials(createRecoveryCredentialsAdapter(transport)),
         enrollment: createEnrollment(
           createEnrollmentAdapter(transport, mdm, tenant, host.serviceId),
           tenant,
@@ -112,7 +147,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         ),
       })
     },
-    passkeys: createPasskeyClient(identity, owner),
+    passkeys,
     flows: createFlows(storage),
     home: management ? '/platform' : '/',
     login: management ? '/platform/login' : '/login',

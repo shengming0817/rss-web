@@ -5,7 +5,7 @@ import type { Locale } from './i18n'
 import { labels } from './AdminUi'
 
 const SecretVisibility = createContext(true)
-function Visibility({ active, children }: { active: boolean; children: ReactNode }) {
+export function SecretPanel({ active, children }: { active: boolean; children: ReactNode }) {
   const parent = useContext(SecretVisibility)
   return <SecretVisibility.Provider value={parent && active}>{children}</SecretVisibility.Provider>
 }
@@ -47,7 +47,7 @@ export function SecretTabs({
         return {
           ...item,
           children: (
-            <Visibility active={item.key === active && allowed}>
+            <SecretPanel active={item.key === active && allowed}>
               {!allowed && (
                 <Alert
                   type="info"
@@ -60,7 +60,7 @@ export function SecretTabs({
               <fieldset className="permission-panel" hidden={!allowed} disabled={!allowed}>
                 {item.children}
               </fieldset>
-            </Visibility>
+            </SecretPanel>
           ),
         }
       })}

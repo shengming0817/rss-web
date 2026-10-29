@@ -893,6 +893,19 @@ html:has(.mdm-overlay-open) {
   display: none;
 }
 
+.definition-preview {
+  max-inline-size: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.disclosed-material pre {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .resource-detail,
 .resource-blueprint {
   display: grid;
@@ -1036,4 +1049,8 @@ html:has(.mdm-overlay-open) {
 .resource-toolbar summary {
   color: var(--muted);
   cursor: pointer;
+}
+
+.certificate-directory .data-table th {
+  white-space: nowrap;
 }

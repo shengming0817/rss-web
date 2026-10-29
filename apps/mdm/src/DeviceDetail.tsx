@@ -1,3 +1,4 @@
+import { DeviceSecurity, hasDeviceSecurity } from './DeviceSecurity'
 import { SelectionGuard, useSelectionGuard, usePendingSelection } from './SelectionGuard'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Result, Select } from 'antd'
@@ -421,6 +422,9 @@ function Detail({
                         'asset',
                         ...(has('inventory_read') ? ['inventory'] : []),
                         ...(has('compliance_read') ? ['compliance'] : []),
+                        ...(hasDeviceSecurity(permissions.value?.grants ?? [], mountedEndpoint.id)
+                          ? ['security']
+                          : []),
                       ]
                     : []
                 }
@@ -489,6 +493,18 @@ function Detail({
                         reference={reference}
                         endpoint={mountedEndpoint.id}
                         canAssign={has('inventory_assign')}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'security',
+                    label: l('设备安全', 'Device security'),
+                    children: (
+                      <DeviceSecurity
+                        runtime={runtime}
+                        locale={locale}
+                        endpoint={mountedEndpoint}
+                        grants={permissions.value?.grants ?? []}
                       />
                     ),
                   },

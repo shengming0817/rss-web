@@ -15,18 +15,29 @@ async function waitFor(predicate) {
     await new Promise((done) => setTimeout(done, 20))
   }
 }
-async function exercise(failure, feature) {
+async function exercise(failure, feature, selection = 'all') {
   const react = feature === 'react-devices-enrollment',
+    certificates = feature === 'react-certificates',
     assets = feature === 'react-assets',
     software = feature === 'react-software',
-    backendEnv = react
-      ? 'MDM_REACT_DEVICES_BACKEND'
-      : assets
-        ? 'MDM_REACT_ASSETS_BACKEND'
-        : software
-          ? 'MDM_REACT_SOFTWARE_BACKEND'
-          : `MDM_${feature.toUpperCase()}_BACKEND`,
-    group = react ? 'react-devices-browser' : assets ? 'react-assets-browser' : `${feature}-browser`
+    backendEnv = certificates
+      ? 'MDM_REACT_CERTIFICATES_BACKEND'
+      : react
+        ? 'MDM_REACT_DEVICES_BACKEND'
+        : assets
+          ? 'MDM_REACT_ASSETS_BACKEND'
+          : software
+            ? 'MDM_REACT_SOFTWARE_BACKEND'
+            : `MDM_${feature.toUpperCase()}_BACKEND`,
+    group = certificates
+      ? selection === 'recovery'
+        ? 'react-recovery-browser'
+        : 'react-certificates-browser'
+      : react
+        ? 'react-devices-browser'
+        : assets
+          ? 'react-assets-browser'
+          : `${feature}-browser`
   const backend = mkdtempSync(resolve(tmpdir(), `mdm-${feature}-lifecycle-`))
   const bin = resolve(backend, 'bin'),
     recovery = resolve(backend, `artifacts/dev-environment/${group}`)
@@ -40,7 +51,17 @@ const fs = require('node:fs'), path = require('node:path')
 const args = process.argv.slice(2), base = process.env['${backendEnv}']
 const compose = '${feature}' === 'settings' && args.includes('--cleanup-compose')
 const device = ['device', 'react-devices-enrollment', 'react-assets', 'react-software'].includes('${feature}') && args.some((arg) => arg.endsWith('/device-cleanup.py'))
-if (args.includes('reset') || device || compose || ('${feature}' === 'settings' && args.includes('-c'))) {
+if ('${feature}' === 'react-certificates') {
+  const cleanup = args.some((arg) => arg.endsWith('/enrollment-cleanup.py') || arg.endsWith('/device-cleanup.py'))
+  fs.appendFileSync(path.join(base, cleanup ? 'cleanup-groups' : 'journeys'), args.join(' ')+'\\n')
+  if (!cleanup) process.exit(0)
+  fs.writeFileSync(path.join(base, 'cleanup-start'), '')
+  setTimeout(() => {
+    fs.rmSync(path.join(base, 'artifacts/dev-environment/${group}'), { recursive: true })
+    fs.writeFileSync(path.join(base, 'cleanup-finished'), '')
+    process.exit(0)
+  }, 700)
+} else if (args.includes('reset') || device || compose || ('${feature}' === 'settings' && args.includes('-c'))) {
   const target = args.includes('-c')
   if (device ? args.at(-2) !== new URL('./device-cleanup.py', 'file://' + process.env.WEB_ROOT + '/e2e/mdm/').pathname || args.at(-1) !== process.env.WEB_ROOT : compose ? args.at(-1) !== '--cleanup-compose' || !args.at(-3).endsWith('/settings-fixture.py') : target ? !args.at(-1).includes("group='settings-browser-target'") : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
   fs.appendFileSync(path.join(base,'cleanup-groups'), (compose ? 'settings-compose' : target ? '${group}-target' : '${group}')+'\\n')
@@ -65,7 +86,10 @@ if (args.includes('reset') || device || compose || ('${feature}' === 'settings' 
   )
   const child = spawn(
     process.execPath,
-    [fileURLToPath(new URL(`./${feature}-run.mjs`, import.meta.url)), ...(react ? ['device'] : [])],
+    [
+      fileURLToPath(new URL(`./${feature}-run.mjs`, import.meta.url)),
+      ...(certificates ? [selection] : react ? ['device'] : []),
+    ],
     {
       env: {
         ...process.env,
@@ -87,9 +111,12 @@ if (args.includes('reset') || device || compose || ('${feature}' === 'settings' 
   })
   try {
     if (!failure) {
-      await waitFor(() => existsSync(resolve(backend, 'execution-start')))
-      child.kill('SIGTERM')
+      if (!certificates) {
+        await waitFor(() => existsSync(resolve(backend, 'execution-start')))
+        child.kill('SIGTERM')
+      }
       await waitFor(() => existsSync(resolve(backend, 'cleanup-start')))
+      if (certificates) child.kill('SIGINT')
       // A second cancellation must not cancel the independent cleanup owner.
       child.kill('SIGTERM')
     }
@@ -115,6 +142,16 @@ if (args.includes('reset') || device || compose || ('${feature}' === 'settings' 
       assert.equal(existsSync(recovery), false)
       assert.ok(output.includes('"classification":"interrupted"'))
       assert.ok(output.includes('"phase":"cleanup","result":"passed"'))
+      if (certificates) {
+        assert.equal(
+          readFileSync(resolve(backend, 'journeys'), 'utf8').trim().split('\n').length,
+          1,
+        )
+        assert.equal(
+          readFileSync(resolve(backend, 'cleanup-groups'), 'utf8').trim().split('\n').length,
+          1,
+        )
+      }
     }
   } finally {
     if (child.exitCode === null) {
@@ -124,6 +161,13 @@ if (args.includes('reset') || device || compose || ('${feature}' === 'settings' 
     await closed
     rmSync(backend, { recursive: true, force: true })
   }
+}
+for (const selection of ['certificates', 'recovery', 'all']) {
+  test(
+    `react-certificates: cleanup interruption exits unsuccessfully and stops later journeys (${selection})`,
+    { timeout: 15000 },
+    () => exercise(false, 'react-certificates', selection),
+  )
 }
 for (const feature of [
   'device',

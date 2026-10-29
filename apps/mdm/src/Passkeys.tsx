@@ -50,74 +50,80 @@ export function Passkeys({
     }
   }, [runtime, form])
   function perform(kind: 'register' | 'authorize', label = '') {
-    void run(async () => {
-      const bound = scope()
-      if (!bound) throw new Error('Session required')
-      const controller = new AbortController()
-      prompt.current = controller
-      let ceremony: string | undefined,
-        dispatched = false,
-        timer: ReturnType<typeof setTimeout> | undefined
-      try {
-        if (kind === 'register') setAuthorized(null)
-        const challenge =
-          kind === 'register'
-            ? await runtime.passkeys.beginRegistration(label)
-            : await runtime.passkeys.beginRegistrationAuthorization()
-        ceremony = challenge.id
-        if (scope() !== bound || !active.current || controller.signal.aborted)
-          throw new DOMException('Cancelled', 'AbortError')
-        const remaining = challenge.expiresAt * 1000 - Date.now()
-        if (remaining <= 0) throw new DOMException('Expired', 'AbortError')
-        timer = setTimeout(() => controller.abort(), Math.min(remaining, 2_147_483_647))
-        const credential =
-          kind === 'register'
-            ? await navigator.credentials.create({
-                publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(
-                  challenge.publicKey as PublicKeyCredentialCreationOptionsJSON,
-                ),
-                signal: controller.signal,
-              })
-            : await navigator.credentials.get({
-                publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(
-                  challenge.publicKey as PublicKeyCredentialRequestOptionsJSON,
-                ),
-                signal: controller.signal,
-              })
-        if (
-          !(credential instanceof PublicKeyCredential) ||
-          controller.signal.aborted ||
-          scope() !== bound ||
-          !active.current
-        )
-          throw new DOMException('Cancelled', 'AbortError')
-        dispatched = true
-        if (kind === 'register') {
-          await runtime.passkeys.finishRegistration(ceremony, credential.toJSON())
-          form.resetFields()
-          setAuthorized(null)
-          await read()
-        } else {
-          const expiresAt = await runtime.passkeys.finishRegistrationAuthorization(
-            ceremony,
-            credential.toJSON(),
+    void run(() =>
+      runtime.runPasskeyCeremony(async () => {
+        if (!active.current) throw new Error('Page left')
+        const bound = scope()
+        if (!bound) throw new Error('Session required')
+        const controller = new AbortController()
+        prompt.current = controller
+        let ceremony: string | undefined,
+          dispatched = false,
+          timer: ReturnType<typeof setTimeout> | undefined
+        try {
+          if (kind === 'register') setAuthorized(null)
+          const challenge =
+            kind === 'register'
+              ? await runtime.passkeys.beginRegistration(label)
+              : await runtime.passkeys.beginRegistrationAuthorization()
+          ceremony = challenge.id
+          if (scope() !== bound || !active.current || controller.signal.aborted)
+            throw new DOMException('Cancelled', 'AbortError')
+          const remaining = challenge.expiresAt * 1000 - Date.now()
+          if (remaining <= 0) throw new DOMException('Expired', 'AbortError')
+          timer = setTimeout(() => controller.abort(), Math.min(remaining, 2_147_483_647))
+          const credential =
+            kind === 'register'
+              ? await navigator.credentials.create({
+                  publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(
+                    challenge.publicKey as PublicKeyCredentialCreationOptionsJSON,
+                  ),
+                  signal: controller.signal,
+                })
+              : await navigator.credentials.get({
+                  publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(
+                    challenge.publicKey as PublicKeyCredentialRequestOptionsJSON,
+                  ),
+                  signal: controller.signal,
+                })
+          if (
+            !(credential instanceof PublicKeyCredential) ||
+            controller.signal.aborted ||
+            scope() !== bound ||
+            !active.current
           )
-          if (active.current && expiresAt * 1000 > Date.now()) setAuthorized(expiresAt)
+            throw new DOMException('Cancelled', 'AbortError')
+          dispatched = true
+          if (kind === 'register') {
+            await runtime.passkeys.finishRegistration(ceremony, credential.toJSON())
+            form.resetFields()
+            setAuthorized(null)
+            await read()
+          } else {
+            const expiresAt = await runtime.passkeys.finishOperationAuthorization(
+              ceremony,
+              credential.toJSON(),
+            )
+            if (active.current && expiresAt * 1000 > Date.now()) setAuthorized(expiresAt)
+          }
+        } catch (error) {
+          // Never cancel/retry a finish whose commit outcome is unknown. Its authority is read again.
+          if (ceremony && !dispatched && scope() === bound)
+            await runtime.passkeys.cancelCeremony(ceremony)
+          if (
+            error instanceof DOMException &&
+            ['AbortError', 'NotAllowedError'].includes(error.name)
+          )
+            throw { code: 'authentication_cancelled' }
+          if (error instanceof DOMException && error.name === 'InvalidStateError')
+            throw { code: 'authenticator_already_registered' }
+          throw error
+        } finally {
+          clearTimeout(timer)
+          if (prompt.current === controller) prompt.current = null
         }
-      } catch (error) {
-        // Never cancel/retry a finish whose commit outcome is unknown. Its authority is read again.
-        if (ceremony && !dispatched && scope() === bound)
-          await runtime.passkeys.cancelCeremony(ceremony)
-        if (error instanceof DOMException && ['AbortError', 'NotAllowedError'].includes(error.name))
-          throw { code: 'authentication_cancelled' }
-        if (error instanceof DOMException && error.name === 'InvalidStateError')
-          throw { code: 'authenticator_already_registered' }
-        throw error
-      } finally {
-        clearTimeout(timer)
-        if (prompt.current === controller) prompt.current = null
-      }
-    })
+      }),
+    )
   }
   const supported =
     typeof PublicKeyCredential !== 'undefined' &&

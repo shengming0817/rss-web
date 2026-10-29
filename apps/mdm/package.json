@@ -28,7 +28,9 @@
     "@rss/mdm-compliance": "workspace:*",
     "@rss/mdm-resources": "workspace:*",
     "@rss/mdm-content": "workspace:*",
-    "@rss/mdm-software": "workspace:*"
+    "@rss/mdm-software": "workspace:*",
+    "@rss/mdm-certificates": "workspace:*",
+    "@rss/mdm-recovery-credentials": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

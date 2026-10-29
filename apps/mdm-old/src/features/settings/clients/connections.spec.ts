@@ -163,6 +163,10 @@ it('binds write receipts and pagination, and downloads only the exact public sig
   new Uint8Array(bytes).set(encoded)
   reply = {
     bytes,
+    status: 200,
+    contentLength: String(encoded.byteLength),
+    contentRange: null,
+    etag: null,
     contentType: 'application/json',
     contentDisposition: `attachment; filename="${connectionsFilename}"`,
   }

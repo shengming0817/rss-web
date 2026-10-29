@@ -33,6 +33,8 @@ import { UserProfiles } from './UserProfiles'
 import { IdentityAdministration } from './IdentityAdministration'
 import { Passkeys } from './Passkeys'
 import { Devices } from './Devices'
+import { Certificates } from './Certificates'
+import { RecoveryDisclosure } from './RecoveryDisclosure'
 import { DeviceDetail } from './DeviceDetail'
 import { Enrollment } from './Enrollment'
 import { Connections } from './Connections'
@@ -228,6 +230,18 @@ const featureRoutes: readonly FeatureRoute[] = [
     label: 'resources',
     realm: 'tenant',
     render: (ui) => <Resources {...ui} />,
+  },
+  {
+    path: '/certificates',
+    label: 'certificates',
+    realm: 'tenant',
+    render: (ui) => <Certificates {...ui} />,
+  },
+  {
+    path: '/recovery-credentials',
+    label: 'recoveryCredentials',
+    realm: 'tenant',
+    render: (ui) => <RecoveryDisclosure {...ui} />,
   },
   { path: '/software', label: 'software', realm: 'tenant', render: (ui) => <Software {...ui} /> },
   { path: '/groups', label: 'groups', realm: 'tenant', render: (ui) => <GroupsPage {...ui} /> },

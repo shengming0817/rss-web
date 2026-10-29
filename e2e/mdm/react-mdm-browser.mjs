@@ -92,12 +92,14 @@ export async function realBrowser(fixtureVariable, journey) {
     await p.getByRole('heading', { name: title, exact: true }).waitFor()
   }
   async function choose(p, control, label) {
+    await p.locator('.ant-select-dropdown:visible').waitFor({ state: 'hidden' })
     await control.click()
     if (await control.isEditable()) await control.fill(label)
     await p
       .locator('.ant-select-dropdown:visible .ant-select-item-option-content')
       .getByText(label, { exact: true })
       .click()
+    await p.locator('.ant-select-dropdown:visible').waitFor({ state: 'hidden' })
   }
   async function response(p, method, path, submit, status = 200) {
     phase = method + ':' + path

@@ -11,7 +11,7 @@ import {
   text,
   uuid,
 } from './decode'
-export { createPasskeyClient, type Passkey } from './passkeys'
+export { createPasskeyClient, createOperationAuthorizationPort, type Passkey } from './passkeys'
 
 export interface HostConfig {
   canonicalOrigin: string

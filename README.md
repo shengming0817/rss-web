@@ -26,6 +26,10 @@ MDM 无后端演示：`pnpm dev:mdm:old:demo`；生产构建：`pnpm build:mdm:o
 
 新资产、设备组与合规 HTTPS Chromium 验证：`MDM_REACT_ASSETS_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-assets-browser`。复用既有设备隔离环境、构建租约及独立清理，运行新 React 代表旅程，输出无秘密的桌面、移动和暗色截图目录。覆盖原请求恢复、服务端分页、嵌套与预览、合规历史和跨租户/权限拒绝；合成设备与字段只证明 HTTP/界面接缝，不代替 Windows/macOS 实际设备效果验收。
 
+新 React `/certificates` 分开提供证书档案与设备 PKI：档案以目录为起点，显式打开生成、导入、编辑、精确版本导出或设置任务，支持主密码和独立权限；PKI 分别显示进程当前材料、轮换受理、撤销发布及设备观察。独立 `/recovery-credentials` 入口可在没有 InventoryRead 时按精确设备和材料坐标披露；设备详情 → 设备安全提供恢复凭据目录、FileVault 收集与托管关联、原生凭据操作及精确材料披露。RSS Login 披露使用绑定设备、材料版本和原操作的 WebAuthn 用途验证，验证完成后须显式披露。秘密和下载只在当前面板短暂保留；隐藏、关闭或离开会清除。结果未知时显式恢复原操作，不自动重放。
+
+证书与恢复凭据真实 HTTPS Chromium 验证：`MDM_REACT_CERTIFICATES_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-certificates-browser`，可追加 `certificates` 或 `recovery` 单独运行旅程。复用既有隔离 PG、HTTPS、PKI、构建租约和独立清理；覆盖档案生成/导入/导出原请求、PKI ACK 边界、配置 CAS、披露权限、WebAuthn 正确/错误用途、过期/取消及披露原操作恢复。输出仅含公开页面的桌面、平板、移动和暗色截图。合成设备与预置合法材料只证明真实 HTTP 和界面接缝，不证明 Agent 创建绑定、Windows/macOS 真机轮换或登录效果。
+
 ## Web 组件开发
 
 `pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。直接展示当前 Vuetify 组件；主题与语言基础见 [@rss/core](packages/core/README.md)。

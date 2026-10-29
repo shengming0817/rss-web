@@ -31,9 +31,9 @@ from candidate_installation_driver import Browser
 from pki_fixtures import running as pki
 
 browser_module = os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE', 'enrollment-browser.mjs')
-if browser_module not in {'enrollment-browser.mjs', 'react-enrollment-browser.mjs'}:
+if browser_module not in {'enrollment-browser.mjs', 'react-enrollment-browser.mjs', 'react-certificates-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
-group = 'react-enrollment-browser' if browser_module == 'react-enrollment-browser.mjs' else 'enrollment-browser'
+group = {'react-enrollment-browser.mjs':'react-enrollment-browser','react-certificates-browser.mjs':'react-certificates-browser'}.get(browser_module,'enrollment-browser')
 environment = Environment(BACKEND, group=group)
 processes = []
 providers = ExitStack()
@@ -54,7 +54,7 @@ def start(binary, initialized, log, expected=200):
     children = []
     for args in ([str(binary), 'serve', '--config', initialized['configuration']],
                  ['nginx', '-c', initialized['gateway'], '-g', 'daemon off;']):
-        child = subprocess.Popen(args, cwd=BACKEND, stdout=log, stderr=log, pass_fds=lease_fds())
+        child = subprocess.Popen(args, cwd=BACKEND, stdout=log, stderr=log, pass_fds=lease_fds(), env={**os.environ, 'RUST_MIN_STACK': str(8*1024*1024)})
         processes.append(child)
         children.append(child)
     until = time.monotonic() + 180
@@ -63,7 +63,7 @@ def start(binary, initialized, log, expected=200):
             log.flush()
             text = Path(log.name).read_text()[-16384:]
             errors = re.findall(r'(?m)^([a-z][a-z0-9_.-]{0,63}): configuration ([A-Za-z][A-Za-z0-9]{0,63}) rejected$', text)
-            print(json.dumps(dict(phase='host-start',result='failed',exitCodes=[child.poll() for child in children],configurationErrors=errors,diagnostics=re.findall(r'(?m)^([a-z][a-z0-9_.-]{0,63}): ([A-Za-z0-9_=:(), -]{1,128})$',text),jsonPositions=re.findall(r'configuration JSON rejected at line ([0-9]+), column ([0-9]+)',text),unsafeFiles=[Path(name).name for name in re.findall(r'configuration file unavailable or unsafe: \"([^\"]+)\"',text)],gatewayErrors=re.findall(r'nginx: \[emerg\] ([a-z]+)',text))),flush=True)
+            print(json.dumps(dict(phase='host-start',result='failed',exitCodes=[child.poll() for child in children],configurationErrors=errors,stackOverflow='stack overflow' in text,diagnostics=re.findall(r'(?m)^([a-z][a-z0-9_.-]{0,63}): ([A-Za-z0-9_=:(), -]{1,128})$',text),jsonPositions=re.findall(r'configuration JSON rejected at line ([0-9]+), column ([0-9]+)',text),unsafeFiles=[Path(name).name for name in re.findall(r'configuration file unavailable or unsafe: \"([^\"]+)\"',text)],gatewayErrors=re.findall(r'nginx: \[emerg\] ([a-z]+)',text))),flush=True)
             raise RuntimeError('host-exit')
         try:
             if readiness(environment, initialized['origin']) == expected:
@@ -124,7 +124,7 @@ def prepare_signer(origin, reader_password):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module == 'react-enrollment-browser.mjs' else 'apps/mdm-old/dist'))
+    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module in {'react-enrollment-browser.mjs','react-certificates-browser.mjs'} else 'apps/mdm-old/dist'))
     initialized = environment.initialize()
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     config_path = Path(initialized['configuration'])
@@ -142,8 +142,12 @@ try:
     if browser_module == 'react-enrollment-browser.mjs':
         grants += [dict(operation=p,scope=dict(kind='tenant')) for p in ['storage_configuration_read','storage_configuration_write','runtime_diagnostics_read','resource_read','resource_write','software_read','software_write','release_publish','software_withdraw']]
 
-    rule = json.dumps(dict(subject=dict(kind='user',user=admin),grants=grants)).replace("'", "''")
-    environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{TENANTS[0]}','{INSTANCE}','{uuid.uuid4()}',1,'{rule}'::jsonb)", 'mdm_dev')
+    if browser_module == 'react-certificates-browser.mjs':
+        grants += [dict(operation=p,scope=dict(kind='tenant')) for p in ['certificate_archive_read','certificate_archive_write','certificate_archive_unlock','certificate_archive_export']]
+    rule_id = str(uuid.uuid4())
+    authority_rule = dict(subject=dict(kind='user',user=admin),grants=grants)
+    rule = json.dumps(authority_rule).replace("'", "''")
+    environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{TENANTS[0]}','{INSTANCE}','{rule_id}',1,'{rule}'::jsonb)", 'mdm_dev')
     # Established device input for management-read continuity, not protocol/OS proof.
     tenant = TENANTS[0]
     registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
@@ -185,6 +189,17 @@ try:
         start(binary, initialized, log)
         operator = Browser(initialized['origin'],environment.root/'ca.crt',urlsplit(initialized['origin']).port)
         operator.login(TENANTS[0],'admin',(environment.root/'account-password').read_text())
+        if browser_module == 'react-certificates-browser.mjs':
+            status, rules = operator.call('GET', '/api/v1/authorization/rules')
+            if status != 200: raise RuntimeError('certificate-authority-read')
+            archive_permissions = {'certificate_archive_read','certificate_archive_write','certificate_archive_unlock','certificate_archive_export'}
+            for existing in rules['items']:
+                if existing['id'] == rule_id or not existing.get('value') or existing['value']['subject'] != authority_rule['subject']:
+                    continue
+                value = dict(existing['value'])
+                value['grants'] = [grant for grant in value['grants'] if grant['operation'] not in archive_permissions]
+                status, _ = operator.call('PUT', '/api/v1/authorization/rules/'+existing['id'], dict(operationId=str(uuid.uuid4()),expectedRevision=existing['revision'],value=value))
+                if status != 200: raise RuntimeError('certificate-authority-scope')
         configuration_prerequisite(environment, WEB, config_path, agent['endpoint']['origin'], TENANTS[0])
         installer_release = None
         if browser_module == 'react-enrollment-browser.mjs':
@@ -200,14 +215,14 @@ try:
         print(json.dumps(dict(phase='backend-baseline',revision=backend_revision)),flush=True)
         fixture = private(environment.root/'browser.json',dict(backendRevision=backend_revision,collector=agent_fixture,pki=dict(candidateTrust=candidate_trust,recoveryCandidate=recovery_candidate,recoveryInputFile=str(recovery_input)),
 
-            origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,
+            origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,ruleId=rule_id,rule=authority_rule,
             admin=dict(login='admin',passwordFile=str(environment.root/'account-password')),
             reader=dict(login='reader',passwordFile=str(reader_password)),
             installerRelease=installer_release, configurationReady=True, organizationReadRoutes=[], admission=True, existingDevice='enrollment-existing'))
         browser = subprocess.Popen(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,
             env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
         processes.append(browser)
-        if browser.wait(timeout=780 if browser_module == 'react-enrollment-browser.mjs' else 360):
+        if browser.wait(timeout=780 if browser_module in {'react-enrollment-browser.mjs','react-certificates-browser.mjs'} else 360):
             raise RuntimeError('browser')
     result = 'passed'
 except BaseException as error:

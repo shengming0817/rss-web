@@ -20,7 +20,10 @@
     "./content": "./src/content.ts",
     "./software": "./src/software.ts",
     "./software-publications": "./src/software-publications.ts",
-    "./resource-mappings": "./src/resource-mappings.ts"
+    "./resource-mappings": "./src/resource-mappings.ts",
+    "./device-pki": "./src/device-pki.ts",
+    "./certificate-archive": "./src/certificate-archive.ts",
+    "./recovery-credentials": "./src/recovery-credentials.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -41,7 +44,9 @@
     "@rss/mdm-compliance": "workspace:*",
     "@rss/mdm-resources": "workspace:*",
     "@rss/mdm-content": "workspace:*",
-    "@rss/mdm-software": "workspace:*"
+    "@rss/mdm-software": "workspace:*",
+    "@rss/mdm-certificates": "workspace:*",
+    "@rss/mdm-recovery-credentials": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

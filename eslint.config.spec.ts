@@ -300,6 +300,7 @@ it('keeps the MDM domain cores independent and their adapters out of feature com
     'mdm-resources',
     'mdm-content',
     'mdm-software',
+    'mdm-recovery-credentials',
   ]) {
     for (const dependency of ['@rss/api/mdm-operations', 'react', '@rss/auth-core'])
       expect(
@@ -391,4 +392,42 @@ it('keeps resource authoring and content transfer in separate pure owners', asyn
   expect(
     await ruleIds("export * from '@rss/mdm-http/content'", 'apps/mdm/src/ContentUpload.tsx'),
   ).toContain('no-restricted-imports')
+})
+
+it('keeps certificate modules and recovery credentials independent of transport and each other', async () => {
+  for (const file of [
+    'packages/mdm-certificates/src/archive/index.ts',
+    'packages/mdm-certificates/src/device-pki/index.ts',
+    'packages/mdm-recovery-credentials/src/index.ts',
+  ]) {
+    for (const dependency of [
+      '@rss/api/mdm-operations',
+      '@rss/auth-core',
+      'react',
+      '@rss/mdm-http',
+      '@rss/mdm-resources',
+    ])
+      expect(await ruleIds(`export * from '${dependency}'`, file)).toContain(
+        'no-restricted-imports',
+      )
+    for (const dependency of ['@rss/mdm-inventory', '@rss/mdm-devices'])
+      expect(await ruleIds(`export * from '${dependency}'`, file)).not.toContain(
+        'no-restricted-imports',
+      )
+  }
+  for (const dependency of [
+    '@rss/mdm-certificates/archive',
+    '@rss/mdm-certificates/device-pki',
+    '@rss/mdm-recovery-credentials',
+  ]) {
+    expect(
+      await ruleIds(
+        `export * from '${dependency}'`,
+        'packages/mdm-http/src/certificate-archive.ts',
+      ),
+    ).not.toContain('no-restricted-imports')
+    expect(
+      await ruleIds(`export * from '${dependency}'`, 'apps/mdm/src/Certificates.tsx'),
+    ).not.toContain('no-restricted-imports')
+  }
 })

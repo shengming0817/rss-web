@@ -365,7 +365,10 @@ it('hides denied device facts while retaining the original unknown manual write 
         connections: {},
         authorization: {
           effective: async () => ({
-            grants: [{ operation: 'inventory_read' }, { operation: 'inventory_assign' }],
+            grants: [
+              { operation: 'inventory_read', scope: { kind: 'all_devices' } },
+              { operation: 'inventory_assign', scope: { kind: 'all_devices' } },
+            ],
           }),
         },
       }),
