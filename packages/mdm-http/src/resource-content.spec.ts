@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import type { AgentDefinition, MappingDeclaration, NativeDefinition } from '@rss/mdm-inventory'
-import { encodeCollectionContent } from './mapping-content'
+import type { AgentDefinition, MappingDeclaration, NativeDefinition } from '@rss/mdm-resources'
+import { encodeCollectionContent } from './resource-content'
 
 const applicability = () => ({
   minimumOsVersion: null,
@@ -159,4 +159,40 @@ it('rejects lossy numbers instead of uploading bytes that disagree with the decl
       },
     }),
   ).toThrow()
+})
+
+it('matches Rust telemetry struct order and sorted parameter objects without reordering field references', () => {
+  const content = encodeCollectionContent({
+    kind: 'telemetry_profile',
+    artifact: artifact(),
+    definition: {
+      template: {
+        architecture: 'x86_64',
+        platform: 'windows',
+        variant: 'main',
+        version: 'v1',
+        resource: 'template',
+      },
+      parameters: { z: false, a: { nested: 0 } },
+      fields: [
+        { key: 'custom.z', version: 2 },
+        { key: 'custom.a', version: 1 },
+      ],
+      projection: 'both',
+      sampleMillis: 30000,
+      uploadMillis: 60000,
+      budget: {
+        points: 100,
+        bytes: 65536,
+        resources: 4,
+        executionMillis: 1000,
+        outputBytes: 65536,
+      },
+      boost: null,
+      backfillSeconds: 3600,
+    },
+  })
+  expect(new TextDecoder().decode(content)).toBe(
+    '{"template":{"resource":"template","version":"v1","variant":"main","platform":"windows","architecture":"x86_64"},"parameters":{"a":{"nested":0},"z":false},"fields":[{"key":"custom.z","version":2},{"key":"custom.a","version":1}],"projection":"both","sampleMillis":30000,"uploadMillis":60000,"budget":{"points":100,"bytes":65536,"resources":4,"executionMillis":1000,"outputBytes":65536},"boost":null,"backfillSeconds":3600}',
+  )
 })

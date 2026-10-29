@@ -1,4 +1,4 @@
-import { identifier } from './authoring'
+import { identifier } from '@rss/mdm-inventory'
 
 /** Shared collection extraction semantics; this model neither executes nor evaluates them. */
 export type Conversion =

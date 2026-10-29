@@ -3,15 +3,13 @@ import { createMappings, replaceDeclaration, resourceId, validateDraft } from '.
 import type {
   MappingDraft,
   MappingVariant,
-  MappingVersionsPort,
+  MappingPort,
   NativeDefinition,
   PreparedMapping,
-  PreparedUpload,
-  UploadSession,
-} from './collection'
+  PreparedMaterial,
+} from './index'
 
-const operation = '11111111-1111-4111-8111-111111111111',
-  uploadId = '22222222-2222-4222-8222-222222222222'
+const operation = '11111111-1111-4111-8111-111111111111'
 const artifact = () => ({
   reference: 'native/windows.json',
   length: 1,
@@ -76,9 +74,8 @@ function prepared(): PreparedMapping {
         variants: source.variants,
       },
     },
-    uploads: [
+    materials: [
       {
-        id: uploadId,
         target: {
           resource: source.resource,
           version: '2.0',
@@ -92,20 +89,8 @@ function prepared(): PreparedMapping {
     ],
   }
 }
-function session(upload: PreparedUpload): UploadSession {
-  return {
-    id: upload.id,
-    target: upload.target,
-    resourceDigest: Array<number>(32).fill(9),
-    actor: 'operator',
-    storageClass: 'native_configuration',
-    offset: 0,
-    expires: 2000000000,
-    complete: false,
-  }
-}
-function port(methods: Partial<MappingVersionsPort>): MappingVersionsPort {
-  return new Proxy(methods as MappingVersionsPort, {
+function port(methods: Partial<MappingPort>): MappingPort {
+  return new Proxy(methods as MappingPort, {
     get(target, key) {
       if (!(key in target)) throw new Error(`Unexpected port call: ${String(key)}`)
       return Reflect.get(target, key)
@@ -153,16 +138,15 @@ it('updates native paired architectures while preserving each variant artifact a
 })
 it('separates read-only byte preparation from explicit declaration and upload actions', async () => {
   const temporary = prepared()
-  new Uint8Array(temporary.uploads[0]!.bytes).fill(7)
+  new Uint8Array(temporary.materials[0]!.bytes).fill(7)
   const prepare = vi.fn(async () => temporary),
     mappings = createMappings(port({ prepare }))
   const result = await mappings.prepare(draft())
   expect(prepare).toHaveBeenCalledTimes(1)
   expect(Object.isFrozen(result.change.input.variants)).toBe(true)
-  expect(result.uploads[0]?.id).toBe(uploadId)
-  expect(result.uploads[0]?.bytes.byteLength).toBe(1)
-  expect(new Uint8Array(result.uploads[0]!.bytes)).toEqual(new Uint8Array([7]))
-  expect(new Uint8Array(temporary.uploads[0]!.bytes)).toEqual(new Uint8Array([0]))
+  expect(result.materials[0]?.bytes.byteLength).toBe(1)
+  expect(new Uint8Array(result.materials[0]!.bytes)).toEqual(new Uint8Array([7]))
+  expect(new Uint8Array(temporary.materials[0]!.bytes)).toEqual(new Uint8Array([0]))
 })
 it('does not replay an unknown declaration or advance an upload without explicit calls', async () => {
   const declare = vi.fn(async () => {
@@ -172,48 +156,80 @@ it('does not replay an unknown declaration or advance an upload without explicit
   const original = prepared()
   await expect(mappings.declare(original)).rejects.toMatchObject({ code: 'operation_unknown' })
   expect(declare).toHaveBeenCalledTimes(1)
-  expect(declare).toHaveBeenCalledWith(original)
+  expect(declare).toHaveBeenCalledWith(original.resource, original.change)
 })
-it('rejects wrong upload targets, offsets and content receipts before reporting success', async () => {
-  const upload = prepared().uploads[0]!,
-    mappings = createMappings(
-      port({
-        begin: async () => ({
-          ...session(upload),
-          target: { ...upload.target, architecture: 'aarch64' },
-        }),
-        append: async () => ({ ...session(upload), offset: 2 }),
-        receipt: async () => ({
-          operationId: uploadId,
-          resource: upload.target.resource,
-          version: 'wrong',
-          reference: upload.target.artifact.reference,
-          length: 1,
-          sha256: artifact().sha256,
-          committed: true,
-        }),
-      }),
-    )
-  await expect(mappings.begin(upload)).rejects.toThrow('Wrong original upload session')
-  await expect(mappings.append(upload, 0)).rejects.toThrow('Wrong original upload session')
-  await expect(mappings.append(upload, 1)).rejects.toThrow('Invalid original upload offset')
-  await expect(mappings.receipt(upload)).rejects.toThrow('Wrong original content receipt')
-})
-it('restores only the original upload ID with an explicit script content source', async () => {
-  const restore = vi.fn(async () => prepared().uploads[0]!),
+it('restores the observed material coordinate with an explicit script content source', async () => {
+  const material = prepared().materials[0]!,
+    restore = vi.fn(async () => material),
     mappings = createMappings(port({ restore }))
-  await mappings.restore('rss/collection.native', uploadId, { version: '1.0' })
-  expect(restore).toHaveBeenCalledWith('rss/collection.native', uploadId, { version: '1.0' })
-  await expect(mappings.restore('rss/collection.native', operation)).rejects.toThrow(
-    'Wrong restored upload',
+  await mappings.restore(material.target, { version: '1.0' })
+  expect(restore).toHaveBeenCalledWith(material.target, { version: '1.0' }, undefined)
+  await expect(mappings.restore({ ...material.target, version: 'other' })).rejects.toThrow(
+    'Wrong restored material',
   )
 })
 
 it('erases the temporary restore buffer after transferring its immutable copy to the caller', async () => {
-  const temporary = prepared().uploads[0]!
+  const temporary = prepared().materials[0]!
   new Uint8Array(temporary.bytes).fill(9)
   const mappings = createMappings(port({ restore: async () => temporary }))
-  const result = await mappings.restore(temporary.target.resource, temporary.id)
+  const result = await mappings.restore(temporary.target)
   expect(new Uint8Array(result.bytes)).toEqual(new Uint8Array([9]))
+  expect(new Uint8Array(temporary.bytes)).toEqual(new Uint8Array([0]))
+})
+
+it('preserves independent native groups on the same platform when changing a chosen pair', () => {
+  const first = variant(),
+    second = variant('aarch64'),
+    other = { ...definition(), outputBytes: 131072 },
+    source = [
+      first,
+      second,
+      {
+        ...variant(),
+        key: 'other',
+        declaration: {
+          kind: 'native_collection' as const,
+          artifact: artifact(),
+          definition: other,
+        },
+      },
+      {
+        ...variant('aarch64'),
+        key: 'other',
+        declaration: {
+          kind: 'native_collection' as const,
+          artifact: artifact(),
+          definition: other,
+        },
+      },
+    ],
+    changed = { ...definition(), timeoutSeconds: 45 },
+    result = replaceDeclaration(source, first, {
+      kind: 'native_collection',
+      artifact: artifact(),
+      definition: changed,
+    })
+  expect(result.slice(0, 2).map((item) => item.declaration.definition)).toEqual([changed, changed])
+  expect(result.slice(2)).toEqual(source.slice(2))
+})
+
+it('passes restoration cancellation to the port and erases material delivered after it was cancelled', async () => {
+  const controller = new AbortController(),
+    temporary = prepared().materials[0]!
+  new Uint8Array(temporary.bytes).fill(7)
+  let finish!: (value: PreparedMaterial) => void
+  const restore = vi.fn<MappingPort['restore']>(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    ),
+    mappings = createMappings(port({ restore })),
+    running = mappings.restore(temporary.target, undefined, controller.signal)
+  expect(restore.mock.calls[0]?.[2]).toBe(controller.signal)
+  controller.abort()
+  finish(temporary)
+  await expect(running).rejects.toThrow('cancelled')
   expect(new Uint8Array(temporary.bytes)).toEqual(new Uint8Array([0]))
 })

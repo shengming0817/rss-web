@@ -698,11 +698,7 @@ try {
       201,
     )
     const receiptPath = `/api/v1/resources/${encodeURIComponent(sourceId)}/content/operations/${uploadPath.split('/').at(-1)}`
-    const receipt = await (
-      await run.response(p, 'GET', receiptPath, () =>
-        card.getByRole('button', { name: '查询原内容提交回执', exact: true }).click(),
-      )
-    ).json()
+    const receipt = await api('GET', receiptPath)
     assert.equal(receipt.committed, true)
     assert.equal(receipt.version, version)
     await p.unroute(pattern)

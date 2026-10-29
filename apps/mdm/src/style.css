@@ -892,3 +892,148 @@ html:has(.mdm-overlay-open) {
 .permission-panel[hidden] {
   display: none;
 }
+
+.resource-detail,
+.resource-blueprint {
+  display: grid;
+  gap: 16px;
+}
+.resource-detail-heading,
+.resource-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.resource-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.resource-toolbar > label {
+  min-width: 180px;
+}
+.resource-toolbar label > .ant-select,
+.resource-detail label > .ant-select {
+  display: block;
+  width: 100%;
+}
+.resource-detail code {
+  overflow-wrap: anywhere;
+}
+.software-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.software-card {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 20px;
+  background: var(--bg);
+  min-width: 0;
+  transition: border-color 0.15s;
+}
+.software-card:hover {
+  border-color: var(--muted);
+}
+.software-icon {
+  display: grid;
+  place-items: center;
+  width: 39px;
+  height: 39px;
+  border-radius: 9px;
+  background: var(--side);
+  border: 1px solid var(--line);
+  font-size: 22px;
+  font-weight: 550;
+}
+.software-card h3 {
+  margin: 18px 0 4px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.software-description,
+.software-facts {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.software-facts {
+  margin: 20px 0 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.software-facts strong {
+  color: var(--text);
+  font-weight: 500;
+}
+@media (max-width: 1180px) {
+  .software-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .software-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .resource-toolbar > label {
+    width: 100%;
+  }
+}
+.resource-author,
+.author-record {
+  display: grid;
+  gap: 12px;
+  margin-block: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+}
+.author-record > .resource-card-top {
+  margin-bottom: 8px;
+}
+.author-literal {
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--line);
+  min-width: 0;
+}
+.resource-author input[type='file'] {
+  max-width: 100%;
+}
+.content-file {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 6px;
+  margin-block: 12px;
+}
+.content-file input {
+  max-width: 100%;
+}
+.software-lifecycle {
+  margin-block: 16px;
+}
+.software-lifecycle h3 {
+  margin-block: 0 8px;
+  font-size: 13px;
+}
+.software-lifecycle code {
+  overflow-wrap: anywhere;
+}
+.software-page-filter {
+  flex: 1 1 260px;
+  max-width: 360px;
+}
+.resource-toolbar > details {
+  padding-block: 8px;
+}
+.resource-toolbar summary {
+  color: var(--muted);
+  cursor: pointer;
+}

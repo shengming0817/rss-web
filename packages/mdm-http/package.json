@@ -16,7 +16,11 @@
     "./inventory": "./src/inventory.ts",
     "./groups": "./src/groups.ts",
     "./compliance": "./src/compliance.ts",
-    "./mapping-versions": "./src/mapping-versions.ts"
+    "./resources": "./src/resources.ts",
+    "./content": "./src/content.ts",
+    "./software": "./src/software.ts",
+    "./software-publications": "./src/software-publications.ts",
+    "./resource-mappings": "./src/resource-mappings.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -34,7 +38,10 @@
     "@rss/mdm-connections": "workspace:*",
     "@rss/mdm-inventory": "workspace:*",
     "@rss/mdm-groups": "workspace:*",
-    "@rss/mdm-compliance": "workspace:*"
+    "@rss/mdm-compliance": "workspace:*",
+    "@rss/mdm-resources": "workspace:*",
+    "@rss/mdm-content": "workspace:*",
+    "@rss/mdm-software": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

@@ -11,6 +11,8 @@ export default defineConfig({
             '*.spec.ts',
             'apps/mdm/src/lifecycle.spec.ts',
             'apps/mdm/src/assets-lifecycle.spec.ts',
+            'apps/mdm/src/resources-lifecycle.spec.ts',
+            'apps/mdm/src/material-source.spec.ts',
           ],
           exclude: ['**/node_modules/**', '**/dist/**'],
           // ESLint's type-aware boundary checks need time to initialize on CI.

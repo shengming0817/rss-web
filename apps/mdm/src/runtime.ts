@@ -8,11 +8,19 @@ import {
   createPublicEnrollment,
 } from '@rss/mdm-enrollment'
 import { createConnections } from '@rss/mdm-connections'
-import { createInventory, createMappings } from '@rss/mdm-inventory'
+import { createInventory } from '@rss/mdm-inventory'
+import { createMappings, createResources } from '@rss/mdm-resources'
+import { createContent } from '@rss/mdm-content'
+import { createSoftware } from '@rss/mdm-software'
+import { createPublications } from '@rss/mdm-software/publications'
 import { createGroups } from '@rss/mdm-groups'
 import { createCompliance } from '@rss/mdm-compliance'
 import { createInventoryAdapter } from '@rss/mdm-http/inventory'
-import { createMappingVersionsAdapter } from '@rss/mdm-http/mapping-versions'
+import { createResourceMappingsAdapter } from '@rss/mdm-http/resource-mappings'
+import { createResourcesAdapter } from '@rss/mdm-http/resources'
+import { createContentAdapter } from '@rss/mdm-http/content'
+import { createSoftwareAdapter } from '@rss/mdm-http/software'
+import { createPublicationsAdapter } from '@rss/mdm-http/software-publications'
 import { createGroupsAdapter } from '@rss/mdm-http/groups'
 import { createComplianceAdapter } from '@rss/mdm-http/compliance'
 import { createDevicesAdapter } from '@rss/mdm-http/devices'
@@ -69,6 +77,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         principalId: state.identity.principalId,
         sessionId: state.session.id,
       })
+      const content = createContent(createContentAdapter(transport))
       return Object.freeze({
         binding: `${tenant}/${state.identity.principalId}/${state.session.id}`,
         identity: createIdentityAdministration(
@@ -83,7 +92,11 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         profiles: createProfiles(createProfilesAdapter(transport), state.identity.principalId),
         devices: createDevices(createDevicesAdapter(transport, tenant), tenant),
         inventory: createInventory(createInventoryAdapter(transport, tenant)),
-        mappings: createMappings(createMappingVersionsAdapter(transport)),
+        resources: createResources(createResourcesAdapter(transport)),
+        content,
+        mappings: createMappings(createResourceMappingsAdapter(transport, content)),
+        software: createSoftware(createSoftwareAdapter(transport)),
+        publications: createPublications(createPublicationsAdapter(transport)),
         groups: createGroups(createGroupsAdapter(transport)),
         compliance: createCompliance(createComplianceAdapter(transport)),
         enrollment: createEnrollment(

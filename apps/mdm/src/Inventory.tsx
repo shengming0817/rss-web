@@ -12,7 +12,7 @@ import { CollectionMappings } from './CollectionMappings'
 
 export function Inventory({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
-    { inventory, mappings, authorization, binding } = useAdministration(runtime),
+    { inventory, mappings, content, authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/inventory-presentation`, authorization.effective),
     tenant = (operation: string) =>
       permissions.value?.grants.some(
@@ -75,7 +75,12 @@ export function Inventory({ runtime, locale }: { runtime: Runtime; locale: Local
             key: 'mappings',
             label: l('采集映射', 'Collection mappings'),
             children: (
-              <CollectionMappings mappings={mappings} locale={locale} canWrite={resourceWrite} />
+              <CollectionMappings
+                mappings={mappings}
+                content={content}
+                locale={locale}
+                canWrite={resourceWrite}
+              />
             ),
           },
         ]}

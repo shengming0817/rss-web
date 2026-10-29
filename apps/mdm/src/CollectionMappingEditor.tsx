@@ -1,11 +1,25 @@
 import { useState } from 'react'
 import { Alert, Button, Form, Input, Select, Space } from 'antd'
-import type { MappingDeclaration } from '@rss/mdm-inventory'
+import type { MappingDeclaration } from '@rss/mdm-resources'
 import type { Locale } from './i18n'
 import { labels } from './AdminUi'
 import { emptyMapping, NativeReadEditor, ValueMappingEditor } from './ValueMappingEditor'
 
 /** Read-only source plans stay visible without a JSON text authoring bridge. */
+function PlanBranch({ value }: { value: object }) {
+  const [expanded, setExpanded] = useState(false),
+    keys = Object.keys(value)
+  return (
+    <details onToggle={(event) => setExpanded(event.currentTarget.open)}>
+      <summary>
+        {Array.isArray(value)
+          ? `[${value.length}]`
+          : keys.slice(0, 5).join(' · ') + (keys.length > 5 ? ` … (${keys.length})` : '')}
+      </summary>
+      {expanded && <CollectionPlan value={value} />}
+    </details>
+  )
+}
 export function CollectionPlan({ value }: { value: unknown }) {
   if (value === null) return <span>—</span>
   if (typeof value !== 'object') return <span>{String(value)}</span>
@@ -16,12 +30,7 @@ export function CollectionPlan({ value }: { value: unknown }) {
           <dt>{key}</dt>
           <dd>
             {item !== null && typeof item === 'object' ? (
-              <details>
-                <summary>
-                  {Array.isArray(item) ? `${item.length}` : Object.keys(item).join(' · ')}
-                </summary>
-                <CollectionPlan value={item} />
-              </details>
+              <PlanBranch value={item} />
             ) : (
               <CollectionPlan value={item} />
             )}
@@ -139,9 +148,31 @@ export function CollectionMappingEditor({
                   }
                 />
               </Form.Item>
-              <p className="subtitle">
-                {l('计数规范化', 'Counter normalization')} · {binding.counterNormalization ?? '—'}
-              </p>
+              <Form.Item label={l('计数规范化', 'Counter normalization')}>
+                <Select
+                  aria-label={`${l('计数规范化', 'Counter normalization')} ${key}`}
+                  value={binding.counterNormalization ?? 'none'}
+                  options={[
+                    { value: 'none', label: l('不规范化', 'None') },
+                    { value: 'local_cumulative_v1', label: 'local_cumulative_v1' },
+                  ]}
+                  onChange={(normalization: 'none' | 'local_cumulative_v1') =>
+                    onChange({
+                      ...value,
+                      definition: {
+                        ...value.definition,
+                        mappings: {
+                          ...value.definition.mappings,
+                          [key]: {
+                            ...binding,
+                            counterNormalization: normalization === 'none' ? null : normalization,
+                          },
+                        },
+                      },
+                    })
+                  }
+                />
+              </Form.Item>
               <ValueMappingEditor
                 locale={locale}
                 value={binding.mapping}

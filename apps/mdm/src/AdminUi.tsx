@@ -204,21 +204,26 @@ export function DirectoryControls({
   sort,
   required = 'id',
   maximum = 1000,
+  disabled = false,
 }: AdminProps & {
   query: Query
   onChange: (query: Query) => void
   fields: readonly string[]
   sort: readonly string[]
-  required?: string
+  required?: string | readonly string[]
   maximum?: number
+  disabled?: boolean
 }) {
   const l = labels(locale),
+    requiredFields = typeof required === 'string' ? [required] : required,
     [filter, setFilter] = useState(query.filter ?? '')
   return (
     <Form
+      disabled={disabled}
       className="admin-toolbar"
       layout="inline"
       onFinish={() => {
+        if (disabled) return
         const rest = firstPage(query)
         delete rest.filter
         onChange({ ...rest, ...(filter ? { filter } : {}) })
@@ -261,11 +266,11 @@ export function DirectoryControls({
           options={fields.map((field) => ({
             value: field,
             label: fieldLabel(locale, field),
-            disabled: field === required,
+            disabled: requiredFields.includes(field),
           }))}
           onChange={(value: string[]) => {
             const rest = firstPage(query)
-            onChange({ ...rest, fields: [...new Set([required, ...value])] })
+            onChange({ ...rest, fields: [...new Set([...requiredFields, ...value])] })
           }}
           maxTagCount="responsive"
         />

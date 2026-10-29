@@ -62,6 +62,10 @@ beforeEach(() => {
         o.responseType === 'arraybuffer'
           ? {
               bytes: binary,
+              status: reply.status,
+              contentLength: reply.headers?.['Content-Length'] ?? null,
+              contentRange: reply.headers?.['Content-Range'] ?? null,
+              etag: reply.headers?.['ETag'] ?? null,
               contentType: reply.headers?.['Content-Type'],
               contentDisposition: reply.headers?.['Content-Disposition'],
             }

@@ -1,3 +1,4 @@
+import type { ContentUseCases } from './ContentUpload'
 import { useRef, useState } from 'react'
 import { Alert, Button, Card, Form, Input, Select } from 'antd'
 import {
@@ -5,10 +6,10 @@ import {
   validateDraft,
   variantKey,
   type MappingResource,
-  type MappingResourceRow,
+  type ResourceRow,
   type PreparedMapping,
-  type PreparedUpload,
-} from '@rss/mdm-inventory'
+  type PreparedMaterial,
+} from '@rss/mdm-resources'
 import {
   CursorControls,
   DirectoryControls,
@@ -24,6 +25,7 @@ import {
 } from './AdminUi'
 import { DataTable } from './DataTable'
 import { CollectionMappingEditor } from './CollectionMappingEditor'
+import type { UploadIntent, UploadSession } from '@rss/mdm-content'
 import { MappingUpload, type MappingUseCases } from './MappingUpload'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
 import { useProtectedDelivery } from './useProtectedDelivery'
@@ -31,12 +33,14 @@ import type { Locale } from './i18n'
 
 function MappingVersionEditor({
   mappings,
+  content,
   resource,
   locale,
   canWrite,
   done,
 }: {
   mappings: MappingUseCases
+  content: ContentUseCases
   resource: MappingResource
   locale: Locale
   canWrite: boolean
@@ -53,16 +57,21 @@ function MappingVersionEditor({
     [pending, setPending] = useState<PreparedMapping | null>(null),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
     [receipts, setReceipts] = useState<readonly string[]>([]),
+    [intents, setIntents] = useState<readonly UploadIntent[]>([]),
     [contentAvailable, setContentAvailable] = useState(false),
     buffers = useRef<PreparedMapping | null>(null),
     delivery = useProtectedDelivery(() => {
-      for (const upload of buffers.current?.uploads ?? []) new Uint8Array(upload.bytes).fill(0)
+      for (const upload of buffers.current?.materials ?? []) new Uint8Array(upload.bytes).fill(0)
       setContentAvailable(false)
     }, canWrite),
     selectedVariant = variants.find((variant) => variantKey(variant) === selected),
     allContents =
-      pending !== null && pending.uploads.every((upload) => receipts.includes(upload.id))
-  usePendingSelection(action.busy || (pending !== null && outcome !== 'rejected' && !allContents))
+      pending !== null &&
+      intents.length === pending.materials.length &&
+      intents.every((intent) => receipts.includes(intent.id))
+  usePendingSelection(
+    action.busy || (pending !== null && outcome !== 'confirmed' && outcome !== 'rejected'),
+  )
   async function prepare() {
     const generation = delivery.capture()
     await action.run(async () => {
@@ -79,11 +88,14 @@ function MappingVersionEditor({
       const prepared = await mappings.prepare(draft)
       // Transfer or erase before useAction can discard a late successful response.
       if (!delivery.isCurrent(generation)) {
-        for (const upload of prepared.uploads) new Uint8Array(upload.bytes).fill(0)
+        for (const upload of prepared.materials) new Uint8Array(upload.bytes).fill(0)
         return
       }
       buffers.current = prepared
       setContentAvailable(true)
+      setIntents(
+        prepared.materials.map((material) => content.intent(crypto.randomUUID(), material.target)),
+      )
       setPending(prepared)
     })
   }
@@ -185,7 +197,7 @@ function MappingVersionEditor({
           <p>
             {pending.resource} / {pending.change.input.version} ·{' '}
             {pending.change.input.variants.length} {l('个变体', 'variants')} ·{' '}
-            {pending.uploads.length} {l('份内容', 'artifacts')}
+            {pending.materials.length} {l('份内容', 'artifacts')}
           </p>
           {outcome === 'confirmed' ? (
             <>
@@ -196,16 +208,20 @@ function MappingVersionEditor({
                   'Fixed version declaration confirmed. Commit each artifact and read its receipt.',
                 )}
               />
-              {pending.uploads.map((upload) => (
+              {pending.materials.map((upload, index) => (
                 <MappingUpload
-                  key={upload.id}
+                  key={intents[index]!.id}
                   mappings={mappings}
+                  content={content}
+                  intent={intents[index]!}
                   locale={locale}
                   upload={upload}
                   canWrite={canWrite}
                   initialAvailable={contentAvailable}
                   scriptSourceVersion={baseId}
-                  confirmed={() => setReceipts((current) => [...new Set([...current, upload.id])])}
+                  confirmed={() =>
+                    setReceipts((current) => [...new Set([...current, intents[index]!.id])])
+                  }
                 />
               ))}
               {allContents && (
@@ -250,10 +266,12 @@ function MappingVersionEditor({
 }
 function UploadRecovery({
   mappings,
+  content,
   locale,
   canWrite,
 }: {
   mappings: MappingUseCases
+  content: ContentUseCases
   locale: Locale
   canWrite: boolean
 }) {
@@ -263,10 +281,13 @@ function UploadRecovery({
     [resource, setResource] = useState(''),
     [id, setId] = useState(''),
     [source, setSource] = useState(''),
-    [restored, setRestored] = useState<{ upload: PreparedUpload; scriptSource: string } | null>(
-      null,
-    ),
-    material = useRef<PreparedUpload | null>(null),
+    [restored, setRestored] = useState<{
+      upload: PreparedMaterial
+      scriptSource: string
+      session: UploadSession
+      intent: UploadIntent
+    } | null>(null),
+    material = useRef<PreparedMaterial | null>(null),
     delivery = useProtectedDelivery(() => {
       if (material.current) new Uint8Array(material.current.bytes).fill(0)
     }, canWrite)
@@ -287,9 +308,10 @@ function UploadRecovery({
           onFinish={() => {
             const generation = delivery.capture()
             void action.run(async () => {
+              const session = await content.read(resource, id)
+              if (!delivery.isCurrent(generation)) return
               const upload = await mappings.restore(
-                resource,
-                id,
+                session.target,
                 source ? { version: source } : undefined,
               )
               if (!delivery.isCurrent(generation)) {
@@ -298,7 +320,12 @@ function UploadRecovery({
               }
               if (material.current) new Uint8Array(material.current.bytes).fill(0)
               material.current = upload
-              setRestored({ upload, scriptSource: source })
+              setRestored({
+                upload,
+                scriptSource: source,
+                session,
+                intent: content.intent(session.id, session.target),
+              })
             })
           }}
         >
@@ -339,8 +366,11 @@ function UploadRecovery({
         </Form>
         {restored && (
           <MappingUpload
-            key={restored.upload.id}
+            key={restored.intent.id}
             mappings={mappings}
+            content={content}
+            intent={restored.intent}
+            initialSession={restored.session}
             locale={locale}
             upload={restored.upload}
             scriptSourceVersion={restored.scriptSource}
@@ -357,13 +387,15 @@ const resourceColumns = [
   'revision',
   'activeVersion',
   'presentation',
-] as const satisfies readonly (keyof MappingResourceRow)[]
+] as const satisfies readonly (keyof ResourceRow)[]
 export function CollectionMappings({
   mappings,
+  content,
   locale,
   canWrite,
 }: {
   mappings: MappingUseCases
+  content: ContentUseCases
   locale: Locale
   canWrite: boolean
 }) {
@@ -454,6 +486,7 @@ export function CollectionMappings({
           <MappingVersionEditor
             key={editor}
             mappings={mappings}
+            content={content}
             resource={detail}
             locale={locale}
             canWrite={canWrite}
@@ -465,7 +498,7 @@ export function CollectionMappings({
         </Card>
       )}
       <div className="admin-subsection">
-        <UploadRecovery mappings={mappings} locale={locale} canWrite={canWrite} />
+        <UploadRecovery mappings={mappings} content={content} locale={locale} canWrite={canWrite} />
       </div>
     </SelectionGuard.Provider>
   )

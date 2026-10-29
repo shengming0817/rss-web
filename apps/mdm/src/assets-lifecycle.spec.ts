@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { ContentUseCases } from './ContentUpload'
 import { act, createElement, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -7,11 +8,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   MappingResource,
   PreparedMapping,
-  PreparedUpload,
-  QueryDefinition,
-  UploadSession,
+  PreparedMaterial,
   ValueMapping,
-} from '@rss/mdm-inventory'
+} from '@rss/mdm-resources'
+import type { QueryDefinition } from '@rss/mdm-inventory'
+import type { UploadSession } from '@rss/mdm-content'
 import type { InventoryUseCases } from './FieldEditor'
 import type { GroupsUseCases } from './GroupPicker'
 import type { DevicesUseCases } from './EndpointPicker'
@@ -402,9 +403,8 @@ it('hides denied device facts while retaining the original unknown manual write 
   expect(assign.mock.calls[1]).toEqual(original)
 })
 
-function preparedUpload(): PreparedUpload {
+function preparedUpload(): PreparedMaterial {
   return {
-    id: nested,
     target: {
       resource: 'rss/collection.native',
       version: '2.0',
@@ -416,24 +416,28 @@ function preparedUpload(): PreparedUpload {
     bytes: new Uint8Array([1, 2, 3]).buffer,
   }
 }
-function uploadSession(upload: PreparedUpload): UploadSession {
+function uploadSession(upload: PreparedMaterial): UploadSession {
   return {
-    id: upload.id,
+    id: nested,
     target: upload.target,
     resourceDigest: Array<number>(32).fill(1),
     actor: 'operator',
     storageClass: 'native_configuration',
+    inspection: null,
+    source: null,
+    origin: null,
     offset: 0,
     expires: 2000000000,
     complete: false,
   }
 }
 function mappingResource(): MappingResource {
-  return {
+  const resource: MappingResource = {
     id: 'rss/collection.native',
     kind: 'native_collection',
     revision: 1,
     presentation: { name: 'Native' },
+    origin: null,
     versions: [
       {
         id: '1.0',
@@ -472,13 +476,21 @@ function mappingResource(): MappingResource {
       },
     ],
   }
+  return {
+    ...resource,
+    versions: resource.versions.map((version) => ({
+      ...version,
+      variants: [...version.variants, { ...version.variants[0]!, architecture: 'aarch64' }],
+    })),
+  }
 }
 it('can explicitly begin the original metadata after hiding an unstarted upload and restore bytes afterward', async () => {
   const upload = preparedUpload(),
     fresh = preparedUpload(),
-    begin = vi.fn<MappingUseCases['begin']>().mockResolvedValue(uploadSession(upload)),
+    begin = vi.fn<ContentUseCases['begin']>().mockResolvedValue(uploadSession(upload)),
     restore = vi.fn<MappingUseCases['restore']>().mockResolvedValue(fresh),
-    mappings = inject<MappingUseCases>({ begin, restore }),
+    mappings = inject<MappingUseCases>({ restore }),
+    content = inject<ContentUseCases>({ begin, verify: async () => {} }),
     show = (allowed: boolean) =>
       createElement(SecretTabs, {
         authorizedKeys: allowed ? ['mapping'] : [],
@@ -488,6 +500,8 @@ it('can explicitly begin the original metadata after hiding an unstarted upload 
             label: 'Mapping',
             children: createElement(MappingUpload, {
               mappings,
+              content,
+              intent: { id: nested, target: upload.target },
               upload,
               locale: 'zh',
               canWrite: true,
@@ -500,22 +514,21 @@ it('can explicitly begin the original metadata after hiding an unstarted upload 
   await render(show(true))
   expect(new Uint8Array(upload.bytes)).toEqual(new Uint8Array([0, 0, 0]))
   expect(button('开始原上传').disabled).toBe(false)
-  expect(button('恢复原内容缓冲').disabled).toBe(true)
+  expect(button('恢复原内容缓冲').disabled).toBe(false)
   await click('开始原上传')
   expect(begin).toHaveBeenCalledTimes(1)
   expect(begin.mock.calls[0]?.[0].id).toBe(nested)
   expect(restore).not.toHaveBeenCalled()
   await click('恢复原内容缓冲')
-  expect(restore).toHaveBeenCalledWith(upload.target.resource, nested, undefined)
+  expect(restore).toHaveBeenCalledWith(upload.target, undefined, expect.any(AbortSignal))
   expect(button('从已确认位置续传一块').disabled).toBe(false)
   expect(new Uint8Array(fresh.bytes)).toEqual(new Uint8Array([1, 2, 3]))
 })
 it('erases a restored upload buffer that arrives after its panel unmounts', async () => {
   const upload = preparedUpload(),
     late = preparedUpload()
-  let finish!: (upload: PreparedUpload) => void
+  let finish!: (upload: PreparedMaterial) => void
   const mappings = inject<MappingUseCases>({
-    upload: async () => uploadSession(upload),
     restore: () =>
       new Promise((resolve) => {
         finish = resolve
@@ -524,6 +537,11 @@ it('erases a restored upload buffer that arrives after its panel unmounts', asyn
   await render(
     createElement(MappingUpload, {
       mappings,
+      content: inject<ContentUseCases>({
+        verify: async () => {},
+        read: async () => uploadSession(upload),
+      }),
+      intent: { id: nested, target: upload.target },
       upload,
       locale: 'zh',
       canWrite: true,
@@ -548,7 +566,17 @@ it('erases all prepared mapping content that arrives after leaving the resource 
         finish = resolve
       }),
   })
-  await render(createElement(CollectionMappings, { mappings, locale: 'zh', canWrite: true }))
+  await render(
+    createElement(CollectionMappings, {
+      mappings,
+      content: inject<ContentUseCases>({
+        verify: async () => {},
+        read: async () => uploadSession(preparedUpload()),
+      }),
+      locale: 'zh',
+      canWrite: true,
+    }),
+  )
   await click(resource.id)
   await fill('新固定版本名称', '2.0')
   await click('准备新版本内容与摘要')
@@ -566,14 +594,14 @@ it('erases all prepared mapping content that arrives after leaving the resource 
           variants: resource.versions[0]!.variants,
         },
       },
-      uploads: [upload],
+      materials: [upload],
     }),
   )
   expect(new Uint8Array(upload.bytes)).toEqual(new Uint8Array([0, 0, 0]))
 })
 it('erases external original-upload recovery content that arrives after the recovery page unmounts', async () => {
   const late = preparedUpload()
-  let finish!: (upload: PreparedUpload) => void
+  let finish!: (upload: PreparedMaterial) => void
   const mappings = inject<MappingUseCases>({
     resources: async () => ({ items: [], nextCursor: null }),
     restore: () =>
@@ -581,7 +609,17 @@ it('erases external original-upload recovery content that arrives after the reco
         finish = resolve
       }),
   })
-  await render(createElement(CollectionMappings, { mappings, locale: 'zh', canWrite: true }))
+  await render(
+    createElement(CollectionMappings, {
+      mappings,
+      content: inject<ContentUseCases>({
+        verify: async () => {},
+        read: async () => uploadSession(preparedUpload()),
+      }),
+      locale: 'zh',
+      canWrite: true,
+    }),
+  )
   await fill('资源标识', late.target.resource)
   await fill('原上传标识', nested)
   await click('读取并核验原上传')

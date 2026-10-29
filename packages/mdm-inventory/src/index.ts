@@ -1,16 +1,5 @@
 export type * from './model'
-export type * from './collection'
-export {
-  createMappings,
-  replaceDeclaration,
-  resourceId,
-  validateDeclaration,
-  validateDraft,
-  variantKey,
-} from './mapping-versions'
 export { operators } from './model'
-export type { AgentMapping, Conversion, NativeMapping, NativeRead, ValueMapping } from './mapping'
-export { validateMapping } from './mapping'
 export {
   fieldKey,
   freeze,

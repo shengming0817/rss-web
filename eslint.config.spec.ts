@@ -297,6 +297,9 @@ it('keeps the MDM domain cores independent and their adapters out of feature com
     'mdm-inventory',
     'mdm-groups',
     'mdm-compliance',
+    'mdm-resources',
+    'mdm-content',
+    'mdm-software',
   ]) {
     for (const dependency of ['@rss/api/mdm-operations', 'react', '@rss/auth-core'])
       expect(
@@ -351,5 +354,41 @@ it('allows only the shared pure asset models across inventory, group and complia
     ).not.toContain('no-restricted-imports')
   expect(
     await ruleIds("export * from '@rss/mdm-groups'", 'packages/mdm-inventory/src/index.ts'),
+  ).toContain('no-restricted-imports')
+})
+
+it('keeps resource authoring and content transfer in separate pure owners', async () => {
+  for (const name of ['mdm-resources', 'mdm-content', 'mdm-software']) {
+    expect(
+      await ruleIds("export * from '@rss/mdm-inventory'", `packages/${name}/src/index.ts`),
+    ).not.toContain('no-restricted-imports')
+    expect(
+      await ruleIds("export * from '@rss/mdm-resources'", `packages/${name}/src/index.ts`),
+    ).not.toContain('no-restricted-imports')
+    expect(
+      await ruleIds(`export * from '@rss/${name}'`, 'apps/mdm/src/Resources.tsx'),
+    ).not.toContain('no-restricted-imports')
+  }
+  for (const name of ['mdm-inventory', 'mdm-resources', 'mdm-software'])
+    expect(
+      await ruleIds("export * from '@rss/mdm-content'", `packages/${name}/src/index.ts`),
+    ).toContain('no-restricted-imports')
+  expect(
+    await ruleIds("export * from '@rss/mdm-resources'", 'packages/mdm-inventory/src/index.ts'),
+  ).toContain('no-restricted-imports')
+  expect(
+    await ruleIds(
+      "export * from '@rss/mdm-software/publications'",
+      'packages/mdm-content/src/index.ts',
+    ),
+  ).toContain('no-restricted-imports')
+  expect(
+    await ruleIds(
+      "export * from '@rss/mdm-software/publications'",
+      'apps/mdm/src/SoftwarePublications.tsx',
+    ),
+  ).not.toContain('no-restricted-imports')
+  expect(
+    await ruleIds("export * from '@rss/mdm-http/content'", 'apps/mdm/src/ContentUpload.tsx'),
   ).toContain('no-restricted-imports')
 })

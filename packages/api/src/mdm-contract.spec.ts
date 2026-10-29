@@ -45,7 +45,7 @@ describe('fixed producer HTTP operations', () => {
   })
   it('sends declared range headers through the public and authenticated download executor', async () => {
     const instance = axios.create(),
-      mock = new MockAdapter(instance)
+      requestSpy = vi.spyOn(instance, 'request')
     const create = vi.spyOn(axios, 'create').mockReturnValue(instance)
     const bytes = new Uint8Array([1, 2]).buffer
     try {
@@ -66,24 +66,38 @@ describe('fixed producer HTTP operations', () => {
             }),
         ],
       ] as const) {
-        mock.onGet(path).reply((config) => {
-          expect(config.headers?.['Range']).toBe(headers.Range)
-          expect(config.headers?.['If-Range']).toBe(headers['If-Range'])
-          return [
-            206,
-            bytes,
-            {
-              'content-type': 'application/octet-stream',
-              'content-length': '2',
-              'content-range': 'bytes 0-1/3',
-              etag: '"fixture"',
-              'accept-ranges': 'bytes',
-              'cache-control': 'private, no-store',
-              'content-disposition': 'attachment; filename="fixture"',
+        requestSpy.mockResolvedValue({
+          status: 206,
+          data: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array(bytes.slice(0)))
+              controller.close()
             },
-          ]
+          }),
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-length': '2',
+            'content-range': 'bytes 0-1/3',
+            etag: '"fixture"',
+            'accept-ranges': 'bytes',
+            'cache-control': 'private, no-store',
+            'content-disposition': 'attachment; filename="fixture"',
+          },
         })
-        await expect(request()).resolves.toMatchObject({ bytes })
+        await expect(request()).resolves.toMatchObject({
+          bytes,
+          status: 206,
+          contentRange: 'bytes 0-1/3',
+          etag: '"fixture"',
+        })
+        expect(requestSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            url: path,
+            adapter: 'fetch',
+            responseType: 'stream',
+            headers: expect.objectContaining(headers),
+          }),
+        )
       }
       await expect(
         getApiV1AgentEnrollPackagesByIdContent(transport, {
@@ -93,7 +107,7 @@ describe('fixed producer HTTP operations', () => {
       ).rejects.toMatchObject({ cause: 'client' })
     } finally {
       create.mockRestore()
-      mock.restore()
+      requestSpy.mockRestore()
     }
   })
   it('keeps unpublished requests in the explicit loopback demo composition', async () => {

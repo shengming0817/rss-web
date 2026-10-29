@@ -39,6 +39,8 @@ import { Connections } from './Connections'
 import { Inventory } from './Inventory'
 import { GroupsPage } from './Groups'
 import { Compliance } from './Compliance'
+import { Resources } from './Resources'
+import { Software } from './Software'
 import { EntraTerms, PublicDownloads } from './PublicEnrollment'
 import { StyleProvider } from '@ant-design/cssinjs'
 import { mdmTheme } from './theme'
@@ -221,6 +223,13 @@ const featureRoutes: readonly FeatureRoute[] = [
     realm: 'tenant',
     render: (ui) => <Inventory {...ui} />,
   },
+  {
+    path: '/resources',
+    label: 'resources',
+    realm: 'tenant',
+    render: (ui) => <Resources {...ui} />,
+  },
+  { path: '/software', label: 'software', realm: 'tenant', render: (ui) => <Software {...ui} /> },
   { path: '/groups', label: 'groups', realm: 'tenant', render: (ui) => <GroupsPage {...ui} /> },
   {
     path: '/compliance',

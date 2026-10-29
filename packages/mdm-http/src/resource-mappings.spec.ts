@@ -5,11 +5,13 @@ import type {
   MappingDeclaration,
   MappingDraft,
   MappingVariant,
-  PreparedUpload,
+  PreparedMaterial,
   ScriptDefinition,
-} from '@rss/mdm-inventory'
-import { createMappingVersionsAdapter } from './mapping-versions'
-import { encodeCollectionContent } from './mapping-content'
+} from '@rss/mdm-resources'
+import { createResourceMappingsAdapter } from './resource-mappings'
+import { createContent } from '@rss/mdm-content'
+import { createContentAdapter } from './content'
+import { encodeCollectionContent } from './resource-content'
 
 const operation = '11111111-1111-4111-8111-111111111111',
   uploadId = '22222222-2222-4222-8222-222222222222',
@@ -144,7 +146,10 @@ it('prepares one changed Agent architecture without moving the untouched shared 
       variants: [changed, original.versions[0]!.variants[1]!],
     },
     f = fixture(() => original),
-    client = createMappingVersionsAdapter(f.transport),
+    client = createResourceMappingsAdapter(
+      f.transport,
+      createContent(createContentAdapter(f.transport)),
+    ),
     prepared = await client.prepare(draft)
   expect(f.request).toHaveBeenCalledTimes(1)
   const edited = prepared.change.input.variants[0]!,
@@ -154,8 +159,8 @@ it('prepares one changed Agent architecture without moving the untouched shared 
   expect(
     edited.declaration.kind === 'agent_collection' && edited.declaration.definition.plan,
   ).toEqual(declaration.definition.plan)
-  expect(prepared.uploads).toHaveLength(2)
-  const bytes = prepared.uploads.find((u) => u.target.architecture === 'x86_64')!.bytes,
+  expect(prepared.materials).toHaveLength(2)
+  const bytes = prepared.materials.find((u) => u.target.architecture === 'x86_64')!.bytes,
     decoded = JSON.parse(new TextDecoder().decode(bytes))
   expect(decoded.mappings['custom.ready'].mapping.conversion.values).toEqual({
     off: false,
@@ -169,7 +174,10 @@ it('rejects changes to physical source plans or the observed Resource revision b
     value = selected.declaration
   if (value.kind !== 'agent_collection') throw new Error('fixture')
   const f = fixture(() => original),
-    client = createMappingVersionsAdapter(f.transport),
+    client = createResourceMappingsAdapter(
+      f.transport,
+      createContent(createContentAdapter(f.transport)),
+    ),
     draft: MappingDraft = {
       resource: resourceId,
       baseVersion: '1.0',
@@ -210,8 +218,7 @@ async function originalUpload() {
     bytes = encodeCollectionContent(
       target.declaration as Exclude<MappingDeclaration, { kind: 'script' }>,
     ),
-    upload: PreparedUpload = {
-      id: uploadId,
+    upload: PreparedMaterial = {
       target: {
         resource: resourceId,
         version: '1.0',
@@ -251,56 +258,23 @@ async function originalUpload() {
     }
   return { resource, upload, session }
 }
-it('verifies original upload target digest before beginning or restoring native content', async () => {
-  const { resource, upload, session } = await originalUpload(),
-    f = fixture((options) => (options.path === '/api/v1/resources/{id}' ? resource : session)),
-    client = createMappingVersionsAdapter(f.transport)
-  expect((await client.begin(upload)).resourceDigest).toEqual(resource.versions[0]!.digest)
-  expect(f.request).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      method: 'POST',
-      path: '/api/v1/resources/{id}/uploads/{upload}',
-      pathParams: { id: resourceId, upload: uploadId },
-      query: {
-        version: '1.0',
-        variant: 'collection',
-        platform: 'windows',
-        architecture: 'x86_64',
-        artifact: upload.target.artifact.reference,
-      },
+it('restores canonical native material without owning or touching an upload session', async () => {
+  const { resource, upload } = await originalUpload(),
+    f = fixture((options) => {
+      if (options.path !== '/api/v1/resources/{id}') throw new Error('Unexpected transfer protocol')
+      return resource
     }),
-  )
-  const restored = await client.restore(resourceId, uploadId)
+    client = createResourceMappingsAdapter(f.transport, { downloadBytes: vi.fn() })
+  const restored = await client.restore(upload.target)
   expect(new Uint8Array(restored.bytes)).toEqual(new Uint8Array(upload.bytes))
-  expect(restored.id).toBe(uploadId)
-  session.binding.purpose.binding.resource_digest = Array<number>(32).fill(8)
-  await expect(client.upload(upload)).rejects.toThrow('Wrong upload binding')
-})
-it('does not append changed bytes or accept a content receipt for another fixed version', async () => {
-  const { resource, upload, session } = await originalUpload(),
-    f = fixture((options) =>
-      options.path === '/api/v1/resources/{id}'
-        ? resource
-        : options.path.includes('content-operations')
-          ? {
-              operationId: uploadId,
-              resource: resourceId,
-              committed: true,
-              version: 'wrong',
-              reference: upload.target.artifact.reference,
-              length: upload.target.artifact.length,
-              sha256: [...upload.target.artifact.sha256],
-            }
-          : session,
-    ),
-    client = createMappingVersionsAdapter(f.transport)
-  new Uint8Array(upload.bytes).fill(0)
-  await expect(client.append(upload, 0)).rejects.toMatchObject({
-    cause: 'client',
-    code: 'input_changed',
-  })
-  expect(f.request.mock.calls.some(([options]) => options.method === 'PATCH')).toBe(false)
-  await expect(client.receipt(upload)).rejects.toThrow()
+  expect(restored.target).toEqual(upload.target)
+  await expect(
+    client.restore({
+      ...upload.target,
+      artifact: { ...upload.target.artifact, length: upload.bytes.byteLength + 1 },
+    }),
+  ).rejects.toThrow('Original fixed material')
+  expect(f.request.mock.calls.every(([options]) => options.method === 'GET')).toBe(true)
 })
 
 it('retains script source bytes and schemas while changing collection mappings in a fixed version', async () => {
@@ -381,10 +355,17 @@ it('retains script source bytes and schemas while changing collection mappings i
             bytes: bytes.slice(0),
             contentType: 'application/octet-stream',
             contentDisposition: 'attachment; filename="script.txt"',
+            status: 200,
+            contentLength: String(bytes.byteLength),
+            contentRange: null,
+            etag: '"' + artifact.sha256.map((n) => n.toString(16).padStart(2, '0')).join('') + '"',
           }
         : resource,
     ),
-    client = createMappingVersionsAdapter(f.transport),
+    client = createResourceMappingsAdapter(
+      f.transport,
+      createContent(createContentAdapter(f.transport)),
+    ),
     prepared = await client.prepare({
       resource: resourceId,
       expectedRevision: 4,
@@ -394,7 +375,7 @@ it('retains script source bytes and schemas while changing collection mappings i
       kind: 'script',
       variants: [changed],
     })
-  expect(new Uint8Array(prepared.uploads[0]!.bytes)).toEqual(new Uint8Array(bytes))
+  expect(new Uint8Array(prepared.materials[0]!.bytes)).toEqual(new Uint8Array(bytes))
   const output = prepared.change.input.variants[0]!.declaration
   expect(output.kind).toBe('script')
   if (output.kind !== 'script') throw new Error('fixture')

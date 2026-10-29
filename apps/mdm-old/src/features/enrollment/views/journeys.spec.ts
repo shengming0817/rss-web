@@ -97,6 +97,10 @@ async function setup(view: unknown, allow = true, targetEvidence = false) {
         o.responseType === 'arraybuffer'
           ? {
               bytes: binary,
+              status: reply.status,
+              contentLength: reply.headers?.['Content-Length'] ?? null,
+              contentRange: reply.headers?.['Content-Range'] ?? null,
+              etag: reply.headers?.['ETag'] ?? null,
               contentType: reply.headers?.['Content-Type'],
               contentDisposition: reply.headers?.['Content-Disposition'],
             }
@@ -619,6 +623,10 @@ it('authorizes macOS profile delivery, clears the submitted secret and withdraws
     bytes: bytes.buffer,
     contentType: 'application/x-apple-aspen-config',
     contentDisposition: 'attachment',
+    status: 200,
+    contentLength: null,
+    contentRange: null,
+    etag: null,
   })
   await wrapper.get('button').trigger('click')
   await flushPromises()
@@ -664,6 +672,10 @@ it('automatically delivers a macOS profile after its confirmed receipt without r
         bytes: bytes.buffer,
         contentType: 'application/x-apple-aspen-config',
         contentDisposition: 'attachment',
+        status: 200,
+        contentLength: null,
+        contentRange: null,
+        etag: null,
       }
     })
   const enroll = vi.spyOn(runtime.devices.registration, 'enroll')
@@ -696,6 +708,10 @@ it('keeps a confirmed macOS enrollment confirmed when profile delivery fails and
     bytes: new Uint8Array([1, 2]).buffer,
     contentType: 'application/x-apple-aspen-config',
     contentDisposition: 'attachment',
+    status: 200,
+    contentLength: null,
+    contentRange: null,
+    etag: null,
   })
   await wrapper.get('input[type=password]').setValue(secret)
   await wrapper.get('form').trigger('submit')
@@ -714,6 +730,10 @@ it('uses the saved original password for an explicit unknown create replay and n
     bytes: new Uint8Array([1]).buffer,
     contentType: 'application/x-apple-aspen-config',
     contentDisposition: 'attachment',
+    status: 200,
+    contentLength: null,
+    contentRange: null,
+    etag: null,
   })
   lost.path = '/api/v1/self-enrollments'
   await click('复制口令并继续')
@@ -756,6 +776,10 @@ it('withdraws a late automatic profile response after navigation and clears its 
       bytes: bytes.buffer,
       contentType: 'application/x-apple-aspen-config',
       contentDisposition: 'attachment',
+      status: 200,
+      contentLength: null,
+      contentRange: null,
+      etag: null,
     }
   })
   await click('复制口令并继续')
@@ -841,6 +865,10 @@ it('revokes an automatically delivered macOS profile when its password is rotate
     bytes: new Uint8Array([1, 2, 3]).buffer,
     contentType: 'application/x-apple-aspen-config',
     contentDisposition: 'attachment',
+    status: 200,
+    contentLength: null,
+    contentRange: null,
+    etag: null,
   }))
   await click('复制口令并继续')
   expect(wrapper.find('a[download="RSS-MDM.mobileconfig"]').exists()).toBe(true)
@@ -907,6 +935,10 @@ it.each(['resume', 'cancel'] as const)(
         bytes: bytes.buffer,
         contentType: 'application/x-apple-aspen-config',
         contentDisposition: 'attachment',
+        status: 200,
+        contentLength: null,
+        contentRange: null,
+        etag: null,
       }
     })
     await click('使用已保存口令重新获取描述文件')

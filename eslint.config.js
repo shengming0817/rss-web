@@ -515,7 +515,7 @@ export default tseslint.config(
   {
     files: [
       'apps/mdm/**/*.{ts,tsx}',
-      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections,mdm-inventory,mdm-groups,mdm-compliance}/**/*.ts',
+      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections,mdm-inventory,mdm-groups,mdm-compliance,mdm-resources,mdm-content,mdm-software}/**/*.ts',
     ],
     languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
     plugins: {
@@ -603,13 +603,38 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/{mdm-resources,mdm-software}/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex:
+            '^(?:@rss/(?!mdm-devices$|mdm-inventory$|mdm-resources$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message:
+            'Resource and software cores consume only existing pure resource, inventory and device models.',
+        },
+      ]),
+    },
+  },
+  {
+    files: ['packages/mdm-content/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex: '^(?:@rss/(?!mdm-resources$|mdm-inventory$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message:
+            'Content owns transfer protocols and consumes only pure material coordinates and validators.',
+        },
+      ]),
+    },
+  },
+  {
     files: ['packages/{auth-http,mdm-http}/**/*.ts'],
     rules: {
       'no-restricted-imports': boundaryRule(
         [
           {
             regex:
-              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-groups$|mdm-compliance$|api/))',
+              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|api/))',
             message: 'Adapters depend only on core ports and the API executor.',
           },
         ],
@@ -639,7 +664,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-groups$|mdm-compliance$))',
+              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$))',
             message: 'Feature pages consume domain use cases; only runtime assembles adapters.',
           },
         ],

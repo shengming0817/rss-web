@@ -1,20 +1,22 @@
 import {
   validateAgentCollectionDefinition,
   validateNativeCollectionDefinition,
+  validateTelemetryProfile,
 } from '@rss/api/mdm-validators'
 import type {
   AgentDefinition,
   AgentPlan,
   Applicability,
   CollectionBudget,
-  MappingDeclaration,
+  Declaration,
+  TelemetryDefinition,
   NativeDefinition,
   PhysicalPredicate,
   PhysicalRead,
   SystemRead,
   TemplateScope,
   ValueMapping,
-} from '@rss/mdm-inventory'
+} from '@rss/mdm-resources'
 
 const encoder = new TextEncoder()
 /** serde struct order and UTF-8 BTreeMap/BTreeSet order are part of these exact artifact bytes.
@@ -236,13 +238,44 @@ function agent(value: AgentDefinition): string {
       ),
   })
 }
+function telemetry(value: TelemetryDefinition): string {
+  if (!validateTelemetryProfile(value)) throw { cause: 'client', code: 'invalid_input' }
+  return struct(
+    value,
+    [
+      'template',
+      'parameters',
+      'fields',
+      'projection',
+      'sampleMillis',
+      'uploadMillis',
+      'budget',
+      'boost',
+      'backfillSeconds',
+    ],
+    {
+      template: (template) =>
+        struct(template, ['resource', 'version', 'variant', 'platform', 'architecture']),
+      parameters: (parameters) => map(parameters, json),
+      fields: (fields) => array(fields, (field) => struct(field, ['key', 'version'])),
+      budget: (budget) =>
+        struct(budget, ['points', 'bytes', 'resources', 'executionMillis', 'outputBytes']),
+      boost: (boost) => (boost === null ? 'null' : struct(boost, ['sampleMillis', 'expiresAt'])),
+    },
+  )
+}
 export function encodeCollectionContent(
-  declaration: Exclude<MappingDeclaration, { readonly kind: 'script' }>,
+  declaration: Extract<
+    Declaration,
+    { readonly kind: 'native_collection' | 'agent_collection' | 'telemetry_profile' }
+  >,
 ): ArrayBuffer {
   const content =
     declaration.kind === 'native_collection'
       ? native(declaration.definition)
-      : agent(declaration.definition)
+      : declaration.kind === 'agent_collection'
+        ? agent(declaration.definition)
+        : telemetry(declaration.definition)
   const bytes = encoder.encode(content)
   if (bytes.byteLength > 8 * 1024 * 1024) throw { cause: 'client', code: 'invalid_input' }
   const result = new ArrayBuffer(bytes.byteLength)

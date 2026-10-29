@@ -20,6 +20,7 @@ import {
 const PATH_PARAM = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
 const ENCODED_PATH_SEPARATOR = /%(?:2e|2f|5c)/i
 const URL_BASE = 'https://rss-web.invalid'
+const MAX_BINARY_RANGE_BYTES = 16 * 1024 * 1024
 
 function positiveTimeout(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0
@@ -103,6 +104,76 @@ export function requestConfig(
   }
 }
 
+/** Read only the selected range budget. The public boundary still returns the existing owned ArrayBuffer. */
+async function boundedBinary(
+  stream: unknown,
+  headers: Readonly<Record<string, unknown>>,
+  maximumBytes: number,
+  status: number,
+  controller: AbortController,
+): Promise<ArrayBuffer> {
+  if (!(stream instanceof ReadableStream)) {
+    if (stream instanceof ArrayBuffer) new Uint8Array(stream).fill(0)
+    throw protocolError(status)
+  }
+  const reader = stream.getReader(),
+    abortRead = () => {
+      void reader.cancel().catch(() => undefined)
+    }
+  controller.signal.addEventListener('abort', abortRead, { once: true })
+  let bytes: Uint8Array<ArrayBuffer> | undefined,
+    offset = 0,
+    complete = false
+  try {
+    const declared: unknown = Object.entries(headers).find(
+      ([name]) => name.toLowerCase() === 'content-length',
+    )?.[1]
+    if (
+      declared !== undefined &&
+      (typeof declared !== 'string' ||
+        !/^\d+$/.test(declared) ||
+        !Number.isSafeInteger(Number(declared)) ||
+        Number(declared) > maximumBytes)
+    )
+      throw protocolError(status)
+    bytes = new Uint8Array(maximumBytes)
+    for (;;) {
+      if (controller.signal.aborted) throw abortedError()
+      const { done, value }: ReadableStreamReadResult<unknown> = await reader.read()
+      if (done) {
+        if (controller.signal.aborted) throw abortedError()
+        complete = true
+        break
+      }
+      if (!(value instanceof Uint8Array)) throw protocolError(status)
+      try {
+        if (controller.signal.aborted) throw abortedError()
+        if (value.byteLength > maximumBytes - offset) throw protocolError(status)
+        bytes.set(value, offset)
+        offset += value.byteLength
+      } finally {
+        value.fill(0)
+      }
+    }
+    if (declared !== undefined && offset !== Number(declared)) throw protocolError(status)
+    if (offset === bytes.byteLength) {
+      const result = bytes.buffer
+      bytes = undefined
+      return result
+    }
+    return bytes.buffer.slice(0, offset)
+  } finally {
+    bytes?.fill(0)
+    controller.signal.removeEventListener('abort', abortRead)
+    if (!complete) {
+      controller.abort()
+      // Cancelling an already errored stream can reject; the request signal has also been aborted.
+      await reader.cancel().catch(() => undefined)
+    }
+    reader.releaseLock()
+  }
+}
+
 export async function execute<T>(
   instance: AxiosInstance,
   defaultTimeoutMs: number,
@@ -110,8 +181,62 @@ export async function execute<T>(
   decodeError: (status: number, value: unknown, retryAfter: unknown) => RssApiError,
 ): Promise<T | void> {
   if (options.signal?.aborted === true) throw abortedError()
+  const range =
+    options.responseType === 'arraybuffer' && options.method === 'GET'
+      ? Object.entries(options.headers ?? {}).find(([name]) => name.toLowerCase() === 'range')?.[1]
+      : undefined
+  const closedRange = range?.match(/^bytes=(\d+)-(\d+)$/)
+  let maximumBytes: number | undefined
+  if (closedRange) {
+    const start = Number(closedRange[1]),
+      end = Number(closedRange[2])
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      start < 0 ||
+      end < start ||
+      !Number.isSafeInteger(end - start + 1) ||
+      end - start + 1 > MAX_BINARY_RANGE_BYTES
+    )
+      throw clientError()
+    maximumBytes = end - start + 1
+  }
+  const bounded = maximumBytes === undefined ? undefined : new AbortController(),
+    cancelBounded = () => bounded?.abort()
+  let timedOut = false,
+    deadline: ReturnType<typeof setTimeout> | undefined,
+    binaryOwned: ArrayBuffer | undefined
+  options.signal?.addEventListener('abort', cancelBounded, { once: true })
   try {
-    const response = await instance.request(requestConfig(options, defaultTimeoutMs))
+    const config = requestConfig(options, defaultTimeoutMs)
+    if (bounded && maximumBytes !== undefined) {
+      if (typeof ReadableStream === 'undefined') throw clientError()
+      // Use Axios' stream adapter inside the same executor and instance. XHR progress cannot bound buffering.
+      // ref: axios v1.16.1 lib/adapters/fetch.js and lib/helpers/trackStream.js.
+      config.adapter = 'fetch'
+      config.responseType = 'stream'
+      config.signal = bounded.signal
+      const timeout = config.timeout!
+      config.timeout = 0
+      deadline = setTimeout(() => {
+        timedOut = true
+        bounded.abort()
+      }, timeout)
+      if (options.signal?.aborted) bounded.abort()
+    }
+    const response = await instance.request(config)
+    if (bounded && maximumBytes !== undefined) {
+      response.data = await boundedBinary(
+        response.data,
+        response.headers,
+        response.status >= 400 ? 16384 : maximumBytes,
+        response.status,
+        bounded,
+      )
+    }
+    if (options.responseType === 'arraybuffer' && response.data instanceof ArrayBuffer) {
+      binaryOwned = response.data
+    }
     if (options.contract) {
       let data: unknown = response.data
       if (
@@ -160,23 +285,34 @@ export async function execute<T>(
         const data: unknown = response.data
         if (!(data instanceof ArrayBuffer)) throw protocolError(response.status)
         const header = (name: string) => {
-          const value: unknown = response.headers[name]
+          const value: unknown = Object.entries(response.headers).find(
+            ([key]) => key.toLowerCase() === name,
+          )?.[1]
           if (value === undefined) return null
           if (typeof value !== 'string') throw protocolError(response.status)
           return value
         }
         const binary: BinaryResponse = {
           bytes: data,
+          status: response.status,
           contentType: header('content-type'),
           contentDisposition: header('content-disposition'),
+          contentLength: header('content-length'),
+          contentRange: header('content-range'),
+          etag: header('etag'),
         }
-        return options.decode(binary)
+        const decoded = options.decode(binary)
+        binaryOwned = undefined
+        return decoded
       }
       return options.decode(response.data)
     } catch {
       throw protocolError(response.status)
     }
   } catch (error: unknown) {
+    if (binaryOwned) new Uint8Array(binaryOwned).fill(0)
+    if (options.signal?.aborted) throw abortedError()
+    if (timedOut) throw timeoutError()
     if (isRssApiError(error)) throw error
     if (axios.isCancel(error) || (axios.isAxiosError(error) && error.code === 'ERR_CANCELED')) {
       throw abortedError()
@@ -188,5 +324,8 @@ export async function execute<T>(
       throw timeoutError()
     }
     throw networkError()
+  } finally {
+    if (deadline !== undefined) clearTimeout(deadline)
+    options.signal?.removeEventListener('abort', cancelBounded)
   }
 }

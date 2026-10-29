@@ -340,6 +340,9 @@ importers:
       '@rss/mdm-connections':
         specifier: workspace:*
         version: link:../../packages/mdm-connections
+      '@rss/mdm-content':
+        specifier: workspace:*
+        version: link:../../packages/mdm-content
       '@rss/mdm-devices':
         specifier: workspace:*
         version: link:../../packages/mdm-devices
@@ -355,6 +358,12 @@ importers:
       '@rss/mdm-inventory':
         specifier: workspace:*
         version: link:../../packages/mdm-inventory
+      '@rss/mdm-resources':
+        specifier: workspace:*
+        version: link:../../packages/mdm-resources
+      '@rss/mdm-software':
+        specifier: workspace:*
+        version: link:../../packages/mdm-software
       '@rss/mdm-tenant-administration':
         specifier: workspace:*
         version: link:../../packages/mdm-tenant-administration
@@ -689,6 +698,28 @@ importers:
         specifier: 'catalog:'
         version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
 
+  packages/mdm-content:
+    dependencies:
+      '@noble/hashes':
+        specifier: 'catalog:'
+        version: 2.4.0
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
+      '@rss/mdm-resources':
+        specifier: workspace:*
+        version: link:../mdm-resources
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
   packages/mdm-devices:
     devDependencies:
       '@vitest/coverage-v8':
@@ -749,6 +780,9 @@ importers:
       '@rss/mdm-connections':
         specifier: workspace:*
         version: link:../mdm-connections
+      '@rss/mdm-content':
+        specifier: workspace:*
+        version: link:../mdm-content
       '@rss/mdm-devices':
         specifier: workspace:*
         version: link:../mdm-devices
@@ -761,6 +795,12 @@ importers:
       '@rss/mdm-inventory':
         specifier: workspace:*
         version: link:../mdm-inventory
+      '@rss/mdm-resources':
+        specifier: workspace:*
+        version: link:../mdm-resources
+      '@rss/mdm-software':
+        specifier: workspace:*
+        version: link:../mdm-software
       '@rss/mdm-tenant-administration':
         specifier: workspace:*
         version: link:../mdm-tenant-administration
@@ -783,6 +823,47 @@ importers:
       '@rss/mdm-devices':
         specifier: workspace:*
         version: link:../mdm-devices
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
+  packages/mdm-resources:
+    dependencies:
+      '@rss/mdm-devices':
+        specifier: workspace:*
+        version: link:../mdm-devices
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
+  packages/mdm-software:
+    dependencies:
+      '@rss/mdm-devices':
+        specifier: workspace:*
+        version: link:../mdm-devices
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
+      '@rss/mdm-resources':
+        specifier: workspace:*
+        version: link:../mdm-resources
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 'catalog:'

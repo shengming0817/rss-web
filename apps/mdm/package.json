@@ -25,7 +25,10 @@
     "@rss/mdm-connections": "workspace:*",
     "@rss/mdm-inventory": "workspace:*",
     "@rss/mdm-groups": "workspace:*",
-    "@rss/mdm-compliance": "workspace:*"
+    "@rss/mdm-compliance": "workspace:*",
+    "@rss/mdm-resources": "workspace:*",
+    "@rss/mdm-content": "workspace:*",
+    "@rss/mdm-software": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

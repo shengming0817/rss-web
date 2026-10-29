@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Checkbox, Form, Input, InputNumber, Select, Space } from 'antd'
-import type { Conversion, NativeRead, ValueMapping } from '@rss/mdm-inventory'
+import type { Conversion, NativeRead, ValueMapping } from '@rss/mdm-resources'
 import type { Locale } from './i18n'
 import { labels } from './AdminUi'
 
