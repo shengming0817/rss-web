@@ -4,32 +4,27 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ../../scripts/ensure-contracts.mjs && vite --configLoader runner --host 127.0.0.1",
-    "build": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vite build --configLoader runner",
-    "typecheck": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json",
-    "test": "node ../../scripts/ensure-contracts.mjs && vitest run",
-    "test:coverage": "node ../../scripts/ensure-contracts.mjs && vitest run --coverage --maxWorkers=2",
-    "demo": "node ../../scripts/ensure-contracts.mjs && vite --configLoader runner --mode demo --host 127.0.0.1"
+    "dev": "node ../../scripts/ensure-contracts.mjs && vite --host 127.0.0.1",
+    "build": "node ../../scripts/ensure-contracts.mjs && tsc --noEmit && vite build && node ../../scripts/check-react-mdm-build.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@noble/hashes": "catalog:",
-    "vue": "catalog:",
-    "vue-router": "catalog:",
-    "vue-i18n": "catalog:",
-    "pinia": "catalog:",
-    "@rss/core": "workspace:*",
-    "@rss/api": "workspace:*",
-    "@rss/auth": "workspace:*",
-    "vuetify": "catalog:"
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router-dom": "catalog:",
+    "antd": "catalog:",
+    "@rss/auth-core": "workspace:*",
+    "@rss/auth-http": "workspace:*",
+    "@rss/mdm-http": "workspace:*",
+    "@ant-design/cssinjs": "catalog:"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "catalog:",
+    "typescript": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@types/node": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:",
-    "@vue/test-utils": "catalog:",
-    "jsdom": "catalog:",
-    "@vitest/coverage-v8": "catalog:",
-    "ajv": "catalog:"
+    "@ant-design/static-style-extract": "catalog:"
   }
 }

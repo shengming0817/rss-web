@@ -4,11 +4,11 @@ import { request } from 'node:http'
 import { expect, it } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { decodeMdmError } from '@rss/api/mdm'
-import { createRegistrationClient } from '../../apps/mdm/src/features/devices/clients/registration'
+import { createRegistrationClient } from '../../apps/mdm-old/src/features/devices/clients/registration'
 import {
   createEnrollmentClient,
   generateEnrollmentPassword,
-} from '../../apps/mdm/src/features/devices/clients/enrollment'
+} from '../../apps/mdm-old/src/features/devices/clients/enrollment'
 const fixture = JSON.parse(readFileSync(process.env['MDM_REGISTRATION_FIXTURE']!, 'utf8')) as {
   origin: string
   tenant: string

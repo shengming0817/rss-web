@@ -37,7 +37,7 @@ async function run(command, args, cwd, timeoutMs) {
     throw new Error('execution-failed')
 }
 try {
-  await run('pnpm', ['build:mdm'], root, 600000)
+  await run('pnpm', ['build:mdm:old'], root, 600000)
   phase = 'backend'
   started = true
   await run(

@@ -57,7 +57,7 @@ def idp_admin(issuer,ca):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT']=str(WEB/'apps/mdm/dist')
+    os.environ['MDM_WEB_ROOT']=str(WEB/'apps/mdm-old/dist')
     initialized=environment.initialize()
     origin=initialized['origin'];config_path=Path(initialized['configuration'])
     binary=Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'

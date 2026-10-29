@@ -40,7 +40,7 @@ async function run(command, args, cwd, timeoutMs) {
   if (result.status !== 0) throw new Error('exit')
 }
 try {
-  await run('pnpm', ['build:mdm'], root, 600000)
+  await run('pnpm', ['build:mdm:old'], root, 600000)
   phase = 'backend'
   backendStarted = true
   await run(

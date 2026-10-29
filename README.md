@@ -2,11 +2,13 @@
 
 独立 Device Access（`apps/device-access`）：`pnpm dev:device-access:demo` 启动明确标识的 mock HTTP 演示；`pnpm build:device-access` 构建生产包。真实接口范围、尚缺的接缝和 MDM 消费方式见 [DA 接入与开发](apps/device-access/README.md)。
 
-本仓维护独立部署的 MDM 控制台（`apps/mdm`）与 Identity 认证 UI（`apps/identity`）。`@rss/auth` 提供共享 cookie 会话与认证 UI，`@rss/core` 提供展示基础，`@rss/api` 拥有单一 HTTP 执行边界；每个应用独立装配唯一会话 owner，权限由后端决定。
+本仓维护独立部署的 旧版生产 MDM 控制台（`apps/mdm-old`）与 Identity 认证 UI（`apps/identity`）。`@rss/auth` 提供共享 cookie 会话与认证 UI，`@rss/core` 提供展示基础，`@rss/api` 拥有单一 HTTP 执行边界；每个应用独立装配唯一会话 owner，权限由后端决定。
 
 接入、部署及会话行为见[宿主认证 UI](docs/architecture/20260917-2368-embedded-identity.md)。
 
-MDM 无后端演示：`pnpm dev:mdm:demo`；生产构建：`pnpm build:mdm`；镜像：`pnpm image:mdm --tag rss-mdm-web:my-version`。接入、候选合同与部署见 [MDM 与 Identity 独立前端](docs/architecture/20260926-2544-mdm-web.md)。
+MDM 无后端演示：`pnpm dev:mdm:old:demo`；生产构建：`pnpm build:mdm:old`；镜像：`pnpm image:mdm --tag rss-mdm-web:my-version`。接入、候选合同与部署见 [MDM 与 Identity 独立前端](docs/architecture/20260926-2544-mdm-web.md)。
+
+新 React + Ant Design MDM 位于 `apps/mdm`，使用 `pnpm dev:mdm` 和 `pnpm build:mdm`，独立依赖 `@rss/auth-core`、`@rss/auth-http`、`@rss/mdm-http`。认证与业务使用同一会话 owner 和既有 `@rss/api` HTTP executor。新入口须挂载到提供正式 Identity/MDM host 配置的同源 HTTPS 宿主；Vite loopback 开发入口本身不提供后端。`pnpm image:mdm` 与既有浏览器业务验证仍显式使用旧应用，生产切换另行完成。旧应用的独立开发入口为 `pnpm dev:mdm:old`。新认证和响应式界面的真实 HTTPS Chromium 验证使用 `MDM_REACT_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-auth-browser`，复用后端隔离环境与构建租约，退出确认清理；该验证不证明设备实际效果。
 
 ## Web 组件开发
 

@@ -156,7 +156,7 @@ def start(binary, initialized, log, expected=200):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT'] = str(WEB/'apps/mdm/dist')
+    os.environ['MDM_WEB_ROOT'] = str(WEB/'apps/mdm-old/dist')
     initialized = environment.initialize()
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())

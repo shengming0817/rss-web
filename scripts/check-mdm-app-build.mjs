@@ -1,7 +1,7 @@
 import process from 'node:process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
-const root = resolve(process.argv[2] ?? 'apps/mdm/dist')
+const root = resolve(process.argv[2] ?? 'apps/mdm-old/dist')
 if (!readFileSync(resolve(root, 'index.html'), 'utf8').includes('<title>RSS MDM</title>'))
   throw new Error('Incorrect product output')
 function scan(dir) {

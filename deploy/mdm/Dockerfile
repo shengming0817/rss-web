@@ -6,11 +6,11 @@ RUN corepack enable
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm build:mdm
+RUN pnpm build:mdm:old
 
 FROM nginx:1.30.4@sha256:d5792f71a9496b833bc08ea834a758c46e2b6a6306c10f4be926f38a656cdc1c AS runtime
 RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/*
-COPY --from=build /app/apps/mdm/dist /usr/share/nginx/html/
+COPY --from=build /app/apps/mdm-old/dist /usr/share/nginx/html/
 COPY deploy/mdm/static.conf /etc/nginx/static.conf
 EXPOSE 8080
 USER 10001:10001

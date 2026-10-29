@@ -182,7 +182,7 @@ export default tseslint.config(
     files: [
       'apps/identity/**/*.{js,ts,vue}',
       'packages/auth/**/*.{js,ts,vue}',
-      'apps/mdm/**/*.{js,ts,vue}',
+      'apps/mdm-old/**/*.{js,ts,vue}',
     ],
     plugins: {
       'identity-boundary': {
@@ -204,14 +204,14 @@ export default tseslint.config(
                 const filename = context.filename
                 const marker = filename.includes(`${sep}packages${sep}auth${sep}`)
                   ? `${sep}packages${sep}auth${sep}`
-                  : filename.includes(`${sep}apps${sep}mdm${sep}`)
-                    ? `${sep}apps${sep}mdm${sep}`
+                  : filename.includes(`${sep}apps${sep}mdm-old${sep}`)
+                    ? `${sep}apps${sep}mdm-old${sep}`
                     : `${sep}apps${sep}identity${sep}`
                 const index = filename.lastIndexOf(marker)
                 const root = filename.slice(0, index) + marker
                 const target = resolve(dirname(filename), value)
                 if (
-                  marker === `${sep}apps${sep}mdm${sep}` &&
+                  marker === `${sep}apps${sep}mdm-old${sep}` &&
                   filename.startsWith(root + 'src' + sep) &&
                   !filename.endsWith('.spec.ts') &&
                   (target === root + 'demo' || target.startsWith(root + 'demo' + sep))
@@ -267,7 +267,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/mdm/**/*.{ts,vue}'],
+    files: ['apps/mdm-old/**/*.{ts,vue}'],
     rules: {
       'no-restricted-imports': boundaryRule(
         [
@@ -282,8 +282,8 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/mdm/src/**/*.{ts,vue}'],
-    ignores: ['apps/mdm/src/main.ts', 'apps/mdm/src/bootstrap.ts', '**/*.spec.ts'],
+    files: ['apps/mdm-old/src/**/*.{ts,vue}'],
+    ignores: ['apps/mdm-old/src/main.ts', 'apps/mdm-old/src/bootstrap.ts', '**/*.spec.ts'],
     rules: {
       'no-restricted-imports': boundaryRule(
         [
@@ -310,7 +310,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/mdm/demo/**/*.{ts,vue}'],
+    files: ['apps/mdm-old/demo/**/*.{ts,vue}'],
     rules: {
       'no-restricted-imports': boundaryRule(
         [
@@ -325,7 +325,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/mdm/**/*.spec.ts'],
+    files: ['apps/mdm-old/**/*.spec.ts'],
     rules: {
       'no-restricted-imports': boundaryRule(
         [
@@ -340,8 +340,8 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/mdm/src/**/*.{ts,vue}', 'packages/device-access/src/clients/live.ts'],
-    ignores: ['apps/mdm/src/main.ts', 'apps/mdm/src/bootstrap.ts', '**/*.spec.ts'],
+    files: ['apps/mdm-old/src/**/*.{ts,vue}', 'packages/device-access/src/clients/live.ts'],
+    ignores: ['apps/mdm-old/src/main.ts', 'apps/mdm-old/src/bootstrap.ts', '**/*.spec.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -506,6 +506,83 @@ export default tseslint.config(
             regex:
               '^@rss/(?!auth$|device-access/(?:client|model|components)$|api/(?:identity|mdm|testing|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
             message: 'Tests use declared public boundaries.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['apps/mdm/**/*.{ts,tsx}', 'packages/{auth-core,auth-http,mdm-http}/**/*.ts'],
+    languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
+    plugins: {
+      'react-boundary': {
+        rules: {
+          contained: {
+            meta: {
+              type: 'problem',
+              schema: [],
+              messages: {
+                escape: 'Use declared public exports; relative imports must stay with their owner.',
+              },
+            },
+            create(context) {
+              function check(node) {
+                if (typeof node.value !== 'string' || !node.value.startsWith('.')) return
+                const relative = path.relative(__dirname, context.filename)
+                const owner = relative.split(sep).slice(0, 2).join(sep)
+                const root = resolve(__dirname, owner) + sep
+                if (!resolve(dirname(context.filename), node.value).startsWith(root))
+                  context.report({ node, messageId: 'escape' })
+              }
+              return {
+                ImportDeclaration: (node) => check(node.source),
+                ExportNamedDeclaration: (node) => {
+                  if (node.source) check(node.source)
+                },
+                ExportAllDeclaration: (node) => check(node.source),
+                ImportExpression: (node) => check(node.source),
+              }
+            },
+          },
+        },
+      },
+    },
+    rules: {
+      'react-boundary/contained': 'error',
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?:auth(?:/|$)|core(?:/|$)|mdm-old-app))',
+            message: 'React MDM must not load the retired Vue composition.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+      'no-restricted-globals': ['error', ...NO_NETWORK],
+      'no-restricted-properties': ['error', ...NO_NETWORK_PROPERTIES],
+    },
+  },
+  {
+    files: ['packages/auth-core/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex: '^(?:@rss/|react(?:/|$)|antd(?:/|$)|axios$)',
+          message: 'Authentication core depends only on its own model and ports.',
+        },
+      ]),
+    },
+  },
+  {
+    files: ['packages/{auth-http,mdm-http}/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|api/))',
+            message: 'Adapters depend only on core ports and the API executor.',
           },
         ],
         [NO_AXIOS_PATH],

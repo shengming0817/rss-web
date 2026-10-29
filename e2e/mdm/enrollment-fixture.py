@@ -120,7 +120,7 @@ def prepare_signer(origin, reader_password):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT'] = str(WEB/'apps/mdm/dist')
+    os.environ['MDM_WEB_ROOT'] = str(WEB/'apps/mdm-old/dist')
     initialized = environment.initialize()
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     config_path = Path(initialized['configuration'])
