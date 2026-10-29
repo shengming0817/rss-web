@@ -7,7 +7,11 @@ export default defineConfig({
         test: {
           name: 'root',
           environment: 'node',
-          include: ['*.spec.ts', 'apps/mdm/src/lifecycle.spec.ts'],
+          include: [
+            '*.spec.ts',
+            'apps/mdm/src/lifecycle.spec.ts',
+            'apps/mdm/src/assets-lifecycle.spec.ts',
+          ],
           exclude: ['**/node_modules/**', '**/dist/**'],
           // ESLint's type-aware boundary checks need time to initialize on CI.
           testTimeout: 30_000,

@@ -58,6 +58,22 @@ const names: Record<string, readonly [string, string]> = {
   verified: ['已验证', 'Verified'],
   unverified: ['未验证', 'Unverified'],
   invalid: ['无效', 'Invalid'],
+  current: ['当前', 'Current'],
+  running: ['运行中', 'Running'],
+  completed: ['已完成', 'Completed'],
+  evaluating: ['评估中', 'Evaluating'],
+  queued: ['已排队', 'Queued'],
+  published: ['已发布', 'Published'],
+  projected: ['已投影', 'Projected'],
+  pending_receipt: ['等待回执', 'Pending receipt'],
+  snapshot: ['快照', 'Snapshot'],
+  partial: ['部分结果', 'Partial result'],
+  compliant: ['合规', 'Compliant'],
+  non_compliant: ['不合规', 'Non-compliant'],
+  not_applicable: ['不适用', 'Not applicable'],
+  match: ['匹配', 'Match'],
+  no_match: ['不匹配', 'No match'],
+  success: ['成功', 'Success'],
 }
 export function statusText(locale: Locale, value: string): string {
   const name = names[value]

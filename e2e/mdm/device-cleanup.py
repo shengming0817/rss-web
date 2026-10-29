@@ -14,5 +14,5 @@ case = hashlib.sha256((str(web) + ':device-browser:agent').encode()).hexdigest()
 Environment(backend, group='t2-pki-' + case).reset()
 Environment(backend, group='device-agent').host_ports(release=True)
 # Remove certificate inputs only after the CA has stopped using them.
-group = {'console-browser.mjs': 'console-browser', 'react-devices-browser.mjs': 'react-devices-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser')
+group = {'console-browser.mjs': 'console-browser', 'react-devices-browser.mjs': 'react-devices-browser', 'react-assets-browser.mjs': 'react-assets-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser')
 Environment(backend, group=group).reset()

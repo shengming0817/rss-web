@@ -36,6 +36,9 @@ import { Devices } from './Devices'
 import { DeviceDetail } from './DeviceDetail'
 import { Enrollment } from './Enrollment'
 import { Connections } from './Connections'
+import { Inventory } from './Inventory'
+import { GroupsPage } from './Groups'
+import { Compliance } from './Compliance'
 import { EntraTerms, PublicDownloads } from './PublicEnrollment'
 import { StyleProvider } from '@ant-design/cssinjs'
 import { mdmTheme } from './theme'
@@ -212,6 +215,19 @@ export interface FeatureRoute {
 const featureRoutes: readonly FeatureRoute[] = [
   { path: '/', label: 'workspace', render: (ui) => <Workspace {...ui} /> },
   { path: '/devices', label: 'devices', realm: 'tenant', render: (ui) => <Devices {...ui} /> },
+  {
+    path: '/inventory',
+    label: 'inventory',
+    realm: 'tenant',
+    render: (ui) => <Inventory {...ui} />,
+  },
+  { path: '/groups', label: 'groups', realm: 'tenant', render: (ui) => <GroupsPage {...ui} /> },
+  {
+    path: '/compliance',
+    label: 'compliance',
+    realm: 'tenant',
+    render: (ui) => <Compliance {...ui} />,
+  },
   {
     path: '/devices/:kind/:id',
     label: 'devices',

@@ -561,6 +561,81 @@ html:has(.mdm-overlay-open) {
   border-top: 1px solid var(--line);
   padding-top: 16px;
 }
+.asset-editor-section {
+  min-width: 0;
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.asset-editor-section legend {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 550;
+}
+.asset-editor-section summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  padding: 6px 0;
+  font-weight: 550;
+}
+.asset-editor-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+.asset-editor-row > .ant-input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.asset-editor-row > code {
+  flex: 1 1 140px;
+  overflow-wrap: anywhere;
+}
+.asset-type-editor,
+.asset-mapping-editor {
+  min-width: 0;
+  padding: 10px 0;
+}
+.asset-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.mapping-upload + .mapping-upload {
+  margin-top: 16px;
+}
+.asset-group-card .ant-card-head-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.asset-group-count {
+  margin: 0 0 16px;
+  font-size: 28px;
+  font-weight: 550;
+}
+.asset-group-count span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.asset-group-description {
+  padding: 8px 12px;
+  border-radius: 5px;
+  background: var(--subtle);
+  overflow-wrap: anywhere;
+}
+.asset-type-editor > .ant-form-item,
+.asset-mapping-editor > .ant-form-item {
+  max-width: 680px;
+}
+.asset-editor-section .asset-editor-section {
+  margin: 8px 0;
+  padding: 8px 12px;
+}
 .admin-id-list {
   padding-left: 18px;
   overflow-wrap: anywhere;
@@ -618,6 +693,9 @@ html:has(.mdm-overlay-open) {
   overflow-wrap: anywhere;
 }
 @media (max-width: 760px) {
+  .asset-group-grid {
+    grid-template-columns: 1fr;
+  }
   .admin-form-grid,
   .admin-profile-grid {
     grid-template-columns: 1fr;

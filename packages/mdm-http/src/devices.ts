@@ -216,7 +216,7 @@ function validateViewBinding(
   )
     throw new Error('Wrong association view')
 }
-function viewSummary(
+export function viewSummary(
   value: { reference: unknown; association: unknown; endpoints: readonly unknown[] },
   tenant: string,
 ) {

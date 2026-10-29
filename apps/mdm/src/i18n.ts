@@ -1,6 +1,9 @@
 export type Locale = 'zh' | 'en'
 const zh = {
   devices: '设备',
+  inventory: '资产查询',
+  groups: '设备组',
+  compliance: '安全与合规',
   enrollment: '设备注册',
   connections: '连接配置',
   authorization: '授权管理',
@@ -83,6 +86,9 @@ const zh = {
 }
 type Messages = { [K in keyof typeof zh]: string }
 const en: Messages = {
+  inventory: 'Inventory',
+  groups: 'Device groups',
+  compliance: 'Security and compliance',
   devices: 'Devices',
   enrollment: 'Device enrollment',
   connections: 'Connections',

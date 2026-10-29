@@ -188,10 +188,12 @@ export interface Query {
   limit?: number
   cursor?: string
 }
-export function firstPage(query: Query): Query {
-  const next = { ...query }
-  delete next.cursor
-  return next
+export function firstPage<Q extends { readonly cursor?: string | undefined }>(
+  query: Q,
+): Omit<Q, 'cursor'> {
+  const { cursor, ...rest } = query
+  void cursor
+  return rest
 }
 /** The server evaluates filter/sort/projection. Cursor belongs only to this exact query. */
 export function DirectoryControls({
@@ -285,7 +287,7 @@ export function DirectoryControls({
     </Form>
   )
 }
-export function CursorControls({
+export function CursorControls<Q extends { readonly cursor?: string | undefined }>({
   locale,
   next,
   query,
@@ -293,8 +295,8 @@ export function CursorControls({
   count,
 }: AdminProps & {
   next: string | null
-  query: Query
-  onChange: (query: Query) => void
+  query: Q
+  onChange: (query: Omit<Q, 'cursor'> & { cursor?: string }) => void
   count: number
 }) {
   const l = labels(locale)

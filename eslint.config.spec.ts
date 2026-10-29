@@ -294,6 +294,9 @@ it('keeps the MDM domain cores independent and their adapters out of feature com
     'mdm-devices',
     'mdm-enrollment',
     'mdm-connections',
+    'mdm-inventory',
+    'mdm-groups',
+    'mdm-compliance',
   ]) {
     for (const dependency of ['@rss/api/mdm-operations', 'react', '@rss/auth-core'])
       expect(
@@ -322,4 +325,31 @@ it('keeps the MDM domain cores independent and their adapters out of feature com
   expect(
     await ruleIds("export * from '@rss/mdm-http/authorization'", 'apps/mdm/src/runtime.ts'),
   ).not.toContain('no-restricted-imports')
+})
+
+it('allows only the shared pure asset models across inventory, group and compliance cores', async () => {
+  for (const name of ['mdm-inventory', 'mdm-groups', 'mdm-compliance']) {
+    expect(
+      await ruleIds("export * from '@rss/mdm-devices'", `packages/${name}/src/index.ts`),
+    ).not.toContain('no-restricted-imports')
+    expect(
+      await ruleIds("export * from '@rss/mdm-compliance'", `packages/${name}/src/authoring.ts`),
+    ).toContain('no-restricted-imports')
+    expect(
+      await ruleIds(
+        "export * from '../../mdm-http/src/inventory'",
+        `packages/${name}/src/index.ts`,
+      ),
+    ).toContain('react-boundary/contained')
+    expect(
+      await ruleIds(`export * from '@rss/${name}'`, 'apps/mdm/src/Inventory.tsx'),
+    ).not.toContain('no-restricted-imports')
+  }
+  for (const name of ['mdm-groups', 'mdm-compliance'])
+    expect(
+      await ruleIds("export * from '@rss/mdm-inventory'", `packages/${name}/src/index.ts`),
+    ).not.toContain('no-restricted-imports')
+  expect(
+    await ruleIds("export * from '@rss/mdm-groups'", 'packages/mdm-inventory/src/index.ts'),
+  ).toContain('no-restricted-imports')
 })

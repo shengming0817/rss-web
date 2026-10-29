@@ -37,7 +37,7 @@ export default defineConfig({
             this.error(`Retired runtime in React MDM graph: ${id}`)
           if (/\/(?:demo|__mocks__)\//.test(id)) this.error(`Demo in product graph: ${id}`)
           const owner =
-            /\/packages\/(auth-core|auth-http|mdm-http|mdm-authorization|mdm-tenant-administration|mdm-user-profiles|mdm-devices|mdm-enrollment|mdm-connections)\//.exec(
+            /\/packages\/(auth-core|auth-http|mdm-http|mdm-authorization|mdm-tenant-administration|mdm-user-profiles|mdm-devices|mdm-enrollment|mdm-connections|mdm-inventory|mdm-groups|mdm-compliance)\//.exec(
               id,
             )?.[1]
           if (owner) {
@@ -47,9 +47,12 @@ export default defineConfig({
                 dependency.includes(`/packages/${owner}/`) ||
                 (owner === 'auth-http' && /\/packages\/(?:auth-core|api)\//.test(dependency)) ||
                 (owner === 'mdm-http' &&
-                  /\/packages\/(?:auth-core|api|mdm-authorization|mdm-tenant-administration|mdm-user-profiles|mdm-devices|mdm-enrollment|mdm-connections)\//.test(
+                  /\/packages\/(?:auth-core|api|mdm-authorization|mdm-tenant-administration|mdm-user-profiles|mdm-devices|mdm-enrollment|mdm-connections|mdm-inventory|mdm-groups|mdm-compliance)\//.test(
                     dependency,
-                  ))
+                  )) ||
+                (owner === 'mdm-inventory' && /\/packages\/mdm-devices\//.test(dependency)) ||
+                (['mdm-groups', 'mdm-compliance'].includes(owner) &&
+                  /\/packages\/(?:mdm-devices|mdm-inventory)\//.test(dependency))
               if (!allowed) this.error(`Invalid ${owner} dependency: ${dependency}`)
             }
           }

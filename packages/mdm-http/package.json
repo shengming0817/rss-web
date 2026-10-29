@@ -12,7 +12,11 @@
     "./devices": "./src/devices.ts",
     "./enrollment": "./src/enrollment.ts",
     "./apple-enrollment": "./src/apple-enrollment.ts",
-    "./connections": "./src/connections.ts"
+    "./connections": "./src/connections.ts",
+    "./inventory": "./src/inventory.ts",
+    "./groups": "./src/groups.ts",
+    "./compliance": "./src/compliance.ts",
+    "./mapping-versions": "./src/mapping-versions.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -27,7 +31,10 @@
     "@rss/mdm-user-profiles": "workspace:*",
     "@rss/mdm-devices": "workspace:*",
     "@rss/mdm-enrollment": "workspace:*",
-    "@rss/mdm-connections": "workspace:*"
+    "@rss/mdm-connections": "workspace:*",
+    "@rss/mdm-inventory": "workspace:*",
+    "@rss/mdm-groups": "workspace:*",
+    "@rss/mdm-compliance": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

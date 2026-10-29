@@ -515,7 +515,7 @@ export default tseslint.config(
   {
     files: [
       'apps/mdm/**/*.{ts,tsx}',
-      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections}/**/*.ts',
+      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections,mdm-inventory,mdm-groups,mdm-compliance}/**/*.ts',
     ],
     languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
     plugins: {
@@ -581,13 +581,35 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/mdm-inventory/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex: '^(?:@rss/(?!mdm-devices$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message: 'Inventory consumes only the existing pure device identity and value models.',
+        },
+      ]),
+    },
+  },
+  {
+    files: ['packages/{mdm-groups,mdm-compliance}/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex: '^(?:@rss/(?!mdm-devices$|mdm-inventory$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message: 'Groups and Compliance consume only pure device and inventory models.',
+        },
+      ]),
+    },
+  },
+  {
     files: ['packages/{auth-http,mdm-http}/**/*.ts'],
     rules: {
       'no-restricted-imports': boundaryRule(
         [
           {
             regex:
-              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|api/))',
+              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-groups$|mdm-compliance$|api/))',
             message: 'Adapters depend only on core ports and the API executor.',
           },
         ],
@@ -617,7 +639,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$))',
+              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-groups$|mdm-compliance$))',
             message: 'Feature pages consume domain use cases; only runtime assembles adapters.',
           },
         ],

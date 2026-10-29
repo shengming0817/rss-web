@@ -8,6 +8,13 @@ import {
   createPublicEnrollment,
 } from '@rss/mdm-enrollment'
 import { createConnections } from '@rss/mdm-connections'
+import { createInventory, createMappings } from '@rss/mdm-inventory'
+import { createGroups } from '@rss/mdm-groups'
+import { createCompliance } from '@rss/mdm-compliance'
+import { createInventoryAdapter } from '@rss/mdm-http/inventory'
+import { createMappingVersionsAdapter } from '@rss/mdm-http/mapping-versions'
+import { createGroupsAdapter } from '@rss/mdm-http/groups'
+import { createComplianceAdapter } from '@rss/mdm-http/compliance'
 import { createDevicesAdapter } from '@rss/mdm-http/devices'
 import { createEnrollmentAdapter, createPublicEnrollmentAdapter } from '@rss/mdm-http/enrollment'
 import { createAppleEnrollmentAdapter } from '@rss/mdm-http/apple-enrollment'
@@ -75,6 +82,10 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         tenants: createTenantAdministration(createTenantAdministrationAdapter(transport)),
         profiles: createProfiles(createProfilesAdapter(transport), state.identity.principalId),
         devices: createDevices(createDevicesAdapter(transport, tenant), tenant),
+        inventory: createInventory(createInventoryAdapter(transport, tenant)),
+        mappings: createMappings(createMappingVersionsAdapter(transport)),
+        groups: createGroups(createGroupsAdapter(transport)),
+        compliance: createCompliance(createComplianceAdapter(transport)),
         enrollment: createEnrollment(
           createEnrollmentAdapter(transport, mdm, tenant, host.serviceId),
           tenant,

@@ -17,8 +17,13 @@ async function waitFor(predicate) {
 }
 async function exercise(failure, feature) {
   const react = feature === 'react-devices-enrollment',
-    backendEnv = react ? 'MDM_REACT_DEVICES_BACKEND' : `MDM_${feature.toUpperCase()}_BACKEND`,
-    group = react ? 'react-devices-browser' : `${feature}-browser`
+    assets = feature === 'react-assets',
+    backendEnv = react
+      ? 'MDM_REACT_DEVICES_BACKEND'
+      : assets
+        ? 'MDM_REACT_ASSETS_BACKEND'
+        : `MDM_${feature.toUpperCase()}_BACKEND`,
+    group = react ? 'react-devices-browser' : assets ? 'react-assets-browser' : `${feature}-browser`
   const backend = mkdtempSync(resolve(tmpdir(), `mdm-${feature}-lifecycle-`))
   const bin = resolve(backend, 'bin'),
     recovery = resolve(backend, `artifacts/dev-environment/${group}`)
@@ -31,7 +36,7 @@ async function exercise(failure, feature) {
 const fs = require('node:fs'), path = require('node:path')
 const args = process.argv.slice(2), base = process.env['${backendEnv}']
 const compose = '${feature}' === 'settings' && args.includes('--cleanup-compose')
-const device = ['device', 'react-devices-enrollment'].includes('${feature}') && args.some((arg) => arg.endsWith('/device-cleanup.py'))
+const device = ['device', 'react-devices-enrollment', 'react-assets'].includes('${feature}') && args.some((arg) => arg.endsWith('/device-cleanup.py'))
 if (args.includes('reset') || device || compose || ('${feature}' === 'settings' && args.includes('-c'))) {
   const target = args.includes('-c')
   if (device ? args.at(-2) !== new URL('./device-cleanup.py', 'file://' + process.env.WEB_ROOT + '/e2e/mdm/').pathname || args.at(-1) !== process.env.WEB_ROOT : compose ? args.at(-1) !== '--cleanup-compose' || !args.at(-3).endsWith('/settings-fixture.py') : target ? !args.at(-1).includes("group='settings-browser-target'") : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
@@ -117,7 +122,13 @@ if (args.includes('reset') || device || compose || ('${feature}' === 'settings' 
     rmSync(backend, { recursive: true, force: true })
   }
 }
-for (const feature of ['device', 'software', 'settings', 'react-devices-enrollment']) {
+for (const feature of [
+  'device',
+  'software',
+  'settings',
+  'react-devices-enrollment',
+  'react-assets',
+]) {
   test(
     `${feature}: waits for independent cleanup after cancellation and a second signal`,
     { timeout: feature === 'settings' ? 40000 : 30000 },

@@ -20,6 +20,12 @@ MDM 无后端演示：`pnpm dev:mdm:old:demo`；生产构建：`pnpm build:mdm:o
 
 新设备、注册与连接代表旅程：`MDM_REACT_DEVICES_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-devices-enrollment-browser`。入口构建新应用，复用既有设备与注册 HTTPS 夹具、构建租约和隔离清理。浏览器覆盖目录、关联原请求恢复、后台准入拒绝、单 JSON 交付及连接版本观察；输出无秘密的桌面、移动和暗色页面截图目录。合成注册与测试 PKI 只证明 HTTP 接缝；真实 Windows/macOS 安装、ADE/Entra 组织资格及设备效果分别验收。
 
+新 React `/inventory` 提供服务端资产查询、个人保存查询、不可变任务结果、字段与展示布局和采集映射；`/groups` 管理静态、动态与嵌套设备组；`/compliance` 管理规则、评估任务及设备当前/历史结论。设备详情的资产页区分关联视图、终端命名空间、来源和历史值，并提供集合续页、手工值和采集质量读取。预览只评估已保存组定义，不发布正式成员；旧成员集和此前合规评估保留历史标识。
+
+采集映射从精确 Resource 固定版本保留物理计划、脚本原文及未编辑变体，创建新的冻结版本。版本声明与每份内容上传分别确认；显示原上传标识及固定坐标，按已读取位置显式续传并查询内容回执。隐藏会清除内容缓冲；若尚未开始上传，先以原标识和冻结元数据显式开始，再读取原上传并恢复固定内容，核验长度和 SHA 后继续。脚本恢复需要原内容所在的精确固定版本；该入口不激活或发布资源。
+
+新资产、设备组与合规 HTTPS Chromium 验证：`MDM_REACT_ASSETS_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-assets-browser`。复用既有设备隔离环境、构建租约及独立清理，运行新 React 代表旅程，输出无秘密的桌面、移动和暗色截图目录。覆盖原请求恢复、服务端分页、嵌套与预览、合规历史和跨租户/权限拒绝；合成设备与字段只证明 HTTP/界面接缝，不代替 Windows/macOS 实际设备效果验收。
+
 ## Web 组件开发
 
 `pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。直接展示当前 Vuetify 组件；主题与语言基础见 [@rss/core](packages/core/README.md)。

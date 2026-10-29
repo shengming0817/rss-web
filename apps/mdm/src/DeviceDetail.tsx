@@ -14,6 +14,8 @@ import { AssociationEditor } from './AssociationEditor'
 import { DevicePersonnel } from './DevicePersonnel'
 import { DeviceRetirement } from './DeviceRetirement'
 import { DeviceRegistration } from './DeviceRegistration'
+import { AssetFacts } from './AssetFacts'
+import { DeviceCompliance } from './DeviceCompliance'
 function AgentObservation({
   runtime,
   locale,
@@ -316,20 +318,31 @@ function Detail({
 }) {
   const guard = useSelectionGuard()
   const l = labels(locale),
-    { devices, binding } = useAdministration(runtime),
+    { devices, inventory, compliance, authorization, binding } = useAdministration(runtime),
+    permissions = useRead(`${binding}/device-asset-presentation`, authorization.effective),
+    has = (operation: string) =>
+      permissions.value?.grants.some((grant) => grant.operation === operation) ?? false,
     [selected, setSelected] = useState(''),
     [snapshot, setSnapshot] = useState<DeviceView>(),
+    [heldEndpoint, setHeldEndpoint] = useState<ViewEndpoint>(),
     read = useRead(`${binding}/device-view/${reference.kind}/${reference.id}`, () =>
       devices.view(reference),
     )
   useEffect(() => {
-    if (read.error) setSnapshot(undefined)
-    else if (read.value) setSnapshot(read.value)
-  }, [read.value, read.error])
-  // Keep local panels mounted during a same-resource read so their frozen unknown intents survive.
-  // Any denied/failed read removes the old projection immediately; session changes remount the root.
-  const view = read.error ? undefined : (read.value ?? snapshot),
-    endpoint = selected ? view?.endpoints.find((e) => e.id === selected) : view?.endpoints[0]
+    if (read.value) setSnapshot(read.value)
+  }, [read.value])
+  // Old facts are hidden on a failed read. Retain operation owners until the same bound
+  // endpoint is observed again; a changed tenant/principal/session remounts this subtree.
+  const retained = read.value ?? snapshot,
+    view = read.error ? undefined : retained,
+    endpoint = selected ? view?.endpoints.find((e) => e.id === selected) : view?.endpoints[0],
+    mountedEndpoint = endpoint ?? heldEndpoint
+  useEffect(() => {
+    if (endpoint) {
+      setHeldEndpoint(endpoint)
+      if (!selected) setSelected(endpoint.id)
+    }
+  }, [endpoint, selected])
   return (
     <>
       <Link to="/devices">← {l('设备目录', 'Devices')}</Link>
@@ -343,8 +356,12 @@ function Detail({
         }
       />
       <ReadState busy={read.busy} error={read.error} locale={locale} />
-      {view && (
-        <>
+      <Button onClick={permissions.reload}>
+        {l('读取设备资产与合规权限', 'Read device inventory and compliance permissions')}
+      </Button>
+      <ReadState busy={permissions.busy} error={permissions.error} locale={locale} />
+      {retained && (
+        <fieldset className="permission-panel" hidden={!view} disabled={!view}>
           {read.busy && (
             <p className="subtitle">
               {l(
@@ -353,14 +370,14 @@ function Detail({
               )}
             </p>
           )}
-          {view.association && (
+          {retained.association && (
             <Alert
-              type={view.association.state === 'needs_verification' ? 'warning' : 'info'}
+              type={retained.association.state === 'needs_verification' ? 'warning' : 'info'}
               title={
                 <span>
                   {l('关联状态', 'Association')} ·{' '}
-                  <Status value={view.association.state} locale={locale} /> · {l('版本', 'Version')}{' '}
-                  {view.association.version}
+                  <Status value={retained.association.state} locale={locale} /> ·{' '}
+                  {l('版本', 'Version')} {retained.association.version}
                 </span>
               }
             />
@@ -371,25 +388,58 @@ function Detail({
               id="device-endpoint"
               disabled={guard.locked}
               value={endpoint?.id ?? null}
-              options={view.endpoints.map((e) => ({
+              options={retained.endpoints.map((e) => ({
                 value: e.id,
                 label: `${deviceName(e.displayName, e.id)} · ${e.id}`,
               }))}
               onChange={(value: string) => setSelected(value)}
             />
           </div>
-          {endpoint ? (
+          {!endpoint && mountedEndpoint && (
+            <Alert
+              type="warning"
+              title={l(
+                '原操作终端暂不在当前视图。原请求已保留，请重新读取当前终端事实。',
+                'The original endpoint is absent from the current view. Original requests are retained; read current endpoint facts again.',
+              )}
+            />
+          )}
+          {mountedEndpoint ? (
             <SelectionGuard.Provider value={guard.register}>
               <SecretTabs
-                key={endpoint.id}
+                key={mountedEndpoint.id}
+                uiLocale={locale}
+                authorizedKeys={
+                  endpoint && view
+                    ? [
+                        'overview',
+                        'registration',
+                        'people',
+                        'association',
+                        'fields',
+                        'retirement',
+                        'asset',
+                        ...(has('inventory_read') ? ['inventory'] : []),
+                        ...(has('compliance_read') ? ['compliance'] : []),
+                      ]
+                    : []
+                }
                 items={[
                   {
                     key: 'overview',
                     label: l('概览', 'Overview'),
                     children: (
                       <div className="device-detail-grid">
-                        <EndpointFacts runtime={runtime} locale={locale} endpoint={endpoint} />
-                        <AgentObservation runtime={runtime} locale={locale} endpoint={endpoint} />
+                        <EndpointFacts
+                          runtime={runtime}
+                          locale={locale}
+                          endpoint={mountedEndpoint}
+                        />
+                        <AgentObservation
+                          runtime={runtime}
+                          locale={locale}
+                          endpoint={mountedEndpoint}
+                        />
                       </div>
                     ),
                   },
@@ -397,7 +447,11 @@ function Detail({
                     key: 'registration',
                     label: l('注册', 'Enrollment'),
                     children: (
-                      <DeviceRegistration runtime={runtime} locale={locale} device={endpoint.id} />
+                      <DeviceRegistration
+                        runtime={runtime}
+                        locale={locale}
+                        device={mountedEndpoint.id}
+                      />
                     ),
                   },
                   {
@@ -407,7 +461,7 @@ function Detail({
                       <DevicePersonnel
                         runtime={runtime}
                         locale={locale}
-                        endpoint={endpoint}
+                        endpoint={mountedEndpoint}
                         onChanged={read.reload}
                       />
                     ),
@@ -419,9 +473,33 @@ function Detail({
                       <AssociationEditor
                         runtime={runtime}
                         locale={locale}
-                        endpoint={endpoint}
-                        prior={view.association}
+                        endpoint={mountedEndpoint}
+                        prior={retained.association}
                         onChanged={read.reload}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'inventory',
+                    label: l('资产信息', 'Inventory'),
+                    children: (
+                      <AssetFacts
+                        inventory={inventory}
+                        locale={locale}
+                        reference={reference}
+                        endpoint={mountedEndpoint.id}
+                        canAssign={has('inventory_assign')}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'compliance',
+                    label: l('安全与合规', 'Security and compliance'),
+                    children: (
+                      <DeviceCompliance
+                        compliance={compliance}
+                        locale={locale}
+                        device={mountedEndpoint.id}
                       />
                     ),
                   },
@@ -431,7 +509,7 @@ function Detail({
                     children: (
                       <DataTable
                         locale={locale}
-                        dataSource={Object.entries(view.fields).map(([field, value]) => ({
+                        dataSource={Object.entries(retained.fields).map(([field, value]) => ({
                           field,
                           value,
                         }))}
@@ -477,7 +555,7 @@ function Detail({
               )}
             />
           )}
-        </>
+        </fieldset>
       )}
     </>
   )
