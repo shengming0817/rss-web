@@ -336,6 +336,11 @@ export function createSession(
       page++
       publish({ security: null })
     },
+    /** A self-management mutation may invalidate the server session even if its response is lost. */
+    invalidate() {
+      page++
+      clear('anonymous', true)
+    },
     suspend() {
       page++
       clear()

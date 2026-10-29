@@ -513,7 +513,10 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/mdm/**/*.{ts,tsx}', 'packages/{auth-core,auth-http,mdm-http}/**/*.ts'],
+    files: [
+      'apps/mdm/**/*.{ts,tsx}',
+      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles}/**/*.ts',
+    ],
     languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
     plugins: {
       'react-boundary': {
@@ -565,12 +568,14 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/auth-core/**/*.ts'],
+    files: [
+      'packages/{auth-core,mdm-authorization,mdm-tenant-administration,mdm-user-profiles}/**/*.ts',
+    ],
     rules: {
       'no-restricted-imports': boundaryRule([
         {
           regex: '^(?:@rss/|react(?:/|$)|antd(?:/|$)|axios$)',
-          message: 'Authentication core depends only on its own model and ports.',
+          message: 'Domain cores depend only on their own models and ports.',
         },
       ]),
     },
@@ -581,11 +586,59 @@ export default tseslint.config(
       'no-restricted-imports': boundaryRule(
         [
           {
-            regex: '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|api/))',
+            regex:
+              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|api/))',
             message: 'Adapters depend only on core ports and the API executor.',
           },
         ],
         [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['packages/auth-http/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|api/(?:identity|testing)$))',
+            message: 'Identity adapters consume only their auth core and Identity executor.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['apps/mdm/src/**/*.{ts,tsx}'],
+    ignores: ['apps/mdm/src/runtime.ts', '**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$))',
+            message: 'Feature pages consume domain use cases; only runtime assembles adapters.',
+          },
+        ],
+        [
+          NO_AXIOS_PATH,
+          {
+            name: '@rss/auth-core',
+            importNames: ['createSession', 'createFlows'],
+            message: 'Only runtime creates the session and flow owner.',
+          },
+          {
+            name: '@rss/auth-http',
+            importNames: [
+              'createAuthPort',
+              'createIdentityTransport',
+              'createPasskeyClient',
+              'createIdentityAdministrationAdapter',
+            ],
+            message: 'Only runtime assembles Identity adapters.',
+          },
+        ],
       ),
     },
   },

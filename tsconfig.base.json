@@ -42,7 +42,10 @@
       "@rss/api/mdm-demo": ["packages/api/src/mdm-demo.ts"],
       "@rss/auth-core": ["packages/auth-core/src/index.ts"],
       "@rss/auth-http": ["packages/auth-http/src/index.ts"],
-      "@rss/mdm-http": ["packages/mdm-http/src/index.ts"]
+      "@rss/mdm-http": ["packages/mdm-http/src/index.ts"],
+      "@rss/mdm-authorization": ["packages/mdm-authorization/src/index.ts"],
+      "@rss/mdm-tenant-administration": ["packages/mdm-tenant-administration/src/index.ts"],
+      "@rss/mdm-user-profiles": ["packages/mdm-user-profiles/src/index.ts"]
     }
   }
 }

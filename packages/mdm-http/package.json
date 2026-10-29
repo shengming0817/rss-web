@@ -5,7 +5,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./authorization": "./src/authorization.ts",
+    "./tenant-administration": "./src/tenant-administration.ts",
+    "./user-profiles": "./src/user-profiles.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -14,7 +17,10 @@
   },
   "dependencies": {
     "@rss/auth-core": "workspace:*",
-    "@rss/api": "workspace:*"
+    "@rss/api": "workspace:*",
+    "@rss/mdm-authorization": "workspace:*",
+    "@rss/mdm-tenant-administration": "workspace:*",
+    "@rss/mdm-user-profiles": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

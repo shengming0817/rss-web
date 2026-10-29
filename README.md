@@ -10,6 +10,10 @@ MDM 无后端演示：`pnpm dev:mdm:old:demo`；生产构建：`pnpm build:mdm:o
 
 新 React + Ant Design MDM 位于 `apps/mdm`，使用 `pnpm dev:mdm` 和 `pnpm build:mdm`，独立依赖 `@rss/auth-core`、`@rss/auth-http`、`@rss/mdm-http`。认证与业务使用同一会话 owner 和既有 `@rss/api` HTTP executor。新入口须挂载到提供正式 Identity/MDM host 配置的同源 HTTPS 宿主；Vite loopback 开发入口本身不提供后端。`pnpm image:mdm` 与既有浏览器业务验证仍显式使用旧应用，生产切换另行完成。旧应用的独立开发入口为 `pnpm dev:mdm:old`。新认证和响应式界面的真实 HTTPS Chromium 验证使用 `MDM_REACT_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-auth-browser`，复用后端隔离环境与构建租约，退出确认清理；该验证不证明设备实际效果。
 
+新 React 管理入口包括 `/authorization`（规则、授权用户组及 API Key）、`/user-profiles`（字段映射及资料投影）、`/identity`（受控账户与 Provider）。管理租户使用 `/platform/authorization`、`/platform/tenants`、`/platform/identity`。编辑单独读取详情版本；提交未知时显式查询原操作或重提同一请求，Provider/普通账户写入没有幂等回执，须显式读取比较。Key 秘密只在正式初次响应中展示，关闭、隐藏或离开会清除。
+
+新 React 授权、租户和资料的真实 HTTPS Chromium 验证：`MDM_REACT_ADMIN_BACKEND=/absolute/rss-mdm IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:mdm:react-administration-browser`。复用现有资料 fixture 的隔离 PG、Keycloak、MDM 宿主、构建租约与清理，以新应用运行代表旅程；不代替业务租户宿主完整启用或设备实际效果验收。
+
 ## Web 组件开发
 
 `pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。直接展示当前 Vuetify 组件；主题与语言基础见 [@rss/core](packages/core/README.md)。

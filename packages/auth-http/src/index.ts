@@ -127,3 +127,5 @@ export function createAuthPort(transport: HttpTransport): AuthPort {
     },
   }
 }
+
+export { createIdentityAdministrationAdapter } from './administration'

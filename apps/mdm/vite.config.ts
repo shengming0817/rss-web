@@ -36,13 +36,20 @@ export default defineConfig({
           )
             this.error(`Retired runtime in React MDM graph: ${id}`)
           if (/\/(?:demo|__mocks__)\//.test(id)) this.error(`Demo in product graph: ${id}`)
-          const owner = /\/packages\/(auth-core|auth-http|mdm-http)\//.exec(id)?.[1]
+          const owner =
+            /\/packages\/(auth-core|auth-http|mdm-http|mdm-authorization|mdm-tenant-administration|mdm-user-profiles)\//.exec(
+              id,
+            )?.[1]
           if (owner) {
             const dependencies = this.getModuleInfo(id)?.importedIds ?? []
             for (const dependency of dependencies) {
               const allowed =
                 dependency.includes(`/packages/${owner}/`) ||
-                (owner !== 'auth-core' && /\/packages\/(?:auth-core|api)\//.test(dependency))
+                (owner === 'auth-http' && /\/packages\/(?:auth-core|api)\//.test(dependency)) ||
+                (owner === 'mdm-http' &&
+                  /\/packages\/(?:auth-core|api|mdm-authorization|mdm-tenant-administration|mdm-user-profiles)\//.test(
+                    dependency,
+                  ))
               if (!allowed) this.error(`Invalid ${owner} dependency: ${dependency}`)
             }
           }

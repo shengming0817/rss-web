@@ -1,5 +1,9 @@
 export type Locale = 'zh' | 'en'
 const zh = {
+  authorization: '授权管理',
+  tenantAdministration: '租户管理',
+  userProfiles: '用户资料',
+  identityAdministration: '账户与身份来源',
   authenticator_already_registered: '此认证器已添加，请使用其他认证器。',
   passkeys: '通行密钥',
   readPasskeys: '读取通行密钥',
@@ -76,6 +80,10 @@ const zh = {
 }
 type Messages = { [K in keyof typeof zh]: string }
 const en: Messages = {
+  authorization: 'Authorization',
+  tenantAdministration: 'Tenant administration',
+  userProfiles: 'User profiles',
+  identityAdministration: 'Accounts and identity sources',
   authenticator_already_registered:
     'This authenticator is already registered. Use another authenticator.',
   passkeys: 'Passkeys',

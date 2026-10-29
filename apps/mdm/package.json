@@ -16,7 +16,10 @@
     "@rss/auth-core": "workspace:*",
     "@rss/auth-http": "workspace:*",
     "@rss/mdm-http": "workspace:*",
-    "@ant-design/cssinjs": "catalog:"
+    "@ant-design/cssinjs": "catalog:",
+    "@rss/mdm-authorization": "workspace:*",
+    "@rss/mdm-tenant-administration": "workspace:*",
+    "@rss/mdm-user-profiles": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

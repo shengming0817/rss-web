@@ -285,3 +285,34 @@ it('keeps the DA stylesheet build helper out of product source imports', async (
     ),
   ).toContain('da-boundary/contained')
 })
+
+it('keeps the three administration cores independent and their adapters out of feature composition', async () => {
+  for (const name of ['mdm-authorization', 'mdm-tenant-administration', 'mdm-user-profiles']) {
+    for (const dependency of ['@rss/api/mdm-operations', 'react', '@rss/auth-core'])
+      expect(
+        await ruleIds(`export * from '${dependency}'`, `packages/${name}/src/index.ts`),
+      ).toContain('no-restricted-imports')
+    expect(
+      await ruleIds("export * from '../../mdm-http/src/index'", `packages/${name}/src/index.ts`),
+    ).toContain('react-boundary/contained')
+    expect(
+      await ruleIds(`export * from '@rss/${name}'`, 'packages/mdm-http/src/authorization.ts'),
+    ).not.toContain('no-restricted-imports')
+  }
+  expect(
+    await ruleIds("export * from '@rss/mdm-authorization'", 'packages/auth-http/src/index.ts'),
+  ).toContain('no-restricted-imports')
+  for (const dependency of ['@rss/api/mdm', '@rss/mdm-http/authorization'])
+    expect(
+      await ruleIds(`export * from '${dependency}'`, 'apps/mdm/src/Authorization.tsx'),
+    ).toContain('no-restricted-imports')
+  expect(
+    await ruleIds(
+      "import {createSession} from '@rss/auth-core'; export const x=createSession",
+      'apps/mdm/src/Authorization.tsx',
+    ),
+  ).toContain('no-restricted-imports')
+  expect(
+    await ruleIds("export * from '@rss/mdm-http/authorization'", 'apps/mdm/src/runtime.ts'),
+  ).not.toContain('no-restricted-imports')
+})

@@ -38,7 +38,7 @@ export function bool(value: unknown): boolean {
 }
 export function list<T>(value: unknown, decode: (v: unknown) => T, max = 100): T[] {
   if (!Array.isArray(value) || value.length > max) throw new Error('Invalid response')
-  return value.map(decode)
+  return value.map((item) => decode(item))
 }
 export interface Session {
   id: string

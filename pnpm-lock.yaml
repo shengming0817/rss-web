@@ -331,9 +331,18 @@ importers:
       '@rss/auth-http':
         specifier: workspace:*
         version: link:../../packages/auth-http
+      '@rss/mdm-authorization':
+        specifier: workspace:*
+        version: link:../../packages/mdm-authorization
       '@rss/mdm-http':
         specifier: workspace:*
         version: link:../../packages/mdm-http
+      '@rss/mdm-tenant-administration':
+        specifier: workspace:*
+        version: link:../../packages/mdm-tenant-administration
+      '@rss/mdm-user-profiles':
+        specifier: workspace:*
+        version: link:../../packages/mdm-user-profiles
       antd:
         specifier: 'catalog:'
         version: 6.6.8(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -619,6 +628,18 @@ importers:
         specifier: 'catalog:'
         version: 2.2.0(typescript@5.7.3)
 
+  packages/mdm-authorization:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
   packages/mdm-http:
     dependencies:
       '@rss/api':
@@ -627,6 +648,39 @@ importers:
       '@rss/auth-core':
         specifier: workspace:*
         version: link:../auth-core
+      '@rss/mdm-authorization':
+        specifier: workspace:*
+        version: link:../mdm-authorization
+      '@rss/mdm-tenant-administration':
+        specifier: workspace:*
+        version: link:../mdm-tenant-administration
+      '@rss/mdm-user-profiles':
+        specifier: workspace:*
+        version: link:../mdm-user-profiles
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
+  packages/mdm-tenant-administration:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
+  packages/mdm-user-profiles:
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 'catalog:'

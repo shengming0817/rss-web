@@ -19,6 +19,10 @@ import enUS from 'antd/locale/en_US'
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { Provider } from '@rss/auth-core'
 import type { Runtime } from './runtime'
+import { Authorization } from './Authorization'
+import { Tenants } from './Tenants'
+import { UserProfiles } from './UserProfiles'
+import { IdentityAdministration } from './IdentityAdministration'
 import { Passkeys } from './Passkeys'
 import { StyleProvider } from '@ant-design/cssinjs'
 import { mdmTheme } from './theme'
@@ -187,11 +191,30 @@ function Brand() {
 export interface FeatureRoute {
   path: string
   label: MessageKey
+  realm?: 'tenant' | 'management'
   render: (ui: Ui) => ReactNode
 }
 /** Product features register implemented routes here; they do not assemble authentication. */
 const featureRoutes: readonly FeatureRoute[] = [
   { path: '/', label: 'workspace', render: (ui) => <Workspace {...ui} /> },
+  { path: '/authorization', label: 'authorization', render: (ui) => <Authorization {...ui} /> },
+  {
+    path: '/tenants',
+    label: 'tenantAdministration',
+    realm: 'management',
+    render: (ui) => <Tenants {...ui} />,
+  },
+  {
+    path: '/user-profiles',
+    label: 'userProfiles',
+    realm: 'tenant',
+    render: (ui) => <UserProfiles {...ui} />,
+  },
+  {
+    path: '/identity',
+    label: 'identityAdministration',
+    render: (ui) => <IdentityAdministration {...ui} />,
+  },
   { path: '/security', label: 'security', render: (ui) => <SessionSecurity {...ui} /> },
 ]
 function Workspace({ runtime, locale }: Ui) {
@@ -411,23 +434,28 @@ function Navigation({ runtime, locale, close }: Ui & { close: () => void }) {
         </div>
       </div>
       <nav aria-label={t.navigation}>
-        {featureRoutes.map((route) => {
-          const href =
-            route.path === '/'
-              ? runtime.home
-              : `${runtime.management ? '/platform' : ''}${route.path}`
-          return (
-            <Link
-              key={route.path}
-              className={`nav-item ${location.pathname === href ? 'active' : ''}`}
-              aria-current={location.pathname === href ? 'page' : undefined}
-              to={href}
-              onClick={close}
-            >
-              {t[route.label]}
-            </Link>
+        {featureRoutes
+          .filter(
+            (route) =>
+              !route.realm || route.realm === (runtime.management ? 'management' : 'tenant'),
           )
-        })}
+          .map((route) => {
+            const href =
+              route.path === '/'
+                ? runtime.home
+                : `${runtime.management ? '/platform' : ''}${route.path}`
+            return (
+              <Link
+                key={route.path}
+                className={`nav-item ${location.pathname === href ? 'active' : ''}`}
+                aria-current={location.pathname === href ? 'page' : undefined}
+                to={href}
+                onClick={close}
+              >
+                {t[route.label]}
+              </Link>
+            )
+          })}
       </nav>
       <div className="sidebar-bottom">
         <span className="profile-icon" aria-hidden="true">
@@ -644,17 +672,28 @@ function Shell({
             />
           )}
           <Routes>
-            {featureRoutes.map((route) => (
-              <Route
-                key={route.path}
-                path={
-                  route.path === '/'
-                    ? runtime.home
-                    : `${runtime.management ? '/platform' : ''}${route.path}`
-                }
-                element={route.render({ runtime, locale })}
-              />
-            ))}
+            {featureRoutes
+              .filter(
+                (route) =>
+                  !route.realm || route.realm === (runtime.management ? 'management' : 'tenant'),
+              )
+              .map((route) => (
+                <Route
+                  key={route.path}
+                  path={
+                    route.path === '/'
+                      ? runtime.home
+                      : `${runtime.management ? '/platform' : ''}${route.path}`
+                  }
+                  element={
+                    <div
+                      key={`${runtime.tenant}/${state.identity?.principalId}/${state.session?.id}`}
+                    >
+                      {route.render({ runtime, locale })}
+                    </div>
+                  }
+                />
+              ))}
             <Route
               path="/auth/resume"
               element={

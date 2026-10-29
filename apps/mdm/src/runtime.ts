@@ -1,6 +1,13 @@
-import { createFlows, createSession } from '@rss/auth-core'
+import { createAuthorization } from '@rss/mdm-authorization'
+import { createTenantAdministration } from '@rss/mdm-tenant-administration'
+import { createProfiles } from '@rss/mdm-user-profiles'
+import { createAuthorizationAdapter } from '@rss/mdm-http/authorization'
+import { createTenantAdministrationAdapter } from '@rss/mdm-http/tenant-administration'
+import { createProfilesAdapter } from '@rss/mdm-http/user-profiles'
+import { createFlows, createSession, createIdentityAdministration } from '@rss/auth-core'
 import {
   createAuthPort,
+  createIdentityAdministrationAdapter,
   createIdentityTransport,
   createPasskeyClient,
   loadHostConfig,
@@ -27,7 +34,36 @@ export async function createRuntime(origin: string, pathname: string, storage: S
     tenant,
     management,
     oidcEnabled,
-    transport: bindSession(mdm, owner, tenant),
+    administration() {
+      const state = owner.getSnapshot()
+      if (
+        state.status !== 'authenticated' ||
+        !state.identity ||
+        !state.session ||
+        state.tenant !== tenant
+      )
+        throw new Error('Session required')
+      const realm = management ? 'management' : 'tenant'
+      const transport = bindSession(mdm, owner, {
+        realm,
+        credentialTenant: tenant,
+        principalId: state.identity.principalId,
+        sessionId: state.session.id,
+      })
+      return Object.freeze({
+        binding: `${tenant}/${state.identity.principalId}/${state.session.id}`,
+        identity: createIdentityAdministration(
+          createIdentityAdministrationAdapter(identity, owner, oidcEnabled),
+        ),
+        authorization: createAuthorization(
+          createAuthorizationAdapter(transport, tenant, realm, state.identity.principalId),
+          tenant,
+          realm,
+        ),
+        tenants: createTenantAdministration(createTenantAdministrationAdapter(transport)),
+        profiles: createProfiles(createProfilesAdapter(transport), state.identity.principalId),
+      })
+    },
     passkeys: createPasskeyClient(identity, owner),
     flows: createFlows(storage),
     home: management ? '/platform' : '/',
