@@ -400,6 +400,7 @@ export interface EventMember {
   readonly operations: readonly EventProgress[]
 }
 export interface PolicyEventsPort {
+  lookupOriginal(device: string, operationId: string): Promise<Page<EventBatch>>
   submit(device: string, request: EventRequest): Promise<EventAccepted>
   batches(device: string, query: DirectoryQuery<keyof EventBatch>): Promise<Page<EventBatch>>
   batch(device: string, batch: string): Promise<EventBatch>

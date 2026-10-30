@@ -58,7 +58,7 @@ it('invalidates directory and list cursors on association membership changes', a
   await h.associations.confirm(h.body)
   await expect(h.views.list({ cursor: page.nextCursor! })).rejects.toMatchObject({
     status: 409,
-    body: { code: 'device_view_cursor_invalidated' },
+    body: { code: 'query_cursor_invalidated' },
   })
   await expect(h.views.items(ref, 'device.software', source)).rejects.toMatchObject({ status: 409 })
 })

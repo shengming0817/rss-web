@@ -1,6 +1,6 @@
 import * as api from '@rss/api/mdm-operations'
 import * as schema from '@rss/api/mdm-schemas'
-import { nextCursor, queryParameters } from '@rss/api/mdm-query'
+import { comparison, nextCursor, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { EventBatch, EventMember, EventProgress, PolicyEventsPort } from '@rss/mdm-policies'
 import { count, positive, text, uuid } from './decode'
@@ -113,6 +113,18 @@ function member(value: unknown): EventMember {
 }
 export function createPolicyEventsAdapter(transport: HttpTransport): PolicyEventsPort {
   return {
+    lookupOriginal: (device, operationId) =>
+      api.getApiV1DevicesByDevicePolicyEventBatches(
+        transport,
+        {
+          pathParams: { device: text(device) },
+          query: queryParameters({
+            filter: comparison('operationId', '==', uuid(operationId)),
+            limit: 2,
+          }),
+        },
+        (value) => ({ items: value.items.map(batch), nextCursor: nextCursor(value.nextCursor) }),
+      ),
     submit: (device, request) =>
       api.postApiV1DevicesByDevicePolicyEvents(
         transport,

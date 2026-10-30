@@ -477,7 +477,7 @@ it('reads explicit runtime facts and never turns missing counts into zero', asyn
         health: 'unknown',
         reasons: ['unobserved'],
         task: 'unknown',
-        dependencies: [{ name: 'flow_storage', state: 'unavailable', reason: 'deadline' }],
+        dependencies: [{ name: 'business_queues', state: 'unavailable', reason: 'deadline' }],
         queues: [{ name: 'pending', count: null, truncated: null }],
         progress: {
           state: 'unobserved',
@@ -489,7 +489,6 @@ it('reads explicit runtime facts and never turns missing counts into zero', asyn
           sourceObservationAgeMs: null,
           applied: null,
         },
-        bridge: { successful: false, reason: 'deadline', observedAt: null },
         runner: {
           scan: null,
           unresolvedAttempts: 2,

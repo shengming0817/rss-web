@@ -89,7 +89,6 @@ export function createSettingsDemo(options: { seedDownloads?: boolean } = {}) {
               sourceObservationAgeMs: null,
               applied: null,
             },
-            bridge: { successful: false, reason: 'unobserved', observedAt: null },
           },
           {
             name: 'automation',
@@ -99,7 +98,7 @@ export function createSettingsDemo(options: { seedDownloads?: boolean } = {}) {
             task: 'running',
             dependencies: [
               {
-                name: 'flow_storage',
+                name: 'business_queues',
                 state: partial ? 'unavailable' : 'available',
                 ...(partial ? { reason: 'deadline' } : {}),
               },

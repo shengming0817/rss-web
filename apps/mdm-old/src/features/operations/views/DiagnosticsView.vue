@@ -205,13 +205,6 @@ watch(
           </dl>
           <p class="device-help">{{ t('operations.diagnosticUi.progressHint') }}</p>
         </section>
-        <section v-if="selected.bridge" class="console-panel">
-          <h3>{{ t('operations.diagnosticUi.bridge') }}</h3>
-          <p>{{ bool(selected.bridge.successful) }} · {{ at(selected.bridge.observedAt) }}</p>
-          <p v-if="selected.bridge.reason">
-            {{ t(`operations.diagnosticUi.reason.${selected.bridge.reason}`) }}
-          </p>
-        </section>
         <section v-if="selected.runner" class="console-panel">
           <h3>{{ t('operations.diagnosticUi.runner') }}</h3>
           <dl class="settings-facts">

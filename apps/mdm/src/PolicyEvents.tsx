@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Alert, Button, Card, Checkbox, Input, Space } from 'antd'
-import { comparison } from '@rss/api/mdm-query'
 import { freeze } from '@rss/mdm-inventory'
 import { validateEventRequest, type createPolicyEvents, type EventRequest } from '@rss/mdm-policies'
 import type { DevicesUseCases } from './EndpointPicker'
@@ -113,26 +112,14 @@ function DeviceEvents({
   }
   async function reconcile() {
     if (!pending) return
-    const result = await action.run(() =>
-      events.batches(device, {
-        filter: comparison('operationId', '==', pending.operationId),
-        limit: 2,
-      }),
-    )
-    if (result.ok && result.value.items.length === 1) {
-      const original = result.value.items[0]!
-      if (
-        original.operationId === pending.operationId &&
-        original.request.operationId === pending.operationId &&
-        original.event === pending.event &&
-        original.request.source.kind === pending.source.kind
-      ) {
-        setSelected(original.id)
-        setOutcome('accepted')
-        read.reload()
-      }
+    const result = await action.run(() => events.original(device, pending))
+    if (result.ok && result.value) {
+      setSelected(result.value.id)
+      setOutcome('accepted')
+      read.reload()
     }
   }
+
   return (
     <>
       <p>

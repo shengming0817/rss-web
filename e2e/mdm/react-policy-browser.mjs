@@ -214,7 +214,7 @@ try {
     ['dark', 1440, 960, true],
   ]) {
     await p.setViewportSize({ width, height })
-    if (dark) await button('切换明暗主题').click()
+    if (dark) await button('切换亮暗主题').click()
     await p.screenshot({
       path: join(screenshots, name + '.png'),
       fullPage: true,

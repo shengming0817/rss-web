@@ -2031,7 +2031,8 @@ it('keeps issuance recovery unknown after null query and retries only the origin
   const f = await fixture(AgentRecovery, { kind: 'issuance' })
   let lose = true
   f.setHandler((o) => {
-    if (o.method === 'GET') return null
+    if (o.method === 'GET')
+      return o.path.endsWith('/recovery-operations') ? { items: [], nextCursor: null } : null
     if (lose) throw decodeMdmError(503, { code: 'issuance_unknown', issuanceId: principal })
     return {
       wireVersion: 1,
@@ -2120,13 +2121,20 @@ it('clears a previously queried issuance candidate when the same session loses C
   const f = await fixture(AgentRecovery, { kind: 'issuance' })
   await f.wrapper.get('#agent-issuance').setValue(principal)
   await f.wrapper.get('#agent-recovery-operation').setValue(id)
-  f.setHandler(() => ({
-    wireVersion: 1,
-    issuanceId: principal,
-    operationId: tenant,
-    certificateChain: ['YQ=='],
-    activateBefore: 1760000000,
-  }))
+  f.setHandler((o) =>
+    o.path.endsWith('/recovery-operations')
+      ? {
+          items: [{ actor: 'original-admin', instance: 'original-instance', operationId: id }],
+          nextCursor: null,
+        }
+      : {
+          wireVersion: 1,
+          issuanceId: principal,
+          operationId: tenant,
+          certificateChain: ['YQ=='],
+          activateBefore: 1760000000,
+        },
+  )
   await button(f.wrapper, '查询原操作').trigger('click')
   await flushPromises()
   expect(f.wrapper.get('table').text()).toContain(principal)

@@ -67,6 +67,7 @@ try {
       failure = new Error('cleanup-unconfirmed')
     }
   }
+  phase = 'policies'
   if (failure) throw failure
 } catch (error) {
   console.error(JSON.stringify({ phase, result: 'failed', classification: error.message }))

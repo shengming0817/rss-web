@@ -80,7 +80,7 @@ export function useOperation(
                               ? e.code === 'first_use_not_ready'
                                 ? 'firstUseNotReady'
                                 : [
-                                      'device_view_cursor_invalidated',
+                                      'query_cursor_invalidated',
                                       'resource_cursor_invalidated',
                                     ].includes(e.code)
                                   ? 'cursorInvalidated'

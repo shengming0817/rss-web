@@ -177,3 +177,17 @@ it('retains original independent event identity and refuses a receipt for anothe
   } as unknown as PolicyEventsPort)
   await expect(wrong.submit('endpoint-1', request)).rejects.toThrow('receipt')
 })
+it('reconciles only the exact original event without replaying a write or equating absence to rejection', async () => {
+  const request: EventRequest = { operationId, event: 'repair.shared', source: { kind: 'human' } }
+  const submit = vi.fn(),
+    lookupOriginal = vi.fn(async () => ({ items: [], nextCursor: null })),
+    events = createPolicyEvents({ submit, lookupOriginal } as unknown as PolicyEventsPort)
+  expect(await events.original('endpoint-1', request)).toBeNull()
+  expect(lookupOriginal).toHaveBeenCalledWith('endpoint-1', operationId)
+  expect(submit).not.toHaveBeenCalled()
+  const batch = { id: versionId, operationId, event: 'another.event', request }
+  const wrong = createPolicyEvents({
+    lookupOriginal: async () => ({ items: [batch], nextCursor: null }),
+  } as unknown as PolicyEventsPort)
+  await expect(wrong.original('endpoint-1', request)).rejects.toThrow('original event')
+})

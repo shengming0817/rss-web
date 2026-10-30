@@ -1918,7 +1918,7 @@ it.each([
           ? 'permission_denied'
           : status === 404
             ? 'inventory_not_found'
-            : 'device_view_cursor_invalidated',
+            : 'query_cursor_invalidated',
     })
     if (request === 'inventory') {
       inventory.mockRejectedValueOnce(rejection)
@@ -2101,14 +2101,14 @@ it('searches the complete authorized device set by personnel through the view AP
   const stale = await f.devices.views.list({ limit: 1 })
   await f.devices.registration.assign('device-02', crypto.randomUUID(), 1, null)
   await expect(f.devices.views.list({ limit: 1, cursor: stale.nextCursor! })).rejects.toMatchObject(
-    { code: 'device_view_cursor_invalidated' },
+    { code: 'query_cursor_invalidated' },
   )
 })
 
 it('restarts an invalidated first page even when its route does not change', async () => {
   const f = await setup()
   const list = vi.spyOn(f.devices.views, 'list')
-  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'device_view_cursor_invalidated' }))
+  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'query_cursor_invalidated' }))
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   await vi.waitFor(() =>
@@ -2137,7 +2137,7 @@ it('restarts an invalidated deep page with its applied filters and columns and o
   const applied = { ...f.router.currentRoute.value.query }
   expect(applied['cursor']).toBeTruthy()
   const list = vi.spyOn(f.devices.views, 'list')
-  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'device_view_cursor_invalidated' }))
+  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'query_cursor_invalidated' }))
   await f.router.replace({ query: { ...applied, trail: ['', ''] } })
   await flushPromises()
   expect(f.wrapper.find('tbody').exists()).toBe(false)

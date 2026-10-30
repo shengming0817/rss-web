@@ -136,7 +136,6 @@ export function runtimeSnapshot(value: unknown) {
                     applied: nullable(p['applied'], count),
                   }
                 })(),
-          bridge: c['bridge'] === undefined ? null : run(c['bridge']),
           runner:
             c['runner'] === undefined
               ? null

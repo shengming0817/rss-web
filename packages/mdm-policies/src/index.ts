@@ -90,6 +90,22 @@ export function createPolicyEvents(port: PolicyEventsPort) {
       uuid(value.batchId)
       return value
     },
+    async original(device: string, request: EventRequest) {
+      validateEventRequest(device, request)
+      const page = await port.lookupOriginal(device, request.operationId)
+      if (!page.items.length && !page.nextCursor) return null
+      if (page.items.length !== 1 || page.nextCursor)
+        throw new Error('Ambiguous original event batch')
+      const value = page.items[0]!
+      if (
+        value.operationId !== request.operationId ||
+        value.request.operationId !== request.operationId ||
+        value.event !== request.event ||
+        value.request.source.kind !== request.source.kind
+      )
+        throw new Error('Wrong original event request')
+      return value
+    },
     batches: (device: string, query: DirectoryQuery<keyof EventBatch> = {}) =>
       port.batches(device, query),
     async batch(device: string, id: string) {

@@ -84,7 +84,7 @@ export function PolicyEditor({
             input: {},
           })
         else {
-          operation(intent.change)
+          operation<unknown>(intent.change)
           if (intent.kind === 'change' && intent.change.input.action === 'put')
             validateDefinition(intent.change.input.definition)
           if (intent.kind === 'rerun' && !Number.isSafeInteger(intent.change.input.deadline))
