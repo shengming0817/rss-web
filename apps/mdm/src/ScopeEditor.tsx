@@ -42,6 +42,7 @@ export function ScopeEditor({
     ),
     [pending, setPending] = useState<Operation<ScopeChange> | null>(null),
     [unknown, setUnknown] = useState(false),
+    [observed, setObserved] = useState<ScopeRead | null>(null),
     [confirmed, setConfirmed] = useState(false),
     [task, setTask] = useState<string | null>(null),
     [invalid, setInvalid] = useState(false),
@@ -107,13 +108,28 @@ export function ScopeEditor({
         <>
           <p className="subtitle">
             {l(
-              '显式核对会使用原操作 ID、原修订和原输入；若此前未受理，服务端可能在此时受理原请求。',
-              'Explicit reconciliation uses the original operation ID, revision and input. If not previously accepted, the server may accept that original request now.',
+              '读取只展示原范围的当前状态，不能确认原操作是否成功；新写入保持锁定。',
+              'Reading shows the original scope’s current state and cannot confirm the original operation. New writes remain locked.',
             )}
           </p>
-          <Button disabled={action.busy} onClick={() => void submit(pending)}>
-            {l('核对原请求', 'Reconcile original request')}
+          <Button
+            disabled={action.busy}
+            onClick={() =>
+              void action
+                .run(() => scopes.read(id))
+                .then((result) => {
+                  if (result.ok) setObserved(result.value)
+                })
+            }
+          >
+            {l('读取原范围当前状态', 'Read original scope current state')}
           </Button>
+          {observed && (
+            <p>
+              {l('当前定义修订', 'Current definition revision')} {observed.revision} ·{' '}
+              {l('当前结果', 'Current result')} {observed.resolution ?? '—'}
+            </p>
+          )}
         </>
       )}
       {confirmed && (

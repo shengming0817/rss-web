@@ -127,6 +127,8 @@ export function PolicyActionEditor({
       <Form.Item label={l('策略动作', 'Policy action')}>
         <Select
           aria-label={l('策略动作', 'Policy action')}
+          showSearch
+          optionFilterProp="label"
           value={value.kind}
           options={policyKinds.map((kind) => ({
             value: kind,
