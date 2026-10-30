@@ -64,6 +64,8 @@ def seed_authority():
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write','webhook_replay','audit_read']] + [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_unmanage','device_control','security_operate','configuration_write','software_deploy']]
     if browser_module == 'react-audit-webhooks-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write','webhook_replay','audit_read']] + [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','operation_cancel','device_unmanage']]
+    if browser_module == 'react-policy-browser.mjs':
+        rule['grants'].append(dict(operation='device_unmanage', scope=dict(kind='all_devices')))
     if browser_module == 'react-recovery-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','security_operate','configuration_write','account_write']]
     if browser_module == 'react-software-browser.mjs':

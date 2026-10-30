@@ -233,20 +233,25 @@ export function PolicyEditor({
             scopes={scopes}
             value={definition.scope}
             locale={locale}
-            onChange={(scope) =>
+            onChange={(scope) => {
+              const action = definition.action,
+                stage =
+                  action.kind === 'software' && action.rollout.stages.length === 1
+                    ? action.rollout.stages[0]
+                    : undefined,
+                followsScope =
+                  stage?.scope === definition.scope &&
+                  stage.opensAt === 0 &&
+                  stage.minimumVerifiedPercent === null
               updateDefinition({
                 ...definition,
                 scope,
                 action:
-                  definition.action.kind === 'software' &&
-                  definition.action.rollout.stages.length === 1
-                    ? {
-                        ...definition.action,
-                        rollout: { stages: [{ scope, opensAt: 0, minimumVerifiedPercent: null }] },
-                      }
-                    : definition.action,
+                  action.kind === 'software' && followsScope
+                    ? { ...action, rollout: { stages: [{ ...stage, scope }] } }
+                    : action,
               })
-            }
+            }}
           />
           <div className="admin-form-grid">
             {(['alias', 'customEvent'] as const).map((key) => (

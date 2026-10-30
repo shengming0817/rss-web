@@ -357,11 +357,19 @@ export function PolicyActionEditor({
         />
       )}
       {value.kind === 'credential' && (
-        <CredentialFields
-          value={value.operation}
-          onChange={(operation) => onChange({ ...value, operation })}
-          locale={locale}
-        />
+        <>
+          <Choice
+            label={l('所需处理器架构', 'Required processor architecture')}
+            value={value.architecture}
+            options={['x86_64', 'aarch64']}
+            onChange={(architecture) => onChange({ ...value, architecture })}
+          />
+          <CredentialFields
+            value={value.operation}
+            onChange={(operation) => onChange({ ...value, operation })}
+            locale={locale}
+          />
+        </>
       )}
       {value.kind === 'device_access' && (
         <>

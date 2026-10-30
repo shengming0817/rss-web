@@ -3,7 +3,7 @@ import { act, createElement as h, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { Policy } from '@rss/mdm-policies'
+import { defaultSchedule, type Policy, type RolloutStage } from '@rss/mdm-policies'
 import type { ScopeRead } from '@rss/mdm-scopes'
 import { PolicyEditor } from './PolicyEditor'
 import { ScopeEditor } from './ScopeEditor'
@@ -265,4 +265,172 @@ it('clears the orphaned preceding-stage gate when removing the first rollout sta
   )
   await click('移除此批次')
   expect(onChange).toHaveBeenCalledWith([{ scope, opensAt: 456, minimumVerifiedPercent: null }])
+})
+
+const changedScope = '33333333-3333-4333-8333-333333333333'
+function software(stages: readonly RolloutStage[]): Policy {
+  const original = policy()
+  return {
+    ...original,
+    definition: {
+      ...original.definition,
+      action: {
+        kind: 'software',
+        channel: 'agent',
+        delivery: { kind: 'direct' },
+        intent: 'required_install',
+        resource: {
+          kind: 'software',
+          id: 'example/app',
+          version: 'v1',
+          variants: { windows_x86_64: 'default' },
+        },
+        rollout: { stages },
+        schedule: defaultSchedule(),
+        runLifetimeSeconds: 86400,
+      },
+    },
+  }
+}
+it.each([
+  {
+    name: 'independent stage scope',
+    stage: { scope: id, opensAt: 0, minimumVerifiedPercent: null },
+    follows: false,
+  },
+  {
+    name: 'future opening time',
+    stage: { scope, opensAt: 2000000000, minimumVerifiedPercent: null },
+    follows: false,
+  },
+  {
+    name: 'default whole-scope stage',
+    stage: { scope, opensAt: 0, minimumVerifiedPercent: null },
+    follows: true,
+  },
+])('changes the overall Scope without overriding $name', async ({ stage, follows }) => {
+  const baseline = software([stage]),
+    change = vi.fn<ComponentProps<typeof PolicyEditor>['policies']['change']>(async () => baseline)
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(PolicyEditor, {
+          policies: inject<ComponentProps<typeof PolicyEditor>['policies']>({ change }),
+          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({
+            list: async () => ({
+              items: [{ id: changedScope, revision: 1, resolution: null, resolutionRevision: 0 }],
+              nextCursor: null,
+            }),
+            read: async () => ({
+              id: changedScope,
+              revision: 1,
+              definition: { targets: [], limitations: null, exclusions: [] },
+              resolution: null,
+              resolutionRevision: 0,
+            }),
+          }),
+          resources: inject<ComponentProps<typeof PolicyEditor>['resources']>({
+            list: async () => ({ items: [], nextCursor: null }),
+          }),
+          baseline,
+          id,
+          initialScope: scope,
+          runtime: inject<Runtime>({}),
+          instance: id,
+          locale: 'zh',
+          canWrite: true,
+          canRerun: true,
+          done() {},
+        }),
+      ),
+    ),
+  )
+  await click('选择范围')
+  await click('使用此范围')
+  await approve()
+  await click('保存策略定义')
+  expect(change).toHaveBeenCalledTimes(1)
+  expect(change.mock.calls[0]![1]).toMatchObject({
+    input: {
+      definition: {
+        scope: changedScope,
+        action: { rollout: { stages: [follows ? { ...stage, scope: changedScope } : stage] } },
+      },
+    },
+  })
+})
+it('submits the selected ARM64 architecture for a credential policy', async () => {
+  const original = policy(),
+    baseline: Policy = {
+      ...original,
+      definition: {
+        ...original.definition,
+        action: {
+          kind: 'credential',
+          operation: { kind: 'collect_bitlocker' },
+          architecture: 'x86_64',
+          frequency: 'once_per_version',
+          schedule: defaultSchedule(),
+          runLifetimeSeconds: 86400,
+        },
+      },
+    },
+    change = vi.fn<ComponentProps<typeof PolicyEditor>['policies']['change']>(async () => baseline)
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(PolicyEditor, {
+          policies: inject<ComponentProps<typeof PolicyEditor>['policies']>({ change }),
+          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
+          resources: inject<ComponentProps<typeof PolicyEditor>['resources']>({}),
+          baseline,
+          id,
+          initialScope: scope,
+          runtime: inject<Runtime>({}),
+          instance: id,
+          locale: 'zh',
+          canWrite: true,
+          canRerun: true,
+          done() {},
+        }),
+      ),
+    ),
+  )
+  await act(async () =>
+    host
+      .querySelector('input[aria-label="所需处理器架构"]')!
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true })),
+  )
+  await vi.waitFor(() =>
+    expect(
+      [...document.querySelectorAll('.ant-select-item-option-content')].some(
+        (node) => node.textContent === 'aarch64',
+      ),
+    ).toBe(true),
+  )
+  await act(async () =>
+    (
+      [...document.querySelectorAll('.ant-select-item-option-content')].find(
+        (node) => node.textContent === 'aarch64',
+      ) as HTMLElement
+    ).click(),
+  )
+  await approve()
+  await click('保存策略定义')
+  expect(change).toHaveBeenCalledTimes(1)
+  expect(change.mock.calls[0]![1]).toMatchObject({
+    input: {
+      definition: {
+        action: {
+          kind: 'credential',
+          architecture: 'aarch64',
+          operation: { kind: 'collect_bitlocker' },
+        },
+      },
+    },
+  })
 })

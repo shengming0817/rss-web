@@ -203,13 +203,87 @@ try {
     .filter({ visible: true })
     .first()
     .waitFor()
+  const memberPath = `/api/v1/devices/${f.mdm}/policy-event-batches/${originalAccepted.batchId}/members`
+  async function decidedMembers() {
+    const end = Date.now() + 45000
+    do {
+      const page = await api('GET', memberPath + '?limit=100')
+      assert.equal(page.nextCursor, null, 'representative event batch must fit one member page')
+      if (
+        page.items.length === originalAccepted.members &&
+        page.items.length > 0 &&
+        page.items.every((item) => item.state !== 'pending')
+      ) {
+        const own = page.items.filter((item) => item.policyId === policy.id)
+        assert.equal(own.length, 1, 'one member for the authored policy')
+        assert.equal(own[0].versionId, policy.versionId)
+        assert.equal(own[0].state, 'accepted')
+        assert.equal(own[0].decision.state, 'accepted')
+        assert.equal(own[0].decision.operations.length, 1)
+        assert.equal(own[0].decision.operations[0].kind, 'retirement')
+        for (const item of page.items) {
+          assert.equal(item.decision.state, item.state)
+          assert.deepEqual(
+            item.operations.map((operation) => operation.reference),
+            item.decision.state === 'accepted' ? item.decision.operations : [],
+          )
+        }
+        assert.equal(own[0].operations[0].state.id, own[0].decision.operations[0].id)
+        return page.items
+      }
+      await new Promise((done) => setTimeout(done, 500))
+    } while (Date.now() < end)
+    assert.fail('bounded original event member decision')
+  }
+  const before = await decidedMembers(),
+    batch = await api(
+      'GET',
+      `/api/v1/devices/${f.mdm}/policy-event-batches/${originalAccepted.batchId}`,
+    ),
+    identities = (members) =>
+      members
+        .map((item) => ({
+          id: item.id,
+          policyId: item.policyId,
+          versionId: item.versionId,
+          decision: item.decision,
+          references: item.operations.map((operation) => operation.reference),
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id))
+  assert.equal(batch.id, originalAccepted.batchId)
+  assert.equal(batch.operationId, originalRequest.operationId)
+  assert.equal(batch.members, before.length)
+  assert.deepEqual(batch.request, originalRequest)
+  assert.equal(batch.processingFailure, null)
+  await run.response(p, 'GET', memberPath, () => button('读取成员与进度').click())
+  const row = p.locator('tbody tr').filter({ hasText: policy.id }).filter({ visible: true })
+  await row.getByText('accepted', { exact: true }).waitFor()
+  await row
+    .getByText(
+      `retirement/${before.find((item) => item.policyId === policy.id).decision.operations[0].id}`,
+      { exact: true },
+    )
+    .waitFor()
+  const rendered = await row.innerText()
+  assert.ok(rendered.includes(policy.versionId))
+  assert.ok(rendered.includes('accepted'))
+  assert.ok(
+    rendered.includes(
+      `retirement/${before.find((item) => item.policyId === policy.id).decision.operations[0].id}`,
+    ),
+  )
   const first = await api('POST', path, originalRequest, 202),
     repeated = await api('POST', path, originalRequest, 202)
   assert.equal(first.batchId, originalAccepted.batchId)
   assert.equal(repeated.batchId, originalAccepted.batchId)
+  assert.deepEqual(
+    identities(await decidedMembers()),
+    identities(before),
+    'duplicates retain original members, execution versions and operation references',
+  )
   await p.unroute('**' + path)
   checks.push(
-    'real-independent-event-response-loss-read-only-original-identity-recovery-and-server-deduplication',
+    'real-independent-event-response-loss-original-member-decision-version-operation-reference-and-deduplication',
   )
 
   const screenshots = mkdtempSync(join(tmpdir(), 'rss-react-policy-design-'))
