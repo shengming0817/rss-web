@@ -15,6 +15,7 @@ import {
   ReadState,
   useAction,
   useRead,
+  usePageRead,
   type Query,
 } from './AdminUi'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
@@ -40,7 +41,7 @@ export function Scopes({ runtime, locale }: { runtime: Runtime; locale: Locale }
       ) ?? false,
     [query, setQuery] = useState<Query>({ limit: 20 }),
     [params, setParams] = useSearchParams(),
-    read = useRead(`${binding}/scopes/${JSON.stringify(query)}/${has('scope_read')}`, () =>
+    read = usePageRead(`${binding}/scopes/${JSON.stringify(query)}/${has('scope_read')}`, () =>
       has('scope_read') ? scopes.list(directoryQuery(query, fields)) : Promise.resolve(null),
     ),
     action = useAction(),
@@ -145,7 +146,10 @@ export function Scopes({ runtime, locale }: { runtime: Runtime; locale: Locale }
                       ),
                     },
                     { title: l('定义修订', 'Definition revision'), dataIndex: 'revision' },
-                    { title: l('结果修订', 'Result revision'), dataIndex: 'resolutionRevision' },
+                    {
+                      title: l('结果语义版本', 'Semantic result version'),
+                      dataIndex: 'resolutionRevision',
+                    },
                     {
                       title: l('计算状态', 'Computation state'),
                       render: (_, row) =>
@@ -153,12 +157,10 @@ export function Scopes({ runtime, locale }: { runtime: Runtime; locale: Locale }
                           ? l('已删除', 'Deleted')
                           : row.resolution == null
                             ? l('尚无结果', 'No result yet')
-                            : row.resolutionRevision === row.revision
-                              ? l('已有计算结果', 'Result available')
-                              : l(
-                                  '定义待计算 / 已有历史结果',
-                                  'Definition pending / historical result available',
-                                ),
+                            : l(
+                                '已有发布结果；打开查看',
+                                'Published result available; open to view',
+                              ),
                     },
                   ]}
                 />
@@ -175,7 +177,9 @@ export function Scopes({ runtime, locale }: { runtime: Runtime; locale: Locale }
         )}
       </fieldset>
       <Modal
-        rootClassName="policy-dialog"
+        rootClassName={`policy-dialog ${selected ? 'mdm-overlay-open' : ''}`}
+        getContainer={false}
+        destroyOnHidden
         open={selected !== null}
         title={selected?.baseline ? l('范围详情', 'Scope details') : l('新建范围', 'New scope')}
         width={880}

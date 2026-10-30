@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import type { Policy } from '@rss/mdm-policies'
 import type { PoliciesUseCases } from './PolicyPreview'
 import type { Locale } from './i18n'
-import { CursorControls, labels, ReadState, useRead, type Query } from './AdminUi'
+import { CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
 
@@ -19,7 +19,7 @@ export function PolicyAssignments({
 }) {
   const l = labels(locale),
     [query, setQuery] = useState<Query>({ limit: 20 }),
-    read = useRead(`policy-assignments/${policy.id}/${JSON.stringify(query)}`, () =>
+    read = usePageRead(`policy-assignments/${policy.id}/${JSON.stringify(query)}`, () =>
       policies.assignments(policy.id, query),
     )
   return (
@@ -126,7 +126,7 @@ export function PolicyRuns({
 }) {
   const l = labels(locale),
     [query, setQuery] = useState<Query>({ limit: 20 }),
-    read = useRead(`policy-runs/${policy.id}/${JSON.stringify(query)}`, () =>
+    read = usePageRead(`policy-runs/${policy.id}/${JSON.stringify(query)}`, () =>
       policies.runs(policy.id, query),
     )
   return (
@@ -188,7 +188,7 @@ export function PolicyRollout({
   locale: Locale
 }) {
   const l = labels(locale),
-    read = useRead(`policy-rollout/${policy.id}`, () => policies.rollout(policy.id))
+    read = usePageRead(`policy-rollout/${policy.id}`, () => policies.rollout(policy.id))
   return (
     <Card title={l('软件批次推进', 'Software rollout progress')}>
       <Button onClick={read.reload}>{l('读取灰度进度', 'Read rollout progress')}</Button>

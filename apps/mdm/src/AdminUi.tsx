@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Alert, Button, Empty, Form, Input, InputNumber, Select, Space, Spin } from 'antd'
 import type { Locale } from './i18n'
@@ -115,6 +115,8 @@ export function useAction() {
   }
   return { busy, error, run, clear: () => setError(null) }
 }
+// Reads follow the same navigation boundary as the session owner; authoring state stays mounted.
+export const ReadEpoch = createContext('initial')
 export function useRead<T>(key: string, read: () => Promise<T>) {
   const [version, setVersion] = useState(0)
   const requestKey = `${key}/${version}`
@@ -143,6 +145,11 @@ export function useRead<T>(key: string, read: () => Promise<T>) {
     ...(state.key === requestKey ? state : { key: requestKey, busy: true }),
     reload: () => setVersion((v) => v + 1),
   }
+}
+/** Page projections refresh after navigation; authority and pending authoring stay mounted. */
+export function usePageRead<T>(key: string, read: () => Promise<T>) {
+  const epoch = useContext(ReadEpoch)
+  return useRead(`${epoch}/${key}`, read)
 }
 export function Heading({
   title,

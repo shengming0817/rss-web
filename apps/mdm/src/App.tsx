@@ -1,3 +1,4 @@
+import { ReadEpoch } from './AdminUi'
 import { Policies } from './Policies'
 import { Scopes } from './Scopes'
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
@@ -792,7 +793,9 @@ function Shell({
                     <div
                       key={`${runtime.tenant}/${state.identity?.principalId}/${state.session?.id}`}
                     >
-                      {route.render({ runtime, locale })}
+                      <ReadEpoch.Provider value={location.key}>
+                        {route.render({ runtime, locale })}
+                      </ReadEpoch.Provider>
                     </div>
                   }
                 />

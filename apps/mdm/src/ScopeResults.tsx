@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import type { Channel } from '@rss/mdm-devices'
 import type { createScopes, ScopeResultKind } from '@rss/mdm-scopes'
 import type { Locale } from './i18n'
-import { CursorControls, firstPage, labels, ReadState, useRead, type Query } from './AdminUi'
+import { CursorControls, firstPage, labels, ReadState, usePageRead, type Query } from './AdminUi'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
 
@@ -24,8 +24,9 @@ export function ScopeResults({
     [channel, setChannel] = useState<Channel>('agent'),
     [kind, setKind] = useState<ScopeResultKind>('members'),
     [query, setQuery] = useState<Query>({ limit: 20 }),
-    read = useRead(`scope-result/${id}/${result}/${channel}/${kind}/${JSON.stringify(query)}`, () =>
-      scopes.result(id, result, kind, channel, query),
+    read = usePageRead(
+      `scope-result/${id}/${result}/${channel}/${kind}/${JSON.stringify(query)}`,
+      () => scopes.result(id, result, kind, channel, query),
     )
   return (
     <Card title={l('范围结果与解释', 'Scope results and explanations')}>
@@ -67,12 +68,12 @@ export function ScopeResults({
             title={
               read.value.current
                 ? l(
-                    '当前范围结果；成员资格不证明命令已受理或设备执行。',
-                    'Current scope result; membership does not establish command acceptance or device execution.',
+                    '当前发布的范围结果；请另行核对定义与来源状态。成员资格不证明命令已受理或设备执行。',
+                    'Currently published scope result; check the definition and sources separately. Membership does not establish command acceptance or device execution.',
                   )
                 : l(
-                    '历史结果或来源已变化，请核对当前定义与来源。',
-                    'Historical result or changed inputs; review current definition and sources.',
+                    '历史发布结果，请核对当前定义与来源。',
+                    'Historical published result; review the current definition and sources.',
                   )
             }
           />
@@ -161,7 +162,7 @@ export function ScopeTaskPanel({
   locale: Locale
 }) {
   const l = labels(locale),
-    read = useRead(`scope-task/${id}/${task}`, () => scopes.task(id, task))
+    read = usePageRead(`scope-task/${id}/${task}`, () => scopes.task(id, task))
   return (
     <Card title={l('范围计算', 'Scope computation')}>
       <p>

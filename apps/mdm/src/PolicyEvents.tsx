@@ -11,7 +11,7 @@ import {
   labels,
   ReadState,
   useAction,
-  useRead,
+  usePageRead,
   validateInput,
   type Query,
 } from './AdminUi'
@@ -84,7 +84,7 @@ function DeviceEvents({
     [outcome, setOutcome] = useState<'none' | 'accepted' | 'unknown' | 'rejected'>('none'),
     [selected, setSelected] = useState<string | null>(null),
     [query, setQuery] = useState<Query>({ limit: 20 }),
-    read = useRead(`policy-event-batches/${device}/${JSON.stringify(query)}`, () =>
+    read = usePageRead(`policy-event-batches/${device}/${JSON.stringify(query)}`, () =>
       events.batches(device, { limit: query.limit, cursor: query.cursor }),
     ),
     locked = action.busy || outcome === 'unknown'
@@ -249,8 +249,8 @@ function EventMembers({
 }) {
   const l = labels(locale),
     [query, setQuery] = useState<Query>({ limit: 20 }),
-    detail = useRead(`policy-event/${device}/${batch}`, () => events.batch(device, batch)),
-    read = useRead(`policy-event-members/${device}/${batch}/${JSON.stringify(query)}`, () =>
+    detail = usePageRead(`policy-event/${device}/${batch}`, () => events.batch(device, batch)),
+    read = usePageRead(`policy-event-members/${device}/${batch}/${JSON.stringify(query)}`, () =>
       events.members(device, batch, { limit: query.limit, cursor: query.cursor }),
     )
   return (

@@ -7,6 +7,8 @@ import { defaultSchedule, type Policy, type RolloutStage } from '@rss/mdm-polici
 import type { ScopeRead } from '@rss/mdm-scopes'
 import { PolicyEditor } from './PolicyEditor'
 import { ScopeEditor } from './ScopeEditor'
+import { Scopes } from './Scopes'
+import { ReadEpoch, usePageRead, useRead } from './AdminUi'
 import { PolicyRolloutEditor } from './PolicyRolloutEditor'
 import type { Runtime } from './runtime'
 
@@ -433,4 +435,68 @@ it('submits the selected ARM64 architecture for a credential policy', async () =
       },
     },
   })
+})
+
+it('does not infer stale scope results by comparing independent revision counters', async () => {
+  const runtime = inject<Runtime>({
+    administration: () =>
+      inject<ReturnType<Runtime['administration']>>({
+        binding: `${id}/${scope}/${id}`,
+        authorization: inject<ReturnType<Runtime['administration']>['authorization']>({
+          effective: async () => ({
+            instanceId: id,
+            tenantId: scope,
+            principalId: id,
+            grants: [
+              {
+                operation: 'scope_read',
+                scope: { kind: 'tenant' },
+                ruleId: id,
+                ruleRevision: 1,
+                subject: {
+                  kind: 'user',
+                  user: { instanceId: id, tenantId: scope, principalId: id },
+                },
+                observation: null,
+              },
+            ],
+          }),
+        }),
+        scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({
+          list: async () => ({
+            items: [
+              { id, revision: 3, resolution: scope, resolutionRevision: 1, calculationRevision: 5 },
+            ],
+            nextCursor: null,
+          }),
+        }),
+      }),
+  })
+  await act(async () => root.render(h(MemoryRouter, null, h(Scopes, { runtime, locale: 'zh' }))))
+  await vi.waitFor(() => expect(host.textContent).toContain('已有发布结果；打开查看'))
+  expect(host.textContent).not.toContain('定义待计算')
+})
+
+it('reloads current navigation reads while discarding an earlier stale response', async () => {
+  let rejectOld!: (reason: Error) => void
+  const old = new Promise<string>((_, reject) => {
+      rejectOld = reject
+    }),
+    load = vi
+      .fn<() => Promise<string>>()
+      .mockReturnValueOnce(old)
+      .mockResolvedValue('current directory')
+  const authorization = vi.fn(async () => 'authorized')
+  function Directory() {
+    const state = usePageRead('same-directory', load)
+    const authority = useRead('same-authority', authorization)
+    return h('p', null, state.error ? 'read failed' : (state.value ?? 'loading'), authority.value)
+  }
+  await act(async () => root.render(h(ReadEpoch.Provider, { value: 'before' }, h(Directory))))
+  expect(load).toHaveBeenCalledTimes(1)
+  await act(async () => root.render(h(ReadEpoch.Provider, { value: 'after' }, h(Directory))))
+  expect(load).toHaveBeenCalledTimes(2)
+  await act(async () => rejectOld(new Error('Stale response')))
+  expect(host.textContent).toBe('current directoryauthorized')
+  expect(authorization).toHaveBeenCalledTimes(1)
 })

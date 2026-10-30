@@ -83,7 +83,7 @@ export function ScopeEditor({
       </p>
       {baseline && (
         <p>
-          {l('结果定义修订', 'Result definition revision')} {baseline.resolutionRevision} ·{' '}
+          {l('结果语义版本', 'Semantic result version')} {baseline.resolutionRevision} ·{' '}
           {baseline.resolution ?? l('尚无结果', 'No result yet')}
         </p>
       )}

@@ -13,6 +13,7 @@ export interface ScopeRead {
   readonly revision: number
   readonly definition: ScopeDefinition
   readonly resolution: string | null
+  /** Changes with result semantics; independent of the definition revision. */
   readonly resolutionRevision: number
 }
 export interface ScopeRow {

@@ -15,6 +15,7 @@ import {
   ReadState,
   useAction,
   useRead,
+  usePageRead,
   type Query,
 } from './AdminUi'
 import { useAdministration } from './useAdministration'
@@ -59,7 +60,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     [params, setParams] = useSearchParams(),
     action = useAction(),
     guard = useSelectionGuard(),
-    read = useRead(
+    read = usePageRead(
       `${binding}/policy-directory/${state}/${JSON.stringify(query)}/${has('policy_read')}`,
       () =>
         has('policy_read')
@@ -264,7 +265,9 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           )}
         </fieldset>
         <Modal
-          rootClassName="policy-dialog"
+          rootClassName={`policy-dialog ${selected ? 'mdm-overlay-open' : ''}`}
+          getContainer={false}
+          destroyOnHidden
           open={selected !== null}
           title={
             selected?.baseline

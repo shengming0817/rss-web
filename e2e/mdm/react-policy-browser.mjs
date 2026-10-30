@@ -32,22 +32,59 @@ try {
     assert.equal(response.status(), expected, `${method} ${path.split('?')[0]}`)
     return expected === 204 ? null : response.json()
   }
-  async function settled(scope) {
+  async function settled(scope, task) {
+    assert.equal(typeof task, 'string')
     const end = Date.now() + 45000
     do {
+      const state = await api('GET', `/api/v1/scopes/${scope}/tasks/${task}`)
+      assert.equal(state.task, task)
+      assert.equal(state.target, scope)
       const value = await api('GET', '/api/v1/scopes/' + scope)
-      if (value.resolution && value.resolutionRevision === value.revision) return value
+      if (state.status === 'completed' && value.resolution) {
+        const page = await api(
+          'GET',
+          `/api/v1/scopes/${scope}/results/${value.resolution}/members?channel=mdm&limit=1`,
+        )
+        assert.equal(page.scope, scope)
+        assert.equal(page.result, value.resolution)
+        assert.equal(page.channel, 'mdm')
+        assert.equal(page.page.kind, 'members')
+        if (page.current === true) return value
+      }
       await new Promise((done) => setTimeout(done, 500))
     } while (Date.now() < end)
+    if (task) {
+      const state = await api('GET', `/api/v1/scopes/${scope}/tasks/${task}`)
+      console.error(
+        JSON.stringify({
+          journey: 'react-policy',
+          stage: 'scope-computation',
+          status: state.status,
+          processed: state.processed,
+          members: state.members,
+          hasFailure: state.failure !== null,
+          inputPending: state.failure_detail?.reason === 'group_input_pending',
+        }),
+      )
+    }
     assert.fail('bounded scope computation')
   }
   await run.login(p)
   await run.nav(p, '/scopes', '策略范围')
+  run.step('scope-create-dialog')
   await button('新建范围').click()
-  await run.choose(p, label('目标（并集） 引用类型'), '终端')
-  await label('终端候选服务端筛选').fill(`id=='${f.mdm}'`)
-  await button('查询终端候选').click()
-  await button('使用此终端').click()
+  for (const endpoint of [f.mdm, f.agent]) {
+    run.step('scope-target-' + endpoint)
+    await run.choose(p, label('目标（并集） 引用类型'), '终端')
+    await label('终端候选服务端筛选').fill(`id=='${endpoint}'`)
+    await button('查询终端候选').click()
+    await p
+      .locator('tbody tr')
+      .filter({ hasText: endpoint })
+      .getByRole('button', { name: '使用此终端', exact: true })
+      .click()
+    await p.locator('.ant-tag').filter({ hasText: endpoint }).waitFor()
+  }
   const scopeResponse = p.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -56,21 +93,50 @@ try {
   await button('保存并计算范围').click()
   const savedScope = await scopeResponse
   assert.equal(savedScope.status(), 200)
-  const scope = (await savedScope.json()).id
-  assert.equal((await settled(scope)).definition.limitations, null)
+  const scopeReceipt = await savedScope.json(),
+    scope = scopeReceipt.id
+  const firstScope = await settled(scope, scopeReceipt.task)
+  assert.equal(firstScope.definition.limitations, null)
+  assert.deepEqual(
+    firstScope.definition.targets.map((item) => item.id).sort(),
+    [f.mdm, f.agent].sort(),
+  )
   await button('返回目录并读取当前状态').click()
   await run.nav(p, '/scopes?scope=' + scope, '策略范围')
   await button('打开定位范围').click()
   await p.getByText('范围结果与解释', { exact: true }).waitFor()
   await label('限制范围（交集）').check()
-  await run.response(p, 'POST', '/api/v1/scopes/' + scope, () => button('保存并计算范围').click())
-  assert.deepEqual((await settled(scope)).definition.limitations, [])
+  const emptyLimits = await run.response(p, 'POST', '/api/v1/scopes/' + scope, () =>
+    button('保存并计算范围').click(),
+  )
+  assert.deepEqual((await api('GET', '/api/v1/scopes/' + scope)).definition.limitations, [])
+  checks.push('real-scope-definition-preserves-null-and-empty-limitations')
+  assert.deepEqual(
+    (await settled(scope, (await emptyLimits.json()).task)).definition.limitations,
+    [],
+  )
   await button('返回目录并读取当前状态').click()
   await run.nav(p, '/scopes?scope=' + scope, '策略范围')
   await button('打开定位范围').click()
   await label('限制范围（交集）').uncheck()
-  await run.response(p, 'POST', '/api/v1/scopes/' + scope, () => button('保存并计算范围').click())
-  await settled(scope)
+  const restoredScope = await run.response(p, 'POST', '/api/v1/scopes/' + scope, () =>
+    button('保存并计算范围').click(),
+  )
+  const restored = await settled(scope, (await restoredScope.json()).task)
+  for (const [channel, endpoint] of [
+    ['mdm', f.mdm],
+    ['agent', f.agent],
+  ]) {
+    const members = await api(
+      'GET',
+      `/api/v1/scopes/${scope}/results/${restored.resolution}/members?channel=${channel}&limit=100`,
+    )
+    assert.equal(members.current, true)
+    assert.ok(
+      members.page.items.some((item) => item.kind === 'endpoint' && item.id === endpoint),
+      'authored channel member must be published',
+    )
+  }
   checks.push('real-scope-authoring-null-versus-empty-limitations-and-published-result-coordinate')
 
   await run.nav(p, '/policies?scope=' + scope, '策略与部署')
@@ -135,29 +201,85 @@ try {
     'real-policy-definition-execution-version-separation-preview-CAS-and-scope-reference-protection',
   )
 
+  // Lifecycle actions have their own durable work, separate from ordinary assignments.
+  // Author another policy through the same public UI to verify that projection explicitly.
   await button('返回并重新读取策略').click()
-  await run.nav(p, '/policies?policy=' + policy.id, '策略与部署')
+  await run.nav(p, '/policies?scope=' + scope, '策略与部署')
+  await button('新建部署').click()
+  await run.choose(p, label('策略动作'), '设备接入')
+  await run.choose(p, label('Windows 接入方式'), 'whfb')
+  await button('下一步').click()
+  await button('下一步').click()
+  await label('确认范围、资源、调度与潜在影响').check()
+  const assignmentPolicyResponse = p.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      /\/api\/v1\/policies\/[^/]+$/.test(new URL(r.url()).pathname),
+  )
+  await button('保存策略定义').click()
+  const assignmentSaved = await assignmentPolicyResponse
+  assert.equal(assignmentSaved.status(), 200)
+  const assignmentPolicy = await assignmentSaved.json()
+  assert.equal(assignmentPolicy.definition.scope, scope)
+  await button('返回并重新读取策略').click()
+  await run.nav(p, '/policies?policy=' + assignmentPolicy.id, '策略与部署')
+  await button('打开定位策略').click()
+  await label('确认已保存范围与动作后启用').check()
+  await run.response(p, 'POST', '/api/v1/policies/' + assignmentPolicy.id, () =>
+    button('启用策略').click(),
+  )
+  await button('返回并重新读取策略').click()
+  await run.nav(p, '/policies?policy=' + assignmentPolicy.id, '策略与部署')
   await button('打开定位策略').click()
   const assignmentResponse = p.waitForResponse(
     (r) =>
       r.request().method() === 'GET' &&
-      new URL(r.url()).pathname === '/api/v1/policies/' + policy.id + '/assignments',
+      new URL(r.url()).pathname === '/api/v1/policies/' + assignmentPolicy.id + '/assignments',
   )
   await p.getByRole('tab', { name: '设备分配', exact: true }).click()
   const assignment = await assignmentResponse
   assert.equal(assignment.status(), 200)
-  const assigned = (await assignment.json()).items.find((item) => item.object.id === f.mdm)
-  assert.ok(assigned)
+  let assignments = await assignment.json(),
+    assigned = assignments.items.find((item) => item.object.id === f.agent)
+  const assignmentDeadline = Date.now() + 45000
+  while (!assigned && Date.now() < assignmentDeadline) {
+    assert.equal(assignments.nextCursor, null, 'representative assignments fit one page')
+    await new Promise((done) => setTimeout(done, 500))
+    assignments = await api('GET', `/api/v1/policies/${assignmentPolicy.id}/assignments?limit=100`)
+    assigned = assignments.items.find((item) => item.object.id === f.agent)
+  }
+  if (!assigned)
+    console.error(
+      JSON.stringify({
+        journey: 'react-policy',
+        stage: 'assignment-projection',
+        count: assignments.items.length,
+        endpointRows: assignments.items.filter((item) => item.object.kind === 'endpoint').length,
+        associationRows: assignments.items.filter((item) => item.object.kind === 'association')
+          .length,
+      }),
+    )
+  assert.ok(assigned, 'bounded authored policy assignment projection')
+  await run.response(p, 'GET', `/api/v1/policies/${assignmentPolicy.id}/assignments`, () =>
+    button('读取分配').click(),
+  )
+  assert.equal(assigned.channel, 'agent')
+  assert.equal(assigned.object.kind, 'endpoint')
   assert.ok(['eligible', 'pending', 'excluded'].includes(assigned.qualification.state))
   assert.equal(assigned.scopeResult, (await api('GET', '/api/v1/scopes/' + scope)).resolution)
   const assignmentRow = p
     .locator('tbody tr')
-    .filter({ has: p.getByRole('link', { name: f.mdm, exact: true }) })
+    .filter({ has: p.getByRole('link', { name: f.agent, exact: true }) })
     .filter({ visible: true })
   await assignmentRow.waitFor()
   assert.ok((await assignmentRow.innerText()).includes(assigned.qualification.state))
   if (assigned.target)
     assert.ok((await assignmentRow.innerText()).includes(assigned.target.registrationId))
+  checks.push('real-device-access-policy-assignment-qualification-and-result-coordinate')
+  await p.getByRole('tab', { name: '定义与发布', exact: true }).click()
+  await button('返回并重新读取策略').click()
+  await run.nav(p, '/policies?policy=' + policy.id, '策略与部署')
+  await button('打开定位策略').click()
   await p.getByRole('tab', { name: '独立事件', exact: true }).click()
   await label('终端候选服务端筛选').fill(`id=='${f.mdm}'`)
   await button('查询终端候选').click()
@@ -290,6 +412,18 @@ try {
     'real-independent-event-response-loss-original-member-decision-version-operation-reference-and-deduplication',
   )
 
+  const closeDialog = async () => {
+    await p.locator('.ant-modal-close').filter({ visible: true }).click()
+    await p.getByRole('dialog').waitFor({ state: 'hidden' })
+  }
+  await closeDialog()
+  await p.locator('.policy-card').first().waitFor()
+  await p.getByText('筛选与排序', { exact: true }).click()
+  await label('服务端筛选').fill(`id=='${policy.id}'`)
+  await run.response(p, 'GET', '/api/v1/policies', () => button('应用').click())
+  await button('查看策略 react.policy.scope').waitFor()
+  await p.getByText('筛选与排序', { exact: true }).click()
+  await p.locator('.ant-collapse-content').waitFor({ state: 'hidden' })
   const screenshots = mkdtempSync(join(tmpdir(), 'rss-react-policy-design-'))
   for (const [name, width, height, dark] of [
     ['desktop', 1440, 960, false],
@@ -297,8 +431,10 @@ try {
     ['mobile', 390, 844, false],
     ['dark', 1440, 960, true],
   ]) {
+    run.step('policy-design-' + name)
     await p.setViewportSize({ width, height })
     if (dark) await button('切换亮暗主题').click()
+    await button('查看策略 react.policy.scope').waitFor()
     await p.screenshot({
       path: join(screenshots, name + '.png'),
       fullPage: true,
@@ -308,12 +444,53 @@ try {
       await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
       true,
     )
+    await button('查看策略 react.policy.scope').click()
+    const dialog = p.getByRole('dialog')
+    await dialog.waitFor()
+    await p.waitForFunction(() => {
+      const dialog = document.querySelector('.ant-modal')
+      if (!dialog) return false
+      const style = getComputedStyle(dialog)
+      return style.opacity === '1' && style.transform === 'none'
+    })
+    assert.equal(
+      await dialog.locator('.ant-modal-body').evaluate((body) => body.scrollTop),
+      0,
+      'reopened details start at their heading and tabs',
+    )
+    await p.screenshot({ path: join(screenshots, name + '-detail.png'), animations: 'disabled' })
+    const bounds = await dialog.boundingBox()
+    assert.ok(
+      bounds &&
+        bounds.x >= 0 &&
+        bounds.y >= 0 &&
+        bounds.x + bounds.width <= width + 1 &&
+        bounds.y + bounds.height <= height + 1,
+    )
+    await closeDialog()
   }
   console.log(JSON.stringify({ journey: 'react-policy', screenshots }))
   checks.push('public-policy-pages-desktop-tablet-mobile-dark-and-no-document-overflow')
 } catch (error) {
   failure = error
-  console.error(JSON.stringify({ journey: 'react-policy', classification: error?.name }))
+  const shape = (value) =>
+    value === null
+      ? 'null'
+      : Array.isArray(value)
+        ? `array:${value.length}`
+        : typeof value === 'number'
+          ? value
+          : typeof value
+  console.error(
+    JSON.stringify({
+      journey: 'react-policy',
+      classification: error?.name,
+      location: error?.stack?.match(/react-policy-browser\.mjs:\d+:\d+/)?.[0],
+      operator: error?.operator,
+      actualShape: shape(error?.actual),
+      expectedShape: shape(error?.expected),
+    }),
+  )
 } finally {
   await run.finish(failure)
 }
