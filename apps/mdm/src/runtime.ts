@@ -1,3 +1,6 @@
+import { createPolicies, createPolicyEvents } from '@rss/mdm-policies'
+import { createPoliciesAdapter } from '@rss/mdm-http/policies'
+import { createPolicyEventsAdapter } from '@rss/mdm-http/policy-events'
 import { createWebhookMaterialRecovery } from './webhook-material-recovery'
 import { createCeremonyHandoff } from './ceremony-handoff'
 import { createAuthorization } from '@rss/mdm-authorization'
@@ -15,6 +18,8 @@ import { createMappings, createResources } from '@rss/mdm-resources'
 import { createContent } from '@rss/mdm-content'
 import { createSoftware } from '@rss/mdm-software'
 import { createPublications } from '@rss/mdm-software/publications'
+import { createScopes } from '@rss/mdm-scopes'
+import { createScopesAdapter } from '@rss/mdm-http/scopes'
 import { createGroups } from '@rss/mdm-groups'
 import { createCompliance } from '@rss/mdm-compliance'
 import { createDevicePki } from '@rss/mdm-certificates/device-pki'
@@ -128,6 +133,9 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         mappings: createMappings(createResourceMappingsAdapter(transport, content)),
         software: createSoftware(createSoftwareAdapter(transport)),
         publications: createPublications(createPublicationsAdapter(transport)),
+        policies: createPolicies(createPoliciesAdapter(transport)),
+        policyEvents: createPolicyEvents(createPolicyEventsAdapter(transport)),
+        scopes: createScopes(createScopesAdapter(transport)),
         groups: createGroups(createGroupsAdapter(transport)),
         compliance: createCompliance(createComplianceAdapter(transport)),
         devicePki: createDevicePki(

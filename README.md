@@ -36,6 +36,10 @@ Webhook 材料写入要求最近 300 秒认证，本地密码账户可在原材�
 
 审计、管理活动与 Webhook 的真实 HTTPS Chromium 验证：`MDM_REACT_AUDIT_WEBHOOKS_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-audit-webhooks-browser`；仅复验公开布局时追加 `design`。入口构建新 React 应用，复用设备夹具的隔离 PG、HTTPS、构建租约和独立清理，输出公开页面的桌面、平板、移动和暗色截图。覆盖已提交响应丢失后的原请求恢复、查询范围、CAS、独立权限和材料清理。410 接收端用于观察 pending/unknown；不修改 Outbox 状态或期限制造死信。宿主持钥确认及真实设备效果分别验收。
 
+新 React `/scopes` 与 `/policies` 提供范围定义、服务端计算结果、精确 Resource/Scope 绑定、策略配置、自助发布、分配资格、独立设备事件及软件灰度。保存 Scope 会排队计算；Policy 资格预览不保存策略、不创建运行。配置修订、执行版本、成员受理、投递与设备效果分别展示。未知写入保留原请求；事件只查询原批次，Scope/Policy 的显式核对使用原 UUID、CAS 和冻结输入，未受理时可能受理原请求。
+
+对应真实 HTTPS Chromium 入口为 `MDM_REACT_POLICY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-policy-browser`，复用设备隔离 fixture、构建租约和独立清理；覆盖范围定义、Policy 管理、原事件身份恢复与公开响应式页面。该入口只证明真实 HTTP/界面接缝，不能代替 Windows/macOS 设备效果验收。
+
 ## Web 组件开发
 
 `pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。直接展示当前 Vuetify 组件；主题与语言基础见 [@rss/core](packages/core/README.md)。

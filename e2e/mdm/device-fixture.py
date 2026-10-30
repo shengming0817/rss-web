@@ -32,7 +32,7 @@ from runtime_fixture import storage, readiness as readiness_status
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
-environment = Environment(BACKEND, group={'software-browser.mjs': 'software-browser', 'console-browser.mjs': 'console-browser', 'react-devices-browser.mjs': 'react-devices-browser', 'react-assets-browser.mjs': 'react-assets-browser', 'react-software-browser.mjs': 'react-software-browser', 'react-recovery-browser.mjs': 'react-recovery-browser', 'react-audit-webhooks-browser.mjs': 'react-audit-webhooks-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser'))
+environment = Environment(BACKEND, group={'software-browser.mjs': 'software-browser', 'console-browser.mjs': 'console-browser', 'react-devices-browser.mjs': 'react-devices-browser', 'react-assets-browser.mjs': 'react-assets-browser', 'react-software-browser.mjs': 'react-software-browser', 'react-recovery-browser.mjs': 'react-recovery-browser', 'react-audit-webhooks-browser.mjs': 'react-audit-webhooks-browser', 'react-policy-browser.mjs': 'react-policy-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser'))
 processes = []
 providers = ExitStack()
 phase = 'environment'
@@ -53,7 +53,7 @@ def q(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 browser_module = os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'device-browser.mjs')
-if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs', 'software-browser.mjs', 'console-browser.mjs', 'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs'}:
+if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs', 'software-browser.mjs', 'console-browser.mjs', 'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs', 'react-policy-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
 
 def seed_authority():
@@ -165,7 +165,7 @@ def start(binary, initialized, log, expected=200):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module in {'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs'} else 'apps/mdm-old/dist'))
+    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module in {'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs', 'react-policy-browser.mjs'} else 'apps/mdm-old/dist'))
     initialized = environment.initialize()
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())

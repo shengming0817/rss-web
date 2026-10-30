@@ -47,7 +47,7 @@ import {
 } from './AdminUi'
 import { ApiAccess } from './ApiAccess'
 type Props = { runtime: Runtime; locale: Locale }
-function SubjectEditor({
+export function SubjectEditor({
   value,
   onChange,
   runtime,

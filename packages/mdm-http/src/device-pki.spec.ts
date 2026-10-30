@@ -193,10 +193,26 @@ it('uses all three original Agent recovery routes with distinct administrator an
       })
     ).originalSigningOperationId,
   ).toBe(tenant)
+  recovery.request.mockImplementation(async (options: RequestOptions<unknown>) =>
+    options.decode(
+      options.path === '/api/v1/agent-issuances/{id}/recovery-operations'
+        ? {
+            items: [
+              { actor: 'original-admin', instance: 'original-instance', operationId: operation },
+            ],
+            nextCursor: null,
+          }
+        : candidate,
+    ),
+  )
   expect(
     (await recovery.core.issuanceRecovery(issuance, operation))!.originalSigningOperationId,
   ).toBe(tenant)
   expect(recovery.request).toHaveBeenLastCalledWith(
-    expect.objectContaining({ method: 'GET', pathParams: { id: issuance, operation } }),
+    expect.objectContaining({
+      method: 'GET',
+      pathParams: { id: issuance, operation },
+      query: { actor: 'original-admin', instance: 'original-instance' },
+    }),
   )
 })
