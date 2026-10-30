@@ -1191,7 +1191,8 @@ html:has(.mdm-overlay-open) {
 .policy-step-controls {
   margin: 18px 0;
 }
-.policy-editor .ant-card {
+.policy-editor .ant-card,
+.scope-editor .ant-card {
   margin: 18px 0;
 }
 @media (max-width: 650px) {

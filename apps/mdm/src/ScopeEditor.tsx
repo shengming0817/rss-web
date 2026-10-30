@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
-import { Alert, Button, Card, Checkbox, Space } from 'antd'
+import { Alert, Button, Checkbox, Space } from 'antd'
 import { freeze, type Operation } from '@rss/mdm-inventory'
 import {
   validateDefinition,
@@ -74,7 +74,10 @@ export function ScopeEditor({
   }
   const pickers = { groups, devices, locale }
   return (
-    <Card title={baseline ? l('范围定义', 'Scope definition') : l('新建范围', 'New scope')}>
+    <section
+      className="scope-editor"
+      aria-label={baseline ? l('范围定义', 'Scope definition') : l('新建范围', 'New scope')}
+    >
       <p>
         <code>{id}</code> · {l('定义修订', 'Definition revision')} {baseline?.revision ?? 0}
       </p>
@@ -231,6 +234,6 @@ export function ScopeEditor({
       <Button disabled={action.busy || (pending !== null && !confirmed)} onClick={done}>
         {l('返回目录并读取当前状态', 'Return to directory and read current state')}
       </Button>
-    </Card>
+    </section>
   )
 }

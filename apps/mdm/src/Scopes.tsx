@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button } from 'antd'
+import { Alert, Button, Collapse, Modal } from 'antd'
 import { useSearchParams } from 'react-router-dom'
 import type { ScopeRead, ScopeRow } from '@rss/mdm-scopes'
 import type { Runtime } from './runtime'
@@ -85,18 +85,37 @@ export function Scopes({ runtime, locale }: { runtime: Runtime; locale: Locale }
           )
         }
       />
-      <Button onClick={permissions.reload}>{l('读取入口权限', 'Read entry permissions')}</Button>
+      {Boolean(permissions.error) && (
+        <Button onClick={permissions.reload}>{l('重试', 'Retry')}</Button>
+      )}
+      {permissions.value && !has('scope_read') && (
+        <Alert
+          type="info"
+          title={l('当前账户没有范围读取权限。', 'Your account cannot read scopes.')}
+        />
+      )}
       <ReadState locale={locale} busy={permissions.busy} error={permissions.error} />
       <Failure locale={locale} error={action.error} />
       <fieldset className="permission-panel" disabled={guard.locked || action.busy}>
         {has('scope_read') && (
           <>
-            <DirectoryControls
-              locale={locale}
-              query={query}
-              onChange={setQuery}
-              fields={fields}
-              sort={['id', 'revision', 'calculationRevision', 'resolutionRevision']}
+            <Collapse
+              className="policy-query"
+              items={[
+                {
+                  key: 'query',
+                  label: l('筛选与排序', 'Filter and sort'),
+                  children: (
+                    <DirectoryControls
+                      locale={locale}
+                      query={query}
+                      onChange={setQuery}
+                      fields={fields}
+                      sort={['id', 'revision', 'calculationRevision', 'resolutionRevision']}
+                    />
+                  ),
+                },
+              ]}
             />
             <Button onClick={read.reload}>{l('读取范围目录', 'Read scope directory')}</Button>
             {params.get('scope') && !selected && (
@@ -155,23 +174,40 @@ export function Scopes({ runtime, locale }: { runtime: Runtime; locale: Locale }
           </>
         )}
       </fieldset>
-      {selected && (
-        <ScopeEditor
-          key={selected.generation}
-          {...selected}
-          scopes={scopes}
-          groups={groups}
-          devices={devices}
-          locale={locale}
-          canWrite={has('scope_write')}
-          done={() => {
+      <Modal
+        rootClassName="policy-dialog"
+        open={selected !== null}
+        title={selected?.baseline ? l('范围详情', 'Scope details') : l('新建范围', 'New scope')}
+        width={880}
+        footer={null}
+        closable={!guard.locked && !action.busy}
+        keyboard={!guard.locked && !action.busy}
+        maskClosable={!guard.locked && !action.busy}
+        onCancel={() => {
+          if (!guard.locked && !action.busy) {
             setSelected(null)
             setParams({})
-            setQuery(firstPage(query))
-            read.reload()
-          }}
-        />
-      )}
+          }
+        }}
+      >
+        {selected && (
+          <ScopeEditor
+            key={selected.generation}
+            {...selected}
+            scopes={scopes}
+            groups={groups}
+            devices={devices}
+            locale={locale}
+            canWrite={has('scope_write')}
+            done={() => {
+              setSelected(null)
+              setParams({})
+              setQuery(firstPage(query))
+              read.reload()
+            }}
+          />
+        )}
+      </Modal>
     </SelectionGuard.Provider>
   )
 }
