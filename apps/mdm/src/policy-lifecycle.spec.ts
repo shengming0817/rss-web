@@ -7,6 +7,7 @@ import type { Policy } from '@rss/mdm-policies'
 import type { ScopeRead } from '@rss/mdm-scopes'
 import { PolicyEditor } from './PolicyEditor'
 import { ScopeEditor } from './ScopeEditor'
+import { PolicyRolloutEditor } from './PolicyRolloutEditor'
 import type { Runtime } from './runtime'
 
 const id = '11111111-1111-4111-8111-111111111111',
@@ -195,4 +196,73 @@ it('requires review again after a deployment wizard returns to an earlier step',
   })
   await click('下一步')
   expect(button('保存策略定义').disabled).toBe(true)
+})
+
+it('shows the exact opening time and scope of a single custom rollout stage', async () => {
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(PolicyRolloutEditor, {
+          value: [{ scope: id, opensAt: 123, minimumVerifiedPercent: null }],
+          scope,
+          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
+          onChange() {},
+          locale: 'zh',
+        }),
+      ),
+    ),
+  )
+  expect(host.querySelector<HTMLInputElement>('input[aria-label="批次开放时间 1"]')?.value).toBe(
+    '123',
+  )
+  expect(host.textContent).toContain(id)
+})
+it('can remove the second rollout stage while retaining the first stage exact coordinates', async () => {
+  const first = { scope: id, opensAt: 123, minimumVerifiedPercent: null },
+    onChange = vi.fn()
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(PolicyRolloutEditor, {
+          value: [first, { scope, opensAt: 456, minimumVerifiedPercent: 90 }],
+          scope,
+          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
+          onChange,
+          locale: 'zh',
+        }),
+      ),
+    ),
+  )
+  const remove = [...host.querySelectorAll('button')].filter(
+    (node) => node.textContent === '移除此批次',
+  )[1]!
+  await act(async () => remove.click())
+  expect(onChange).toHaveBeenCalledWith([first])
+})
+it('clears the orphaned preceding-stage gate when removing the first rollout stage', async () => {
+  const onChange = vi.fn()
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(PolicyRolloutEditor, {
+          value: [
+            { scope: id, opensAt: 123, minimumVerifiedPercent: null },
+            { scope, opensAt: 456, minimumVerifiedPercent: 90 },
+          ],
+          scope,
+          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
+          onChange,
+          locale: 'zh',
+        }),
+      ),
+    ),
+  )
+  await click('移除此批次')
+  expect(onChange).toHaveBeenCalledWith([{ scope, opensAt: 456, minimumVerifiedPercent: null }])
 })

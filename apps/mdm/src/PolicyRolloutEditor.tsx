@@ -19,7 +19,12 @@ export function PolicyRolloutEditor({
   locale: Locale
 }) {
   const l = labels(locale),
-    staged = value.length > 1
+    staged =
+      value.length > 1 ||
+      value.some(
+        (stage) =>
+          stage.scope !== scope || stage.opensAt !== 0 || stage.minimumVerifiedPercent !== null,
+      )
   function change(index: number, stage: RolloutStage) {
     onChange(value.map((item, i) => (i === index ? stage : item)))
   }
@@ -46,7 +51,7 @@ export function PolicyRolloutEditor({
           )
         }
       >
-        {l('分批部署', 'Staged rollout')}
+        {l('自定义批次与时间', 'Customize stages and timing')}
       </Checkbox>
       <p className="subtitle">
         {l(
@@ -107,8 +112,15 @@ export function PolicyRolloutEditor({
             )}
             <Button
               danger
-              disabled={value.length <= 2}
-              onClick={() => onChange(value.filter((_, i) => i !== index))}
+              disabled={value.length <= 1}
+              onClick={() => {
+                const remaining = value.filter((_, i) => i !== index)
+                onChange(
+                  remaining.map((stage, i) =>
+                    i === 0 ? { ...stage, minimumVerifiedPercent: null } : stage,
+                  ),
+                )
+              }}
             >
               {l('移除此批次', 'Remove stage')}
             </Button>
