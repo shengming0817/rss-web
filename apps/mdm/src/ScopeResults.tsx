@@ -176,6 +176,15 @@ export function ScopeTaskPanel({
             {l('成员', 'Members')} {read.value.members}
           </p>
           {read.value.failure && <Alert type="error" title={read.value.failure} />}
+          {read.value.failureDetail?.reason === 'group_input_pending' && (
+            <Alert
+              type="info"
+              title={l(
+                '等待设备组输入；尚未完成范围计算。',
+                'Waiting for device group input; scope computation is not complete.',
+              )}
+            />
+          )}
           {read.value.replacementTask && (
             <p>
               {l('替代计算', 'Replacement computation')} · <code>{read.value.replacementTask}</code>

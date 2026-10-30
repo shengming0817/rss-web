@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Alert, Button, Card, Checkbox, Input, Space } from 'antd'
 import { comparison } from '@rss/api/mdm-query'
 import { freeze } from '@rss/mdm-inventory'
-import type { createPolicyEvents, EventRequest } from '@rss/mdm-policies'
+import { validateEventRequest, type createPolicyEvents, type EventRequest } from '@rss/mdm-policies'
 import type { DevicesUseCases } from './EndpointPicker'
 import type { Locale } from './i18n'
 import {
@@ -13,6 +13,7 @@ import {
   ReadState,
   useAction,
   useRead,
+  validateInput,
   type Query,
 } from './AdminUi'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
@@ -97,12 +98,18 @@ function DeviceEvents({
     })
     setPending(request)
     setApproved(false)
-    const result = await action.run(() => events.submit(device, request))
+    const result = await action.run(() => {
+      validateInput(() => validateEventRequest(device, request))
+      return events.submit(device, request)
+    })
     if (result.ok) {
       setOutcome('accepted')
       setSelected(result.value.batchId)
       read.reload()
-    } else setOutcome(isUnknown(result.error) ? 'unknown' : 'rejected')
+    } else {
+      setOutcome(isUnknown(result.error) ? 'unknown' : 'rejected')
+      if (!isUnknown(result.error)) setPending(null)
+    }
   }
   async function reconcile() {
     if (!pending) return

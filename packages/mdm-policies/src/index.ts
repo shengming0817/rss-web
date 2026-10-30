@@ -74,17 +74,17 @@ export function createPolicies(port: PoliciesPort) {
     },
   })
 }
+export function validateEventRequest(device: string, request: EventRequest): void {
+  if (!device || /\p{Cc}/u.test(device)) throw new Error('Invalid event device')
+  uuid(request.operationId)
+  if (!/^[a-z0-9._-]{1,64}$/.test(request.event) || !['human', 'ai'].includes(request.source.kind))
+    throw new Error('Invalid event request')
+}
 /** Each explicit event keeps its identity independently of coalesced membership recalculation. */
 export function createPolicyEvents(port: PolicyEventsPort) {
   return Object.freeze({
     async submit(device: string, request: EventRequest) {
-      if (!device || /\p{Cc}/u.test(device)) throw new Error('Invalid event device')
-      uuid(request.operationId)
-      if (
-        !/^[a-z0-9._-]{1,64}$/.test(request.event) ||
-        !['human', 'ai'].includes(request.source.kind)
-      )
-        throw new Error('Invalid event request')
+      validateEventRequest(device, request)
       const value = await port.submit(device, freeze(request))
       if (value.operationId !== request.operationId) throw new Error('Wrong event receipt')
       uuid(value.batchId)

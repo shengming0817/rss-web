@@ -76,6 +76,12 @@ try {
   await run.nav(p, '/policies?scope=' + scope, '策略与部署')
   await button('新建部署').click()
   await run.choose(p, label('策略动作'), '设备退管')
+  await label('唯一别名').fill('invalid alias')
+  await label('确认范围、资源、调度与潜在影响').check()
+  await button('保存策略定义').click()
+  await p.getByText('请求未完成，请检查输入、权限或当前状态。', { exact: true }).waitFor()
+  assert.equal(await label('唯一别名').isEnabled(), true)
+  assert.equal(await button('核对原请求').count(), 0)
   await label('唯一别名').fill('react.policy.scope')
   await label('共享事件名').fill('react.policy.event')
   await label('确认范围、资源、调度与潜在影响').check()
@@ -94,6 +100,11 @@ try {
   await run.nav(p, '/policies?policy=' + policy.id, '策略与部署')
   await button('打开定位策略').click()
   await run.response(p, 'POST', '/api/v1/policies/previews', () => button('预览此草稿资格').click())
+  assert.equal(await button('启用策略').isEnabled(), false)
+  await label('唯一别名').fill('unsaved.smaller.scope')
+  assert.equal(await button('启用策略').isEnabled(), false)
+  await label('唯一别名').fill('react.policy.scope')
+  await label('确认已保存范围与动作后启用').check()
   await run.response(p, 'POST', '/api/v1/policies/' + policy.id, () => button('启用策略').click())
   const current = await api('GET', '/api/v1/policies/' + policy.id)
   assert.equal(current.versionId, policy.versionId)
@@ -121,16 +132,43 @@ try {
   await button('返回并重新读取策略').click()
   await run.nav(p, '/policies?policy=' + policy.id, '策略与部署')
   await button('打开定位策略').click()
+  const assignmentResponse = p.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === '/api/v1/policies/' + policy.id + '/assignments',
+  )
   await p.getByRole('tab', { name: '设备分配', exact: true }).click()
-  await button('读取分配').waitFor()
+  const assignment = await assignmentResponse
+  assert.equal(assignment.status(), 200)
+  const assigned = (await assignment.json()).items.find((item) => item.object.id === f.mdm)
+  assert.ok(assigned)
+  assert.ok(['eligible', 'pending', 'excluded'].includes(assigned.qualification.state))
+  assert.equal(assigned.scopeResult, (await api('GET', '/api/v1/scopes/' + scope)).resolution)
+  const assignmentRow = p
+    .locator('tbody tr')
+    .filter({ has: p.getByRole('link', { name: f.mdm, exact: true }) })
+    .filter({ visible: true })
+  await assignmentRow.waitFor()
+  assert.ok((await assignmentRow.innerText()).includes(assigned.qualification.state))
+  if (assigned.target)
+    assert.ok((await assignmentRow.innerText()).includes(assigned.target.registrationId))
   await p.getByRole('tab', { name: '独立事件', exact: true }).click()
   await label('终端候选服务端筛选').fill(`id=='${f.mdm}'`)
   await button('查询终端候选').click()
   await button('使用此终端').click()
   let originalRequest,
+    originalAccepted,
     intercepted = false,
     interceptionFailed = false
   const path = '/api/v1/devices/' + f.mdm + '/policy-events'
+  await label('设备事件名').fill('invalid event')
+  await label('确认向此设备提交独立事件').check()
+  await button('提交设备事件').click()
+  await p.getByText('请求未完成，请检查输入、权限或当前状态。', { exact: true }).waitFor()
+  assert.equal(await label('设备事件名').isEnabled(), true)
+  assert.equal(run.count(p, 'POST', path), 0)
+  await label('设备事件名').fill('react.policy.event')
+
   await p.route('**' + path, async (route) => {
     if (route.request().method() !== 'POST' || intercepted) return route.continue()
     intercepted = true
@@ -138,6 +176,7 @@ try {
     try {
       const response = await route.fetch()
       assert.equal(response.status(), 202)
+      originalAccepted = await response.json()
     } catch {
       interceptionFailed = true
     }
@@ -151,9 +190,17 @@ try {
   assert.equal(run.count(p, 'POST', path), 1)
   assert.equal(interceptionFailed, false)
   assert.ok(originalRequest)
+  assert.ok(originalAccepted)
+  assert.equal(originalAccepted.operationId, originalRequest.operationId)
+  await p
+    .getByText(originalAccepted.batchId, { exact: true })
+    .filter({ visible: true })
+    .first()
+    .waitFor()
   const first = await api('POST', path, originalRequest, 202),
     repeated = await api('POST', path, originalRequest, 202)
-  assert.equal(first.batchId, repeated.batchId)
+  assert.equal(first.batchId, originalAccepted.batchId)
+  assert.equal(repeated.batchId, originalAccepted.batchId)
   await p.unroute('**' + path)
   checks.push(
     'real-independent-event-response-loss-read-only-original-identity-recovery-and-server-deduplication',

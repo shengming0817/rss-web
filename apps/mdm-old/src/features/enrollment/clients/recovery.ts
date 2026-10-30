@@ -1,8 +1,9 @@
+import { comparison, nextCursor, queryParameters } from '@rss/api/mdm-query'
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 /** Administrator-only continuation of existing registration/signing attempts. No device-key owner. */
 import type { HttpTransport } from '@rss/api/mdm'
-import { array, enumeration, count, nullable, uuid } from '../../../services/decode'
+import { array, enumeration, count, nullable, uuid, string } from '../../../services/decode'
 import { encoded } from '../../settings/clients/pki'
 import { base64url, platforms } from './packages'
 export function publicChain(value: unknown) {
@@ -61,12 +62,35 @@ export function issuanceCandidate(value: unknown, issuance: string) {
 }
 export function createRecoveryClient(transport: HttpTransport) {
   return {
-    operation: (issuance: string, operation: string) =>
-      api.getApiV1AgentIssuancesByIdRecoveryOperationsByOperation(
+    operation: async (issuance: string, operation: string) => {
+      const page = await api.getApiV1AgentIssuancesByIdRecoveryOperations(
         transport,
-        { pathParams: { id: uuid(issuance), operation: uuid(operation) } },
+        {
+          pathParams: { id: uuid(issuance) },
+          query: queryParameters({
+            filter: comparison('operationId', '==', uuid(operation)),
+            fields: ['actor', 'instance', 'operationId'],
+            limit: 2,
+          }),
+        },
+        (value) => ({
+          items: value.items.map((row) => {
+            if (row.operationId !== operation || !row.actor || !row.instance)
+              throw new Error('Wrong original recovery identity')
+            return { actor: string(row.actor), instance: string(row.instance) }
+          }),
+          nextCursor: nextCursor(value.nextCursor),
+        }),
+      )
+      if (!page.items.length && !page.nextCursor) return null
+      if (page.items.length !== 1 || page.nextCursor)
+        throw new Error('Ambiguous original recovery identity')
+      return api.getApiV1AgentIssuancesByIdRecoveryOperationsByOperation(
+        transport,
+        { pathParams: { id: uuid(issuance), operation: uuid(operation) }, query: page.items[0]! },
         (v) => nullable(v, (v) => issuanceCandidate(v, issuance)),
-      ),
+      )
+    },
     registration: (registration: string, input: RecoveryGrant) =>
       api.postApiV1AgentRegistrationsByIdRecovery(
         transport,

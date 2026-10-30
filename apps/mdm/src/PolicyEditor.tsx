@@ -1,16 +1,21 @@
 import { useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Space } from 'antd'
-import { freeze, type Operation } from '@rss/mdm-inventory'
-import type { Policy, PolicyChange, PolicyDefinition } from '@rss/mdm-policies'
+import { freeze, operation, type Operation } from '@rss/mdm-inventory'
+import {
+  validateDefinition,
+  type Policy,
+  type PolicyChange,
+  type PolicyDefinition,
+} from '@rss/mdm-policies'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import type { ResourcesUseCases } from './ResourceCommand'
 import type { ScopesUseCases } from './ScopeResults'
-import { Failure, isUnknown, labels, useAction } from './AdminUi'
+import { Failure, isUnknown, labels, useAction, validateInput } from './AdminUi'
 import { usePendingSelection } from './SelectionGuard'
 import { BooleanField } from './AuthorFields'
 import { ScopePicker } from './ScopePicker'
-import { newPolicyAction, PolicyActionEditor } from './PolicyActionEditor'
+import { newPolicyAction, policyActionLabel, PolicyActionEditor } from './PolicyActionEditor'
 import { PolicySelfService } from './PolicySelfService'
 import { PolicyPreview, type PoliciesUseCases } from './PolicyPreview'
 
@@ -63,32 +68,57 @@ export function PolicyEditor({
     [approve, setApprove] = useState(false),
     [archiveApproved, setArchiveApproved] = useState(false),
     [rerunApproved, setRerunApproved] = useState(false),
+    [enableApproved, setEnableApproved] = useState(false),
     [deadline, setDeadline] = useState(() => Math.floor(Date.now() / 1000) + 86400),
     mutable = baseline?.state !== 'archived',
-    blocked = action.busy || pending !== null
+    blocked = action.busy || pending !== null,
+    dirty = baseline !== null && JSON.stringify(definition) !== JSON.stringify(baseline.definition)
   usePendingSelection(action.busy || outcome === 'unknown')
   async function send(intent: Intent) {
-    const result = await action.run<Policy | Awaited<ReturnType<PoliciesUseCases['rerun']>>>(() =>
-      intent.kind === 'change'
+    const result = await action.run<Policy | Awaited<ReturnType<PoliciesUseCases['rerun']>>>(() => {
+      validateInput(() => {
+        if (intent.kind === 'archive')
+          operation({
+            operationId: intent.operationId,
+            expectedRevision: intent.expectedRevision,
+            input: {},
+          })
+        else {
+          operation(intent.change)
+          if (intent.kind === 'change' && intent.change.input.action === 'put')
+            validateDefinition(intent.change.input.definition)
+          if (intent.kind === 'rerun' && !Number.isSafeInteger(intent.change.input.deadline))
+            throw new Error('Invalid deadline')
+        }
+      })
+      return intent.kind === 'change'
         ? policies.change(id, intent.change)
         : intent.kind === 'archive'
           ? policies.archive(id, intent.operationId, intent.expectedRevision)
-          : policies.rerun(id, intent.change),
-    )
-    setOutcome((previous) =>
-      result.ok
-        ? 'confirmed'
-        : previous === 'unknown' || isUnknown(result.error)
-          ? 'unknown'
-          : 'rejected',
-    )
+          : policies.rerun(id, intent.change)
+    })
+    const next = result.ok
+      ? 'confirmed'
+      : outcome === 'unknown' || isUnknown(result.error)
+        ? 'unknown'
+        : 'rejected'
+    setOutcome(next)
+    if (next === 'rejected') setPending(null)
   }
+  function updateDefinition(value: PolicyDefinition) {
+    setDefinition(value)
+    setApprove(false)
+    setEnableApproved(false)
+    setRerunApproved(false)
+  }
+
   function start(intent: Intent) {
     const fixed = freeze(intent)
     setPending(fixed)
     setApprove(false)
     setArchiveApproved(false)
     setRerunApproved(false)
+    setEnableApproved(false)
     void send(fixed)
   }
   function change(input: PolicyChange) {
@@ -170,7 +200,7 @@ export function PolicyEditor({
           value={definition.scope}
           locale={locale}
           onChange={(scope) =>
-            setDefinition({
+            updateDefinition({
               ...definition,
               scope,
               action:
@@ -203,7 +233,7 @@ export function PolicyEditor({
                 value={definition[key] ?? ''}
                 maxLength={64}
                 onChange={(e) =>
-                  setDefinition({
+                  updateDefinition({
                     ...definition,
                     [key]: e.target.value.trim().toLowerCase() || null,
                   })
@@ -219,7 +249,7 @@ export function PolicyEditor({
           scopes={scopes}
           locale={locale}
           onChange={(action) =>
-            setDefinition({
+            updateDefinition({
               ...definition,
               action,
               ...(action.kind === 'execution' ||
@@ -238,13 +268,16 @@ export function PolicyEditor({
             locale={locale}
             software={definition.action.kind === 'software'}
             value={definition.selfService ?? null}
-            onChange={(selfService) => setDefinition({ ...definition, selfService })}
+            onChange={(selfService) => updateDefinition({ ...definition, selfService })}
           />
         )}
         <BooleanField
           label={l('保存后启用策略', 'Enable after saving')}
           value={enabled}
-          onChange={setEnabled}
+          onChange={(enabled) => {
+            setEnabled(enabled)
+            setApprove(false)
+          }}
         />
         <Checkbox checked={approve} onChange={(e) => setApprove(e.target.checked)}>
           {l(
@@ -266,8 +299,43 @@ export function PolicyEditor({
       {baseline && mutable && (
         <fieldset className="permission-panel" disabled={blocked}>
           <Space wrap>
+            {canWrite && baseline.state === 'disabled' && (
+              <>
+                <Alert
+                  type="warning"
+                  title={l('启用以下已保存配置', 'Enable the following saved configuration')}
+                  description={
+                    <>
+                      {policyActionLabel(baseline.definition.action.kind, locale)} ·{' '}
+                      {l('范围', 'Scope')} <code>{baseline.definition.scope}</code> ·{' '}
+                      {l('配置修订', 'Configuration revision')} {baseline.revision}
+                    </>
+                  }
+                />
+                {dirty && (
+                  <Alert
+                    type="info"
+                    title={l(
+                      '草稿已变化，请先保存或放弃草稿，再启用已保存策略。',
+                      'The draft has changed. Save or discard it before enabling the saved policy.',
+                    )}
+                  />
+                )}
+                <Checkbox
+                  checked={enableApproved && !dirty}
+                  disabled={dirty}
+                  onChange={(event) => setEnableApproved(event.target.checked)}
+                >
+                  {l(
+                    '确认已保存范围与动作后启用',
+                    'Confirm saved scope and action before enabling',
+                  )}
+                </Checkbox>
+              </>
+            )}
             {canWrite && (
               <Button
+                disabled={baseline.state === 'disabled' && (dirty || !enableApproved)}
                 onClick={() =>
                   change({ action: baseline.state === 'enabled' ? 'disable' : 'enable' })
                 }
