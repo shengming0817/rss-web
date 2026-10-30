@@ -36,6 +36,11 @@ def configure(environment, config, providers, private, binary):
     def database(role, password):
         return dict(config['access_database'], user=role, password_file=str(private(root / (role + '-password'), password)))
     config['tenant_administration'] = dict(registry_database=database('mdm_tenant_registry', 'tenant-registry-fixture'), provisioning_database=database('mdm_identity_provisioning', 'identity-provisioning-fixture'), fingerprint_key_file=str(private(root / 'tenant-operation-key', 'x' * 32)))
+    return dict(managementTenant=management, **configure_webhooks(environment, config, providers))
+
+
+def configure_webhooks(environment, config, providers):
+    from candidate_fixture import TENANTS
     signing = bytes([7] * 32)
     class Receiver(BaseHTTPRequestHandler):
         def log_message(self, *_args):
@@ -65,7 +70,7 @@ def configure(environment, config, providers, private, binary):
     providers.callback(server.shutdown)
     port = server.server_port
     config['webhooks']['networks'] = [dict(tenant=TENANTS[0], reference='console', hostname='localhost', port=port, addresses=[f'{pinned}:{port}'], cidrs=[f'{pinned}/32'], ca_files=[str(environment.root / 'ca.crt')])]
-    return dict(managementTenant=management, webhookOrigin=f'https://localhost:{port}', signing=base64.b64encode(signing).decode())
+    return dict(webhookOrigin=f'https://localhost:{port}', signing=base64.b64encode(signing).decode())
 
 
 def prepare(operator, facts, environment):

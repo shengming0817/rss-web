@@ -8,6 +8,8 @@ export default defineConfig({
     name: 'mdm',
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'jsdom',
+    // Multi-submit Vuetify journeys must also complete under V8 coverage instrumentation.
+    testTimeout: 15_000,
     server: { deps: { inline: ['vuetify'] } },
     setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/*.spec.ts', 'demo/**/*.spec.ts'],

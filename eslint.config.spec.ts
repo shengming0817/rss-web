@@ -301,6 +301,8 @@ it('keeps the MDM domain cores independent and their adapters out of feature com
     'mdm-content',
     'mdm-software',
     'mdm-recovery-credentials',
+    'mdm-audit',
+    'mdm-webhooks',
   ]) {
     for (const dependency of ['@rss/api/mdm-operations', 'react', '@rss/auth-core'])
       expect(

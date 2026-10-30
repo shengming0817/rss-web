@@ -1054,3 +1054,49 @@ html:has(.mdm-overlay-open) {
 .certificate-directory .data-table th {
   white-space: nowrap;
 }
+
+.audit-page,
+.audit-page .admin-stack,
+.webhooks-page,
+.webhooks-page .ant-tabs-tabpane > .permission-panel:not([hidden]) {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.audit-page details,
+.webhooks-page details {
+  min-width: 0;
+}
+.audit-page summary,
+.webhooks-page summary {
+  cursor: pointer;
+  padding-block: 8px;
+}
+.audit-page code,
+.webhooks-page code,
+.audit-page .ant-descriptions-item-content,
+.webhooks-page .ant-descriptions-item-content {
+  overflow-wrap: anywhere;
+}
+.audit-page .data-table th,
+.webhooks-page .data-table th {
+  white-space: nowrap;
+}
+.audit-page .ant-card-body > * + *,
+.webhooks-page .ant-card-body > * + * {
+  margin-block-start: 12px;
+}
+
+.audit-page > *,
+.audit-page .ant-card,
+.webhooks-page > *,
+.webhooks-page .ant-tabs-content-holder,
+.webhooks-page .ant-tabs-content,
+.webhooks-page .ant-tabs-tabpane,
+.webhooks-page .ant-card {
+  min-width: 0;
+}
+
+.audit-page .data-table td {
+  white-space: nowrap;
+}

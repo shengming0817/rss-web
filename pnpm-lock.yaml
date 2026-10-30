@@ -331,6 +331,9 @@ importers:
       '@rss/auth-http':
         specifier: workspace:*
         version: link:../../packages/auth-http
+      '@rss/mdm-audit':
+        specifier: workspace:*
+        version: link:../../packages/mdm-audit
       '@rss/mdm-authorization':
         specifier: workspace:*
         version: link:../../packages/mdm-authorization
@@ -376,6 +379,9 @@ importers:
       '@rss/mdm-user-profiles':
         specifier: workspace:*
         version: link:../../packages/mdm-user-profiles
+      '@rss/mdm-webhooks':
+        specifier: workspace:*
+        version: link:../../packages/mdm-webhooks
       antd:
         specifier: 'catalog:'
         version: 6.6.8(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -661,6 +667,25 @@ importers:
         specifier: 'catalog:'
         version: 2.2.0(typescript@5.7.3)
 
+  packages/mdm-audit:
+    dependencies:
+      '@rss/mdm-devices':
+        specifier: workspace:*
+        version: link:../mdm-devices
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
   packages/mdm-authorization:
     devDependencies:
       '@vitest/coverage-v8':
@@ -796,6 +821,9 @@ importers:
       '@rss/auth-core':
         specifier: workspace:*
         version: link:../auth-core
+      '@rss/mdm-audit':
+        specifier: workspace:*
+        version: link:../mdm-audit
       '@rss/mdm-authorization':
         specifier: workspace:*
         version: link:../mdm-authorization
@@ -838,6 +866,9 @@ importers:
       '@rss/mdm-user-profiles':
         specifier: workspace:*
         version: link:../mdm-user-profiles
+      '@rss/mdm-webhooks':
+        specifier: workspace:*
+        version: link:../mdm-webhooks
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
@@ -938,6 +969,25 @@ importers:
         version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
 
   packages/mdm-user-profiles:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
+  packages/mdm-webhooks:
+    dependencies:
+      '@rss/mdm-devices':
+        specifier: workspace:*
+        version: link:../mdm-devices
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 'catalog:'

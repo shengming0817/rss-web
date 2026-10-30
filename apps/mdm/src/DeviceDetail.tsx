@@ -17,6 +17,7 @@ import { DeviceRetirement } from './DeviceRetirement'
 import { DeviceRegistration } from './DeviceRegistration'
 import { AssetFacts } from './AssetFacts'
 import { DeviceCompliance } from './DeviceCompliance'
+import { AuditWorkspace } from './Audit'
 function AgentObservation({
   runtime,
   locale,
@@ -422,6 +423,7 @@ function Detail({
                         'asset',
                         ...(has('inventory_read') ? ['inventory'] : []),
                         ...(has('compliance_read') ? ['compliance'] : []),
+                        ...(has('audit_read') || has('operation_read') ? ['history'] : []),
                         ...(hasDeviceSecurity(permissions.value?.grants ?? [], mountedEndpoint.id)
                           ? ['security']
                           : []),
@@ -493,6 +495,17 @@ function Detail({
                         reference={reference}
                         endpoint={mountedEndpoint.id}
                         canAssign={has('inventory_assign')}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'history',
+                    label: l('历史与活动', 'History and activity'),
+                    children: (
+                      <AuditWorkspace
+                        runtime={runtime}
+                        locale={locale}
+                        device={mountedEndpoint.id}
                       />
                     ),
                   },

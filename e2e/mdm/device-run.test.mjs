@@ -20,15 +20,19 @@ async function exercise(failure, feature, selection = 'all') {
     certificates = feature === 'react-certificates',
     assets = feature === 'react-assets',
     software = feature === 'react-software',
-    backendEnv = certificates
-      ? 'MDM_REACT_CERTIFICATES_BACKEND'
-      : react
-        ? 'MDM_REACT_DEVICES_BACKEND'
-        : assets
-          ? 'MDM_REACT_ASSETS_BACKEND'
-          : software
-            ? 'MDM_REACT_SOFTWARE_BACKEND'
-            : `MDM_${feature.toUpperCase()}_BACKEND`,
+    auditWebhooks = feature === 'react-audit-webhooks',
+    cleanupOnly = certificates || (auditWebhooks && selection === 'cleanup'),
+    backendEnv = auditWebhooks
+      ? 'MDM_REACT_AUDIT_WEBHOOKS_BACKEND'
+      : certificates
+        ? 'MDM_REACT_CERTIFICATES_BACKEND'
+        : react
+          ? 'MDM_REACT_DEVICES_BACKEND'
+          : assets
+            ? 'MDM_REACT_ASSETS_BACKEND'
+            : software
+              ? 'MDM_REACT_SOFTWARE_BACKEND'
+              : `MDM_${feature.toUpperCase()}_BACKEND`,
     group = certificates
       ? selection === 'recovery'
         ? 'react-recovery-browser'
@@ -50,8 +54,8 @@ async function exercise(failure, feature, selection = 'all') {
 const fs = require('node:fs'), path = require('node:path')
 const args = process.argv.slice(2), base = process.env['${backendEnv}']
 const compose = '${feature}' === 'settings' && args.includes('--cleanup-compose')
-const device = ['device', 'react-devices-enrollment', 'react-assets', 'react-software'].includes('${feature}') && args.some((arg) => arg.endsWith('/device-cleanup.py'))
-if ('${feature}' === 'react-certificates') {
+const device = ['device', 'react-devices-enrollment', 'react-assets', 'react-software', 'react-audit-webhooks'].includes('${feature}') && args.some((arg) => arg.endsWith('/device-cleanup.py'))
+if ('${feature}' === 'react-certificates' || ('${feature}' === 'react-audit-webhooks' && '${selection}' === 'cleanup')) {
   const cleanup = args.some((arg) => arg.endsWith('/enrollment-cleanup.py') || arg.endsWith('/device-cleanup.py'))
   fs.appendFileSync(path.join(base, cleanup ? 'cleanup-groups' : 'journeys'), args.join(' ')+'\\n')
   if (!cleanup) process.exit(0)
@@ -111,12 +115,12 @@ if ('${feature}' === 'react-certificates') {
   })
   try {
     if (!failure) {
-      if (!certificates) {
+      if (!cleanupOnly) {
         await waitFor(() => existsSync(resolve(backend, 'execution-start')))
         child.kill('SIGTERM')
       }
       await waitFor(() => existsSync(resolve(backend, 'cleanup-start')))
-      if (certificates) child.kill('SIGINT')
+      if (cleanupOnly) child.kill('SIGINT')
       // A second cancellation must not cancel the independent cleanup owner.
       child.kill('SIGTERM')
     }
@@ -142,7 +146,7 @@ if ('${feature}' === 'react-certificates') {
       assert.equal(existsSync(recovery), false)
       assert.ok(output.includes('"classification":"interrupted"'))
       assert.ok(output.includes('"phase":"cleanup","result":"passed"'))
-      if (certificates) {
+      if (cleanupOnly) {
         assert.equal(
           readFileSync(resolve(backend, 'journeys'), 'utf8').trim().split('\n').length,
           1,
@@ -162,6 +166,11 @@ if ('${feature}' === 'react-certificates') {
     rmSync(backend, { recursive: true, force: true })
   }
 }
+test(
+  'react-audit-webhooks: interruption during final cleanup exits unsuccessfully',
+  { timeout: 15000 },
+  () => exercise(false, 'react-audit-webhooks', 'cleanup'),
+)
 for (const selection of ['certificates', 'recovery', 'all']) {
   test(
     `react-certificates: cleanup interruption exits unsuccessfully and stops later journeys (${selection})`,
@@ -176,6 +185,7 @@ for (const feature of [
   'react-devices-enrollment',
   'react-assets',
   'react-software',
+  'react-audit-webhooks',
 ]) {
   test(
     `${feature}: waits for independent cleanup after cancellation and a second signal`,

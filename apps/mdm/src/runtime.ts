@@ -1,3 +1,4 @@
+import { createWebhookMaterialRecovery } from './webhook-material-recovery'
 import { createCeremonyHandoff } from './ceremony-handoff'
 import { createAuthorization } from '@rss/mdm-authorization'
 import { createTenantAdministration } from '@rss/mdm-tenant-administration'
@@ -19,6 +20,10 @@ import { createCompliance } from '@rss/mdm-compliance'
 import { createDevicePki } from '@rss/mdm-certificates/device-pki'
 import { createCertificateArchive } from '@rss/mdm-certificates/archive'
 import { createRecoveryCredentials } from '@rss/mdm-recovery-credentials'
+import { createAudit, createAuditPolicyLookup } from '@rss/mdm-audit'
+import { createWebhooks } from '@rss/mdm-webhooks'
+import { createWebhooksAdapter } from '@rss/mdm-http/webhooks'
+import { createAuditAdapter, createAuditPolicyLookupAdapter } from '@rss/mdm-http/audit'
 import { createDevicePkiAdapter } from '@rss/mdm-http/device-pki'
 import { createCertificateArchiveAdapter } from '@rss/mdm-http/certificate-archive'
 import { createRecoveryCredentialsAdapter } from '@rss/mdm-http/recovery-credentials'
@@ -79,6 +84,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
   const passkeys = createPasskeyClient(identity, owner)
   return Object.freeze({
     owner,
+    webhookMaterialRecovery: createWebhookMaterialRecovery(owner),
     materialAuthorization,
     ...createCeremonyHandoff(materialAuthorization, passkeys.cancelAuthorization),
     host,
@@ -134,6 +140,11 @@ export async function createRuntime(origin: string, pathname: string, storage: S
           tenant,
         ),
         recoveryCredentials: createRecoveryCredentials(createRecoveryCredentialsAdapter(transport)),
+        audit: createAudit(createAuditAdapter(transport)),
+        webhooks: createWebhooks(createWebhooksAdapter(transport)),
+        auditPolicyLookup: createAuditPolicyLookup(
+          createAuditPolicyLookupAdapter(transport, tenant, host.serviceId),
+        ),
         enrollment: createEnrollment(
           createEnrollmentAdapter(transport, mdm, tenant, host.serviceId),
           tenant,

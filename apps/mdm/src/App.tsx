@@ -34,6 +34,8 @@ import { IdentityAdministration } from './IdentityAdministration'
 import { Passkeys } from './Passkeys'
 import { Devices } from './Devices'
 import { Certificates } from './Certificates'
+import { Audit } from './Audit'
+import { Webhooks } from './Webhooks'
 import { RecoveryDisclosure } from './RecoveryDisclosure'
 import { DeviceDetail } from './DeviceDetail'
 import { Enrollment } from './Enrollment'
@@ -244,6 +246,8 @@ const featureRoutes: readonly FeatureRoute[] = [
     render: (ui) => <RecoveryDisclosure {...ui} />,
   },
   { path: '/software', label: 'software', realm: 'tenant', render: (ui) => <Software {...ui} /> },
+  { path: '/audit', label: 'audit', realm: 'tenant', render: (ui) => <Audit {...ui} /> },
+  { path: '/webhooks', label: 'webhooks', realm: 'tenant', render: (ui) => <Webhooks {...ui} /> },
   { path: '/groups', label: 'groups', realm: 'tenant', render: (ui) => <GroupsPage {...ui} /> },
   {
     path: '/compliance',
