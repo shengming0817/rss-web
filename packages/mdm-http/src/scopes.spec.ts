@@ -109,3 +109,43 @@ it('preserves unavailable historical members instead of removing them or changin
   }
   expect(await fixture(value).client.result(id, result, 'members', 'mdm', {})).toEqual(value)
 })
+it('sends the complete draft and editing CAS for read-only bounded preview', async () => {
+  const value = {
+      items: [],
+      channel: 'agent',
+      scanComplete: false,
+      stopReason: 'work_budget',
+      hasUnknown: true,
+      inputFingerprint: 'fixed',
+      assetCut: { tenant: id, epoch: result, snapshot: '1:2:' },
+      sources: [],
+      asOf: 0,
+    },
+    f = fixture(value),
+    request = {
+      definition: { targets: [], limitations: [], exclusions: [] },
+      channel: 'agent' as const,
+      editing: { scopeId: id, expectedRevision: 3 },
+    }
+  expect(await f.client.preview(request)).toEqual(value)
+  expect(f.request).toHaveBeenCalledWith(
+    expect.objectContaining({ method: 'POST', path: '/api/v1/scopes/previews', body: request }),
+  )
+})
+it('reads retained archived Policy references without requiring its full definition', async () => {
+  const value = {
+      items: [
+        {
+          kind: 'policy',
+          id: result,
+          version: id,
+          revision: 3,
+          roles: ['policy_scope', 'rollout_stage'],
+          release: 'retained_archived_policy',
+        },
+      ],
+      nextCursor: 'next',
+    },
+    f = fixture(value)
+  expect(await f.client.references(id, { limit: 1 })).toEqual(value)
+})

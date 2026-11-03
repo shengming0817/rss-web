@@ -1,6 +1,6 @@
 {
   "repository": "https://dev.azure.com/shengming0923/rss/_git/rss-mdm",
-  "revision": "30df574bd46c9e268b924e64f2b67a148d43c9ed",
+  "revision": "59ac43de917d4502e1faeafe11a88f10f275a369",
   "generator": "python3 hack/http_contract_artifact.py --output artifacts/http-contract/http-v1.json",
-  "sha256": "820bc6ce7e69cbe6800c29cd0bddd93b271d91f5924d8c1350dd80b10c74da80"
+  "sha256": "78d3ecd418a253a0475726ed22debd4b78be5a87f95902f1e7ab728e921d77d6"
 }

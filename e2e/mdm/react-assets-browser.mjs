@@ -439,7 +439,7 @@ try {
     ),
     preview = await previewResponse.json()
   assert.equal(previewResponse.request().postDataJSON().editing.groupId, nestedId)
-  assert.ok(preview.items.length <= 20)
+  assert.ok(preview.items.length <= 1000)
   assert.equal('task' in preview, false)
   assert.equal((await api('GET', `/api/v1/groups/${nestedId}`)).memberSet, beforePreview.memberSet)
   await openGroup(staticGroup.id, 'React empty source')

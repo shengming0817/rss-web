@@ -295,8 +295,22 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
         },
         (value) => result(value, group, resultId, kind),
       ),
-    references: (group, query = {}) =>
+    references: (id, query = {}) =>
       api.getApiV1GroupsByIdReferences(
+        transport,
+        { pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        (value) => ({
+          items: value.items.map((item) => ({
+            ...item,
+            id: uuid(item.id),
+            revision: positive(item.revision),
+            roles: [...item.roles],
+          })),
+          nextCursor: nextCursor(value.nextCursor),
+        }),
+      ),
+    impacts: (group, query = {}) =>
+      api.getApiV1GroupsByIdImpacts(
         transport,
         {
           pathParams: { id: uuid(group) },
@@ -307,7 +321,6 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
           },
         },
         (value) => ({
-          deletionBlocked: value.deletionBlocked,
           nextCursor: nextCursor(value.nextCursor),
           items: value.items.map((entry) => ({
             ...entry,

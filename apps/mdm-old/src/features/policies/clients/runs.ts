@@ -306,7 +306,7 @@ function scriptAuthorization(value: unknown) {
   }
 }
 export function decodeRunEvidence(value: unknown) {
-  if (!wireSchemas.getApiV1OperationsResponse.validateEvidence(value))
+  if (!wireSchemas.getApiV1OperationsResponse.validateEvidence(value) || value.owner === 'native')
     throw new Error('Invalid run evidence')
   return {
     kind: 'action_run' as const,

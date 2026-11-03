@@ -10,7 +10,6 @@ import {
   identifier,
   integer,
   nullable,
-  record,
   string,
   uuid,
 } from '../../../services/decode'
@@ -43,8 +42,8 @@ const executionFields = {
     if (!wireSchemas.getApiV1OperationsResponse.validateEvidence(v))
       throw new Error('Invalid contract value')
 
-    if (record(v)['owner'] !== 'native') return decodeRunEvidence(v)
-    const raw = record(v)
+    if (v.owner !== 'native') return decodeRunEvidence(v)
+    const raw = v.detail
     return {
       kind: 'command' as const,
       commandStatus: identifier(raw['commandStatus']),

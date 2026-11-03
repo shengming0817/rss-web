@@ -162,28 +162,19 @@ it('retains concrete namespace in endpoint list requests and does not reinterpre
   )
 })
 it('uses opaque Resource references in field impact pages rather than requiring UUIDs', async () => {
-  const f = fixture(
-    envelope({
-      kind: 'field_references',
-      field: 'custom.ready',
-      impact: {
-        archivedResourceVersions: 1,
-        compliance: 2,
-        groups: 3,
-        savedQueries: 4,
-        telemetryProfiles: 0,
-        templates: 1,
+  const f = fixture({
+    items: [
+      {
+        source: { kind: 'resource_version', id: 'rss/collection.native', version: '1.0' },
+        role: 'collection_mapping',
+        release: 'archive_referencing_version',
       },
-      mappings: [
-        { resource: 'rss/collection.native', version: '1.0', state: 'active', telemetry: false },
-      ],
-      nextCursor: null,
-    }),
-  )
-  expect(
-    (await createInventoryAdapter(f.transport, tenant).references('custom.ready', {})).items[0]
-      ?.resource,
-  ).toBe('rss/collection.native')
+    ],
+    nextCursor: null,
+  })
+  const value = (await createInventoryAdapter(f.transport, tenant).references('custom.ready', {}))
+    .items[0]?.source
+  expect(value?.kind === 'resource_version' ? value.id : null).toBe('rss/collection.native')
 })
 it('sends the observed saved revision unchanged and preserves sparse saved directory rows', async () => {
   const f = fixture(

@@ -133,7 +133,11 @@ it('keeps an unknown Scope write locked after reading a matching current definit
         MemoryRouter,
         null,
         h(ScopeEditor, {
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({ change, read }),
+          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({
+            change,
+            read,
+            references: async () => ({ items: [], nextCursor: null }),
+          }),
           groups: inject<ComponentProps<typeof ScopeEditor>['groups']>({}),
           devices: inject<ComponentProps<typeof ScopeEditor>['devices']>({}),
           id,
@@ -499,4 +503,56 @@ it('reloads current navigation reads while discarding an earlier stale response'
   await act(async () => rejectOld(new Error('Stale response')))
   expect(host.textContent).toBe('current directoryauthorized')
   expect(authorization).toHaveBeenCalledTimes(1)
+})
+
+it('requires explicit approval to retry an unknown recompute with the original request', async () => {
+  const baseline: ScopeRead = {
+    id,
+    revision: 3,
+    definition: { targets: [], limitations: null, exclusions: [] },
+    resolution: null,
+    resolutionRevision: 0,
+  }
+  const change = vi
+      .fn()
+      .mockRejectedValueOnce({ cause: 'transport' })
+      .mockResolvedValue({ id, revision: 3, task: scope }),
+    read = vi.fn(async () => baseline)
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(ScopeEditor, {
+          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({
+            change,
+            read,
+            references: async () => ({ items: [], nextCursor: null }),
+            task: vi.fn().mockRejectedValue({ cause: 'transport' }),
+          }),
+          groups: inject<ComponentProps<typeof ScopeEditor>['groups']>({}),
+          devices: inject<ComponentProps<typeof ScopeEditor>['devices']>({}),
+          id,
+          baseline,
+          locale: 'zh',
+          canWrite: true,
+          done() {},
+        }),
+      ),
+    ),
+  )
+  await click('重新计算已保存范围')
+  const original = change.mock.calls[0]![1]
+  expect(original).toMatchObject({ expectedRevision: 3, input: { action: 'recompute' } })
+  expect(button('重提原重算请求').disabled).toBe(true)
+  await click('读取原范围当前状态')
+  expect(change).toHaveBeenCalledTimes(1)
+  const approval = [...host.querySelectorAll('label')]
+    .find((node) => node.textContent?.includes('确认使用原操作标识和原输入重提重算请求'))!
+    .querySelector<HTMLInputElement>('input')!
+  await act(async () => approval.click())
+  await click('重提原重算请求')
+  expect(change).toHaveBeenCalledTimes(2)
+  expect(change.mock.calls[1]).toEqual(change.mock.calls[0])
+  expect(host.textContent).toContain('操作已确认')
 })

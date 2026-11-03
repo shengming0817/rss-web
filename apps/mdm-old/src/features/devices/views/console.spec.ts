@@ -2185,9 +2185,9 @@ it('preserves hidden Group deletion blockers and withdraws the decision on a fai
   const f = await setup()
   const references = vi
     .spyOn(f.devices.groups, 'references')
-    .mockResolvedValueOnce({ items: [], nextCursor: 'opaque', deletionBlocked: true })
+    .mockResolvedValueOnce({ items: [], nextCursor: 'opaque' })
     .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
-    .mockResolvedValueOnce({ items: [], nextCursor: null, deletionBlocked: false })
+    .mockResolvedValueOnce({ items: [], nextCursor: null })
   const wrapper = mount(GroupDependencies, {
     props: { group: '11111111-1111-4111-8111-111111111111' },
     global: {
@@ -2210,7 +2210,7 @@ it('preserves hidden Group deletion blockers and withdraws the decision on a fai
     .find((b) => b.text() === '重新读取')!
     .trigger('click')
   await flushPromises()
-  expect(references.mock.lastCall![1]?.cursor).toBeUndefined()
+  expect(references.mock.lastCall![1]).toBeUndefined()
   expect(wrapper.emitted('loaded')?.at(-1)).toEqual([false])
 })
 
@@ -2401,7 +2401,7 @@ it('stops automatic observation after a member task fails and permits preview af
         .pathParams!['id'] as string,
     )
     await h.click('预览已保存条件样例')
-    expect(h.wrapper.text()).toContain('扫描或样例达到上限；空样例不证明没有匹配')
+    expect(h.wrapper.text()).toContain('本次扫描完成；不发布成员')
     expect((await h.devices.groups.read(before.group.id)).memberSet).toBe(before.memberSet)
     h.scenario.set('partial')
     await h.click('重算并发布成员')

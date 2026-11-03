@@ -1,12 +1,7 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { checked } from '../../../contracts/collection/check'
-import {
-  validateFieldWrite,
-  validateFieldImpact,
-  validateFieldMappingReference,
-  validateFieldReferenceQuery,
-} from '@rss/api/mdm-validators'
+import { validateFieldWrite, validateFieldReferenceQuery } from '@rss/api/mdm-validators'
 import type { FieldWrite } from '@rss/api/mdm-types'
 import { queryParameters, nextCursor, projectedRow, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { Operation } from '../../../services/useOperation'
@@ -242,14 +237,11 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           },
         },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'field_references')
-          if (v['field'] !== field) throw new Error('Wrong reference field')
+          if (!wireSchemas.getApiV1AssetFieldsByFieldReferencesResponse.validateRoot(value))
+            throw new Error('Invalid field references')
           return {
-            impact: checked(validateFieldImpact, v['impact']),
-            mappings: array(v['mappings'], (mapping) =>
-              checked(validateFieldMappingReference, mapping),
-            ),
-            nextCursor: nextCursor(v['nextCursor']),
+            ...value,
+            items: value.items.map((item) => ({ ...item, source: { ...item.source } })),
           }
         },
       ),

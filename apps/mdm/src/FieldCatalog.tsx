@@ -56,42 +56,38 @@ export function FieldReferences({
       <ReadState locale={locale} busy={read.busy} error={read.error} />
       {read.value && (
         <>
-          <dl className="device-facts">
-            {Object.entries(read.value.impact).map(([name, count]) => (
-              <div key={name}>
-                <dt>
-                  {
-                    (
-                      {
-                        archivedResourceVersions: l('归档资源版本', 'Archived resource versions'),
-                        compliance: l('合规规则', 'Compliance rules'),
-                        groups: l('设备组', 'Device groups'),
-                        savedQueries: l('保存查询', 'Saved queries'),
-                        telemetryProfiles: l('指标配置', 'Telemetry profiles'),
-                        templates: l('采集模板', 'Collection templates'),
-                      } as Record<string, string>
-                    )[name]
-                  }
-                </dt>
-                <dd>{count}</dd>
-              </div>
-            ))}
-          </dl>
           <p className="subtitle">
             {l(
-              '映射引用列表受当前授权范围过滤；空列表不代表允许删除。',
-              'Mapping references are filtered by current authority. An empty list does not grant deletion.',
+              '直接引用摘要仅展示身份；空列表不构成删除许可。',
+              'Direct references reveal identities; an empty page does not grant deletion.',
             )}
           </p>
           <DataTable
             locale={locale}
             dataSource={read.value.items}
-            rowKey={(row) => JSON.stringify([row.resource, row.version])}
+            rowKey={(row) => JSON.stringify([row.source, row.role])}
             columns={[
-              { title: l('资源', 'Resource'), dataIndex: 'resource' },
-              { title: l('固定版本', 'Fixed version'), dataIndex: 'version' },
-              { title: l('状态', 'State'), dataIndex: 'state' },
-              { title: l('指标引用', 'Telemetry reference'), dataIndex: 'telemetry' },
+              { title: l('来源类型', 'Source kind'), render: (_, row) => row.source.kind },
+              {
+                title: l('引用身份', 'Reference identity'),
+                render: (_, row) =>
+                  row.source.kind === 'saved_query'
+                    ? `${row.source.instance} / ${row.source.owner} / ${row.source.id}`
+                    : row.source.id,
+              },
+              {
+                title: l('版本或修订', 'Version or revision'),
+                render: (_, row) =>
+                  row.source.kind === 'resource_version' ? row.source.version : row.source.revision,
+              },
+              { title: l('用途', 'Role'), dataIndex: 'role' },
+              {
+                title: l('解除方式', 'Release'),
+                render: (_, row) =>
+                  row.release === 'archive_referencing_version'
+                    ? l('归档引用版本', 'Archive the referencing version')
+                    : l('编辑或删除引用对象', 'Edit or delete the referencing object'),
+              },
             ]}
           />
           <CursorControls

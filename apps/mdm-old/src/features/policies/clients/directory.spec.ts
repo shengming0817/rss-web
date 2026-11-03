@@ -157,7 +157,7 @@ it('separates redacted collection summaries from authorized native detail eviden
   ).toThrow()
 })
 
-it('rejects invalid native aggregate evidence while producer owner conflict is tracked in #3131', async () => {
+it('decodes nested native owner evidence and rejects the retired flat aggregate', async () => {
   const observation = {
     protocol: 'syncml',
     observationScope: 'native_objects',
@@ -165,7 +165,24 @@ it('rejects invalid native aggregate evidence while producer owner conflict is t
     progress: 'received',
     effect: 'waiting',
   }
-  let evidence: unknown = { commandStatus: 'received', dispatchFailure: null, observation }
+  let evidence: unknown = {
+    owner: 'native',
+    detail: {
+      owner: 'device',
+      operationId: id,
+      commandId: id,
+      revision: 1,
+      task: { platform: 'windows', kind: 'sync_ml', name: 'SyncML', objects: [] },
+      target: { kind: 'device' },
+      inputVersion: 'device-control-v1',
+      deadline: 100,
+      authorization: { state: 'authorized' },
+      reauthorization: { state: 'unavailable', reason: 'already_received' },
+      commandStatus: 'received',
+      dispatchFailure: null,
+      observation,
+    },
+  }
   const request = vi.fn(async (options: RequestOptions<unknown>) =>
     options.decode({
       items: [
@@ -189,7 +206,11 @@ it('rejects invalid native aggregate evidence while producer owner conflict is t
     }),
   )
   const client = createExecutionsClient({ request } as unknown as HttpTransport)
-  await expect(client.directory()).rejects.toThrow()
+  expect((await client.directory()).items[0]?.evidence).toMatchObject({
+    kind: 'command',
+    commandStatus: 'received',
+    observation,
+  })
   evidence = {
     commandStatus: 'received',
     dispatchFailure: null,

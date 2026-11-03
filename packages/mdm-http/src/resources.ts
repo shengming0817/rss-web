@@ -1,11 +1,11 @@
 import * as api from '@rss/api/mdm-operations'
 import { validateResourceResponse, validateResourceWrite } from '@rss/api/mdm-validators'
-import { allOf, projectedPage, queryParameters } from '@rss/api/mdm-query'
+import { allOf, nextCursor, projectedPage, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { ResourcesPort } from '@rss/mdm-resources'
 import { resourceKinds, sameArtifact, validateVersionDraft, variantKey } from '@rss/mdm-resources'
 import { count, enumeration, nullable, text } from './decode'
-import { requestInput } from './inventory-values'
+import { requestInput, windowQuery } from './inventory-values'
 import {
   agentDefinition,
   declarationInput,
@@ -29,6 +29,19 @@ const fields = {
 }
 export function createResourcesAdapter(transport: HttpTransport): ResourcesPort {
   return {
+    references: (id, version, query = {}) =>
+      api.getApiV1ResourcesByIdVersionsByVersionReferences(
+        transport,
+        { pathParams: { id, version }, query: windowQuery(query) },
+        (value) => ({
+          items: value.items.map((item) => ({
+            ...item,
+            id: text(item.id),
+            version: nullable(item.version, text),
+          })),
+          nextCursor: nextCursor(value.nextCursor),
+        }),
+      ),
     reconstruct: async (target) => {
       const source = await api.getApiV1ResourcesById(
         transport,

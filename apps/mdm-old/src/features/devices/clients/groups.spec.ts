@@ -230,7 +230,5 @@ it('keeps group membership rules separate from asset conditions and preserves hi
     criteria: { kind: 'and', children: [{ kind: 'group', groupId: id, op: 'not_member_of' }] },
   }
   expect(groupCondition(value).criteria).toEqual(value.criteria)
-  expect(
-    groupReferences({ items: [], nextCursor: null, deletionBlocked: true }).deletionBlocked,
-  ).toBe(true)
+  expect(groupReferences({ items: [], nextCursor: 'opaque' }).nextCursor).toBe('opaque')
 })

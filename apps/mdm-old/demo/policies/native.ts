@@ -241,12 +241,7 @@ export function createNativeDemo(
         reauthorization: eligibility(s, actor),
         status: s.read.commandStatus,
         detailUrl: `/api/v1/devices/${encodeURIComponent(s.device)}/operations/${s.read.operationId}`,
-        evidence: {
-          commandStatus: s.read.commandStatus,
-          observation: s.read.observation,
-          dispatchFailure: s.read.dispatchFailure,
-          agentInstallation: s.read.agentInstallation,
-        },
+        evidence: { owner: 'native', detail: { ...structuredClone(s.read) } },
       }))
     },
     reset() {

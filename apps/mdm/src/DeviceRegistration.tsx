@@ -42,6 +42,7 @@ export function DeviceRegistration({
         directoryQuery(query, [
           'registrationId',
           'enrollmentId',
+          'certificateGrantId',
           'userContextId',
           'source',
           'generation',
@@ -81,6 +82,7 @@ export function DeviceRegistration({
         fields={[
           'registrationId',
           'enrollmentId',
+          'certificateGrantId',
           'userContextId',
           'source',
           'generation',

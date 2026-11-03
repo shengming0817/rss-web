@@ -12,25 +12,36 @@ const runtime = useMdm(),
   { t } = useI18n(),
   client = runtime.devices.groups
 const { run, busy, failure } = useOperation([], () => [...deviceBinding(runtime), props.group])
-const page = ref<Awaited<ReturnType<typeof client.references>>>()
+const blockers = ref<Awaited<ReturnType<typeof client.references>>>()
+const page = ref<Awaited<ReturnType<typeof client.impacts>>>()
 const kind = ref<'' | 'group' | 'scope' | 'policy' | 'compliance_rule'>(''),
   relation = ref<'all' | 'direct' | 'indirect'>('all')
+async function loadBlockers(cursor?: string) {
+  blockers.value = undefined
+  emit('loaded', undefined)
+  return run(
+    () => client.references(props.group, cursor),
+    (value) => {
+      blockers.value = value
+      emit('loaded', !!cursor || value.items.length > 0 || value.nextCursor !== null)
+    },
+  )
+}
 async function load(cursor?: string) {
   page.value = undefined
   emit('loaded', undefined)
-  const ok = await run(
+  if (!(await loadBlockers())) return
+  await run(
     () =>
-      client.references(props.group, {
+      client.impacts(props.group, {
         kind: kind.value || undefined,
         relation: relation.value,
         cursor,
       }),
     (value) => {
       page.value = value
-      emit('loaded', value.deletionBlocked)
     },
   )
-  if (!ok) emit('loaded', undefined)
 }
 watch(
   () => JSON.stringify([...deviceBinding(runtime), props.group]),
@@ -43,6 +54,21 @@ watch(
 </script>
 <template>
   <section class="group-dependencies" :aria-busy="busy">
+    <div>
+      <h3>{{ t('devices.dependencies') }}</h3>
+      <ul>
+        <li v-for="item in blockers?.items" :key="item.kind + '/' + item.id">
+          {{ item.kind }} · {{ item.id }} · {{ item.revision }} · {{ item.roles.join(' · ') }}
+        </li>
+      </ul>
+      <p v-if="blockers && !blockers.items.length">{{ t('devices.noDependencies') }}</p>
+      <v-btn
+        v-if="blockers?.nextCursor"
+        :disabled="busy"
+        @click="loadBlockers(blockers.nextCursor)"
+        >{{ t('devices.next') }}</v-btn
+      >
+    </div>
     <div class="console-toolbar">
       <v-select
         v-model="kind"
@@ -71,10 +97,7 @@ watch(
       <v-btn :disabled="busy" @click="load()">{{ t('devices.reload') }}</v-btn>
     </div>
     <v-alert v-if="failure" type="error" variant="tonal">{{ t('devices.' + failure) }}</v-alert>
-    <v-alert v-if="page?.deletionBlocked" type="warning" variant="tonal">{{
-      t('devices.deletionBlocked')
-    }}</v-alert>
-    <p v-else-if="page && !page.items.length">{{ t('devices.noDependencies') }}</p>
+    <p v-if="page && !page.items.length">{{ t('devices.noDependencies') }}</p>
     <v-list
       ><v-list-item
         v-for="(item, index) in page?.items"

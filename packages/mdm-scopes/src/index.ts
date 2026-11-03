@@ -8,6 +8,7 @@ import type {
   ScopeReference,
   ScopeResultKind,
   ScopeRow,
+  ScopePreviewRequest,
   ScopesPort,
 } from './model'
 
@@ -39,14 +40,43 @@ export function createScopes(port: ScopesPort) {
       if (value.id !== id) throw new Error('Wrong scope detail')
       return value
     },
+    async preview(request: ScopePreviewRequest) {
+      validateDefinition(request.definition)
+      if (!['agent', 'mdm'].includes(request.channel)) throw new Error('Invalid preview channel')
+      if (request.editing) {
+        uuid(request.editing.scopeId)
+        if (
+          !Number.isSafeInteger(request.editing.expectedRevision) ||
+          request.editing.expectedRevision < 1
+        )
+          throw new Error('Invalid preview revision')
+      }
+      const value = await port.preview(freeze(request))
+      if (
+        value.channel !== request.channel ||
+        value.items.length > 1000 ||
+        value.scanComplete !== (value.stopReason === 'complete')
+      )
+        throw new Error('Wrong scope preview')
+      return value
+    },
+    references: (id: string, query: WindowQuery = {}) => port.references(uuid(id), query),
     async change(id: string, change: Operation<ScopeChange>) {
       uuid(id)
       operation(change)
       if (change.input.action === 'put') validateDefinition(change.input.definition)
-      else if (change.input.action !== 'delete' || change.expectedRevision === 0)
+      else if (
+        !['delete', 'recompute'].includes(change.input.action) ||
+        change.expectedRevision === 0
+      )
         throw new Error('Invalid scope deletion')
       const value = await port.change(id, freeze(change))
-      if (value.id !== id || value.revision !== change.expectedRevision + 1)
+      if (
+        value.id !== id ||
+        value.revision !==
+          change.expectedRevision + (change.input.action === 'recompute' ? 0 : 1) ||
+        (change.input.action === 'recompute' && !value.task)
+      )
         throw new Error('Wrong scope receipt')
       return value
     },

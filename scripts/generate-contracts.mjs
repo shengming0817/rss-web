@@ -280,8 +280,7 @@ for (const e of endpoints) {
   }
   if (e.method === 'GET' && e.path === '/api/v1/asset-fields/{field}') {
     const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
-    for (const name of ['FieldView', 'FieldImpact', 'FieldMappingReference'])
-      ownerNames.set(name, { id, name })
+    for (const name of ['FieldView']) ownerNames.set(name, { id, name })
   }
   if (e.method === 'GET' && e.path === '/api/v1/asset-fields/{field}/references')
     ownerNames.set('FieldReferenceQuery', {

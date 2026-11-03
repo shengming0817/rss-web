@@ -74,11 +74,24 @@ export interface GroupQuery<
 }
 export function groupReferences(value: unknown) {
   if (!wireSchemas.getApiV1GroupsByIdReferencesResponse.validateRoot(value))
+    throw new Error('Invalid group references')
+  return {
+    items: value.items.map((item) => ({
+      ...item,
+      id: uuid(item.id),
+      revision: count(item.revision),
+      roles: [...item.roles],
+    })),
+    nextCursor: cursor(value.nextCursor),
+  }
+}
+export function groupImpacts(value: unknown) {
+  if (!wireSchemas.getApiV1GroupsByIdImpactsResponse.validateRoot(value))
     throw new Error('Invalid contract value')
 
   const v = value
   const source = (value: unknown) => {
-    if (!wireSchemas.getApiV1GroupsByIdReferencesResponse.validateObject(value))
+    if (!wireSchemas.getApiV1GroupsByIdImpactsResponse.validateObject(value))
       throw new Error('Invalid contract value')
 
     const v = value
@@ -99,11 +112,9 @@ export function groupReferences(value: unknown) {
         lifecycleState: identifier(item['lifecycleState']),
         freshness: identifier(item['freshness']),
         effective: item['effective'],
-        blocksDeletion: item['blocksDeletion'],
       }
     }),
     nextCursor: cursor(v['nextCursor']),
-    deletionBlocked: v['deletionBlocked'],
   }
 }
 export function groupPresentation(value: unknown) {
@@ -302,7 +313,13 @@ export function createGroupsClient(transport: HttpTransport) {
         },
       )
     },
-    references: (
+    references: (id: string, cursor?: string) =>
+      api.getApiV1GroupsByIdReferences(
+        transport,
+        { pathParams: { id: uuid(id) }, query: { limit: 20, ...(cursor ? { cursor } : {}) } },
+        groupReferences,
+      ),
+    impacts: (
       id: string,
       query: {
         kind?: 'group' | 'scope' | 'policy' | 'compliance_rule' | undefined
@@ -310,10 +327,10 @@ export function createGroupsClient(transport: HttpTransport) {
         cursor?: string | undefined
       } = {},
     ) =>
-      api.getApiV1GroupsByIdReferences(
+      api.getApiV1GroupsByIdImpacts(
         transport,
         { pathParams: { id: uuid(id) }, query: { ...query, limit: 20 } },
-        groupReferences,
+        groupImpacts,
       ),
     read: (id: string) =>
       api.getApiV1GroupsById(transport, { pathParams: { id } }, (v) => decodeGroup(v, id)),

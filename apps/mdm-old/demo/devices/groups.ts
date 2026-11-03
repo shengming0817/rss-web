@@ -361,7 +361,7 @@ export function createGroupDemo(
         (item) => evaluateGroup(criteria, item.contexts, item.key).decision === 'match',
       )
       return ok({
-        items: matches.slice(0, 20).map((item) =>
+        items: matches.slice(0, 1000).map((item) =>
           context === 'endpoint'
             ? { kind: 'endpoint', id: item.key }
             : objectRef({
@@ -369,7 +369,7 @@ export function createGroupDemo(
                 id: item.key.slice(item.key.indexOf(':') + 1),
               }),
         ),
-        scanComplete: matches.length <= 20,
+        scanComplete: matches.length < 1000,
         inputFingerprint: 'demo-criteria-sample',
         assetCut: {
           tenant: '11111111-1111-4111-8111-111111111111',
@@ -402,7 +402,7 @@ export function createGroupDemo(
         }),
       )
     }
-    const referenceMatch = /^\/api\/v1\/groups\/([^/]+)\/references$/.exec(path)
+    const referenceMatch = /^\/api\/v1\/groups\/([^/]+)\/(references|impacts)$/.exec(path)
     if (referenceMatch && method === 'GET') {
       const root = referenceMatch[1]!
       if (!groups.has(root)) return error('group_not_found', 404)
@@ -422,8 +422,21 @@ export function createGroupDemo(
           lifecycleState: 'active',
           freshness: g.read.freshness,
           effective: g.read.freshness === 'current',
-          blocksDeletion: true,
         }))
+      if (referenceMatch[2] === 'references')
+        return ok(
+          pages.page(
+            path,
+            items.map((item) => ({
+              kind: item.source.kind,
+              id: item.source.id,
+              revision: item.revision,
+              roles: ['group_condition'],
+              release: 'edit_or_delete_referencing_object',
+            })),
+            query,
+          ),
+        )
       const selected =
         query.get('relation') === 'indirect' || (query.get('kind') && query.get('kind') !== 'group')
           ? []
@@ -432,7 +445,6 @@ export function createGroupDemo(
       return ok({
         items: page.items,
         nextCursor: page.nextCursor,
-        deletionBlocked: items.length > 0,
       })
     }
     const match =

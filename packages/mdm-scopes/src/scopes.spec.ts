@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createScopes, validateDefinition } from './index'
 import type { Operation } from '@rss/mdm-inventory'
-import type { ScopeChange, ScopeDefinition, ScopesPort } from './model'
+import type { ScopeChange, ScopeDefinition, ScopePreviewRequest, ScopesPort } from './model'
 
 const id = '11111111-1111-4111-8111-111111111111'
 const result = '22222222-2222-4222-8222-222222222222'
@@ -72,4 +72,34 @@ describe('Scope authoring and result coordinates', () => {
       scopes.change(id, { operationId, expectedRevision: 1, input: { action: 'put', definition } }),
     ).rejects.toThrow('receipt')
   })
+})
+it('recomputes with unchanged definition revision and keeps the original request on explicit retry', async () => {
+  const change = vi.fn(async () => ({ id, revision: 7, task: result })),
+    scopes = createScopes({ change } as unknown as ScopesPort),
+    request = { operationId, expectedRevision: 7, input: { action: 'recompute' as const } }
+  expect((await scopes.change(id, request)).revision).toBe(7)
+  await scopes.change(id, request)
+  expect(change.mock.calls).toHaveLength(2)
+  expect(change.mock.calls[0]).toEqual(change.mock.calls[1])
+  await expect(scopes.change(id, { ...request, expectedRevision: 0 })).rejects.toThrow()
+})
+it('keeps unknown or bounded draft samples distinct from an empty published scope', async () => {
+  const value = {
+      items: [],
+      channel: 'mdm',
+      scanComplete: false,
+      stopReason: 'work_budget',
+      hasUnknown: true,
+      inputFingerprint: 'fixed',
+      assetCut: { tenant: id, epoch: result, snapshot: '1:2:' },
+      sources: [],
+      asOf: 0,
+    },
+    preview = vi.fn(async (_request: ScopePreviewRequest) => value),
+    scopes = createScopes({ preview } as unknown as ScopesPort)
+  expect(
+    await scopes.preview({ definition: { ...definition, limitations: [] }, channel: 'mdm' }),
+  ).toEqual(value)
+  expect(preview.mock.calls[0]?.[0]).toMatchObject({ definition: { limitations: [] } })
+  await expect(scopes.preview({ definition, channel: 'agent' })).rejects.toThrow('preview')
 })

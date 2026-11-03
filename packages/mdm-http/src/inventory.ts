@@ -1,6 +1,6 @@
 import * as api from '@rss/api/mdm-operations'
 import * as schema from '@rss/api/mdm-schemas'
-import { projectedPage, queryParameters } from '@rss/api/mdm-query'
+import { nextCursor, projectedPage, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type {
   FieldDescriptor,
@@ -169,24 +169,22 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         transport,
         { pathParams: { field }, query: windowQuery(query) },
         (value) => {
-          const result = asset(value, tenant, 'field_references'),
-            impact = result.impact
-          if (result.field !== field) throw new Error('Wrong field impact')
           return {
-            field,
-            nextCursor: cursor(result.nextCursor),
-            impact: {
-              archivedResourceVersions: count(impact.archivedResourceVersions),
-              compliance: count(impact.compliance),
-              groups: count(impact.groups),
-              savedQueries: count(impact.savedQueries),
-              telemetryProfiles: count(impact.telemetryProfiles),
-              templates: count(impact.templates),
-            },
-            items: result.mappings.map((mapping) => ({
-              ...mapping,
-              resource: text(mapping.resource),
+            items: value.items.map((item) => ({
+              ...item,
+              source:
+                item.source.kind === 'resource_version'
+                  ? { ...item.source, id: text(item.source.id), version: text(item.source.version) }
+                  : {
+                      ...item.source,
+                      id: uuid(item.source.id),
+                      revision: count(item.source.revision),
+                      ...(item.source.kind === 'saved_query'
+                        ? { instance: uuid(item.source.instance), owner: uuid(item.source.owner) }
+                        : {}),
+                    },
             })),
+            nextCursor: nextCursor(value.nextCursor),
           }
         },
       ),

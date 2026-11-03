@@ -82,7 +82,7 @@ try {
     ),
     sample = await sampleResponse.json()
   assert.equal(sampleResponse.status(), 200)
-  assert.ok(sample.items.length <= 20)
+  assert.ok(sample.items.length <= 1000)
   assert.ok(sample.items.some((item) => item.kind === 'endpoint' && item.id === f.mdm))
   assert.equal(typeof sample.scanComplete, 'boolean')
   assert.equal(sample.assetCut.tenant, f.tenant)
@@ -110,6 +110,28 @@ try {
       .click()
     await p.locator('.ant-tag').filter({ hasText: endpoint }).waitFor()
   }
+  run.step('scope-unsaved-preview')
+  const beforeScopes = await api('GET', '/api/v1/scopes?fields=id&limit=100')
+  const draftSampleResponse = await run.response(p, 'POST', '/api/v1/scopes/previews', () =>
+    button('预览当前范围样例（不保存）').click(),
+  )
+  const draftSample = await draftSampleResponse.json()
+  assert.equal(draftSampleResponse.status(), 200)
+  assert.equal(draftSample.channel, 'agent')
+  assert.ok(draftSample.items.length <= 1000)
+  assert.ok(draftSample.items.some((item) => item.kind === 'endpoint' && item.id === f.agent))
+  assert.equal(draftSample.assetCut.tenant, f.tenant)
+  assert.equal('editing' in draftSampleResponse.request().postDataJSON(), false)
+  assert.equal('task' in draftSample, false)
+  assert.deepEqual(
+    (await api('GET', '/api/v1/scopes?fields=id&limit=100')).items,
+    beforeScopes.items,
+  )
+  await p.getByText('本次匹配样例', { exact: false }).waitFor()
+  await label('限制范围（交集）').check()
+  assert.equal(await p.getByText('本次匹配样例', { exact: false }).count(), 0)
+  await label('限制范围（交集）').uncheck()
+  checks.push('real-scope-draft-preview-no-definition-write-and-draft-invalidation')
   const scopeResponse = p.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -131,6 +153,21 @@ try {
   await button('打开定位范围').click()
   await p.getByText('范围结果与解释', { exact: true }).waitFor()
   await label('限制范围（交集）').check()
+  const editingSampleResponse = await run.response(p, 'POST', '/api/v1/scopes/previews', () =>
+    button('预览当前范围样例（不保存）').click(),
+  )
+  const editingSample = await editingSampleResponse.json()
+  assert.equal(editingSampleResponse.status(), 200)
+  assert.deepEqual(editingSampleResponse.request().postDataJSON().editing, {
+    scopeId: scope,
+    expectedRevision: firstScope.revision,
+  })
+  assert.deepEqual(editingSampleResponse.request().postDataJSON().definition.limitations, [])
+  assert.deepEqual(editingSample.items, [])
+  assert.equal(editingSample.scanComplete, true)
+  assert.equal(editingSample.hasUnknown, false)
+  assert.deepEqual((await api('GET', '/api/v1/scopes/' + scope)).definition.limitations, null)
+  assert.equal(await button('重新计算已保存范围').isEnabled(), false)
   const emptyLimits = await run.response(p, 'POST', '/api/v1/scopes/' + scope, () =>
     button('保存并计算范围').click(),
   )
@@ -167,6 +204,50 @@ try {
   }
   checks.push('real-scope-authoring-null-versus-empty-limitations-and-published-result-coordinate')
 
+  await button('返回目录并读取当前状态').click()
+  await run.nav(p, '/scopes?scope=' + scope, '策略范围')
+  await button('打开定位范围').click()
+  run.step('scope-recompute-explicit-original-retry')
+  let recomputeRequest,
+    recomputeReceipt,
+    recomputeIntercepted = false,
+    recomputeFailure = false
+  const recomputePath = '/api/v1/scopes/' + scope
+  await p.route('**' + recomputePath, async (route) => {
+    if (route.request().method() !== 'POST' || recomputeIntercepted) return route.continue()
+    recomputeIntercepted = true
+    recomputeRequest = route.request().postDataJSON()
+    try {
+      const response = await route.fetch()
+      assert.equal(response.status(), 200)
+      recomputeReceipt = await response.json()
+    } catch {
+      recomputeFailure = true
+    }
+    await route.abort('failed')
+  })
+  await button('重新计算已保存范围').click()
+  await button('重提原重算请求').waitFor()
+  assert.equal(recomputeFailure, false)
+  assert.deepEqual(recomputeRequest.input, { action: 'recompute' })
+  assert.equal(recomputeRequest.expectedRevision, restored.revision)
+  assert.equal(recomputeReceipt.revision, restored.revision)
+  const recomputePosts = run.count(p, 'POST', recomputePath)
+  assert.equal(await button('重提原重算请求').isEnabled(), false)
+  await button('读取原范围当前状态').click()
+  await p.getByText('当前定义修订', { exact: false }).waitFor()
+  assert.equal(run.count(p, 'POST', recomputePath), recomputePosts)
+  await label('确认使用原操作标识和原输入重提重算请求').check()
+  const retry = await run.response(p, 'POST', recomputePath, () => button('重提原重算请求').click())
+  assert.equal(retry.status(), 200)
+  assert.deepEqual(retry.request().postDataJSON(), recomputeRequest)
+  assert.deepEqual(await retry.json(), recomputeReceipt)
+  const recomputed = await settled(scope, recomputeReceipt.task)
+  assert.equal(recomputed.revision, restored.revision)
+  assert.deepEqual(recomputed.definition, restored.definition)
+  await p.unroute('**' + recomputePath)
+  await button('返回目录并读取当前状态').click()
+  checks.push('real-scope-editing-preview-and-recompute-unchanged-CAS-explicit-identical-retry')
   await run.nav(p, '/policies?scope=' + scope, '策略与部署')
   await button('新建部署').click()
   await run.choose(p, label('策略动作'), '设备退管')
@@ -228,6 +309,78 @@ try {
   checks.push(
     'real-policy-definition-execution-version-separation-preview-CAS-and-scope-reference-protection',
   )
+
+  await button('返回并重新读取策略').click()
+  await run.nav(p, '/scopes?scope=' + scope, '策略范围')
+  await button('打开定位范围').click()
+  const scopeReferences = await run.response(p, 'GET', `/api/v1/scopes/${scope}/references`, () =>
+    button('读取范围引用').click(),
+  )
+  const scopeBlockers = await scopeReferences.json()
+  assert.equal(scopeReferences.status(), 200)
+  assert.ok(
+    scopeBlockers.items.some(
+      (item) =>
+        item.id === policy.id &&
+        item.version === policy.versionId &&
+        item.roles.includes('policy_scope') &&
+        item.release === 'edit_referencing_policy',
+    ),
+  )
+  await p.getByRole('cell', { name: policy.id, exact: true }).waitFor()
+  await button('返回目录并读取当前状态').click()
+  // Direct blockers and recursive impacts use separate public endpoints.
+  const groupId = randomUUID(),
+    referencingScope = randomUUID()
+  await api('POST', '/api/v1/groups/' + groupId, {
+    operationId: randomUUID(),
+    expectedRevision: 0,
+    input: {
+      action: 'create',
+      presentation: { name: 'Scope reference source', description: '' },
+      assetContext: 'endpoint',
+      criteria: null,
+    },
+  })
+  await api('POST', '/api/v1/scopes/' + referencingScope, {
+    operationId: randomUUID(),
+    expectedRevision: 0,
+    input: {
+      action: 'put',
+      definition: { targets: [{ kind: 'group', id: groupId }], limitations: null, exclusions: [] },
+    },
+  })
+  await run.nav(p, '/groups', '设备组')
+  await label('服务端筛选').fill(`id==${groupId}`)
+  await button('读取设备组目录').click()
+  await p
+    .locator('.asset-group-card')
+    .filter({ hasText: 'Scope reference source' })
+    .getByRole('button', { name: '查看定义与成员 →', exact: true })
+    .click()
+  const groupReferences = await run.response(p, 'GET', `/api/v1/groups/${groupId}/references`, () =>
+    button('读取直接引用').click(),
+  )
+  const directBlockers = await groupReferences.json()
+  assert.ok(
+    directBlockers.items.some(
+      (item) =>
+        item.kind === 'scope' && item.id === referencingScope && item.roles.includes('target'),
+    ),
+  )
+  assert.equal('deletionBlocked' in directBlockers, false)
+  await p.getByRole('cell', { name: referencingScope, exact: true }).first().waitFor()
+  const impactResponse = await run.response(p, 'GET', `/api/v1/groups/${groupId}/impacts`, () =>
+    button('读取影响').click(),
+  )
+  assert.equal(impactResponse.status(), 200)
+  assert.equal('deletionBlocked' in (await impactResponse.json()), false)
+  checks.push(
+    'real-scope-policy-blockers-and-separate-group-direct-references-and-recursive-impacts',
+  )
+  await button('关闭设备组详情').click()
+  await run.nav(p, '/policies?policy=' + policy.id, '策略与部署')
+  await button('打开定位策略').click()
 
   // Lifecycle actions have their own durable work, separate from ordinary assignments.
   // Author another policy through the same public UI to verify that projection explicitly.

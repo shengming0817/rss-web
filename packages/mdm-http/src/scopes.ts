@@ -4,7 +4,7 @@ import { nextCursor, projectedPage, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { ScopeDefinition, ScopeReference, ScopeRow, ScopesPort } from '@rss/mdm-scopes'
 import { boolean, count, enumeration, nullable, positive, text, uuid } from './decode'
-import { distinct, requestInput, windowQuery } from './inventory-values'
+import { assetCut, distinct, integer, requestInput, windowQuery } from './inventory-values'
 
 function reference(value: ScopeReference): ScopeReference {
   return { kind: value.kind, id: value.kind === 'group' ? uuid(value.id) : text(value.id) }
@@ -53,6 +53,50 @@ export function createScopesAdapter(transport: HttpTransport): ScopesPort {
           resolutionRevision: count(value.resolutionRevision),
         }
       }),
+    preview: (request) =>
+      api.postApiV1ScopesPreviews(
+        transport,
+        { body: requestInput(request, schema.postApiV1ScopesPreviewsBody.validateRoot) },
+        (value) => ({
+          items: value.items.map((item) => ({
+            kind: item.kind,
+            id: item.kind === 'association' ? uuid(item.id) : text(item.id),
+          })),
+          channel: value.channel,
+          scanComplete: value.scanComplete,
+          stopReason: value.stopReason,
+          hasUnknown: value.hasUnknown,
+          inputFingerprint: text(value.inputFingerprint),
+          assetCut: assetCut(value.assetCut),
+          sources: value.sources.map((source) => ({
+            reference: reference(source.reference),
+            coordinates: {
+              ...source.coordinates,
+              definitionVersion: count(source.coordinates.definitionVersion),
+              memberVersion: count(source.coordinates.memberVersion),
+              authorityVersion: count(source.coordinates.authorityVersion),
+              memberSet: nullable(source.coordinates.memberSet, uuid),
+            },
+            objectSnapshot: nullable(source.objectSnapshot, uuid),
+          })),
+          asOf: integer(value.asOf),
+        }),
+      ),
+    references: (id, query = {}) =>
+      api.getApiV1ScopesByIdReferences(
+        transport,
+        { pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        (value) => ({
+          items: value.items.map((item) => ({
+            ...item,
+            id: uuid(item.id),
+            version: uuid(item.version),
+            revision: positive(item.revision),
+            roles: [...item.roles],
+          })),
+          nextCursor: nextCursor(value.nextCursor),
+        }),
+      ),
     change: (id, change) =>
       api.postApiV1ScopesById(
         transport,

@@ -20,7 +20,7 @@ import {
 import { catalog, fact, type DemoDevice } from './fixtures'
 import { asset } from './http'
 import { TENANT } from '../scenario'
-import { createPages, createReceipts, error, operation } from '../http'
+import { createPages, createReceipts, error, ok, operation } from '../http'
 import { evaluateCondition } from './criteria'
 interface Search {
   reads: number
@@ -118,21 +118,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
     if (fieldPath) {
       const key = decodeURIComponent(fieldPath[1]!),
         old = catalog.find((f) => f.key === key)
-      if (method === 'GET' && fieldPath[2])
-        return asset({
-          kind: 'field_references',
-          field: key,
-          mappings: [],
-          nextCursor: null,
-          impact: {
-            groups: 0,
-            templates: 0,
-            telemetryProfiles: old?.timeSeries ? 1 : 0,
-            archivedResourceVersions: 0,
-            compliance: 0,
-            savedQueries: 0,
-          },
-        })
+      if (method === 'GET' && fieldPath[2]) return ok({ items: [], nextCursor: null })
       if (method === 'GET' && !fieldPath[2])
         return old
           ? asset({

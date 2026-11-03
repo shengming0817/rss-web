@@ -172,16 +172,11 @@ it('keeps historical source coordinates and empty continuable result pages', asy
 it('retains deletion blocking even when the authorized reference list is empty', async () => {
   const references = vi.fn(async () => ({
       items: [],
-      deletionBlocked: true,
       nextCursor: 'opaque',
     })),
     groups = createGroups(port({ references }))
-  expect(
-    await groups.references(id, { kind: 'compliance_rule', relation: 'indirect', limit: 1 }),
-  ).toEqual({ items: [], deletionBlocked: true, nextCursor: 'opaque' })
+  expect(await groups.references(id, { limit: 1 })).toEqual({ items: [], nextCursor: 'opaque' })
   expect(references).toHaveBeenCalledWith(id, {
-    kind: 'compliance_rule',
-    relation: 'indirect',
     limit: 1,
   })
 })

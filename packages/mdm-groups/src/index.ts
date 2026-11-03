@@ -17,6 +17,7 @@ import type {
   GroupQuery,
   GroupsPort,
   ReferenceQuery,
+  ImpactQuery,
   ResultKind,
 } from './model'
 
@@ -122,7 +123,7 @@ export function createGroups(port: GroupsPort) {
       }
       const result = await port.preview(freeze(request))
       if (
-        result.items.length > 20 ||
+        result.items.length > 1000 ||
         result.items.some(
           (item) =>
             item.kind !== (request.assetContext === 'endpoint' ? 'endpoint' : 'association'),
@@ -143,5 +144,6 @@ export function createGroups(port: GroupsPort) {
       return result
     },
     references: (id: string, query: ReferenceQuery = {}) => port.references(uuid(id), query),
+    impacts: (id: string, query: ImpactQuery = {}) => port.impacts(uuid(id), query),
   })
 }

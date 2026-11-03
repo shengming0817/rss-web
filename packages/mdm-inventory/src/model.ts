@@ -182,22 +182,26 @@ export interface FieldDetail {
   readonly version: number
   readonly definition: FieldDefinition | null
 }
-export interface FieldReferences extends Page<{
-  readonly resource: string
-  readonly version: string
-  readonly state: string
-  readonly telemetry: boolean
-}> {
-  readonly field: string
-  readonly impact: {
-    readonly archivedResourceVersions: number
-    readonly compliance: number
-    readonly groups: number
-    readonly savedQueries: number
-    readonly telemetryProfiles: number
-    readonly templates: number
-  }
+export interface FieldReference {
+  readonly source:
+    | { readonly kind: 'group' | 'compliance_rule'; readonly id: string; readonly revision: number }
+    | { readonly kind: 'resource_version'; readonly id: string; readonly version: string }
+    | {
+        readonly kind: 'saved_query'
+        readonly instance: string
+        readonly owner: string
+        readonly id: string
+        readonly revision: number
+      }
+  readonly role:
+    | 'group_condition'
+    | 'collection_mapping'
+    | 'telemetry_mapping'
+    | 'compliance_condition'
+    | 'saved_query'
+  readonly release: 'edit_or_delete_referencing_object' | 'archive_referencing_version'
 }
+export type FieldReferences = Page<FieldReference>
 export interface DisplayGroup {
   readonly id: string
   readonly name: string

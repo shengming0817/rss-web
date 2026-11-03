@@ -1,5 +1,5 @@
 import type { Channel, DeviceRef, DirectoryQuery, Page, WindowQuery } from '@rss/mdm-devices'
-import type { Operation } from '@rss/mdm-inventory'
+import type { AssetCut, Operation } from '@rss/mdm-inventory'
 
 export type ScopeReference = { readonly kind: 'device' | 'group'; readonly id: string }
 export interface ScopeDefinition {
@@ -26,7 +26,7 @@ export interface ScopeRow {
 }
 export type ScopeChange =
   | { readonly action: 'put'; readonly definition: ScopeDefinition }
-  | { readonly action: 'delete' }
+  | { readonly action: 'delete' | 'recompute' }
 export interface ScopeReceipt {
   readonly id: string
   readonly revision: number
@@ -79,9 +79,45 @@ export interface ScopeResult {
     | { readonly kind: 'decisions'; readonly items: readonly ScopeDecision[] }
   readonly nextCursor: string | null
 }
+export interface ScopePreviewRequest {
+  readonly definition: ScopeDefinition
+  readonly channel: Channel
+  readonly editing?: { readonly scopeId: string; readonly expectedRevision: number }
+}
+export interface ScopePreview {
+  readonly items: readonly DeviceRef[]
+  readonly channel: Channel
+  readonly scanComplete: boolean
+  readonly stopReason: 'complete' | 'sample_limit' | 'work_budget'
+  readonly hasUnknown: boolean
+  readonly inputFingerprint: string
+  readonly assetCut: AssetCut
+  readonly sources: readonly {
+    readonly reference: ScopeReference
+    readonly coordinates: {
+      readonly definitionVersion: number
+      readonly memberVersion: number
+      readonly authorityVersion: number
+      readonly memberSet: string | null
+      readonly assetContext: 'endpoint' | 'associated_device'
+    }
+    readonly objectSnapshot: string | null
+  }[]
+  readonly asOf: number
+}
+export interface ScopeBlocker {
+  readonly kind: 'policy'
+  readonly id: string
+  readonly version: string
+  readonly revision: number
+  readonly roles: readonly ('policy_scope' | 'rollout_stage')[]
+  readonly release: 'edit_referencing_policy' | 'retained_archived_policy'
+}
 export interface ScopesPort {
   list(query: DirectoryQuery<keyof ScopeRow>): Promise<Page<ScopeRow>>
   read(id: string): Promise<ScopeRead>
+  preview(request: ScopePreviewRequest): Promise<ScopePreview>
+  references(id: string, query: WindowQuery): Promise<Page<ScopeBlocker>>
   change(id: string, change: Operation<ScopeChange>): Promise<ScopeReceipt>
   task(id: string, task: string): Promise<ScopeTask>
   result(
