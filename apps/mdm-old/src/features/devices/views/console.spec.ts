@@ -2011,10 +2011,9 @@ it('compares a deleted group inside its unknown-result modal before replaying th
   await f.click('删除')
   f.loseReply.path = '/api/v1/groups/{id}'
   const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
-  await dialog
-    .findAll('button')
-    .find((b) => b.text() === '删除')!
-    .trigger('click')
+  const confirmDelete = dialog.findAll('button').find((b) => b.text() === '删除')!
+  await vi.waitFor(() => expect(confirmDelete.attributes('disabled')).toBeUndefined())
+  await confirmDelete.trigger('click')
   await flushPromises()
   f.loseReply.path = ''
   await dialog

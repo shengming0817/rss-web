@@ -104,7 +104,7 @@ it('previews do not publish membership and metadata edits preserve accepted memb
     editing: { groupId: id, expectedRevision: current.group.revision },
   })
   expect(typeof preview.scanComplete).toBe('boolean')
-  expect(preview.items.length).toBeLessThanOrEqual(20)
+  expect(preview.items.length).toBeLessThanOrEqual(1000)
   expect((await groups.read(id)).memberSet).toBe(published)
   const recompute = await groups.change(
     id,

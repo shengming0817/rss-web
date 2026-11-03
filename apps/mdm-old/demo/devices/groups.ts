@@ -423,20 +423,20 @@ export function createGroupDemo(
           freshness: g.read.freshness,
           effective: g.read.freshness === 'current',
         }))
-      if (referenceMatch[2] === 'references')
-        return ok(
-          pages.page(
-            path,
-            items.map((item) => ({
-              kind: item.source.kind,
-              id: item.source.id,
-              revision: item.revision,
-              roles: ['group_condition'],
-              release: 'edit_or_delete_referencing_object',
-            })),
-            query,
-          ),
+      if (referenceMatch[2] === 'references') {
+        const page = pages.page(
+          path,
+          items.map((item) => ({
+            kind: item.source.kind,
+            id: item.source.id,
+            revision: item.revision,
+            roles: ['group_condition'],
+            release: 'edit_or_delete_referencing_object',
+          })),
+          query,
         )
+        return ok({ items: page.items, nextCursor: page.nextCursor })
+      }
       const selected =
         query.get('relation') === 'indirect' || (query.get('kind') && query.get('kind') !== 'group')
           ? []

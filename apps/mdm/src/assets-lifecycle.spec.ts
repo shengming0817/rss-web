@@ -218,54 +218,77 @@ it('continues an empty candidate page and verifies full group detail before usin
   expect(read).toHaveBeenCalledWith(nested)
   expect(selected).toHaveBeenCalledWith(nested)
 })
-it('does not enable group deletion for an empty authorized reference list with deletionBlocked=true', async () => {
-  const groups = inject<GroupsUseCases>({
-      references: async () => ({ items: [], nextCursor: null, deletionBlocked: true }),
-    }),
-    devices = inject<DevicesUseCases>({ endpoints: async () => ({ items: [], nextCursor: null }) }),
-    baseline = {
-      group: {
-        id,
-        kind: 'static' as const,
-        systemSelector: null,
-        assetContext: 'endpoint' as const,
-        presentation: { name: 'Blocked empty', description: '' },
-        revision: 1,
-        calculationRevision: 0,
-        memberVersion: 0,
-        memberCount: 0,
-        ruleVersion: null,
-        deleted: false,
-      },
-      criteria: null,
-      memberSet: null,
-      freshness: 'current' as const,
-    }
-  await render(
-    createElement(
-      MemoryRouter,
-      null,
-      createElement(GroupEditor, {
-        groups,
-        devices,
-        locale: 'zh',
-        id,
-        baseline,
-        canWrite: true,
-        canPreview: true,
-        canRecompute: true,
-        done: vi.fn(),
+it.each(['blocker', 'continuation', 'unreadable'] as const)(
+  'keeps group deletion blocked with %s direct references even when recursive impacts are empty',
+  async (state) => {
+    const groups = inject<GroupsUseCases>({
+        references: async () => {
+          if (state === 'unreadable') throw { status: 403, code: 'forbidden' }
+          return {
+            items:
+              state === 'blocker'
+                ? [
+                    {
+                      kind: 'scope',
+                      id: nested,
+                      revision: 2,
+                      roles: ['target'],
+                      release: 'edit_or_delete_referencing_object',
+                    },
+                  ]
+                : [],
+            nextCursor: state === 'continuation' ? 'opaque' : null,
+          }
+        },
+        impacts: async () => ({ items: [], nextCursor: null }),
       }),
-    ),
-  )
-  const label = [...host.querySelectorAll('label')].find((node) =>
-    node.textContent?.includes('已核对服务端删除保护'),
-  )!
-  await act(async () => label.querySelector<HTMLInputElement>('input')!.click())
-  expect(
-    button('删除设备组').disabled || !!button('删除设备组').closest('fieldset[disabled]'),
-  ).toBe(true)
-})
+      devices = inject<DevicesUseCases>({
+        endpoints: async () => ({ items: [], nextCursor: null }),
+      }),
+      baseline = {
+        group: {
+          id,
+          kind: 'static' as const,
+          systemSelector: null,
+          assetContext: 'endpoint' as const,
+          presentation: { name: 'Blocked empty', description: '' },
+          revision: 1,
+          calculationRevision: 0,
+          memberVersion: 0,
+          memberCount: 0,
+          ruleVersion: null,
+          deleted: false,
+        },
+        criteria: null,
+        memberSet: null,
+        freshness: 'current' as const,
+      }
+    await render(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(GroupEditor, {
+          groups,
+          devices,
+          locale: 'zh',
+          id,
+          baseline,
+          canWrite: true,
+          canPreview: true,
+          canRecompute: true,
+          done: vi.fn(),
+        }),
+      ),
+    )
+    const label = [...host.querySelectorAll('label')].find((node) =>
+      node.textContent?.includes('已核对服务端删除保护'),
+    )!
+    await act(async () => label.querySelector<HTMLInputElement>('input')!.click())
+    expect(
+      button('删除设备组').disabled || !!button('删除设备组').closest('fieldset[disabled]'),
+    ).toBe(true)
+  },
+)
 it('edits a root pointer without losing typed enum values or recursive column mappings', async () => {
   let latest: ValueMapping = {
     pointer: '/old',
@@ -664,7 +687,8 @@ it('recovers an unknown recompute by exact replay and reads only the returned se
     groups = inject<GroupsUseCases>({
       change,
       task,
-      references: async () => ({ items: [], nextCursor: null, deletionBlocked: false }),
+      references: async () => ({ items: [], nextCursor: null }),
+      impacts: async () => ({ items: [], nextCursor: null }),
     }),
     devices = inject<DevicesUseCases>({ endpoints: async () => ({ items: [], nextCursor: null }) }),
     baseline = {

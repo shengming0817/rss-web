@@ -335,7 +335,7 @@ try {
   const followingList = await run.response(p, 'POST', listPath, () =>
     listCard.getByRole('button', { name: '下一页', exact: true }).click(),
   )
-  assert.equal(new URL(followingList.url()).searchParams.get('cursor'), sourceList.nextCursor)
+  assert.equal(followingList.request().postDataJSON().cursor, sourceList.nextCursor)
   checks.push('real-custom-field-layout-typed-false-and-live-namespace-list')
 
   run.step('empty-static-and-nested-rule-authoring')
@@ -465,9 +465,7 @@ try {
   assert.deepEqual(addedMembers.page.items, [{ kind: 'endpoint', id: f.mdm }])
   await p.getByRole('button', { name: '任务已受理，重新读取组事实', exact: true }).click()
   await openGroup(staticGroup.id, 'React empty source')
-  await p
-    .getByText('服务端报告仍有阻止删除的引用。授权范围内的列表可能为空。', { exact: true })
-    .waitFor()
+  await p.getByRole('cell', { name: nestedId, exact: true }).waitFor()
   assert.equal(await p.getByRole('button', { name: '删除设备组', exact: true }).isDisabled(), true)
   checks.push('real-saved-preview-never-publishes-static-member-patch-and-nested-deletion-guard')
 
@@ -703,6 +701,52 @@ try {
     'real-native-fixed-version-canonical-bytes-clear-restore-original-upload-offset-and-content-receipt',
   )
 
+  run.step('direct-resource-and-field-references')
+  await run.nav(p, '/resources', '资源库')
+  await visibleLabel('精确资源标识').fill(sourceId)
+  await p.getByRole('button', { name: '读取精确资源', exact: true }).click()
+  await run.choose(p, visibleLabel('资源固定版本'), `${version} · frozen`)
+  const resourceReferencePath = `/api/v1/resources/${encodeURIComponent(sourceId)}/versions/${encodeURIComponent(version)}/references`
+  const resourceReferences = await run.response(p, 'GET', resourceReferencePath, () =>
+    p.getByRole('button', { name: '读取资源引用', exact: true }).click(),
+  )
+  assert.equal(resourceReferences.status(), 200)
+  assert.ok(Array.isArray((await resourceReferences.json()).items))
+  const mappedField = Object.keys(fixedVersion.variants[0].declaration.definition.mappings)[0]
+  assert.ok(mappedField)
+  await run.nav(p, '/inventory', '资产查询')
+  await tab('字段目录')
+  await visibleLabel('服务端筛选').fill(`key=='${mappedField}'`)
+  await p.getByRole('button', { name: '应用', exact: true }).click()
+  await p.getByRole('button', { name: mappedField, exact: true }).click()
+  const fieldReferences = await run.response(
+    p,
+    'GET',
+    `/api/v1/asset-fields/${encodeURIComponent(mappedField)}/references`,
+    () => p.getByRole('button', { name: '读取影响', exact: true }).click(),
+  )
+  assert.equal(fieldReferences.status(), 200)
+  assert.ok(
+    (await fieldReferences.json()).items.some(
+      (item) =>
+        item.source.kind === 'resource_version' &&
+        item.source.id === sourceId &&
+        item.source.version === version &&
+        item.release === 'archive_referencing_version',
+    ),
+  )
+  await p.getByRole('cell', { name: sourceId, exact: true }).first().waitFor()
+  const registrations = await api(
+    'GET',
+    `/api/v1/devices/${f.agent}/registrations?fields=registrationId,certificateGrantId&limit=1`,
+  )
+  assert.equal(registrations.items.length, 1)
+  assert.equal(typeof registrations.items[0].certificateGrantId, 'string')
+  assert.equal('agentGrantId' in registrations.items[0], false)
+  checks.push(
+    'real-field-resource-direct-reference-pages-and-certificate-grant-directory-projection',
+  )
+
   run.step('associated-conflict-missing-and-authorization')
   const mdm = await api('GET', `/api/v1/devices/${f.mdm}`),
     agent = await api('GET', `/api/v1/devices/${f.agent}`),
@@ -766,12 +810,19 @@ try {
     value: { ...f.rule, grants: reduced },
   })
   const references = await api('GET', `/api/v1/groups/${candidates[0]}/references`)
-  assert.equal(references.items.length, 0)
-  assert.equal(references.deletionBlocked, true)
+  assert.ok(
+    references.items.some(
+      (item) =>
+        item.kind === 'compliance_rule' &&
+        item.id === hiddenReferenceRule &&
+        item.roles.includes('compliance_target'),
+    ),
+  )
+  assert.equal('deletionBlocked' in references, false)
+  const impacts = await api('GET', `/api/v1/groups/${candidates[0]}/impacts`)
+  assert.equal(impacts.items.length, 0)
   await openGroup(candidates[0], 'Asset candidate 0')
-  await p
-    .getByText('服务端报告仍有阻止删除的引用。授权范围内的列表可能为空。', { exact: true })
-    .waitFor()
+  await p.getByRole('cell', { name: hiddenReferenceRule, exact: true }).waitFor()
   assert.equal(await p.getByRole('button', { name: '删除设备组', exact: true }).isDisabled(), true)
   await api(
     'PUT',
@@ -790,7 +841,7 @@ try {
   const anonymous = await run.page()
   assert.equal((await anonymous.request.get(origin + '/api/v1/groups')).status(), 401)
   checks.push(
-    'real-associated-conflict-foreign-tenant-404-denied-403-anonymous-401-and-empty-filtered-deletion-block',
+    'real-associated-conflict-foreign-tenant-404-denied-403-anonymous-401-and-minimal-blocker-identity-with-empty-filtered-impacts',
   )
   assert.equal(interceptionFailed, false)
 } catch (error) {

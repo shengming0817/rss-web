@@ -106,8 +106,14 @@ export async function acceptExperience({
   const members = await api(`/api/v1/groups/${nested.group.id}/results/${nested.memberSet}/members`)
   assert.deepEqual(members.page.items, [{ kind: 'endpoint', id: fixture.agent }])
   const references = await api(`/api/v1/groups/${group}/references`)
-  assert.equal(references.deletionBlocked, true)
-  assert.ok(references.items.some((item) => item.source.id === nested.group.id))
+  assert.ok(
+    references.items.some(
+      (item) =>
+        item.kind === 'group' &&
+        item.id === nested.group.id &&
+        item.roles.includes('group_condition'),
+    ),
+  )
   await page.getByRole('tab', { name: '依赖影响', exact: true }).click()
   await page.locator('.group-dependencies').waitFor()
   coverage.push('real-nested-group-save-members-and-authoritative-references')
