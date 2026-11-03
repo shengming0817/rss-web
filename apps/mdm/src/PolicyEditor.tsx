@@ -185,8 +185,8 @@ export function PolicyEditor({
         <Alert
           type="warning"
           title={l(
-            '提交结果未知，新写入已锁定。读取当前配置不证明原回执。',
-            'Submission outcome unknown; new writes are locked. Current configuration does not prove the original receipt.',
+            '未收到保存结果。请刷新页面查看服务器当前配置，再决定是否继续编辑。',
+            'Save result was not received. Refresh the page to review the current server configuration before editing again.',
           )}
         />
       )}

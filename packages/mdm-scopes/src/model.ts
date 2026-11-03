@@ -49,6 +49,7 @@ export interface ScopeSource {
 }
 export interface ScopeDecision {
   readonly object: DeviceRef
+  readonly available: boolean
   readonly qualification:
     | { readonly state: 'eligible'; readonly entry: number }
     | { readonly state: 'pending' | 'excluded' }
@@ -63,6 +64,10 @@ export interface ScopeDecision {
   readonly limitations: readonly ScopeSource[] | null
   readonly exclusions: readonly ScopeSource[] | null
 }
+export interface ScopeMember {
+  readonly object: DeviceRef
+  readonly available: boolean
+}
 export type ScopeResultKind = 'members' | 'decisions'
 export interface ScopeResult {
   readonly scope: string
@@ -70,7 +75,7 @@ export interface ScopeResult {
   readonly current: boolean
   readonly channel: Channel
   readonly page:
-    | { readonly kind: 'members'; readonly items: readonly DeviceRef[] }
+    | { readonly kind: 'members'; readonly items: readonly ScopeMember[] }
     | { readonly kind: 'decisions'; readonly items: readonly ScopeDecision[] }
   readonly nextCursor: string | null
 }

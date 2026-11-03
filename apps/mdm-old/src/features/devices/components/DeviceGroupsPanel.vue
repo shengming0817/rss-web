@@ -158,12 +158,6 @@ function beginCreate() {
   editing.value = true
 }
 let pending: (() => Promise<boolean>) | undefined
-function write<T>(request: () => Promise<T>, apply: (value: T) => void) {
-  if (busy.value || uncertain.value) return
-  compared.value = false
-  pending = () => runWrite(request, apply)
-  void pending()
-}
 function loadList(next?: string) {
   list.value = undefined
   if (busy.value) return
@@ -296,19 +290,26 @@ function save() {
     failure.value = 'invalidRequest'
   }
 }
+const previewSample = ref<Awaited<ReturnType<typeof client.preview>>>()
+watch(
+  () => current.value?.group.id,
+  () => {
+    previewSample.value = undefined
+  },
+)
 function preview() {
-  if (!current.value || definitionPending.value) return
-  const group = id.value,
-    body = operation({}, current.value.group.revision)
-  write(
-    () => client.preview(group, body),
-    (v) => {
-      definitionTask.value = undefined
-      definitionStatus.value = undefined
-      task.value = v.task
-      taskKind.value = 'group_preview'
-      status.value = undefined
-      result.value = undefined
+  const saved = current.value
+  if (!saved?.criteria || definitionPending.value || busy.value || uncertain.value) return
+  previewSample.value = undefined
+  void run(
+    () =>
+      client.preview({
+        criteria: saved.criteria!,
+        assetContext: saved.group.assetContext,
+        editing: { groupId: saved.group.id, expectedRevision: saved.group.revision },
+      }),
+    (value) => {
+      previewSample.value = value
     },
   )
 }
@@ -354,13 +355,12 @@ async function refresh() {
       },
     )
     if (!loaded || !completed(status.value)) return
-    if (taskKind.value === 'group_preview') return
   }
   await run(
     () => client.read(group),
     (v) => {
       current.value = v
-      if (taskKind.value !== 'group_preview' && task.value !== (v.memberSet ?? undefined)) {
+      if (task.value !== (v.memberSet ?? undefined)) {
         task.value = v.memberSet ?? undefined
         status.value = undefined
         result.value = undefined
@@ -375,8 +375,7 @@ const observing = computed(
     (!!status.value && ['pending', 'running'].includes(status.value.status)) ||
     (current.value?.freshness === 'pending' &&
       (!status.value || ['pending', 'running', 'completed'].includes(status.value.status)) &&
-      (!definitionStatus.value || definitionStatus.value.status === 'completed') &&
-      taskKind.value !== 'group_preview'),
+      (!definitionStatus.value || definitionStatus.value.status === 'completed')),
 )
 let timer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
@@ -613,15 +612,29 @@ directoryQuery.onClear(() => {
               :disabled="busy || uncertain || current.group.kind === 'system'"
               @click="beginEdit('metadata')"
               >{{ t('console.edit') }}</v-btn
-            ><v-btn :disabled="busy || uncertain || definitionPending" @click="preview">{{
-              t('devices.previewSaved')
-            }}</v-btn
+            ><v-btn
+              :disabled="busy || uncertain || definitionPending || !current.criteria"
+              @click="preview"
+              >{{ t('devices.previewSaved') }}</v-btn
             ><v-btn
               :disabled="busy || uncertain || current.group.kind === 'system'"
               @click="change({ action: 'recompute' })"
               >{{ t('devices.recompute') }}</v-btn
             >
           </div>
+          <v-alert v-if="previewSample" type="info"
+            >{{ previewSample.items.length }} ·
+            {{
+              previewSample.scanComplete
+                ? t('devices.previewComplete')
+                : t('devices.previewIncomplete')
+            }}
+            <ul>
+              <li v-for="item in previewSample.items" :key="objectKey(item)">
+                <ObjectLink :object="item" />
+              </li>
+            </ul>
+          </v-alert>
           <v-tabs v-model="detailTab" :aria-label="t('devices.groups')"
             ><v-tab value="overview">{{ t('devices.overview') }}</v-tab
             ><v-tab v-if="current.group.kind === 'dynamic'" value="rule">{{

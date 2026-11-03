@@ -18,7 +18,6 @@ async function withSnapshot(bytes, changes, work) {
     await mkdir(join(temporary, 'contracts/mdm'), { recursive: true })
     const source = {
       ...current,
-      blob: createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),
       sha256: createHash('sha256').update(bytes).digest('hex'),
       ...changes,
     }
@@ -41,7 +40,8 @@ test('rejects invalid provenance or a snapshot that differs from its pin', async
   for (const replacement of [
     { revision: 'develop' },
     { repository: 'https://untrusted.invalid/mdm' },
-    { path: '../different.json' },
+    { generator: 'unregistered-generator' },
+    { path: 'contracts/http-v1.json' },
     { sha256: '0'.repeat(64) },
     { blob: '0'.repeat(40) },
   ])

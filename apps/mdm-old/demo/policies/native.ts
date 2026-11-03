@@ -95,6 +95,7 @@ export function createNativeDemo(
             return error('operation_conflict')
           const read = decodeNativeOperation(
             {
+              owner: 'device',
               operationId: id,
               commandId: id,
               revision: 1,
@@ -127,7 +128,6 @@ export function createNativeDemo(
               authorization: { state: 'authorized' },
               reauthorization: { state: 'available', confirmationRequired: a.kind !== 'restart' },
               commandStatus: 'queued',
-              agentInstallation: null,
               observation: {
                 protocol: d.summary.platform === 'windows' ? 'syncml' : 'mdm.apple',
                 observationScope:
@@ -173,7 +173,9 @@ export function createNativeDemo(
             s.read.observation.progress = scenario === 'partial' ? 'failed' : 'succeeded'
         }
         s.read.reauthorization = eligibility(s, request.actor.principalId)
-        return ok(structuredClone(s.read))
+        const { agentInstallation: _installation, ...wire } = structuredClone(s.read)
+        void _installation
+        return ok(wire)
       }
       if (request.method !== 'POST' || !m[3]) return
       const b = closed(

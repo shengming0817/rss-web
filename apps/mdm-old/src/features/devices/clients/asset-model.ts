@@ -343,7 +343,7 @@ export function assetEnvelope<K extends InventoryAssetWire['kind']>(
   return value.asset as Extract<InventoryAssetWire, { kind: K }>
 }
 export function pageToken(value: unknown): string {
-  if (typeof value !== 'string' || !value || value.length > 16384 || /\p{Cc}/u.test(value))
+  if (typeof value !== 'string' || !value || value.length > 262144 || /\p{Cc}/u.test(value))
     throw new Error('Invalid cursor')
   return value
 }

@@ -15,6 +15,7 @@ import { boolean, count, enumeration, list, nullable, text, uuid } from './decod
 import { viewSummary } from './devices'
 import {
   conditionContext,
+  assetCut,
   distinct,
   evidence,
   fieldDefinition,
@@ -52,7 +53,7 @@ function asset<K extends Asset['kind']>(
 function cursor(value: unknown): string | null {
   if (value === null) return null
   const token = text(value)
-  if (!token || token.length > 16384 || /\p{Cc}/u.test(token))
+  if (!token || token.length > 262144 || /\p{Cc}/u.test(token))
     throw new Error('Invalid opaque cursor')
   return token
 }
@@ -342,15 +343,15 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     scopes: (id, query = {}) =>
-      api.getApiV1DevicesByIdInventoryScopes(
+      api.postApiV1DevicesByIdInventoryScopes(
         transport,
-        { pathParams: { id }, query: windowQuery(query) },
+        { pathParams: { id }, body: { limit: query.limit ?? 20, cursor: query.cursor } },
         (value) => {
           const result = asset(value, tenant, 'inventory_scopes')
           if (result.device !== id) throw new Error('Wrong namespace directory')
           return {
             device: id,
-            watermark: count(result.watermark),
+            assetCut: assetCut(result.assetCut),
             items: distinct(
               result.items.map((item) => ({ scope: scope(item.scope) })),
               (item) => JSON.stringify(item.scope),
@@ -441,17 +442,20 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
                 field: query.field,
                 items: value.items.map(scalar),
                 total: count(value.total),
-                watermark: null,
+                assetCut: null,
                 nextCursor: cursor(value.nextCursor),
               }
             },
           )
-        : api.getApiV1DevicesByIdInventoryListsByField(
+        : api.postApiV1DevicesByIdInventoryListsByField(
             transport,
             {
               pathParams: { id: query.endpoint, field: query.field },
-              query: {
-                scope: JSON.stringify(scope(query.scope)),
+              body: {
+                scope: requestInput(
+                  scope(query.scope),
+                  schema.postApiV1DevicesByIdInventoryListsByFieldBody.validateCollectionScope,
+                ),
                 cursor: query.cursor,
                 limit: query.limit ?? 50,
               },
@@ -467,7 +471,7 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
                 field: result.field,
                 items: result.items.map(scalar),
                 total: count(result.total),
-                watermark: count(result.watermark),
+                assetCut: assetCut(result.assetCut),
                 nextCursor: cursor(result.nextCursor),
               }
             },

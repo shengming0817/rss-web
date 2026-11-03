@@ -185,7 +185,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
       }
     }
     const directory = /^\/api\/v1\/devices\/([^/]+)\/inventory-scopes$/.exec(path)
-    if (directory && method === 'GET') {
+    if (directory && method === 'POST') {
       const device = devices().get(decodeURIComponent(directory[1]!))
       if (!device) return error('inventory_not_found', 404)
       const items = [
@@ -195,11 +195,21 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
             .map((x) => [JSON.stringify(x.collectionScope), { scope: x.collectionScope }]),
         ).values(),
       ]
-      const page = pages.page(path, items, query)
+      const page = pages.page(
+        path,
+        items,
+        new URLSearchParams(
+          Object.entries(record(request.body)).map(([key, value]) => [key, String(value)]),
+        ),
+      )
       return asset({
         kind: 'inventory_scopes',
         device: device.summary.id,
-        watermark: 1,
+        assetCut: {
+          tenant: '11111111-1111-4111-8111-111111111111',
+          epoch: '22222222-2222-4222-8222-222222222222',
+          snapshot: '1:2:',
+        },
         items: page.items,
         nextCursor: page.nextCursor,
       })

@@ -336,7 +336,16 @@ it('hides denied device facts while retaining the original unknown manual write 
         quality: [],
         revisions: {},
       }),
-      scopes: async () => ({ device: 'endpoint', watermark: 1, items: [], nextCursor: null }),
+      scopes: async () => ({
+        device: 'endpoint',
+        assetCut: {
+          tenant: '11111111-1111-4111-8111-111111111111',
+          epoch: '22222222-2222-4222-8222-222222222222',
+          snapshot: '1:2:',
+        },
+        items: [],
+        nextCursor: null,
+      }),
       field: async () => ({
         field: 'custom.ready',
         version: 1,

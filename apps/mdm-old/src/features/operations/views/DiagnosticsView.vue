@@ -230,10 +230,10 @@ watch(
         <section v-if="selected.dispatch" class="console-panel">
           <h3>{{ t('operations.diagnosticUi.dispatch') }}</h3>
           <dl class="settings-facts">
-            <dt>{{ t('operations.diagnosticUi.consumed') }}</dt>
-            <dd>{{ selected.dispatch.consumed }}</dd>
-            <dt>{{ t('operations.diagnosticUi.watermark') }}</dt>
-            <dd>{{ selected.dispatch.watermark }}</dd>
+            <dt>{{ t('operations.diagnosticUi.windowOpen') }}</dt>
+            <dd>{{ selected.dispatch.windowOpen }}</dd>
+            <dt>{{ t('operations.diagnosticUi.eventAfter') }}</dt>
+            <dd>{{ selected.dispatch.eventAfter }}</dd>
           </dl>
         </section>
       </div>

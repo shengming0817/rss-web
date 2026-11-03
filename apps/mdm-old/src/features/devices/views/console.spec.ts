@@ -516,11 +516,12 @@ it('creates a group, edits its definition, previews and recomputes server member
   await click('概览')
   await click('重读服务器值并比较')
   await click('成员')
-  await click('预览已保存版本')
-  await click('读取任务状态')
-  await click('读取任务状态')
-  await click('载入')
-  expect(wrapper.text()).toContain('当前已发布成员集: 否')
+  expect(
+    wrapper
+      .findAll('button')
+      .find((b) => b.text() === '预览已保存条件样例')
+      ?.attributes('disabled'),
+  ).toBeDefined()
   await click('重算并发布成员')
   await click('读取任务状态')
   await click('读取任务状态')
@@ -634,12 +635,12 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   expect((await devices.groups.read(group.id)).criteria).toMatchObject({
     criteria: { value: { kind: 'boolean', value: true } },
   })
-  await click('预览已保存版本')
+  await click('预览已保存条件样例')
   await click('成员解释')
   await click('读取任务状态')
   await click('读取任务状态')
   await click('载入')
-  expect(wrapper.text()).toContain('当前已发布成员集: 否')
+  expect(wrapper.text()).toContain('当前已发布成员集: 是')
   expect(wrapper.text()).toContain('未采集')
   const explanation = wrapper
     .findAll('.mdm-disclosure')
@@ -657,7 +658,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await click('载入')
   expect(wrapper.text()).toContain('当前已发布成员集: 是')
   scenario.set('partial')
-  await click('预览已保存版本')
+  await click('重算并发布成员')
   await click('读取任务状态')
   await click('读取任务状态')
   expect(wrapper.text()).toContain('stale_plan')
@@ -1724,7 +1725,11 @@ it.each([
       device: 'device-01',
       items: [scope],
       nextCursor: null,
-      watermark: 21,
+      assetCut: {
+        tenant: '11111111-1111-4111-8111-111111111111',
+        epoch: '22222222-2222-4222-8222-222222222222',
+        snapshot: '1:2:',
+      },
     })
     vi.spyOn(h.devices.assets, 'inventory').mockResolvedValue({
       device: 'device-01',
@@ -1866,7 +1871,11 @@ it.each([
       device: 'device-01',
       items: [scope],
       nextCursor: null,
-      watermark: 21,
+      assetCut: {
+        tenant: '11111111-1111-4111-8111-111111111111',
+        epoch: '22222222-2222-4222-8222-222222222222',
+        snapshot: '1:2:',
+      },
     })
     const inventory = vi.spyOn(h.devices.assets, 'inventory').mockResolvedValue({
       device: 'device-01',
@@ -1893,7 +1902,11 @@ it.each([
     const items = vi.spyOn(h.devices.assets, 'listItems').mockResolvedValue({
       items: [{ kind: 'string', value: 'scope-private-item' }],
       total: 2,
-      watermark: 21,
+      assetCut: {
+        tenant: '11111111-1111-4111-8111-111111111111',
+        epoch: '22222222-2222-4222-8222-222222222222',
+        snapshot: '1:2:',
+      },
       nextCursor: 'next',
     })
     await h.router.push({
@@ -2383,11 +2396,13 @@ it('stops automatic observation after a member task fails and permits preview af
     await flushPromises()
     await vi.advanceTimersByTimeAsync(6000)
     await flushPromises()
-    await h.click('预览已保存版本')
-    await vi.advanceTimersByTimeAsync(4000)
-    await flushPromises()
-    await h.click('载入')
-    expect(h.wrapper.text()).toContain('当前已发布成员集: 否')
+    const before = await h.devices.groups.read(
+      h.requests.filter((r) => r.method === 'POST' && r.path === '/api/v1/groups/{id}').at(-1)!
+        .pathParams!['id'] as string,
+    )
+    await h.click('预览已保存条件样例')
+    expect(h.wrapper.text()).toContain('扫描或样例达到上限；空样例不证明没有匹配')
+    expect((await h.devices.groups.read(before.group.id)).memberSet).toBe(before.memberSet)
     h.scenario.set('partial')
     await h.click('重算并发布成员')
     await vi.advanceTimersByTimeAsync(4000)
@@ -2428,7 +2443,7 @@ it('retains the running rule definition when its drawer is closed and preview is
     ).operationId
     await dialog.get('button[aria-label="关闭"]').trigger('click')
     await flushPromises()
-    const preview = h.wrapper.findAll('button').find((b) => b.text() === '预览已保存版本')!
+    const preview = h.wrapper.findAll('button').find((b) => b.text() === '预览已保存条件样例')!
     expect(preview.attributes('disabled')).toBeDefined()
     await preview.trigger('click')
     expect(h.requests.some((r) => r.method === 'POST' && r.path.endsWith('/previews'))).toBe(false)
@@ -2441,7 +2456,7 @@ it('retains the running rule definition when its drawer is closed and preview is
     expect(
       h.wrapper
         .findAll('button')
-        .find((b) => b.text() === '预览已保存版本')!
+        .find((b) => b.text() === '预览已保存条件样例')!
         .attributes('disabled'),
     ).toBeUndefined()
     h.wrapper.unmount()

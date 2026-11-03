@@ -297,15 +297,15 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         (v) => decodeCollectionRun(v, tenant, id),
       ),
     scopes: (device: string, next?: string) =>
-      api.getApiV1DevicesByIdInventoryScopes(
+      api.postApiV1DevicesByIdInventoryScopes(
         transport,
-        { pathParams: { id: device }, query: { cursor: next, limit: 20 } },
+        { pathParams: { id: device }, body: { cursor: next, limit: 20 } },
         (value) => {
           const v = assetEnvelope(value, tenant, 'inventory_scopes')
           if (v['device'] !== device) throw new Error('Wrong scope directory device')
           return {
             device,
-            watermark: count(v['watermark']),
+            assetCut: { ...v['assetCut'] },
             items: unique(
               array(v['items'], (x) => {
                 const item = x
@@ -320,11 +320,11 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         },
       ),
     listItems: (device: string, field: string, scope: CollectionScope, next: string) =>
-      api.getApiV1DevicesByIdInventoryListsByField(
+      api.postApiV1DevicesByIdInventoryListsByField(
         transport,
         {
           pathParams: { id: device, field: field },
-          query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 20 },
+          body: { scope: collectionScope(scope), cursor: next, limit: 20 },
         },
         (value) => {
           const v = assetEnvelope(value, tenant, 'list_items')
@@ -332,7 +332,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           return {
             items: array(v['items'], readScalar),
             total: count(v['total']),
-            watermark: count(v['watermark']),
+            assetCut: { ...v['assetCut'] },
             nextCursor: cursor(v['nextCursor']),
           }
         },

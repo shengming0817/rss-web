@@ -14,7 +14,7 @@ import {
   type RecoveryCredentialsPort,
   type Subject,
 } from '@rss/mdm-recovery-credentials'
-import { boolean, nullable, positive, text, uuid } from './decode'
+import { boolean, enumeration, nullable, positive, text, uuid } from './decode'
 import { integer, requestInput } from './inventory-values'
 
 function subject(value: unknown): Subject {
@@ -118,6 +118,7 @@ const path = (target: MaterialRef) => ({
 function operation(value: unknown, id: string): CredentialOperation {
   if (
     !schema.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(value) ||
+    value.owner !== 'recovery' ||
     value.operationId !== id ||
     value.commandId !== id ||
     value.inputVersion !== 'recovery-credential/v1' ||
@@ -139,7 +140,16 @@ function operation(value: unknown, id: string): CredentialOperation {
     inputVersion: value.inputVersion,
     deadline: integer(value.deadline),
     task: value.task.name,
-    commandStatus: value.commandStatus,
+    commandStatus: enumeration(value.commandStatus, [
+      'queued',
+      'published',
+      'received',
+      'applied',
+      'rejected',
+      'timed_out',
+      'superseded',
+      'cancelled',
+    ] as const),
     authorization: value.authorization.state,
     authorizationReason:
       value.authorization.state === 'blocked' ? value.authorization.reason : null,

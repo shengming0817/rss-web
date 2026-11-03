@@ -70,6 +70,31 @@ try {
     assert.fail('bounded scope computation')
   }
   await run.login(p)
+  await run.nav(p, '/groups', '设备组')
+  run.step('group-unsaved-readonly-sample')
+  const beforeGroups = await api('GET', '/api/v1/groups?fields=id&limit=100')
+  await button('新建设备组').click()
+  await run.choose(p, label('设备组类型'), '动态设备组')
+  await label('条件字段').fill('custom.asset_tag')
+  await label('文本值').fill(f.mdm)
+  const sampleResponse = await run.response(p, 'POST', '/api/v1/groups/previews', () =>
+      button('预览当前条件样例（不保存）').click(),
+    ),
+    sample = await sampleResponse.json()
+  assert.equal(sampleResponse.status(), 200)
+  assert.ok(sample.items.length <= 20)
+  assert.ok(sample.items.some((item) => item.kind === 'endpoint' && item.id === f.mdm))
+  assert.equal(typeof sample.scanComplete, 'boolean')
+  assert.equal(sample.assetCut.tenant, f.tenant)
+  assert.equal('task' in sample, false)
+  assert.equal('editing' in sampleResponse.request().postDataJSON(), false)
+  await p.getByText('条件匹配样例', { exact: true }).waitFor()
+  const afterGroups = await api('GET', '/api/v1/groups?fields=id&limit=100')
+  assert.deepEqual(afterGroups.items, beforeGroups.items)
+  await label('文本值').fill('changed-unsaved-draft')
+  assert.equal(await p.getByText('条件匹配样例', { exact: true }).count(), 0)
+  await button('关闭设备组详情').click()
+  checks.push('real-unsaved-group-preview-bounded-readonly-sample-and-draft-invalidation')
   await run.nav(p, '/scopes', '策略范围')
   run.step('scope-create-dialog')
   await button('新建范围').click()
@@ -133,7 +158,10 @@ try {
     )
     assert.equal(members.current, true)
     assert.ok(
-      members.page.items.some((item) => item.kind === 'endpoint' && item.id === endpoint),
+      members.page.items.some(
+        (item) =>
+          item.object.kind === 'endpoint' && item.object.id === endpoint && item.available === true,
+      ),
       'authored channel member must be published',
     )
   }

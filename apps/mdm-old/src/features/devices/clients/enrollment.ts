@@ -148,7 +148,7 @@ function receipt(value: unknown, operationId: string, id?: string) {
 const registrationFields = {
   registrationId: uuid,
   enrollmentId: (v: unknown) => nullable(v, uuid),
-  agentGrantId: (v: unknown) => nullable(v, uuid),
+  certificateGrantId: (v: unknown) => nullable(v, uuid),
   userContextId: (v: unknown) => nullable(v, uuid),
   source: (v: unknown) => enumeration(v, enrollmentSources),
   generation: count,

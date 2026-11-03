@@ -99,6 +99,7 @@ export function decodeNativeOperation(value: unknown, id: string) {
     kind = target['kind']
 
   return {
+    owner: v.owner,
     operationId: id,
     commandId: id,
     revision: count(v['revision']),
@@ -108,9 +109,10 @@ export function decodeNativeOperation(value: unknown, id: string) {
     deadline: count(v['deadline']),
     dispatchFailure: nullable(v['dispatchFailure'], (v) => jsonValue(v, 16384)),
     authorization: authorization(v['authorization']),
-    reauthorization: reauthorizationEligibility(v['reauthorization']),
+    reauthorization: 'reauthorization' in v ? reauthorizationEligibility(v.reauthorization) : null,
     commandStatus: v['commandStatus'],
-    agentInstallation: nullable(v['agentInstallation'], (v) => jsonValue(v, 65536)),
+    agentInstallation:
+      v.owner === 'software' ? nullable(v.agentInstallation, (v) => jsonValue(v, 65536)) : null,
     observation: decodeNativeObservation(v['observation']),
   }
 }

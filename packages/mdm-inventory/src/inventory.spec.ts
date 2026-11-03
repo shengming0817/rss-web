@@ -144,7 +144,7 @@ it('retains concrete namespaces and opaque cursors without evaluating a list loc
       source: null,
       field: 'custom.rows',
       total: 0,
-      watermark: null,
+      assetCut: null,
       items: [],
       nextCursor: 'next/opaque',
     })),

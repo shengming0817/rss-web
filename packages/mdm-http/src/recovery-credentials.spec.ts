@@ -29,6 +29,7 @@ const configuration = () => ({
   materialRevision: 12,
 })
 const operation = () => ({
+  owner: 'recovery',
   operationId,
   commandId: operationId,
   revision: 1,
@@ -40,7 +41,6 @@ const operation = () => ({
   authorization: { state: 'authorized' },
   reauthorization: { state: 'not_applicable' },
   dispatchFailure: null,
-  agentInstallation: null,
   observation: {
     protocol: 'mdm.apple',
     observationScope: 'native_command',

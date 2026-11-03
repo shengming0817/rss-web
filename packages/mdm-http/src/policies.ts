@@ -196,6 +196,10 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
           safeNumbers(value)
           return {
             items: value.items.map((item) => ({
+              kind: item.kind,
+              nativeDelivery:
+                item.kind === 'collection' && item.channel === 'mdm' ? item.delivery : null,
+              report: item.kind === 'collection' ? item.report : null,
               taskId: uuid(item.taskId),
               device: text(item.device),
               registrationId: uuid(item.registrationId),
@@ -203,9 +207,19 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
               occurrence: item.occurrence,
               availableAt: item.availableAt,
               deadline: item.deadline,
-              state: item.state,
-              effect: item.effect,
-              userAction: item.userAction,
+              state:
+                item.kind === 'collection' && item.channel === 'mdm'
+                  ? null
+                  : requestInput(
+                      item.state,
+                      schema.getApiV1PoliciesByIdRunsResponse.validateRunState,
+                    ),
+              effect:
+                item.kind === 'software' || item.kind === 'execution' ? text(item.effect) : null,
+              userAction:
+                item.kind === 'software' || item.kind === 'execution'
+                  ? nullable(item.userAction, text)
+                  : null,
             })),
             nextCursor: nextCursor(value.nextCursor),
           }

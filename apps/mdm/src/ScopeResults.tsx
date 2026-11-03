@@ -80,13 +80,25 @@ export function ScopeResults({
           {read.value.page.kind === 'members' ? (
             <DataTable
               locale={locale}
-              rowKey={(row) => `${row.kind}/${row.id}`}
+              rowKey={(row) => `${row.object.kind}/${row.object.id}`}
               dataSource={read.value.page.items}
               columns={[
-                { title: l('对象类型', 'Object kind'), dataIndex: 'kind' },
+                {
+                  title: l('当前可用性', 'Current availability'),
+                  render: (_, row) =>
+                    row.available
+                      ? l('当前可用', 'Available now')
+                      : l(
+                          '当前不可用；历史资格保留',
+                          'Unavailable now; historical qualification retained',
+                        ),
+                },
+                { title: l('对象类型', 'Object kind'), render: (_, row) => row.object.kind },
                 {
                   title: l('设备', 'Device'),
-                  render: (_, row) => <Link to={devicePath(row.kind, row.id)}>{row.id}</Link>,
+                  render: (_, row) => (
+                    <Link to={devicePath(row.object.kind, row.object.id)}>{row.object.id}</Link>
+                  ),
                 },
               ]}
             />
@@ -96,6 +108,16 @@ export function ScopeResults({
               rowKey={(row) => `${row.object.kind}/${row.object.id}`}
               dataSource={read.value.page.items}
               columns={[
+                {
+                  title: l('当前可用性', 'Current availability'),
+                  render: (_, row) =>
+                    row.available
+                      ? l('当前可用', 'Available now')
+                      : l(
+                          '当前不可用；历史资格保留',
+                          'Unavailable now; historical qualification retained',
+                        ),
+                },
                 {
                   title: l('设备', 'Device'),
                   render: (_, row) => (

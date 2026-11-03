@@ -495,7 +495,7 @@ it('reads explicit runtime facts and never turns missing counts into zero', asyn
           truncated: false,
           latestFailure: { stage: 'observe', reason: 'deadline', observedAt: null },
         },
-        dispatch: { consumed: 0, watermark: 0 },
+        dispatch: { windowOpen: false, eventAfter: 0 },
       },
     ],
   }

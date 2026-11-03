@@ -24,7 +24,7 @@ export interface RunRecord {
   stageScope: string
   createdAt: number
   occurrence: string
-  value: PolicyRun
+  value: PolicyRun & { state: NonNullable<PolicyRun['state']> }
 }
 export function createPolicyRuns(allowed: (run: RunRecord) => boolean) {
   const rows: RunRecord[] = []
@@ -79,6 +79,7 @@ export function createPolicyRuns(allowed: (run: RunRecord) => boolean) {
         ? { attemptId: value.state.delivery.attempt }
         : {}),
       ...(value.authorization ? { authorization: value.authorization } : {}),
+      kind: 'software',
       taskId: value.taskId,
       device: value.device,
       registrationId: value.registrationId,
@@ -276,6 +277,9 @@ export function createPolicyRuns(allowed: (run: RunRecord) => boolean) {
         createdAt: now,
         occurrence: `software:stage:${stageScope}:desired:${profile.registration}:${current.filter((r) => r.stageScope === stageScope).length}`,
         value: {
+          kind: 'software',
+          nativeDelivery: null,
+          report: null,
           taskId: randomUUID(),
           policyId: policy.id,
           device: device.summary.id,

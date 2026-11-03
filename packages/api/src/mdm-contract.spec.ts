@@ -329,3 +329,43 @@ describe('fixed producer HTTP operations', () => {
     expect(request).not.toHaveBeenCalled()
   })
 })
+
+it('validates a discriminator beside a referenced record without opening unknown fields', () => {
+  const value = {
+    owner: 'device',
+    operationId: id,
+    commandId: id,
+    revision: 1,
+    task: { platform: 'windows', kind: 'sync_ml', name: 'SyncML', objects: [] },
+    target: { kind: 'device' },
+    inputVersion: 'device-control-v1',
+    deadline: 100,
+    dispatchFailure: null,
+    authorization: { state: 'authorized' },
+    reauthorization: { state: 'not_applicable' },
+    commandStatus: 'queued',
+    observation: {
+      protocol: 'syncml',
+      observationScope: 'native_objects',
+      receipts: [],
+      progress: 'queued',
+      effect: 'waiting',
+    },
+  }
+  expect(schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(value)).toBe(true)
+  expect(
+    schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot({
+      ...value,
+      unexpected: true,
+    }),
+  ).toBe(false)
+  expect(
+    schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot({
+      ...value,
+      owner: 'unknown',
+    }),
+  ).toBe(false)
+  const missing: Record<string, unknown> = { ...value }
+  delete missing['commandId']
+  expect(schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(missing)).toBe(false)
+})

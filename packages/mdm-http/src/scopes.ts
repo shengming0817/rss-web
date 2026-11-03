@@ -136,7 +136,13 @@ export function createScopesAdapter(transport: HttpTransport): ScopesPort {
             nextCursor: nextCursor(value.nextCursor),
             page:
               page.kind === 'members'
-                ? { kind: 'members', items: page.items.map(object) }
+                ? {
+                    kind: 'members',
+                    items: page.items.map((item) => ({
+                      object: object(item.object),
+                      available: boolean(item.available),
+                    })),
+                  }
                 : {
                     kind: 'decisions',
                     items: page.items.map((item) => {
@@ -148,6 +154,7 @@ export function createScopesAdapter(transport: HttpTransport): ScopesPort {
                         throw new Error('Unsafe scope entry')
                       return {
                         object: object(item.object),
+                        available: boolean(item.available),
                         qualification: { ...qualification },
                         reasons: [...item.reasons],
                         targets: sources(item.targets),

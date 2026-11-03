@@ -318,11 +318,11 @@ try {
         .locator('.asset-editor-section')
         .filter({ has: p.locator('strong').filter({ hasText: /^custom\.browser_list$/ }) })
         .getByRole('button', { name: '读取命名空间集合', exact: true })
-  await run.response(p, 'GET', listPath, () => namespaceList().click())
+  await run.response(p, 'POST', listPath, () => namespaceList().click())
   await p.getByText('来源集合总数', { exact: false }).waitFor()
   const sourceList = (
     await (
-      await run.response(p, 'GET', listPath, () => visibleLabel('集合每页条目').fill('10'))
+      await run.response(p, 'POST', listPath, () => visibleLabel('集合每页条目').fill('10'))
     ).json()
   ).asset
   assert.equal(sourceList.total, 25)
@@ -332,7 +332,7 @@ try {
     .locator('.ant-card')
     .filter({ has: visibleLabel('集合每页条目') })
     .last()
-  const followingList = await run.response(p, 'GET', listPath, () =>
+  const followingList = await run.response(p, 'POST', listPath, () =>
     listCard.getByRole('button', { name: '下一页', exact: true }).click(),
   )
   assert.equal(new URL(followingList.url()).searchParams.get('cursor'), sourceList.nextCursor)
@@ -434,21 +434,13 @@ try {
   await openGroup(nestedId, 'React nested assets')
   const beforePreview = await api('GET', `/api/v1/groups/${nestedId}`)
   await visibleLabel('设备组名称').fill('Unsaved title')
-  const previewResponse = await run.response(
-      p,
-      'POST',
-      `/api/v1/groups/${nestedId}/previews`,
-      () => p.getByRole('button', { name: '预览已保存定义（不含草稿）', exact: true }).click(),
-      202,
+  const previewResponse = await run.response(p, 'POST', '/api/v1/groups/previews', () =>
+      p.getByRole('button', { name: '预览当前条件样例（不保存）', exact: true }).click(),
     ),
     preview = await previewResponse.json()
-  assert.deepEqual(previewResponse.request().postDataJSON().input, {})
-  await settleGroup(nestedId, preview.task)
-  await p.getByRole('button', { name: '读取此任务固定结果', exact: true }).click()
-  assert.equal(
-    (await api('GET', `/api/v1/groups/${nestedId}/results/${preview.task}/members`)).current,
-    false,
-  )
+  assert.equal(previewResponse.request().postDataJSON().editing.groupId, nestedId)
+  assert.ok(preview.items.length <= 20)
+  assert.equal('task' in preview, false)
   assert.equal((await api('GET', `/api/v1/groups/${nestedId}`)).memberSet, beforePreview.memberSet)
   await openGroup(staticGroup.id, 'React empty source')
   const additions = p.getByRole('group', { name: '添加终端标识', exact: true })

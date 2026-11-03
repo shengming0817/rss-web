@@ -4,6 +4,7 @@ import { freeze, type AssetContext, type Operation } from '@rss/mdm-inventory'
 import {
   validateChange,
   type GroupChange,
+  type GroupPreview,
   type GroupCondition,
   type GroupRead,
 } from '@rss/mdm-groups'
@@ -20,9 +21,7 @@ import { GroupReferences } from './GroupReferences'
 import { GroupResults, GroupTaskPanel } from './GroupResults'
 import { Status } from './DevicePresentation'
 
-type Pending =
-  | { readonly kind: 'change'; readonly change: Operation<GroupChange> }
-  | { readonly kind: 'preview'; readonly change: Operation<Record<string, never>> }
+type Pending = { readonly kind: 'change'; readonly change: Operation<GroupChange> }
 export function GroupEditor({
   groups,
   devices,
@@ -71,6 +70,7 @@ export function GroupEditor({
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'accepted' | 'unknown' | 'rejected'>(
       'none',
     ),
+    [preview, setPreview] = useState<GroupPreview | null>(null),
     [task, setTask] = useState<string | null>(null),
     [approved, setApproved] = useState(false),
     [invalid, setInvalid] = useState(false),
@@ -82,11 +82,7 @@ export function GroupEditor({
       (pending !== null && !['confirmed', 'accepted', 'rejected'].includes(outcome)),
   )
   async function submit(intent: Pending) {
-    const result = await action.run(() =>
-      intent.kind === 'preview'
-        ? groups.preview(id, intent.change)
-        : groups.change(id, intent.change),
-    )
+    const result = await action.run(() => groups.change(id, intent.change))
     if (result.ok) {
       if ('statusUrl' in result.value) {
         setTask(result.value.task)
@@ -201,6 +197,7 @@ export function GroupEditor({
                   { value: 'dynamic', label: l('动态设备组', 'Dynamic group') },
                 ]}
                 onChange={(kind: 'static' | 'dynamic') => {
+                  setPreview(null)
                   setKind(kind)
                   if (kind === 'static') setAssetContext('endpoint')
                 }}
@@ -232,7 +229,10 @@ export function GroupEditor({
                   { value: 'endpoint', label: l('独立终端', 'Endpoint') },
                   { value: 'associated_device', label: l('关联设备', 'Associated device') },
                 ]}
-                onChange={(context: AssetContext) => setAssetContext(context)}
+                onChange={(context: AssetContext) => {
+                  setPreview(null)
+                  setAssetContext(context)
+                }}
               />
             </Form.Item>
           )}
@@ -241,14 +241,20 @@ export function GroupEditor({
               <ConditionContextEditor
                 locale={locale}
                 value={criteria}
-                onChange={(context) => setCriteria({ ...criteria, ...context })}
+                onChange={(context) => {
+                  setPreview(null)
+                  setCriteria({ ...criteria, ...context })
+                }}
               />
               <GroupCriteriaEditor
                 locale={locale}
                 groups={groups}
                 assetContext={assetContext}
                 value={criteria.criteria}
-                onChange={(value) => setCriteria({ ...criteria, criteria: value })}
+                onChange={(value) => {
+                  setPreview(null)
+                  setCriteria({ ...criteria, criteria: value })
+                }}
               />
             </>
           )}
@@ -267,7 +273,10 @@ export function GroupEditor({
             <ConditionContextEditor
               locale={locale}
               value={criteria}
-              onChange={(context) => setCriteria({ ...criteria, ...context })}
+              onChange={(context) => {
+                setPreview(null)
+                setCriteria({ ...criteria, ...context })
+              }}
             />
             <GroupCriteriaEditor
               locale={locale}
@@ -275,7 +284,10 @@ export function GroupEditor({
               referenceableFor={group.id}
               assetContext={group.assetContext}
               value={criteria.criteria}
-              onChange={(value) => setCriteria({ ...criteria, criteria: value })}
+              onChange={(value) => {
+                setPreview(null)
+                setCriteria({ ...criteria, criteria: value })
+              }}
             />
             <Button type="primary" htmlType="submit">
               {l('提交规则验证与保存任务', 'Submit rule validation and save task')}
@@ -329,27 +341,65 @@ export function GroupEditor({
             <Button htmlType="submit">{l('提交成员增减', 'Submit membership changes')}</Button>
           </Form>
         )}
-        {group && (
-          <Space wrap className="admin-subsection">
+        {kind === 'dynamic' && (
+          <>
             <Button
               disabled={
-                !canPreview || group.deleted || action.busy || pending !== null || guard.locked
+                !canPreview || !!group?.deleted || action.busy || pending !== null || guard.locked
               }
               onClick={() => {
-                const intent: Pending = {
-                  kind: 'preview',
-                  change: freeze({
-                    operationId: crypto.randomUUID(),
-                    expectedRevision: group.revision,
-                    input: {},
-                  }),
-                }
-                setPending(intent)
-                void submit(intent)
+                setPreview(null)
+                void action
+                  .run(() =>
+                    groups.preview({
+                      criteria,
+                      assetContext,
+                      ...(group
+                        ? { editing: { groupId: id, expectedRevision: group.revision } }
+                        : {}),
+                    }),
+                  )
+                  .then((result) => {
+                    if (result.ok) setPreview(result.value)
+                  })
               }}
             >
-              {l('预览已保存定义（不含草稿）', 'Preview saved definition (excludes drafts)')}
+              {l('预览当前条件样例（不保存）', 'Preview current criteria sample (without saving)')}
             </Button>
+            {preview && (
+              <Card title={l('条件匹配样例', 'Matching sample')}>
+                <p>
+                  {preview.items.length} ·{' '}
+                  {preview.scanComplete
+                    ? l(
+                        '本次扫描完成；样例不发布成员',
+                        'Scan complete; the sample does not publish members',
+                      )
+                    : l(
+                        '扫描或样例达到上限；空样例不证明没有匹配',
+                        'Scan or sample limit reached; an empty sample is inconclusive',
+                      )}
+                </p>
+                <ul>
+                  {preview.items.map((item) => (
+                    <li key={`${item.kind}/${item.id}`}>
+                      {item.kind} · {item.id}
+                    </li>
+                  ))}
+                </ul>
+                <details>
+                  <summary>{l('预览输入坐标', 'Preview input coordinates')}</summary>
+                  <code>{preview.inputFingerprint}</code>
+                  <p>
+                    {preview.objectSnapshot ?? '—'} · {preview.asOf}
+                  </p>
+                </details>
+              </Card>
+            )}
+          </>
+        )}
+        {group && (
+          <Space wrap className="admin-subsection">
             <Button
               disabled={
                 !canRecompute ||
@@ -391,11 +441,7 @@ export function GroupEditor({
                 <Button
                   disabled={
                     action.busy ||
-                    !(pending.kind === 'preview'
-                      ? canPreview
-                      : pending.change.input.action === 'recompute'
-                        ? canRecompute
-                        : canWrite)
+                    !(pending.change.input.action === 'recompute' ? canRecompute : canWrite)
                   }
                   onClick={() => void submit(pending)}
                 >

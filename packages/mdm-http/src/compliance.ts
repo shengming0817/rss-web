@@ -18,6 +18,7 @@ import {
   condition,
   distinct,
   integer,
+  assetCut,
   requestInput,
   windowQuery,
 } from './inventory-values'
@@ -61,7 +62,7 @@ function assessment(value: unknown): Assessment {
     ...value,
     ruleId: uuid(value.ruleId),
     ruleVersion: positive(value.ruleVersion),
-    factWatermark: count(value.factWatermark),
+    assetCut: assetCut(value.assetCut),
     evaluatedAt: integer(value.evaluatedAt),
     groups: distinct(
       value.groups.map((group) => ({
@@ -69,7 +70,7 @@ function assessment(value: unknown): Assessment {
         id: uuid(group.id),
         revision: positive(group.revision),
         memberVersion: count(group.memberVersion),
-        assetWatermark: nullable(group.assetWatermark, count),
+        assetCut: nullable(group.assetCut, assetCut),
         memberSet: nullable(group.memberSet, uuid),
       })),
       (group) => group.id,
@@ -206,7 +207,7 @@ export function createComplianceAdapter(transport: HttpTransport): CompliancePor
           return {
             ...value,
             ruleVersion: positive(value.ruleVersion),
-            factWatermark: count(value.factWatermark),
+            assetCut: assetCut(value.assetCut),
             processed: count(value.processed),
           }
         },

@@ -51,6 +51,7 @@ it('retains pending unknown exclusion facts and distinguishes absent from empty 
       items: [
         {
           object: { kind: 'endpoint', id: 'endpoint-1' },
+          available: false,
           qualification: { state: 'pending' },
           reasons: ['unknown_exclusion'],
           targets: [{ reference: { kind: 'group', id: result }, version: 3 }],
@@ -80,6 +81,7 @@ it('rejects unrepresentable membership entry coordinates', async () => {
       items: [
         {
           object: { kind: 'endpoint', id: 'endpoint-1' },
+          available: false,
           qualification: { state: 'eligible', entry: Number.MAX_SAFE_INTEGER + 1 },
           reasons: [],
           targets: [],
@@ -91,4 +93,19 @@ it('rejects unrepresentable membership entry coordinates', async () => {
     nextCursor: null,
   })
   await expect(f.client.result(id, result, 'decisions', 'mdm', {})).rejects.toThrow()
+})
+
+it('preserves unavailable historical members instead of removing them or changing their identity', async () => {
+  const value = {
+    scope: id,
+    result,
+    current: true,
+    channel: 'mdm',
+    page: {
+      kind: 'members',
+      items: [{ object: { kind: 'endpoint', id: 'endpoint-1' }, available: false }],
+    },
+    nextCursor: null,
+  }
+  expect(await fixture(value).client.result(id, result, 'members', 'mdm', {})).toEqual(value)
 })

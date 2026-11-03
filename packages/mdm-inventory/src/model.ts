@@ -11,6 +11,12 @@ import type {
   ViewEndpoint,
 } from '@rss/mdm-devices'
 
+/** Opaque committed input issued by the backend; never a numeric frontier. */
+export interface AssetCut {
+  readonly tenant: string
+  readonly epoch: string
+  readonly snapshot: string
+}
 /** Asset values and their source coordinates are facts, never client-side resolution. */
 export type AssetContext = 'endpoint' | 'associated_device'
 export type InventorySource =
@@ -430,7 +436,7 @@ export interface ListItems extends Page<Scalar> {
   readonly source: Evidence | null
   readonly field: string
   readonly total: number
-  readonly watermark: number | null
+  readonly assetCut: AssetCut | null
 }
 export interface ListRead {
   readonly reference: DeviceRef
@@ -479,7 +485,7 @@ export interface InventoryPort {
   ): Promise<
     Page<{ readonly scope: CollectionScope }> & {
       readonly device: string
-      readonly watermark: number
+      readonly assetCut: AssetCut
     }
   >
   list(query: ListRead): Promise<ListItems>

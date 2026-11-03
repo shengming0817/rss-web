@@ -45,7 +45,7 @@ export function createComplianceDemo(
         revision: g.definitionVersion,
         memberSet: g.memberSet,
         memberVersion: g.memberVersion,
-        assetWatermark: null,
+        assetCut: null,
         ready: g.ready,
         members: g.members,
       }
@@ -83,7 +83,11 @@ export function createComplianceDemo(
         task,
         ruleId: r.rule.id,
         ruleVersion: r.rule.revision,
-        factWatermark: ++watermark,
+        assetCut: {
+          tenant: '11111111-1111-4111-8111-111111111111',
+          epoch: '22222222-2222-4222-8222-222222222222',
+          snapshot: `1:${++watermark}:`,
+        },
         phase: 'queued',
         processed: 0,
         completed: false,
@@ -172,7 +176,7 @@ export function createComplianceDemo(
         ruleId: job.rule.id,
         ruleVersion: job.rule.revision,
         dictionaryVersion: 'assets-v1',
-        factWatermark: job.view.factWatermark,
+        assetCut: job.view.assetCut,
         evaluatedAt: job.evaluatedAt,
         groups: job.input.groups.map(({ members: _members, ...g }) => g),
         status,
@@ -223,7 +227,7 @@ export function createComplianceDemo(
           target,
           evidence: {
             id: job.view.task,
-            version: job.view.factWatermark,
+            version: job.rule.revision,
             at: job.evaluatedAt,
             state:
               assessment.status === 'non_compliant'

@@ -1,5 +1,5 @@
 import type { DirectoryQuery, Page, WindowQuery } from '@rss/mdm-devices'
-import type { Condition, Operation } from '@rss/mdm-inventory'
+import type { AssetCut, Condition, Operation } from '@rss/mdm-inventory'
 
 export type Status = 'compliant' | 'non_compliant' | 'unknown' | 'not_applicable'
 export type Decision = 'match' | 'no_match' | 'unknown'
@@ -52,7 +52,7 @@ export interface GroupInput {
   readonly revision: number
   readonly memberSet: string | null
   readonly memberVersion: number
-  readonly assetWatermark: number | null
+  readonly assetCut: AssetCut | null
   readonly ready: boolean
 }
 export interface FactReference {
@@ -70,7 +70,7 @@ export interface Assessment {
   readonly ruleId: string
   readonly ruleVersion: number
   readonly dictionaryVersion: string
-  readonly factWatermark: number
+  readonly assetCut: AssetCut
   readonly evaluatedAt: number
   readonly groups: readonly GroupInput[]
   readonly status: Status
@@ -135,7 +135,7 @@ export interface Task {
   readonly task: string
   readonly ruleId: string
   readonly ruleVersion: number
-  readonly factWatermark: number
+  readonly assetCut: AssetCut
   readonly phase: 'queued' | 'evaluating' | 'published' | 'superseded' | 'failed'
   readonly processed: number
   readonly completed: boolean

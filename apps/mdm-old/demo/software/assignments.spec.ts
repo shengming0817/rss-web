@@ -154,7 +154,7 @@ it('only admits on Agent poll, retains independent delivery and verified result,
     result: null,
   })
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 1 }, 'normal')
-  expect(f.runs()[0]?.state.execution).toBe('running')
+  expect(f.runs()[0]?.state?.execution).toBe('running')
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 2 }, 'normal')
   expect(f.runs()[0]).toMatchObject({
     effect: 'verified',
@@ -182,10 +182,10 @@ it('pausing RequiredInstall preserves unknown effects and does not restart on en
   f.put()
   f.owner.tick({ kind: 'check_in', device: 'device-01', at }, 'normal')
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 1 }, 'normal')
-  expect(f.runs()[0]?.state.execution).toBe('running')
+  expect(f.runs()[0]?.state?.execution).toBe('running')
   f.owner.handle(request(f.path, operation({ action: 'disable' }, 1)), 'normal')
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 2 }, 'normal')
-  expect(f.runs()[0]?.state.execution).toBe('unknown')
+  expect(f.runs()[0]?.state?.execution).toBe('unknown')
   f.owner.handle(request(f.path, operation({ action: 'enable' }, 2)), 'normal')
   f.owner.tick({ kind: 'check_in', device: 'device-01', at: at + 1000 }, 'normal')
   expect(f.runs()).toHaveLength(1)
@@ -253,7 +253,7 @@ it('keeps reboot evidence through pause and checks current authority before acce
     state: { execution: 'waiting_reboot' },
   })
   f.owner.handle(request(f.path, operation({ action: 'disable' }, 1)), 'normal')
-  expect(f.runs()[0]?.state.cancellation).toBe('none')
+  expect(f.runs()[0]?.state?.cancellation).toBe('none')
   f.owner.tick({ kind: 'software_reboot', device: 'device-01', at: at + 3 }, 'normal')
   expect(f.runs()[0]?.effect).toBe('unknown')
 })
@@ -347,7 +347,7 @@ it('settles unknown only from explicit detection for the original task with curr
     registrationId: run.registrationId,
     generation: run.generation,
     effect: 'verified',
-    state: { delivery: run.state.delivery },
+    state: { delivery: run.state?.delivery },
     result: {
       definitionDigest: run.result!.kind === 'software' ? run.result!.definitionDigest : [],
     },
@@ -376,7 +376,7 @@ it('rejects late detection after registration generation changes or cancellation
   }
 })
 
-it('preserves current script history evidence through mock list/detail while redacting summary output', () => {
+it('rejects script evidence in a software-owned run under the current tagged contract', () => {
   const f = setup(),
     at = 2_000_000_000
   f.put()
@@ -401,21 +401,7 @@ it('preserves current script history evidence through mock list/detail while red
       failure: null,
     },
   }
-  expect(f.runs()[0]!.result).toMatchObject({
-    kind: 'script',
-    collectedAt: at,
-    receivedAt: at + 2,
-    trusted: false,
-  })
-  expect(f.runs()[0]!.result).not.toHaveProperty('output')
-  const detail = policyRun(
-    f.owner.handle(request(`${f.path}/runs/${row.value.taskId}`), 'normal')!.body,
-    true,
-  )
-  expect(detail.result).toMatchObject({
-    output: { simulation: true },
-    diagnostics: { stdout: 'Synthetic historical script evidence' },
-  })
+  expect(() => f.runs()).toThrow('Invalid contract value')
 })
 
 it('requires a new authored Policy version after lifecycle withdrawal and re-enable', () => {

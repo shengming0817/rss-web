@@ -58,6 +58,7 @@ it('binds Scope pages to channel and preserves typed targets and source referenc
       items: [
         {
           object: { kind: 'endpoint', id: 'device-01' },
+          available: false,
           qualification: { state: 'excluded' },
           reasons: ['explicit_exclusion'],
           targets: [{ reference: { kind: 'group', id: group }, version: 4 }],

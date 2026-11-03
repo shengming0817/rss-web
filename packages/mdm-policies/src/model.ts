@@ -306,6 +306,22 @@ export interface RunProgress {
   readonly startedAt: number | null
 }
 export interface PolicyRun {
+  readonly kind:
+    | 'software'
+    | 'access'
+    | 'credential'
+    | 'enrollment'
+    | 'execution'
+    | 'script'
+    | 'collection'
+  readonly nativeDelivery: 'queued' | 'prepared' | 'sent' | 'cancelled' | null
+  readonly report: {
+    readonly id: string
+    readonly result: string
+    readonly reason: string | null
+    readonly sealedAt: number | null
+    readonly projectionPending: boolean
+  } | null
   readonly taskId: string
   readonly device: string
   readonly registrationId: string
@@ -313,8 +329,8 @@ export interface PolicyRun {
   readonly occurrence: string
   readonly availableAt: number
   readonly deadline: number
-  readonly state: RunProgress
-  readonly effect: string
+  readonly state: RunProgress | null
+  readonly effect: string | null
   readonly userAction: string | null
 }
 export interface RolloutProgress {

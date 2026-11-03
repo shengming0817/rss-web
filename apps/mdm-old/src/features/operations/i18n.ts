@@ -76,7 +76,7 @@ export const operationsZh = {
     scan: '最近扫描',
     dispatch: '调度坐标',
     consumed: '已消费坐标',
-    watermark: '水位',
+    eventAfter: '已读取事件位置',
     componentName: {
       initialization: '初始化',
       inventory: 'Inventory · 资产投影',
@@ -404,7 +404,7 @@ export const operationsEn: typeof operationsZh = {
     scan: 'Latest scan',
     dispatch: 'Dispatch positions',
     consumed: 'Consumed position',
-    watermark: 'Watermark',
+    eventAfter: 'Last read event position',
     componentName: {
       initialization: 'Initialization',
       inventory: 'Inventory',

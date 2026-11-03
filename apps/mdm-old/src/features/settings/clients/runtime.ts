@@ -172,7 +172,10 @@ export function runtimeSnapshot(value: unknown) {
                   )
                     throw new Error('Invalid runtime observation')
                   const d = c['dispatch']
-                  return { consumed: count(d['consumed']), watermark: count(d['watermark']) }
+                  return {
+                    eventAfter: count(d['eventAfter']),
+                    windowOpen: boolean(d['windowOpen']),
+                  }
                 })(),
         }
       }),

@@ -118,3 +118,71 @@ it('keeps member acceptance separate from native effect and rejects mismatched o
     ),
   ).rejects.toThrow('references')
 })
+it('preserves native collection delivery and intake without fabricating agent execution or effect', async () => {
+  const report = {
+      id: operationId,
+      result: 'complete',
+      reason: null,
+      sealedAt: 100,
+      projectionPending: true,
+    },
+    run = {
+      kind: 'collection',
+      channel: 'mdm',
+      taskId: operationId,
+      policyId: id,
+      versionId,
+      device: 'endpoint-1',
+      registrationId: id,
+      generation: 1,
+      occurrence: 'collection:1',
+      availableAt: 0,
+      deadline: 200,
+      delivery: 'sent',
+      report,
+    },
+    result = await createPoliciesAdapter(
+      fixture({ items: [run], nextCursor: null }).transport,
+    ).runs(id, {})
+  expect(result.items[0]).toMatchObject({
+    kind: 'collection',
+    nativeDelivery: 'sent',
+    state: null,
+    effect: null,
+    report,
+  })
+})
+it('consumes access run state without inventing a software effect', async () => {
+  const state = {
+      delivery: { kind: 'queued' },
+      execution: 'not_started',
+      cancellation: 'none',
+      deadline: 200,
+      startedAt: null,
+    },
+    run = {
+      kind: 'access',
+      taskId: operationId,
+      policyId: id,
+      versionId,
+      device: 'endpoint-1',
+      registrationId: id,
+      generation: 1,
+      occurrence: 'access:1',
+      availableAt: 0,
+      deadline: 200,
+      state,
+      authorization: null,
+      attemptId: null,
+      result: null,
+    },
+    result = await createPoliciesAdapter(
+      fixture({ items: [run], nextCursor: null }).transport,
+    ).runs(id, {})
+  expect(result.items[0]).toMatchObject({
+    kind: 'access',
+    state,
+    effect: null,
+    nativeDelivery: null,
+  })
+})

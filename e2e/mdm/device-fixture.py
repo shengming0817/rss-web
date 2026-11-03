@@ -100,8 +100,8 @@ def seed():
                     f"INSERT INTO mdm_access.requests(tenant_id,id,grant_id,source,windows_profile) VALUES('{tenant}','{request}','{grant}','{source}',CASE WHEN '{source}'='mdm.windows' THEN 'Device' END)"]
             column, origin = 'request_id', request
         else:
-            sql.append(f"INSERT INTO mdm_access.agent_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{grant}','{request}','download','fixture','{INSTANCE}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')")
-            column, origin = 'agent_grant_id', grant
+            sql.append(f"INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{grant}','{request}','download','fixture','{INSTANCE}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')")
+            column, origin = 'certificate_grant_id', grant
         sql += [f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,{column},state,purpose,epoch) VALUES('{tenant}','{registration}','{device}','{channel}',1,'{origin}','active','primary',gen_random_uuid())",
                 f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
         if browser_module in {'console-browser.mjs', 'react-recovery-browser.mjs'} and channel == 'mdm':
@@ -116,8 +116,8 @@ def seed():
     if browser_module == 'console-browser.mjs':
         # A superseded synthetic registration exercises history paging without another active identity.
         old_grant, old_operation, old_registration = [str(uuid.uuid4()) for _ in range(3)]
-        sql += [f"INSERT INTO mdm_access.agent_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{old_grant}','{old_operation}','download','fixture','{INSTANCE}','fixture-mdm','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')",
-                f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,agent_grant_id,state,purpose,epoch) VALUES('{tenant}','{old_registration}','fixture-mdm','agent',1,'{old_grant}','superseded','primary',gen_random_uuid())"]
+        sql += [f"INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{old_grant}','{old_operation}','download','fixture','{INSTANCE}','fixture-mdm','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')",
+                f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,certificate_grant_id,state,purpose,epoch) VALUES('{tenant}','{old_registration}','fixture-mdm','agent',1,'{old_grant}','superseded','primary',gen_random_uuid())"]
     # Explicit asset scenarios own their disposable array paging data.
     if browser_module in {'device-browser.mjs', 'react-assets-browser.mjs'}:
         definition=dict(key='custom.browser_list',version=1,valueType=dict(kind='array',items=dict(kind='integer'),maxItems=1000),nullable=True,manual=True,sources=dict(manual=0),platforms=['windows','macos'],sensitivity='standard',unit=None,searchable=True,itemKey=None)

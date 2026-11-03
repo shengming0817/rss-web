@@ -365,7 +365,7 @@ export function createEnrollmentDemo(devices: () => Map<string, DemoDevice>) {
       d.registrations.push({
         registrationId,
         enrollmentId: e.enrollmentId,
-        agentGrantId: null,
+        certificateGrantId: null,
         userContextId:
           e.source === 'mdm.windows' && e.windowsProfile === 'Full' ? registrationId : null,
         source: e.source,

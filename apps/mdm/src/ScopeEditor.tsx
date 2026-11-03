@@ -101,8 +101,8 @@ export function ScopeEditor({
         <Alert
           type="warning"
           title={l(
-            '提交结果未知，后续写入已锁定。请保留原操作身份并核对原请求结果。',
-            'Submission outcome unknown; further writes are locked. Retain the original operation identity and reconcile its outcome.',
+            '未收到保存结果。请刷新页面查看服务器当前配置，再决定是否继续编辑。',
+            'Save result was not received. Refresh the page to review the current server configuration before editing again.',
           )}
           description={<code>{pending?.operationId}</code>}
         />

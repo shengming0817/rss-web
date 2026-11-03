@@ -40,8 +40,8 @@ if action == 'add-agent-to-alone':
     registration,credential,epoch,operation,grant=[str(uuid.uuid4()) for _ in range(5)]
     e.sql(f"""BEGIN;
 SET LOCAL rss.tenant_id = '{t}';
-INSERT INTO mdm_access.agent_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{t}','{grant}','{operation}','download','fixture','{fixture['instance']}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour');
-INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,agent_grant_id,state,purpose,epoch) VALUES('{t}','{registration}','{device}','agent',1,'{grant}','active','primary','{epoch}');
+INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{t}','{grant}','{operation}','download','fixture','{fixture['instance']}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour');
+INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,certificate_grant_id,state,purpose,epoch) VALUES('{t}','{registration}','{device}','agent',1,'{grant}','active','primary','{epoch}');
 INSERT INTO mdm_access.credentials(tenant_id,id,registration,channel,locator,state) VALUES('{t}','{credential}','{registration}','agent',md5('{credential}')||md5('{registration}'),'active');
 COMMIT;""",'mdm_dev')
     sys.exit(0)
@@ -49,9 +49,9 @@ channel=action
 assert channel in {'mdm','agent'}
 device=fixture[channel]
 assert device==f'fixture-{channel}'
-origin_column='request_id' if channel=='mdm' else 'agent_grant_id'
+origin_column='request_id' if channel=='mdm' else 'certificate_grant_id'
 r,credential,epoch,request,grant=[str(uuid.uuid4()) for _ in range(5)]
-new_origin = f"'{request}'" if channel=='mdm' else 'agent_grant_id'
+new_origin = f"'{request}'" if channel=='mdm' else 'certificate_grant_id'
 prepare_request = f"""INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) SELECT g.tenant_id,'{grant}',g.actor,g.instance,g.device,g.purpose,g.state,clock_timestamp()+interval '2 minutes' FROM mdm_access.grants g JOIN mdm_access.requests q ON g.tenant_id=q.tenant_id AND g.id=q.grant_id JOIN old_registration r ON r.tenant_id=q.tenant_id AND r.request_id=q.id;
 INSERT INTO mdm_access.requests(tenant_id,id,grant_id,source,windows_profile) SELECT q.tenant_id,'{request}','{grant}',q.source,q.windows_profile FROM mdm_access.requests q JOIN old_registration r ON r.tenant_id=q.tenant_id AND r.request_id=q.id;""" if channel=='mdm' else ''
 e.sql(f"""BEGIN;

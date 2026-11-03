@@ -152,10 +152,23 @@ export function PolicyRuns({
                   <Link to={devicePath('endpoint', row.device)}>{row.device}</Link>
                 ),
               },
-              { title: l('投递', 'Delivery'), render: (_, row) => row.state.delivery.kind },
-              { title: l('执行', 'Execution'), render: (_, row) => row.state.execution },
-              { title: l('效果', 'Effect'), dataIndex: 'effect' },
-              { title: l('取消', 'Cancellation'), render: (_, row) => row.state.cancellation },
+              {
+                title: l('投递', 'Delivery'),
+                render: (_, row) => row.state?.delivery.kind ?? row.nativeDelivery ?? '—',
+              },
+              { title: l('执行', 'Execution'), render: (_, row) => row.state?.execution ?? '—' },
+              { title: l('效果', 'Effect'), render: (_, row) => row.effect ?? '—' },
+              {
+                title: l('采集报告', 'Collection report'),
+                render: (_, row) =>
+                  row.report
+                    ? `${row.report.result} · ${row.report.reason ?? '—'}${row.report.projectionPending ? l(' · 资产应用待完成', ' · asset projection pending') : ''}`
+                    : '—',
+              },
+              {
+                title: l('取消', 'Cancellation'),
+                render: (_, row) => row.state?.cancellation ?? '—',
+              },
               {
                 title: l('注册与触发', 'Registration and occurrence'),
                 render: (_, row) => `${row.registrationId}@${row.generation} · ${row.occurrence}`,

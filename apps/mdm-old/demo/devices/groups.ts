@@ -35,7 +35,6 @@ interface GroupState {
 interface Job {
   group: string
   revision: number
-  publish: boolean
   reads: number
   status: 'running' | 'completed' | 'superseded' | 'failed'
   members: string[]
@@ -190,73 +189,75 @@ export function createGroupDemo(
     })
   }
   reset()
-  function start(id: string, task: string, publish: boolean, next?: string[]) {
-    const state = groups.get(id)!
-    if (publish) state.read.freshness = 'pending'
-    const universe =
-      state.read.group.assetContext === 'endpoint'
-        ? [...devices().values()]
-            .filter((d) => d.summary.inventoryAvailable)
-            .map((d) => ({
-              key: d.summary.id,
-              contexts: [d.inventory, ...(d.scopedInventory ?? [])],
-            }))
-        : objects().map((o) => {
-            const contexts = new Map<string, NonNullable<DemoDevice['scopedInventory']>[number][]>()
-            for (const member of o.members) {
-              const d = devices().get(member.device)
-              if (!d) continue
-              for (const inventory of [d.inventory, ...(d.scopedInventory ?? [])]) {
-                const key = JSON.stringify(inventory.collectionScope),
-                  list = contexts.get(key) ?? []
-                list.push({
-                  ...inventory,
-                  fields: Object.fromEntries(
-                    Object.entries(inventory.fields).map(([key, field]) => {
-                      const sources = field.sources.filter(
-                        (f) =>
-                          f.evidence.registration === member.registrationId &&
-                          f.evidence.registrationGeneration === member.generation,
-                      )
-                      return [
-                        key,
-                        {
-                          ...field,
-                          sources,
-                          state: sources.length
-                            ? mergedFieldState(sources)
-                            : { kind: 'missing' as const },
-                        },
-                      ]
-                    }),
-                  ),
-                })
-                contexts.set(key, list)
-              }
-            }
-            return {
-              key: objectKey(o.object),
-              contexts: [...contexts.values()].map((values) => ({
-                ...values[0]!,
+  function previewUniverse(assetContext: GroupRead['group']['assetContext']) {
+    return assetContext === 'endpoint'
+      ? [...devices().values()]
+          .filter((d) => d.summary.inventoryAvailable)
+          .map((d) => ({
+            key: d.summary.id,
+            contexts: [d.inventory, ...(d.scopedInventory ?? [])],
+          }))
+      : objects().map((o) => {
+          const contexts = new Map<string, NonNullable<DemoDevice['scopedInventory']>[number][]>()
+          for (const member of o.members) {
+            const d = devices().get(member.device)
+            if (!d) continue
+            for (const inventory of [d.inventory, ...(d.scopedInventory ?? [])]) {
+              const key = JSON.stringify(inventory.collectionScope),
+                list = contexts.get(key) ?? []
+              list.push({
+                ...inventory,
                 fields: Object.fromEntries(
-                  [...new Set(values.flatMap((v) => Object.keys(v.fields)))].map((key) => {
-                    const entries = values.flatMap((v) => (v.fields[key] ? [v.fields[key]!] : [])),
-                      sources = entries.flatMap((f) => f.sources)
+                  Object.entries(inventory.fields).map(([key, field]) => {
+                    const sources = field.sources.filter(
+                      (f) =>
+                        f.evidence.registration === member.registrationId &&
+                        f.evidence.registrationGeneration === member.generation,
+                    )
                     return [
                       key,
                       {
-                        ...entries[0]!,
+                        ...field,
+                        sources,
                         state: sources.length
                           ? mergedFieldState(sources)
                           : { kind: 'missing' as const },
-                        sources,
                       },
                     ]
                   }),
                 ),
-              })),
+              })
+              contexts.set(key, list)
             }
-          })
+          }
+          return {
+            key: objectKey(o.object),
+            contexts: [...contexts.values()].map((values) => ({
+              ...values[0]!,
+              fields: Object.fromEntries(
+                [...new Set(values.flatMap((v) => Object.keys(v.fields)))].map((key) => {
+                  const entries = values.flatMap((v) => (v.fields[key] ? [v.fields[key]!] : [])),
+                    sources = entries.flatMap((f) => f.sources)
+                  return [
+                    key,
+                    {
+                      ...entries[0]!,
+                      state: sources.length
+                        ? mergedFieldState(sources)
+                        : { kind: 'missing' as const },
+                      sources,
+                    },
+                  ]
+                }),
+              ),
+            })),
+          }
+        })
+  }
+  function start(id: string, task: string, next?: string[]) {
+    const state = groups.get(id)!
+    state.read.freshness = 'pending'
+    const universe = previewUniverse(state.read.group.assetContext)
     const decisions: Decision[] = universe.map(({ key, contexts }) => {
       const evaluation =
         state.read.group.kind === 'dynamic'
@@ -289,7 +290,6 @@ export function createGroupDemo(
     jobs.set(task, {
       group: id,
       revision: state.read.group.calculationRevision,
-      publish,
       reads: 0,
       status: 'running',
       members,
@@ -308,7 +308,7 @@ export function createGroupDemo(
     return ok(
       {
         task,
-        kind: publish ? 'group' : 'group_preview',
+        kind: 'group',
         target: id,
         statusUrl: `/api/v1/groups/${id}/tasks/${task}`,
       },
@@ -336,7 +336,7 @@ export function createGroupDemo(
             state.read.group.ruleVersion === job.ruleVersion
           ? 'completed'
           : 'superseded'
-    if (job.status === 'completed' && job.publish) {
+    if (job.status === 'completed') {
       state.read.group.calculationRevision++
       if (job.added.length || job.removed.length) state.read.group.memberVersion++
       state.read.group.memberCount = job.members.length
@@ -347,6 +347,40 @@ export function createGroupDemo(
   }
   const handle: DomainHandler = (request, scenario) => {
     const { path, method, query } = request
+    if (path === '/api/v1/groups/previews' && method === 'POST') {
+      const body = record(request.body),
+        context = enumeration(body['assetContext'], ['endpoint', 'associated_device'] as const),
+        criteria = groupCondition(body['criteria'])
+      if (body['editing']) {
+        const editing = record(body['editing']),
+          saved = groups.get(uuid(editing['groupId']))
+        if (!saved || saved.read.group.revision !== editing['expectedRevision'])
+          return error('operation_conflict')
+      }
+      const matches = previewUniverse(context).filter(
+        (item) => evaluateGroup(criteria, item.contexts, item.key).decision === 'match',
+      )
+      return ok({
+        items: matches.slice(0, 20).map((item) =>
+          context === 'endpoint'
+            ? { kind: 'endpoint', id: item.key }
+            : objectRef({
+                kind: item.key.slice(0, item.key.indexOf(':')),
+                id: item.key.slice(item.key.indexOf(':') + 1),
+              }),
+        ),
+        scanComplete: matches.length <= 20,
+        inputFingerprint: 'demo-criteria-sample',
+        assetCut: {
+          tenant: '11111111-1111-4111-8111-111111111111',
+          epoch: '22222222-2222-4222-8222-222222222222',
+          snapshot: '1:2:',
+        },
+        objectSnapshot: context === 'endpoint' ? null : '33333333-3333-4333-8333-333333333333',
+        sources: [],
+        asOf: Date.now(),
+      })
+    }
     if (path === '/api/v1/groups' && method === 'GET') {
       const items = (
         scenario === 'empty' ? [] : [...groups.values()].map((g) => g.read.group)
@@ -402,7 +436,7 @@ export function createGroupDemo(
       })
     }
     const match =
-      /^\/api\/v1\/groups\/([^/]+)(?:\/(previews|tasks|results)(?:\/([^/]+))?(?:\/(members|changes|decisions))?)?$/.exec(
+      /^\/api\/v1\/groups\/([^/]+)(?:\/(tasks|results)(?:\/([^/]+))?(?:\/(members|changes|decisions))?)?$/.exec(
         path,
       )
     if (!match) return
@@ -431,7 +465,7 @@ export function createGroupDemo(
       advance(job, state, scenario)
       return ok({
         task,
-        kind: job.publish ? 'group' : 'group_preview',
+        kind: 'group',
         target: id,
         status: job.status,
         processed: job.status === 'running' ? 0 : job.decisions.length,
@@ -506,8 +540,7 @@ export function createGroupDemo(
     }
     if (method === 'GET') {
       if (state)
-        for (const job of jobs.values())
-          if (job.group === id && job.publish) advance(job, state, scenario)
+        for (const job of jobs.values()) if (job.group === id) advance(job, state, scenario)
       return state && !state.read.group.deleted
         ? ok({ ...state.read, criteria: responseCriteria(state.read.criteria) })
         : error('group_not_found', 404)
@@ -515,12 +548,6 @@ export function createGroupDemo(
     if (method !== 'POST') return
     const op = operation(request.body)
     return receipts.write(request, op.operationId, () => {
-      if (match[2] === 'previews')
-        return state &&
-          state.read.group.revision === op.expectedRevision &&
-          !state.read.group.deleted
-          ? start(id, op.operationId, false)
-          : error('operation_conflict')
       const input = record(op.input),
         action = enumeration(input['action'], [
           'create',
@@ -562,7 +589,7 @@ export function createGroupDemo(
           return definition(id, op.operationId, () => {
             if (groups.has(id)) return false
             groups.set(id, { read, members: [] })
-            start(id, randomUUID(), true)
+            start(id, randomUUID())
             return true
           })
         groups.set(id, { read, members: [] })
@@ -588,11 +615,11 @@ export function createGroupDemo(
           })
         if (add.some((id) => !devices().get(id)?.summary.inventoryAvailable))
           return error('inventory_not_found', 404)
-        return start(id, op.operationId, true, [
+        return start(id, op.operationId, [
           ...new Set([...state.members.filter((id) => !remove.includes(id)), ...add]),
         ])
       }
-      if (action === 'recompute') return start(id, op.operationId, true)
+      if (action === 'recompute') return start(id, op.operationId)
       if (
         action === 'delete' &&
         [...groups.values()].some(
@@ -610,7 +637,7 @@ export function createGroupDemo(
           state.read.criteria = condition
           state.read.group.ruleVersion = randomUUID()
           state.read.group.revision++
-          start(id, randomUUID(), true)
+          start(id, randomUUID())
           return true
         })
       } else if (action === 'edit') {
@@ -641,7 +668,7 @@ export function createGroupDemo(
         const previous = jobs.get(state.read.memberSet)
         if (!previous || previous.inputs === inputs(state.read)) continue
         const task = randomUUID()
-        start(id, task, true)
+        start(id, task)
         const job = jobs.get(task)!
         job.status = 'completed'
         state.read.group.calculationRevision++

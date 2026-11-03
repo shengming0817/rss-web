@@ -132,7 +132,11 @@ it('retains concrete namespace in endpoint list requests and does not reinterpre
         kind: 'list_items',
         device: 'endpoint',
         field: 'custom.rows',
-        watermark: 8,
+        assetCut: {
+          tenant: '11111111-1111-4111-8111-111111111111',
+          epoch: '22222222-2222-4222-8222-222222222222',
+          snapshot: '1:2:',
+        },
         total: 0,
         items: [],
         nextCursor: 'b3BhcXVl',
@@ -153,7 +157,7 @@ it('retains concrete namespace in endpoint list requests and does not reinterpre
   ).toBe(0)
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      query: { scope: JSON.stringify(scope), cursor: 'opaque-source/first=', limit: 2 },
+      body: { scope, cursor: 'opaque-source/first=', limit: 2 },
     }),
   )
 })

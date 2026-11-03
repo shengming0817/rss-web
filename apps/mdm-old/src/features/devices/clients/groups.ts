@@ -57,7 +57,7 @@ export function groupCriteria(value: unknown, depth = 0): GroupCriteria {
   return predicate
 }
 export function groupCondition(value: unknown): GroupCondition {
-  if (!wireSchemas.postApiV1GroupsByIdBody.validateInventoryCondition(value))
+  if (!wireSchemas.postApiV1GroupsByIdBody.validateCondition(value))
     throw new Error('Invalid contract value')
 
   const v = value
@@ -366,10 +366,16 @@ export function createGroupsClient(transport: HttpTransport) {
         }
       })
     },
-    preview: (id: string, body: Operation<Record<string, never>>) =>
-      api.postApiV1GroupsByIdPreviews(transport, { pathParams: { id }, body }, (v) =>
-        accepted(v, id, body.operationId, 'group_preview'),
-      ),
+    preview: (body: {
+      criteria: GroupCondition
+      assetContext: 'endpoint' | 'associated_device'
+      editing?: { groupId: string; expectedRevision: number }
+    }) =>
+      api.postApiV1GroupsPreviews(transport, { body }, (value) => ({
+        ...value,
+        items: value.items.map(objectRef),
+        asOf: integer(value.asOf),
+      })),
     status: (group: string, task: string, kind: GroupTaskKind = 'group') =>
       api.getApiV1GroupsByGroupTasksByTask(transport, { pathParams: { group, task } }, (value) =>
         calculationTask(value, kind, group, task),

@@ -5,16 +5,19 @@ import { readFile } from 'node:fs/promises'
 export async function contractSource(root = new URL('../', import.meta.url)) {
   const source = JSON.parse(await readFile(new URL('contracts/mdm/source.json', root), 'utf8'))
   if (
+    !source ||
+    typeof source !== 'object' ||
+    Array.isArray(source) ||
+    Object.keys(source).sort().join(',') !== 'generator,repository,revision,sha256' ||
     source.repository !== 'https://dev.azure.com/shengming0923/rss/_git/rss-mdm' ||
     !/^[a-f0-9]{40}$/.test(source.revision) ||
-    !/^[a-f0-9]{40}$/.test(source.blob) ||
     !/^[a-f0-9]{64}$/.test(source.sha256) ||
-    source.path !== 'contracts/http-v1.json'
+    source.generator !==
+      'python3 hack/http_contract_artifact.py --output artifacts/http-contract/http-v1.json'
   )
     throw new Error('Invalid fixed MDM source')
   const bytes = await readFile(new URL('contracts/mdm/http-v1.json', root))
-  const blob = createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex')
-  if (blob !== source.blob || createHash('sha256').update(bytes).digest('hex') !== source.sha256)
+  if (createHash('sha256').update(bytes).digest('hex') !== source.sha256)
     throw new Error('Local MDM contract differs from its pin')
   const document = JSON.parse(bytes.toString())
   if (

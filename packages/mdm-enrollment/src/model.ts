@@ -147,7 +147,7 @@ export interface NativeIntent {
 export interface Registration {
   readonly registrationId: string
   readonly enrollmentId?: string | null
-  readonly agentGrantId?: string | null
+  readonly certificateGrantId?: string | null
   readonly userContextId?: string | null
   readonly source?: Source
   readonly generation?: number

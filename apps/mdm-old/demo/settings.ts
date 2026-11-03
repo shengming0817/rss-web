@@ -103,7 +103,7 @@ export function createSettingsDemo(options: { seedDownloads?: boolean } = {}) {
                 ...(partial ? { reason: 'deadline' } : {}),
               },
             ],
-            dispatch: { consumed: 4, watermark: 4 },
+            dispatch: { windowOpen: true, eventAfter: 4 },
           },
           {
             name: 'execution_recovery',

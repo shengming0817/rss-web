@@ -216,9 +216,10 @@ export function createScopeDemo(devices: Devices) {
           eligible = (id: string) => projected.members.includes(id)
         const values =
           kind === 'members'
-            ? projected.members.map((id) => ({ kind: 'endpoint', id }))
+            ? projected.members.map((id) => ({ object: { kind: 'endpoint', id }, available: true }))
             : projected.devices.map((id) => ({
                 object: { kind: 'endpoint', id },
+                available: true,
                 qualification: eligible(id)
                   ? { state: 'eligible', entry: 1 }
                   : projected.excludedByLimit.includes(id) ||

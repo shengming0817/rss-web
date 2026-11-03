@@ -11,6 +11,7 @@ import {
 } from '@rss/mdm-inventory'
 import type {
   GroupChange,
+  GroupPreviewRequest,
   GroupCondition,
   GroupCriteria,
   GroupQuery,
@@ -107,15 +108,27 @@ export function createGroups(port: GroupsPort) {
         throw new Error('Wrong group change receipt')
       return result
     },
-    async preview(id: string, change: Operation<Record<string, never>>) {
-      uuid(id)
-      operation(change)
-      if (!change.expectedRevision || Object.keys(change.input).length)
-        throw new Error('Preview requires the saved definition')
-      const result = await port.preview(id, freeze(change))
-      uuid(result.task)
-      if (result.target !== id || result.kind !== 'group_preview')
-        throw new Error('Wrong preview receipt')
+    async preview(request: GroupPreviewRequest) {
+      validateRule(request.criteria)
+      if (!['endpoint', 'associated_device'].includes(request.assetContext))
+        throw new Error('Invalid asset context')
+      if (request.editing) {
+        uuid(request.editing.groupId)
+        if (
+          !Number.isSafeInteger(request.editing.expectedRevision) ||
+          request.editing.expectedRevision < 1
+        )
+          throw new Error('Invalid preview revision')
+      }
+      const result = await port.preview(freeze(request))
+      if (
+        result.items.length > 20 ||
+        result.items.some(
+          (item) =>
+            item.kind !== (request.assetContext === 'endpoint' ? 'endpoint' : 'association'),
+        )
+      )
+        throw new Error('Wrong preview sample')
       return result
     },
     async task(id: string, task: string) {

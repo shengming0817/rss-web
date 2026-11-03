@@ -174,7 +174,6 @@ it('uses current job kinds for definitions, recompute and preview while keeping 
     expectedRevision: 2,
     input: { action: 'recompute' },
   })
-  await client.preview(id, { operationId: task, expectedRevision: 2, input: {} })
   await client.change(id, {
     operationId: task,
     expectedRevision: 2,
@@ -191,12 +190,8 @@ it('uses current job kinds for definitions, recompute and preview while keeping 
     [200, 202],
     [200, 202],
     [200, 202],
-    [200, 202],
   ])
-  expect(request.mock.calls[2]?.[0]).toMatchObject({
-    path: '/api/v1/groups/{id}/previews',
-    body: { expectedRevision: 2, input: {} },
-  })
+  expect(request.mock.calls.every(([o]) => !o.path.endsWith('/previews'))).toBe(true)
 })
 
 it('accepts safe failed-task details and rejects unknown diagnostic fields', async () => {

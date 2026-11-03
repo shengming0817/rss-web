@@ -12,11 +12,11 @@ const utc = (at: number) =>
     <h3>{{ run.device }} · {{ run.taskId }}</h3>
     <dl>
       <dt>{{ t('policies.dispatch') }}</dt>
-      <dd>{{ t(`software.run_${run.state.delivery.kind}`) }}</dd>
+      <dd>{{ t(`software.run_${run.state?.delivery.kind}`) }}</dd>
       <dt>{{ t('policies.execution') }}</dt>
-      <dd>{{ t(`policies.fact.${run.state.execution}`) }}</dd>
+      <dd>{{ t(`policies.fact.${run.state?.execution}`) }}</dd>
       <dt>{{ t('policies.cancel') }}</dt>
-      <dd>{{ t(`policies.state.${run.state.cancellation}`) }}</dd>
+      <dd>{{ t(`policies.state.${run.state?.cancellation}`) }}</dd>
       <dt>{{ t('policies.effect') }}</dt>
       <dd>{{ t(`software.effect_${run.effect}`) }}</dd>
       <dt>{{ t('software.userAction') }}</dt>
@@ -26,7 +26,9 @@ const utc = (at: number) =>
       <dt>{{ t('software.runWindow') }}</dt>
       <dd>{{ utc(run.availableAt) }} → {{ utc(run.deadline) }}</dd>
       <dt>{{ t('policies.attempt') }}</dt>
-      <dd>{{ run.state.delivery.kind === 'queued' ? '—' : run.state.delivery.attempt }}</dd>
+      <dd>
+        {{ !run.state || run.state.delivery.kind === 'queued' ? '—' : run.state.delivery.attempt }}
+      </dd>
       <template v-if="run.result?.kind === 'software'">
         <dt>{{ t('software.definitionDigest') }}</dt>
         <dd class="console-wrap">{{ run.result.definitionDigest.join(',') }}</dd>

@@ -34,7 +34,7 @@ const at = (seconds: number) =>
       </tr>
       <tr>
         <th>{{ t('security.watermark') }}</th>
-        <td>{{ assessment.factWatermark }} · {{ assessment.dictionaryVersion }}</td>
+        <td>{{ assessment.assetCut.epoch }} · {{ assessment.dictionaryVersion }}</td>
       </tr>
       <tr>
         <th>{{ t('security.condition') }}</th>
@@ -70,7 +70,7 @@ const at = (seconds: number) =>
                 {{ group.memberVersion }}
               </td>
               <td>{{ group.memberSet ?? '—' }}</td>
-              <td>{{ t('security.watermark') }} {{ group.assetWatermark ?? '—' }}</td>
+              <td>{{ t('security.watermark') }} {{ group.assetCut?.epoch ?? '—' }}</td>
               <td>{{ t(`security.state.${assessment.applicability.groups[index]!.decision}`) }}</td>
             </tr>
           </tbody></v-table

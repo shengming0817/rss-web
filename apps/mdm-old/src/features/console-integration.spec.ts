@@ -432,6 +432,18 @@ it('clears disclosed secrets on hiding and refuses late disclosure responses', a
 
 it('renders credential outcomes without confusing escrow or recovered mutation with verified device effects', () => {
   const base = {
+    owner: 'credential',
+    taskId: a,
+    policyId: b,
+    versionId: c,
+    device: 'endpoint',
+    registrationId: a,
+    generation: 1,
+    occurrence: 'credential:1',
+    availableAt: 0,
+    deadline: 100,
+    authorization: null,
+    attemptId: null,
     state: {
       delivery: { kind: 'queued' },
       execution: 'succeeded',
@@ -439,7 +451,6 @@ it('renders credential outcomes without confusing escrow or recovered mutation w
       deadline: 100,
       startedAt: null,
     },
-    effect: 'unverified',
   }
   expect(
     decodeRunEvidence({
@@ -452,20 +463,18 @@ it('renders credential outcomes without confusing escrow or recovered mutation w
         items: [
           { subject: { kind: 'bitlocker', volume: 'volume', protector: a }, outcome: 'escrowed' },
         ],
-        diagnostics: null,
       },
     }),
   ).toMatchObject({
-    effect: 'unverified',
+    effect: null,
     result: { kind: 'credential', items: [{ outcome: 'escrowed' }] },
   })
   expect(
     decodeRunEvidence({
       ...base,
-      effect: 'applied',
-      result: { effect: 'applied', recoveredByTask: b, recoveredByAttempt: c, diagnostics: null },
+      result: { effect: 'applied', recoveredByTask: b, recoveredByAttempt: c },
     }),
-  ).toMatchObject({ effect: 'applied', result: { kind: 'credential_recovery' } })
+  ).toMatchObject({ effect: null, result: { kind: 'credential_recovery', effect: 'applied' } })
 })
 
 function button(w: Pick<VueWrapper, 'findAll'>, label: string) {

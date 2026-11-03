@@ -20,7 +20,7 @@ MDM 无后端演示：`pnpm dev:mdm:old:demo`；生产构建：`pnpm build:mdm:o
 
 新设备、注册与连接代表旅程：`MDM_REACT_DEVICES_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-devices-enrollment-browser`。入口构建新应用，复用既有设备与注册 HTTPS 夹具、构建租约和隔离清理。浏览器覆盖目录、关联原请求恢复、后台准入拒绝、单 JSON 交付及连接版本观察；输出无秘密的桌面、移动和暗色页面截图目录。合成注册与测试 PKI 只证明 HTTP 接缝；真实 Windows/macOS 安装、ADE/Entra 组织资格及设备效果分别验收。
 
-新 React `/inventory` 提供服务端资产查询、个人保存查询、不可变任务结果、字段与展示布局和采集映射；`/groups` 管理静态、动态与嵌套设备组；`/compliance` 管理规则、评估任务及设备当前/历史结论。设备详情的资产页区分关联视图、终端命名空间、来源和历史值，并提供集合续页、手工值和采集质量读取。预览只评估已保存组定义，不发布正式成员；旧成员集和此前合规评估保留历史标识。
+新 React `/inventory` 提供服务端资产查询、个人保存查询、不可变任务结果、字段与展示布局和采集映射；`/groups` 管理静态、动态与嵌套设备组；`/compliance` 管理规则、评估任务及设备当前/历史结论。设备详情的资产页区分关联视图、终端命名空间、来源和历史值，并提供集合续页、手工值和采集质量读取。设备组预览评估当前条件草稿，返回最多20个匹配样例并标明扫描是否完成，不保存定义或发布正式成员；旧成员集和此前合规评估保留历史标识。
 
 采集映射从精确 Resource 固定版本保留物理计划、脚本原文及未编辑变体，创建新的冻结版本。版本声明与每份内容上传分别确认；显示原上传标识及固定坐标，按已读取位置显式续传并查询内容回执。隐藏会清除内容缓冲；若尚未开始上传，先以原标识和冻结元数据显式开始，再读取原上传并恢复固定内容，核验长度和 SHA 后继续。脚本恢复需要原内容所在的精确固定版本；该入口不激活或发布资源。
 
@@ -36,7 +36,7 @@ Webhook 材料写入要求最近 300 秒认证，本地密码账户可在原材�
 
 审计、管理活动与 Webhook 的真实 HTTPS Chromium 验证：`MDM_REACT_AUDIT_WEBHOOKS_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-audit-webhooks-browser`；仅复验公开布局时追加 `design`。入口构建新 React 应用，复用设备夹具的隔离 PG、HTTPS、构建租约和独立清理，输出公开页面的桌面、平板、移动和暗色截图。覆盖已提交响应丢失后的原请求恢复、查询范围、CAS、独立权限和材料清理。410 接收端用于观察 pending/unknown；不修改 Outbox 状态或期限制造死信。宿主持钥确认及真实设备效果分别验收。
 
-新 React `/scopes` 与 `/policies` 提供范围定义、服务端计算结果、精确 Resource/Scope 绑定、策略配置、自助发布、分配资格、独立设备事件及软件灰度。保存 Scope 会排队计算；Policy 资格预览不保存策略、不创建运行。配置修订、执行版本、成员受理、投递与设备效果分别展示。未知写入保留原请求；事件只查询原批次，Scope/Policy 仅显式读取原对象当前状态，不能据此确认原回执；未知结果期间保留原操作标识并锁定新写入。
+新 React `/scopes` 与 `/policies` 提供范围定义、服务端计算结果、精确 Resource/Scope 绑定、策略配置、自助发布、分配资格、独立设备事件及软件灰度。保存 Scope 会排队计算；Policy 资格预览不保存策略、不创建运行。配置修订、执行版本、成员受理、投递与设备效果分别展示。保存响应丢失时提示结果未知，保留原操作标识且不自动重放；管理员可刷新查看当前配置。事件继续只查询原批次。Scope 保存前的只读匹配样例预览由 #3130 跟进，当前通过保存触发计算后查看正式结果。
 
 对应真实 HTTPS Chromium 入口为 `MDM_REACT_POLICY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-policy-browser`，复用设备隔离 fixture、构建租约和独立清理；覆盖范围定义、Policy 管理、原事件身份恢复与公开响应式页面。该入口只证明真实 HTTP/界面接缝，不能代替 Windows/macOS 设备效果验收。
 
@@ -118,13 +118,13 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 
 ## 固定 MDM HTTP 契约
 
-`contracts/mdm/http-v1.json` 是提交在仓内的固定契约输入，`source.json` 记录其后端 revision、blob 和 SHA-256。普通安装、开发、测试和构建只读取这两个本地文件，不访问后端或执行后端 Python 工具。
+`contracts/mdm/http-v1.json` 是提交在仓内的固定契约输入，`source.json` 记录其后端 revision、生成入口和 SHA-256。普通安装、开发、测试和构建只读取这两个本地文件，不访问后端或执行后端 Python 工具。
 
 `pnpm install --frozen-lockfile` 安装后自动生成静态端点、类型和 CSP 安全的校验器，供编辑器使用；根命令及依赖 API 的包级 `dev`、`demo`、`typecheck`、`test`、`test:coverage`、`build` 也会先确保生成完成。生成输入未变化时直接复用本地结果；删除生成目录后，下次命令会重建。安装时若使用 `--ignore-scripts`，可执行 `pnpm generate:contracts` 初始化编辑器类型。
 
 `packages/api/src/generated/` 是忽略的本地产物，不提交 Git。`pnpm generate:contracts` 强制重新生成；`pnpm check:contracts` 确保生成目录存在后核对本地输入与生成结果，已进入 `make ci`。并发包命令共用生成锁，失败会阻止后续命令。
 
-升级时从选定的后端 commit 取得 `contracts/http-v1.json` 原始文件，保存为本仓 `contracts/mdm/http-v1.json`，同时更新 pin 的 revision、blob、SHA-256，运行 `pnpm generate:contracts` 并迁移实际消费者；PR 提交契约输入与 pin，不提交生成目录。不会追随远端 develop。生产 HTTP 调用使用 `@rss/api/mdm-operations`；作者模型和 canonical 编码复用 `@rss/api/mdm-types`、`@rss/api/mdm-validators`；其它领域投影和未知编辑输入使用 `@rss/api/mdm-schemas` 自动导出的 scoped 类型与静态校验器，不维护第二套 wire 定义。整数按 JavaScript 精确范围校验，浮点字段保留 producer 的数值语义。Identity 与宿主静态配置继续使用原有边界。
+升级时在选定后端 commit 的固定源码检出中运行 `python3 hack/http_contract_artifact.py --output artifacts/http-contract/http-v1.json`，生成期间保持源码不变，再复制到本仓 `contracts/mdm/http-v1.json`，同时更新 pin 的 revision、generator、SHA-256。后端不再提交完整 JSON，因此 pin 不记录已退役的后端文件路径或 Git blob。随后运行 `pnpm generate:contracts` 并迁移实际消费者；PR 提交契约输入与 pin，不提交生成目录。不会追随远端 develop。生产 HTTP 调用使用 `@rss/api/mdm-operations`；作者模型和 canonical 编码复用 `@rss/api/mdm-types`、`@rss/api/mdm-validators`；其它领域投影和未知编辑输入使用 `@rss/api/mdm-schemas` 自动导出的 scoped 类型与静态校验器，不维护第二套 wire 定义。整数按 JavaScript 精确范围校验，浮点字段保留 producer 的数值语义。Identity 与宿主静态配置继续使用原有边界。
 
 新 React `/resources` 统一管理软件、脚本、配置、Native/Agent 采集和遥测方案的精确版本、变体、Blueprint 与完整定义。元数据保留未编辑键；声明版本、每份内容提交和激活分别确认。文件按块校验与传输；尚未发起上传的本地准备可以放弃。开始请求结果未知时保留原上传标识，显式恢复；冲突或提交未知后，显式读取原上传位置或内容回执，再继续同一操作。下载支持浏览器流式保存，以及最大 16 MiB 的小文件模式；隐藏、权限变化或离开会释放内容与临时下载。
 
