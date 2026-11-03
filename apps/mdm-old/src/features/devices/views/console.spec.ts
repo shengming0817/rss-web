@@ -5,6 +5,7 @@ import { VSelect, VAutocomplete, VTextField, VAlert } from 'vuetify/components'
 import NativeEnrollmentPanel from '../../enrollment/components/NativeEnrollmentPanel.vue'
 import { encodeAssetQuery } from '../clients/asset-query'
 import GroupDependencies from '../components/GroupDependencies.vue'
+import RegistrationPanel from '../components/RegistrationPanel.vue'
 import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
 import TenantUserSelect from '../components/TenantUserSelect.vue'
 import { shallowRef } from 'vue'
@@ -379,6 +380,31 @@ it('opens the existing registration owner from a software source-policy deep lin
   expect(registrations).toHaveLength(1)
   expect(registrations[0]!.text()).toContain('mdm.apple')
   expect(registrations[0]!.text()).not.toContain('agent.builtin')
+})
+it('selects certificate grant identities through the legacy registration directory and sends the exact projection', async () => {
+  const f = await setup('device-management', { device: 'device-01' })
+  const panel = f.wrapper.findComponent(RegistrationPanel)
+  await panel.get('select[multiple]').setValue(['registrationId', 'certificateGrantId'])
+  const before = f.requests.filter(
+    (request) => request.path === '/api/v1/devices/{device}/registrations',
+  ).length
+  await panel
+    .find('.directory-query')
+    .findAll('button')
+    .find((button) => button.text() === '应用查询')!
+    .trigger('click')
+  await flushPromises()
+  const requests = f.requests.filter(
+    (request) => request.path === '/api/v1/devices/{device}/registrations',
+  )
+  expect(requests).toHaveLength(before + 1)
+  expect(requests.at(-1)).toMatchObject({
+    method: 'GET',
+    pathParams: { device: 'device-01' },
+    query: { fields: 'registrationId,certificateGrantId', limit: 50 },
+  })
+  expect(panel.text()).toContain('certificateGrantId')
+  expect(panel.find('[role=alert]').exists()).toBe(false)
 })
 it('renders asset categories, edits manual fields and keeps ownership blocked', async () => {
   const { wrapper, click, scenario } = await setup('device-detail', { device: 'device-01' })

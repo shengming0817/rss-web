@@ -17,7 +17,15 @@ const props = defineProps<{ endpoint: EndpointDetail }>()
 const emit = defineEmits<{ changed: [] }>()
 
 const registrationQuery = useDirectoryQuery(
-  ['registrationId', 'source', 'generation', 'status', 'userContextId', 'enrollmentId'],
+  [
+    'registrationId',
+    'source',
+    'generation',
+    'status',
+    'userContextId',
+    'enrollmentId',
+    'certificateGrantId',
+  ],
   1000,
 )
 
