@@ -45,7 +45,11 @@ function assessment(): Assessment {
     ruleId: id,
     ruleVersion: 2,
     dictionaryVersion: 'dictionary',
-    factWatermark: 5,
+    assetCut: {
+      tenant: '11111111-1111-4111-8111-111111111111',
+      epoch: '22222222-2222-4222-8222-222222222222',
+      snapshot: '1:2:',
+    },
     evaluatedAt: 100,
     groups: [],
     status: 'unknown',

@@ -25,7 +25,7 @@ export const telemetryZh = {
     sources: '允许来源',
     priority: '优先级',
     referencePermission:
-      '映射引用需要 InventoryFieldsWrite 和 ResourceRead 权限；字段目录可独立读取。',
+      '直接引用摘要需要 InventoryFieldsWrite 权限；读取资源内容还需 ResourceRead。',
     configurationOnly:
       '这里只显示映射配置。Policy 是否启用、设备是否采集成功需在对应策略和设备观察中查看。',
   },
@@ -270,7 +270,7 @@ export const telemetryEn: typeof telemetryZh = {
     sources: 'Allowed sources',
     priority: 'Priority',
     referencePermission:
-      'Mapping references require InventoryFieldsWrite and ResourceRead. The field catalog is independently readable.',
+      'Direct references require InventoryFieldsWrite. Reading resource content also requires ResourceRead.',
     configurationOnly:
       'These are mapping configurations. Check the corresponding Policy and device observations for enablement and actual collection results.',
   },

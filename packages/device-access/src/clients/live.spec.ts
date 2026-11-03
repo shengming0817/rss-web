@@ -356,6 +356,7 @@ describe('native public DA adapters', () => {
     f.replies.push(
       {
         operationId: id,
+        owner: 'device',
         commandId: id,
         revision: 1,
         task: { platform: 'windows', kind: 'sync_ml', name: 'sync', objects: [] },
@@ -366,7 +367,6 @@ describe('native public DA adapters', () => {
         authorization: { state: 'authorized' },
         reauthorization: { state: 'not_applicable' },
         commandStatus: 'applied',
-        agentInstallation: null,
         observation: {
           protocol: 'syncml',
           observationScope: 'native_objects',

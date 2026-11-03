@@ -98,11 +98,13 @@ it('previews do not publish membership and metadata edits preserve accepted memb
   )
   const published = await publishGroupDefinition(groups, id, created.task!)
   const current = await groups.read(id)
-  const preview = await groups.preview(id, operation({}, current.group.revision))
-  await groups.status(id, preview.task, 'group_preview')
-  await groups.status(id, preview.task, 'group_preview')
-  const result = await groups.page(id, preview.task, 'members')
-  expect(result.current).toBe(false)
+  const preview = await groups.preview({
+    criteria: current.criteria!,
+    assetContext: 'endpoint',
+    editing: { groupId: id, expectedRevision: current.group.revision },
+  })
+  expect(typeof preview.scanComplete).toBe('boolean')
+  expect(preview.items.length).toBeLessThanOrEqual(1000)
   expect((await groups.read(id)).memberSet).toBe(published)
   const recompute = await groups.change(
     id,

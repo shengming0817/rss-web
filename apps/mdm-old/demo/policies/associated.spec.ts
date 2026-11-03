@@ -82,8 +82,8 @@ it('keeps canonical associations in assignments, channel endpoints in Scope page
   expect(history.page).toEqual(old.page)
   expect(history.current).toBe(false)
   const page = scopes.handle(req(`/api/v1/scopes/${id}/results/${task}/members`), 'normal')!
-    .body as { page: { items: { kind: string }[] } }
-  expect(page.page.items.every((o) => o.kind === 'endpoint')).toBe(true)
+    .body as { page: { items: { object: { kind: string } }[] } }
+  expect(page.page.items.every((o) => o.object.kind === 'endpoint')).toBe(true)
 })
 it('evaluates associated conditions only from evidence matching original registrations', async () => {
   const f = await setup(),
@@ -180,6 +180,7 @@ it('evaluates associated conditions only from evidence matching original registr
       items: expect.arrayContaining([
         {
           object: { kind: 'endpoint', id: agent.device },
+          available: true,
           qualification: { state: 'pending' },
           reasons: [],
           targets: expect.any(Array),

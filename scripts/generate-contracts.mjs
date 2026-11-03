@@ -91,6 +91,59 @@ const schemaChildren = new Set([
   'then',
   'else',
 ])
+// A tagged record adds properties beside a reference. Expand that record before
+// applying local closed-record validation, so the referenced body does not reject
+// the enclosing discriminator. Explicit producer additionalProperties stays authoritative.
+function referenceSiblings(schema, definitions) {
+  if (typeof schema === 'boolean') return schema
+  const target = schema.$ref?.startsWith('#/$defs/')
+    ? definitions?.[schema.$ref.slice('#/$defs/'.length)]
+    : undefined
+  if (
+    schema.properties &&
+    target?.properties &&
+    target.additionalProperties === undefined &&
+    Object.keys(schema).every(
+      (key) => ['$ref', 'type', 'properties', 'required'].includes(key) || annotationKeys.has(key),
+    )
+  ) {
+    const { $ref: _ref, ...siblings } = schema
+    void _ref
+    schema = {
+      ...target,
+      ...siblings,
+      properties: {
+        ...target.properties,
+        ...Object.fromEntries(
+          Object.entries(siblings.properties).map(([key, value]) => [
+            key,
+            key in target.properties ? { allOf: [target.properties[key], value] } : value,
+          ]),
+        ),
+      },
+      required: [...new Set([...(target.required ?? []), ...(siblings.required ?? [])])],
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(schema).map(([key, value]) => [
+      key,
+      schemaMaps.has(key)
+        ? Object.fromEntries(
+            Object.entries(value).map(([name, child]) => [
+              name,
+              referenceSiblings(child, definitions),
+            ]),
+          )
+        : schemaLists.has(key)
+          ? value.map((child) => referenceSiblings(child, definitions))
+          : schemaChildren.has(key)
+            ? referenceSiblings(value, definitions)
+            : value,
+    ]),
+  )
+}
+for (const [id, schema] of Object.entries(schemas))
+  schemas[id] = referenceSiblings(schema, schema.$defs)
 // Visit only schema positions. A const/enum/example containing JSON Schema is ordinary data.
 function objectShape(schema) {
   return (
@@ -145,6 +198,12 @@ function transform(schema, mode, composed = false) {
     result.maximum = Math.min(result.maximum ?? Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
   }
   if (mode === 'types') {
+    // ref: json-schema.org/draft/2020-12/json-schema-core §8.2.3.1; json-schema-to-typescript issue #613.
+    // Preserve reference siblings as an intersection for the TypeScript compiler.
+    if (result.$ref && Object.keys(result).some((key) => key !== '$ref')) {
+      const { $ref, ...siblings } = result
+      return { allOf: [{ $ref }, siblings] }
+    }
     if (result.prefixItems) {
       result.additionalItems = result.items ?? true
       result.items = result.prefixItems
@@ -221,8 +280,7 @@ for (const e of endpoints) {
   }
   if (e.method === 'GET' && e.path === '/api/v1/asset-fields/{field}') {
     const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
-    for (const name of ['FieldView', 'FieldImpact', 'FieldMappingReference'])
-      ownerNames.set(name, { id, name })
+    for (const name of ['FieldView']) ownerNames.set(name, { id, name })
   }
   if (e.method === 'GET' && e.path === '/api/v1/asset-fields/{field}/references')
     ownerNames.set('FieldReferenceQuery', {

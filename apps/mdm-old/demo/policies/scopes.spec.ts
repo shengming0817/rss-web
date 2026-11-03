@@ -53,7 +53,10 @@ it('distinguishes unlimited from empty limitations and keeps old Scope results f
   expect(scopes.freeze(id)?.members).toEqual([])
   expect(
     scopes.handle(request(`/api/v1/scopes/${id}/results/${task}/members`), 'normal')?.body,
-  ).toMatchObject({ current: false, page: { items: [{ kind: 'endpoint', id: device }] } })
+  ).toMatchObject({
+    current: false,
+    page: { items: [{ object: { kind: 'endpoint', id: device }, available: true }] },
+  })
 })
 it('uses published group membership, never a running or preview membership set', () => {
   const devices = createDeviceDemo(),
@@ -108,7 +111,10 @@ it('uses published group membership, never a running or preview membership set',
   expect(scopes.freeze(id)).toBeNull()
   expect(
     scopes.handle(request(`/api/v1/scopes/${id}/results/${op}/members`), 'normal')?.body,
-  ).toMatchObject({ current: true, page: { items: [{ kind: 'endpoint', id: device }] } })
+  ).toMatchObject({
+    current: true,
+    page: { items: [{ object: { kind: 'endpoint', id: device }, available: true }] },
+  })
 })
 
 it('blocks current Scope consumers while a changed dynamic group is pending and preserves frozen pages', () => {

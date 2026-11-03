@@ -469,7 +469,11 @@ it('binds scoped reads and opaque scope-directory pagination to the requested en
         ? {
             kind: 'inventory_scopes',
             device: device.device,
-            watermark: 12,
+            assetCut: {
+              tenant: '11111111-1111-4111-8111-111111111111',
+              epoch: '22222222-2222-4222-8222-222222222222',
+              snapshot: '1:2:',
+            },
             items: [{ scope }],
             nextCursor: 'next-scope',
           }
@@ -478,7 +482,7 @@ it('binds scoped reads and opaque scope-directory pagination to the requested en
   )
   const client = createAssetsClient({ request } as unknown as HttpTransport, tenant)
   expect((await client.scopes(device.device, 'old-scope')).items).toEqual([scope])
-  expect(request.mock.calls[0]?.[0].query).toEqual({ limit: 20, cursor: 'old-scope' })
+  expect(request.mock.calls[0]?.[0].body).toEqual({ limit: 20, cursor: 'old-scope' })
   expect((await client.inventory(device.device, scope)).collectionScope).toEqual(scope)
   expect(request.mock.calls[1]?.[0].query).toEqual({ scope: JSON.stringify(scope) })
   await expect(client.scopes('other-device')).rejects.toThrow()

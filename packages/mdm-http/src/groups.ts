@@ -20,6 +20,7 @@ import {
   conditionContext,
   conditionValue,
   distinct,
+  integer,
   requestInput,
   windowQuery,
 } from './inventory-values'
@@ -45,7 +46,7 @@ function groupCriteria(value: unknown): GroupCriteria {
   }
 }
 function groupCondition(value: unknown): GroupCondition {
-  if (!schema.getApiV1GroupsByIdResponse200.validateInventoryCondition(value))
+  if (!schema.getApiV1GroupsByIdResponse200.validateCondition(value))
     throw new Error('Invalid group condition')
   return {
     ...conditionContext({ selector: value.selector, quantifier: value.quantifier }),
@@ -227,14 +228,34 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
           }
         },
       ),
-    preview: (id, change) =>
-      api.postApiV1GroupsByIdPreviews(
+    preview: (request) =>
+      api.postApiV1GroupsPreviews(
         transport,
         {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.postApiV1GroupsByIdPreviewsBody.validateRoot),
+          body: requestInput(request, schema.postApiV1GroupsPreviewsBody.validateRoot),
         },
-        (value) => accepted(value, id),
+        (value) => ({
+          items: distinct(value.items.map(objectRef), (item) => `${item.kind}/${item.id}`),
+          scanComplete: boolean(value.scanComplete),
+          inputFingerprint: text(value.inputFingerprint),
+          assetCut: {
+            tenant: uuid(value.assetCut.tenant),
+            epoch: uuid(value.assetCut.epoch),
+            snapshot: text(value.assetCut.snapshot),
+          },
+          objectSnapshot: nullable(value.objectSnapshot, uuid),
+          sources: value.sources.map((source) => ({
+            group: uuid(source.group),
+            coordinates: {
+              ...source.coordinates,
+              memberSet: nullable(source.coordinates.memberSet, uuid),
+              definitionVersion: count(source.coordinates.definitionVersion),
+              memberVersion: count(source.coordinates.memberVersion),
+              authorityVersion: count(source.coordinates.authorityVersion),
+            },
+          })),
+          asOf: integer(value.asOf),
+        }),
       ),
     task: (group, task) =>
       api.getApiV1GroupsByGroupTasksByTask(
@@ -274,8 +295,22 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
         },
         (value) => result(value, group, resultId, kind),
       ),
-    references: (group, query = {}) =>
+    references: (id, query = {}) =>
       api.getApiV1GroupsByIdReferences(
+        transport,
+        { pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        (value) => ({
+          items: value.items.map((item) => ({
+            ...item,
+            id: uuid(item.id),
+            revision: positive(item.revision),
+            roles: [...item.roles],
+          })),
+          nextCursor: nextCursor(value.nextCursor),
+        }),
+      ),
+    impacts: (group, query = {}) =>
+      api.getApiV1GroupsByIdImpacts(
         transport,
         {
           pathParams: { id: uuid(group) },
@@ -286,7 +321,6 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
           },
         },
         (value) => ({
-          deletionBlocked: value.deletionBlocked,
           nextCursor: nextCursor(value.nextCursor),
           items: value.items.map((entry) => ({
             ...entry,

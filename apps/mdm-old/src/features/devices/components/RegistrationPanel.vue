@@ -24,7 +24,7 @@ const registrationQuery = useDirectoryQuery(
     'status',
     'userContextId',
     'enrollmentId',
-    'agentGrantId',
+    'certificateGrantId',
   ],
   1000,
 )
@@ -36,7 +36,13 @@ const runtime = useMdm(),
     () => deviceBinding(runtime),
     () => props.endpoint.id,
   )
-const page = ref<Awaited<ReturnType<typeof runtime.devices.enrollment.registrations>>>(),
+type RegistrationRow = Awaited<
+  ReturnType<typeof runtime.devices.enrollment.registrations>
+>['items'][number]
+const page = ref<{
+    items: (Partial<RegistrationRow> & Pick<RegistrationRow, 'registrationId'>)[]
+    nextCursor: string | null
+  }>(),
   target = ref<string>(),
   original = ref<{ id: string; registration: string }>(),
   compared = ref(false)

@@ -1,3 +1,6 @@
+import { ReadEpoch } from './AdminUi'
+import { Policies } from './Policies'
+import { Scopes } from './Scopes'
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -248,6 +251,8 @@ const featureRoutes: readonly FeatureRoute[] = [
   { path: '/software', label: 'software', realm: 'tenant', render: (ui) => <Software {...ui} /> },
   { path: '/audit', label: 'audit', realm: 'tenant', render: (ui) => <Audit {...ui} /> },
   { path: '/webhooks', label: 'webhooks', realm: 'tenant', render: (ui) => <Webhooks {...ui} /> },
+  { path: '/policies', label: 'policies', realm: 'tenant', render: (ui) => <Policies {...ui} /> },
+  { path: '/scopes', label: 'scopes', realm: 'tenant', render: (ui) => <Scopes {...ui} /> },
   { path: '/groups', label: 'groups', realm: 'tenant', render: (ui) => <GroupsPage {...ui} /> },
   {
     path: '/compliance',
@@ -788,7 +793,9 @@ function Shell({
                     <div
                       key={`${runtime.tenant}/${state.identity?.principalId}/${state.session?.id}`}
                     >
-                      {route.render({ runtime, locale })}
+                      <ReadEpoch.Provider value={location.key}>
+                        {route.render({ runtime, locale })}
+                      </ReadEpoch.Provider>
                     </div>
                   }
                 />

@@ -1100,3 +1100,172 @@ html:has(.mdm-overlay-open) {
 .audit-page .data-table td {
   white-space: nowrap;
 }
+
+/* Policy directory and focused deployment tasks follow the console design. */
+.policy-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.policy-query {
+  margin-bottom: 20px;
+}
+.policy-list {
+  display: grid;
+  gap: 12px;
+}
+.policy-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 19px 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.policy-card:hover {
+  border-color: var(--muted);
+}
+.policy-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--side);
+  color: var(--muted);
+}
+.policy-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.policy-card-main {
+  flex: 1;
+  min-width: 0;
+}
+.policy-title.ant-btn {
+  max-width: 100%;
+  height: auto;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 550;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.policy-meta {
+  display: flex;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.policy-meta a {
+  color: inherit;
+}
+.policy-versions {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.policy-versions strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.policy-editor .ant-steps {
+  margin: 4px 0 24px;
+}
+.policy-coordinate {
+  margin: 12px 0 20px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.policy-step-controls {
+  margin: 18px 0;
+}
+.policy-editor .ant-card,
+.scope-editor .ant-card {
+  margin: 18px 0;
+}
+@media (max-width: 650px) {
+  .policies-page .page-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .policy-card {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: start;
+    padding: 15px 12px;
+    gap: 12px 10px;
+  }
+  .policy-icon {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .policy-card-main {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .policy-card > button {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .policy-versions {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .policy-card > .ant-tag {
+    grid-column: 3;
+    grid-row: 2;
+    margin: 0;
+  }
+  .policy-toolbar .ant-segmented {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
+.policy-dialog .ant-modal {
+  top: 32px;
+  padding-bottom: 0;
+}
+.policy-dialog .ant-modal-container {
+  max-height: calc(100dvh - 64px);
+  display: flex;
+  flex-direction: column;
+}
+.policy-dialog .ant-modal-body {
+  overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+@media (max-width: 650px) {
+  .policy-dialog .ant-modal {
+    top: 16px;
+  }
+  .policy-dialog .ant-modal-container {
+    max-height: calc(100dvh - 32px);
+  }
+}
+
+.policy-title.ant-btn {
+  color: var(--text);
+}
+.policy-card > .ant-tag-success {
+  color: #218262;
+  background: #e9f6ef;
+}
+:root[data-theme='dark'] .policy-card > .ant-tag-success {
+  color: #79ba9f;
+  background: #20352c;
+}

@@ -3,6 +3,7 @@ import type { FieldState, Scalar } from '@rss/mdm-devices'
 import { validateScalar } from '@rss/mdm-inventory'
 import type {
   CollectionScope,
+  AssetCut,
   Condition,
   ConditionContext,
   ConditionValue,
@@ -109,6 +110,11 @@ export function integer(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value))
     throw new Error('Unsafe asset integer')
   return value
+}
+export function assetCut(value: unknown): AssetCut {
+  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateAssetCut(value))
+    throw new Error('Invalid asset cut')
+  return { ...value, tenant: uuid(value.tenant), epoch: uuid(value.epoch) }
 }
 function sourceFact(value: unknown): SourceFact {
   if (!schema.getApiV1DevicesByIdInventoryResponse200.validateSourceFact(value))

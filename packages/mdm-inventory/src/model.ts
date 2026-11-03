@@ -11,6 +11,12 @@ import type {
   ViewEndpoint,
 } from '@rss/mdm-devices'
 
+/** Opaque committed input issued by the backend; never a numeric frontier. */
+export interface AssetCut {
+  readonly tenant: string
+  readonly epoch: string
+  readonly snapshot: string
+}
 /** Asset values and their source coordinates are facts, never client-side resolution. */
 export type AssetContext = 'endpoint' | 'associated_device'
 export type InventorySource =
@@ -176,22 +182,26 @@ export interface FieldDetail {
   readonly version: number
   readonly definition: FieldDefinition | null
 }
-export interface FieldReferences extends Page<{
-  readonly resource: string
-  readonly version: string
-  readonly state: string
-  readonly telemetry: boolean
-}> {
-  readonly field: string
-  readonly impact: {
-    readonly archivedResourceVersions: number
-    readonly compliance: number
-    readonly groups: number
-    readonly savedQueries: number
-    readonly telemetryProfiles: number
-    readonly templates: number
-  }
+export interface FieldReference {
+  readonly source:
+    | { readonly kind: 'group' | 'compliance_rule'; readonly id: string; readonly revision: number }
+    | { readonly kind: 'resource_version'; readonly id: string; readonly version: string }
+    | {
+        readonly kind: 'saved_query'
+        readonly instance: string
+        readonly owner: string
+        readonly id: string
+        readonly revision: number
+      }
+  readonly role:
+    | 'group_condition'
+    | 'collection_mapping'
+    | 'telemetry_mapping'
+    | 'compliance_condition'
+    | 'saved_query'
+  readonly release: 'edit_or_delete_referencing_object' | 'archive_referencing_version'
 }
+export type FieldReferences = Page<FieldReference>
 export interface DisplayGroup {
   readonly id: string
   readonly name: string
@@ -430,7 +440,7 @@ export interface ListItems extends Page<Scalar> {
   readonly source: Evidence | null
   readonly field: string
   readonly total: number
-  readonly watermark: number | null
+  readonly assetCut: AssetCut | null
 }
 export interface ListRead {
   readonly reference: DeviceRef
@@ -479,7 +489,7 @@ export interface InventoryPort {
   ): Promise<
     Page<{ readonly scope: CollectionScope }> & {
       readonly device: string
-      readonly watermark: number
+      readonly assetCut: AssetCut
     }
   >
   list(query: ListRead): Promise<ListItems>

@@ -1,4 +1,4 @@
-import type { DirectoryQuery, Page, Platform } from '@rss/mdm-devices'
+import type { DirectoryQuery, Page, Platform, WindowQuery } from '@rss/mdm-devices'
 import type { Operation } from '@rss/mdm-inventory'
 import type { AgentDefinition, NativeDefinition, ScriptDefinition } from './collections'
 import type { SoftwareDefinition } from './software'
@@ -141,9 +141,26 @@ export interface ResourceReceipt {
   readonly request: string
   readonly storageRevision: number
 }
+export interface ResourceReference {
+  readonly kind:
+    | 'policy_version'
+    | 'software_publication'
+    | 'software_catalog'
+    | 'collection_profile'
+  readonly id: string
+  readonly version: string | null
+  readonly role: 'policy_action' | 'publication_subject' | 'catalog_version' | 'collection_template'
+  readonly retention:
+    | 'current_version'
+    | 'historical_version'
+    | 'retained_record'
+    | 'unarchived_version'
+  readonly release: 'retained_immutable' | 'archive_referencing_version'
+}
 export interface ResourcesPort {
   list(query: DirectoryQuery<keyof ResourceRow>, kind?: ResourceKind): Promise<Page<ResourceRow>>
   read(id: string): Promise<Resource>
+  references(id: string, version: string, query: WindowQuery): Promise<Page<ResourceReference>>
   blueprints(): Promise<BlueprintCatalog>
   change(id: string, change: Operation<ResourceChange>): Promise<ResourceReceipt | Resource>
   prepareVersion(draft: ResourceVersionDraft): Promise<PreparedResourceVersion>

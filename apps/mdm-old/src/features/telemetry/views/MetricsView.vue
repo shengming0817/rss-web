@@ -29,7 +29,7 @@ const runtime = useMdm(),
 const { run, runWrite, busy, failure, uncertain } = useOperation([], () => deviceBinding(runtime))
 const permission = usePermission('inventory_read', 'inventory_fields_write'),
   { canWrite } = permission
-const canReadReferences = computed(() => canWrite.value && permission.allows('resource_read'))
+const canReadReferences = computed(() => canWrite.value)
 const fields = ref<FieldDefinition[]>([]),
   search = ref(''),
   selected = ref<FieldDefinition>(),
@@ -534,19 +534,12 @@ watch(
           <section v-if="references">
             <h3>{{ t('telemetry.references') }}</h3>
             <ul>
-              <li
-                v-for="mapping in references.mappings"
-                :key="mapping.resource + '/' + mapping.version"
-              >
-                <RouterLink
-                  :to="{
-                    name: 'policy-resources',
-                    params: { tenant: runtime.tenant },
-                    query: { resource: mapping.resource, version: mapping.version },
-                  }"
-                  >{{ mapping.resource }} / {{ mapping.version }}</RouterLink
+              <li v-for="reference in references.items" :key="JSON.stringify(reference)">
+                {{ reference.source.kind }} · {{ reference.source.id }} · {{ reference.role }} ·
+                {{ reference.release
+                }}<span v-if="reference.source.kind === 'resource_version'">
+                  · {{ reference.source.version }}</span
                 >
-                · {{ mapping.state }}
               </li>
             </ul>
             <VBtn
@@ -555,12 +548,6 @@ watch(
               @click="loadReferences(references.nextCursor)"
               >{{ t('devices.next') }}</VBtn
             >
-            <dl class="telemetry-facts">
-              <template v-for="(count, name) in references.impact" :key="name"
-                ><dt>{{ t('telemetry.reference.' + name) }}</dt>
-                <dd>{{ count }}</dd></template
-              >
-            </dl>
           </section>
           <p class="telemetry-caption">{{ t('telemetry.newSamplesOnly') }}</p>
           <label

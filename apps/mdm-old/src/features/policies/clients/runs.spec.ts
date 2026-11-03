@@ -5,6 +5,7 @@ const id = '11111111-1111-4111-8111-111111111111',
   task = '22222222-2222-4222-8222-222222222222'
 const digest = Array<number>(32).fill(1)
 const run = {
+  kind: 'software',
   nodes: [],
   taskId: task,
   policyId: id,
@@ -56,6 +57,26 @@ const run = {
     },
   },
 }
+
+function scriptRun(result: unknown) {
+  return {
+    kind: 'script',
+    taskId: task,
+    policyId: id,
+    versionId: task,
+    device: 'device-01',
+    registrationId: id,
+    generation: 1,
+    occurrence: 'script:1',
+    availableAt: 10,
+    deadline: 100,
+    state: run.state,
+    authorization: null,
+    attemptId: task,
+    resourceId: 'script-resource',
+    result,
+  }
+}
 it('preserves script history without pretending a pending result has a software kind', () => {
   const result = {
     collectedAt: 12,
@@ -69,12 +90,12 @@ it('preserves script history without pretending a pending result has a software 
     diagnostics: run.result.evidence.steps[0]!.diagnostics,
     trusted: true,
   }
-  expect(policyRun({ ...run, effect: 'unverified', result }, true).result).toMatchObject({
+  expect(policyRun(scriptRun(result), true).result).toMatchObject({
     kind: 'script',
     output: { count: 1 },
   })
-  expect(policyRun({ ...run, effect: 'unverified', result: null }, true).result).toBeNull()
-  expect(() => policyRun({ ...run, result: { ...result, effect: 'verified' } }, true)).toThrow()
+  expect(policyRun(scriptRun(null), true).result).toBeNull()
+  expect(() => policyRun(scriptRun({ ...result, effect: 'verified' }), true)).toThrow()
 })
 it('enforces wire diagnostic limits and matching deadlines but accepts ecosystem version strings', () => {
   expect(
@@ -228,7 +249,7 @@ it('consumes current script evidence, redacts summaries and rejects obsolete or 
     diagnostics: run.result.evidence.steps[0]!.diagnostics,
     trusted: true,
   }
-  expect(policyRun({ ...run, result }, true).result).toMatchObject({
+  expect(policyRun(scriptRun(result), true).result).toMatchObject({
     collectedAt: 12,
     receivedAt: 15,
     budgetValid: true,
@@ -239,8 +260,8 @@ it('consumes current script evidence, redacts summaries and rejects obsolete or 
   const diagnostics: Record<string, unknown> = { ...result.diagnostics }
   delete diagnostics['stdout']
   delete diagnostics['stderr']
-  const summaryRun: Record<string, unknown> = { ...run }
-  delete summaryRun['policyId']
+  const summaryRun: Record<string, unknown> = scriptRun(null)
+  // Policy and immutable version remain bound in script summaries.
   delete summaryRun['nodes']
   const request = vi.fn(async (o: RequestOptions<unknown>) =>
     o.decode({
@@ -262,10 +283,7 @@ it('consumes current script evidence, redacts summaries and rejects obsolete or 
   const reference = { bytes: 1_048_577, sha256: 'a'.repeat(64) }
   expect(
     policyRun(
-      {
-        ...run,
-        result: { ...result, budgetValid: false, output: null, outputReference: reference },
-      },
+      scriptRun({ ...result, budgetValid: false, output: null, outputReference: reference }),
       true,
     ).result,
   ).toMatchObject({ output: null, outputReference: reference })
@@ -277,10 +295,10 @@ it('consumes current script evidence, redacts summaries and rejects obsolete or 
     { ...result, extra: true },
     { ...result, output: 'a'.repeat(1_048_577) },
   ])
-    expect(() => policyRun({ ...run, result: invalid }, true)).toThrow()
+    expect(() => policyRun(scriptRun(invalid), true)).toThrow()
   for (const key of ['collectedAt', 'receivedAt', 'budgetValid', 'outputReference']) {
     const invalid: Record<string, unknown> = { ...result }
     delete invalid[key]
-    expect(() => policyRun({ ...run, result: invalid }, true)).toThrow()
+    expect(() => policyRun(scriptRun(invalid), true)).toThrow()
   }
 })

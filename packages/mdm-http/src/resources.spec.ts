@@ -396,3 +396,31 @@ it('retains all three Blueprint definition families and correlates instantiation
     'Wrong instantiated resource',
   )
 })
+
+it('reads exact resource version blockers with retention and opaque cursor identities', async () => {
+  const item = {
+    kind: 'policy_version',
+    id: operationId,
+    version: 'frozen-policy-version',
+    role: 'policy_action',
+    retention: 'historical_version',
+    release: 'retained_immutable',
+  }
+  const f = fixture(() => ({ items: [item], nextCursor: 'bmV4dA' })),
+    client = f.adapter
+  expect(
+    await client.references('company/script', 'fixed-v1', { cursor: 'cHJldg', limit: 1 }),
+  ).toEqual({ items: [item], nextCursor: 'bmV4dA' })
+  expect(f.request).toHaveBeenCalledWith(
+    expect.objectContaining({
+      pathParams: { id: 'company/script', version: 'fixed-v1' },
+      query: { cursor: 'cHJldg', limit: 1 },
+    }),
+  )
+  await expect(
+    fixture(() => ({
+      items: [{ ...item, release: 'delete_history' }],
+      nextCursor: null,
+    })).adapter.references('company/script', 'fixed-v1', {}),
+  ).rejects.toThrow()
+})

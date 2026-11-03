@@ -72,7 +72,7 @@ function saved(value: unknown) {
   return { revision: count(v['revision']), intent: decodeIntent(v['intent']) }
 }
 export function decodeFirstUse(value: unknown, tenant: string) {
-  if (!wireSchemas.getApiV1SettingsFirstUseResponse.validateProgress(value))
+  if (!wireSchemas.getApiV1SettingsFirstUseResponse.validateRoot(value))
     throw new Error('Invalid contract value')
 
   const v = value
@@ -103,7 +103,7 @@ export function decodeFirstUse(value: unknown, tenant: string) {
 }
 export type FirstUseProgress = ReturnType<typeof decodeFirstUse>
 function receipt(value: unknown) {
-  if (!wireSchemas.getApiV1SettingsFirstUseOperationsByIdResponse.validateReceipt(value))
+  if (!wireSchemas.getApiV1SettingsFirstUseOperationsByIdResponse.validateRoot(value))
     throw new Error('Invalid contract value')
 
   const v = value,

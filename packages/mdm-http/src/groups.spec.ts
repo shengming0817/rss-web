@@ -139,10 +139,10 @@ it('retains association versions and exact source registration generations in hi
   expect(await createGroupsAdapter(f.transport).result(id, task, 'decisions', {})).toEqual(value)
 })
 it('preserves deletion protection on an empty permission-filtered reference page', async () => {
-  const value = { items: [], nextCursor: 'b3BhcXVl', deletionBlocked: true },
+  const value = { items: [], nextCursor: 'b3BhcXVl' },
     f = fixture(value)
   expect(
-    await createGroupsAdapter(f.transport).references(id, {
+    await createGroupsAdapter(f.transport).impacts(id, {
       relation: 'indirect',
       kind: 'compliance_rule',
       cursor: 'cHJldmlvdXM',
@@ -155,17 +155,7 @@ it('preserves deletion protection on an empty permission-filtered reference page
     }),
   )
 })
-it('does not follow a foreign task status URL or accept a task for another group', async () => {
-  const f = fixture({
-      task,
-      kind: 'group_preview',
-      target: id,
-      statusUrl: 'https://elsewhere.example/task',
-    }),
-    client = createGroupsAdapter(f.transport)
-  await expect(
-    client.preview(id, { operationId: task, expectedRevision: 2, input: {} }),
-  ).rejects.toThrow()
+it('rejects a task for another group', async () => {
   const wrong = fixture({
     task,
     kind: 'group',
@@ -204,4 +194,51 @@ it('binds a reused calculation task to its returned identity and canonical statu
   await expect(
     client.change(id, { operationId: task, expectedRevision: 2, input: { action: 'recompute' } }),
   ).rejects.toThrow('Wrong group task binding')
+})
+it('previews unsaved criteria with bounded sample facts and no task identity', async () => {
+  const input = {
+      criteria: {
+        selector: { kind: 'device' as const },
+        quantifier: 'one' as const,
+        criteria: { kind: 'and' as const, children: [] },
+      },
+      assetContext: 'endpoint' as const,
+      editing: { groupId: id, expectedRevision: 2 },
+    },
+    value = {
+      items: [],
+      scanComplete: false,
+      inputFingerprint: 'input-1',
+      assetCut: { tenant: id, epoch: task, snapshot: '1:2:' },
+      objectSnapshot: null,
+      sources: [],
+      asOf: 0,
+    },
+    f = fixture(value)
+  expect(await createGroupsAdapter(f.transport).preview(input)).toEqual(value)
+  expect(f.request).toHaveBeenCalledWith(
+    expect.objectContaining({ method: 'POST', path: '/api/v1/groups/previews', body: input }),
+  )
+  await expect(
+    createGroupsAdapter(fixture({ ...value, scanComplete: 'false' }).transport).preview(input),
+  ).rejects.toThrow()
+})
+it('reads complete direct blockers independently of the filtered recursive impacts', async () => {
+  const value = {
+      items: [
+        {
+          kind: 'scope',
+          id: nested,
+          revision: 2,
+          roles: ['target', 'exclusion'],
+          release: 'edit_or_delete_referencing_object',
+        },
+      ],
+      nextCursor: null,
+    },
+    f = fixture(value)
+  expect(await createGroupsAdapter(f.transport).references(id, {})).toEqual(value)
+  expect(f.request).toHaveBeenCalledWith(
+    expect.objectContaining({ path: '/api/v1/groups/{id}/references', query: { limit: 50 } }),
+  )
 })

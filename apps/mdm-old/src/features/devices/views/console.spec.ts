@@ -5,6 +5,7 @@ import { VSelect, VAutocomplete, VTextField, VAlert } from 'vuetify/components'
 import NativeEnrollmentPanel from '../../enrollment/components/NativeEnrollmentPanel.vue'
 import { encodeAssetQuery } from '../clients/asset-query'
 import GroupDependencies from '../components/GroupDependencies.vue'
+import RegistrationPanel from '../components/RegistrationPanel.vue'
 import { createSecurityClients as createFormalSecurityClients } from '../../security/client'
 import TenantUserSelect from '../components/TenantUserSelect.vue'
 import { shallowRef } from 'vue'
@@ -380,6 +381,31 @@ it('opens the existing registration owner from a software source-policy deep lin
   expect(registrations[0]!.text()).toContain('mdm.apple')
   expect(registrations[0]!.text()).not.toContain('agent.builtin')
 })
+it('selects certificate grant identities through the legacy registration directory and sends the exact projection', async () => {
+  const f = await setup('device-management', { device: 'device-01' })
+  const panel = f.wrapper.findComponent(RegistrationPanel)
+  await panel.get('select[multiple]').setValue(['registrationId', 'certificateGrantId'])
+  const before = f.requests.filter(
+    (request) => request.path === '/api/v1/devices/{device}/registrations',
+  ).length
+  await panel
+    .find('.directory-query')
+    .findAll('button')
+    .find((button) => button.text() === '应用查询')!
+    .trigger('click')
+  await flushPromises()
+  const requests = f.requests.filter(
+    (request) => request.path === '/api/v1/devices/{device}/registrations',
+  )
+  expect(requests).toHaveLength(before + 1)
+  expect(requests.at(-1)).toMatchObject({
+    method: 'GET',
+    pathParams: { device: 'device-01' },
+    query: { fields: 'registrationId,certificateGrantId', limit: 50 },
+  })
+  expect(panel.text()).toContain('certificateGrantId')
+  expect(panel.find('[role=alert]').exists()).toBe(false)
+})
 it('renders asset categories, edits manual fields and keeps ownership blocked', async () => {
   const { wrapper, click, scenario } = await setup('device-detail', { device: 'device-01' })
   await click('硬件')
@@ -516,11 +542,12 @@ it('creates a group, edits its definition, previews and recomputes server member
   await click('概览')
   await click('重读服务器值并比较')
   await click('成员')
-  await click('预览已保存版本')
-  await click('读取任务状态')
-  await click('读取任务状态')
-  await click('载入')
-  expect(wrapper.text()).toContain('当前已发布成员集: 否')
+  expect(
+    wrapper
+      .findAll('button')
+      .find((b) => b.text() === '预览已保存条件样例')
+      ?.attributes('disabled'),
+  ).toBeDefined()
   await click('重算并发布成员')
   await click('读取任务状态')
   await click('读取任务状态')
@@ -634,12 +661,12 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   expect((await devices.groups.read(group.id)).criteria).toMatchObject({
     criteria: { value: { kind: 'boolean', value: true } },
   })
-  await click('预览已保存版本')
+  await click('预览已保存条件样例')
   await click('成员解释')
   await click('读取任务状态')
   await click('读取任务状态')
   await click('载入')
-  expect(wrapper.text()).toContain('当前已发布成员集: 否')
+  expect(wrapper.text()).toContain('当前已发布成员集: 是')
   expect(wrapper.text()).toContain('未采集')
   const explanation = wrapper
     .findAll('.mdm-disclosure')
@@ -657,7 +684,7 @@ it('saves dynamic rules and renders unknown decisions, explanations and provenan
   await click('载入')
   expect(wrapper.text()).toContain('当前已发布成员集: 是')
   scenario.set('partial')
-  await click('预览已保存版本')
+  await click('重算并发布成员')
   await click('读取任务状态')
   await click('读取任务状态')
   expect(wrapper.text()).toContain('stale_plan')
@@ -1724,7 +1751,11 @@ it.each([
       device: 'device-01',
       items: [scope],
       nextCursor: null,
-      watermark: 21,
+      assetCut: {
+        tenant: '11111111-1111-4111-8111-111111111111',
+        epoch: '22222222-2222-4222-8222-222222222222',
+        snapshot: '1:2:',
+      },
     })
     vi.spyOn(h.devices.assets, 'inventory').mockResolvedValue({
       device: 'device-01',
@@ -1866,7 +1897,11 @@ it.each([
       device: 'device-01',
       items: [scope],
       nextCursor: null,
-      watermark: 21,
+      assetCut: {
+        tenant: '11111111-1111-4111-8111-111111111111',
+        epoch: '22222222-2222-4222-8222-222222222222',
+        snapshot: '1:2:',
+      },
     })
     const inventory = vi.spyOn(h.devices.assets, 'inventory').mockResolvedValue({
       device: 'device-01',
@@ -1893,7 +1928,11 @@ it.each([
     const items = vi.spyOn(h.devices.assets, 'listItems').mockResolvedValue({
       items: [{ kind: 'string', value: 'scope-private-item' }],
       total: 2,
-      watermark: 21,
+      assetCut: {
+        tenant: '11111111-1111-4111-8111-111111111111',
+        epoch: '22222222-2222-4222-8222-222222222222',
+        snapshot: '1:2:',
+      },
       nextCursor: 'next',
     })
     await h.router.push({
@@ -1918,7 +1957,7 @@ it.each([
           ? 'permission_denied'
           : status === 404
             ? 'inventory_not_found'
-            : 'device_view_cursor_invalidated',
+            : 'query_cursor_invalidated',
     })
     if (request === 'inventory') {
       inventory.mockRejectedValueOnce(rejection)
@@ -1998,10 +2037,9 @@ it('compares a deleted group inside its unknown-result modal before replaying th
   await f.click('删除')
   f.loseReply.path = '/api/v1/groups/{id}'
   const dialog = new DOMWrapper(document.body).get('[role=alertdialog]')
-  await dialog
-    .findAll('button')
-    .find((b) => b.text() === '删除')!
-    .trigger('click')
+  const confirmDelete = dialog.findAll('button').find((b) => b.text() === '删除')!
+  await vi.waitFor(() => expect(confirmDelete.attributes('disabled')).toBeUndefined())
+  await confirmDelete.trigger('click')
   await flushPromises()
   f.loseReply.path = ''
   await dialog
@@ -2101,14 +2139,14 @@ it('searches the complete authorized device set by personnel through the view AP
   const stale = await f.devices.views.list({ limit: 1 })
   await f.devices.registration.assign('device-02', crypto.randomUUID(), 1, null)
   await expect(f.devices.views.list({ limit: 1, cursor: stale.nextCursor! })).rejects.toMatchObject(
-    { code: 'device_view_cursor_invalidated' },
+    { code: 'query_cursor_invalidated' },
   )
 })
 
 it('restarts an invalidated first page even when its route does not change', async () => {
   const f = await setup()
   const list = vi.spyOn(f.devices.views, 'list')
-  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'device_view_cursor_invalidated' }))
+  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'query_cursor_invalidated' }))
   await f.wrapper.get('form').trigger('submit')
   await flushPromises()
   await vi.waitFor(() =>
@@ -2137,7 +2175,7 @@ it('restarts an invalidated deep page with its applied filters and columns and o
   const applied = { ...f.router.currentRoute.value.query }
   expect(applied['cursor']).toBeTruthy()
   const list = vi.spyOn(f.devices.views, 'list')
-  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'device_view_cursor_invalidated' }))
+  list.mockRejectedValueOnce(decodeMdmError(409, { code: 'query_cursor_invalidated' }))
   await f.router.replace({ query: { ...applied, trail: ['', ''] } })
   await flushPromises()
   expect(f.wrapper.find('tbody').exists()).toBe(false)
@@ -2172,9 +2210,9 @@ it('preserves hidden Group deletion blockers and withdraws the decision on a fai
   const f = await setup()
   const references = vi
     .spyOn(f.devices.groups, 'references')
-    .mockResolvedValueOnce({ items: [], nextCursor: 'opaque', deletionBlocked: true })
+    .mockResolvedValueOnce({ items: [], nextCursor: 'opaque' })
     .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
-    .mockResolvedValueOnce({ items: [], nextCursor: null, deletionBlocked: false })
+    .mockResolvedValueOnce({ items: [], nextCursor: null })
   const wrapper = mount(GroupDependencies, {
     props: { group: '11111111-1111-4111-8111-111111111111' },
     global: {
@@ -2197,7 +2235,7 @@ it('preserves hidden Group deletion blockers and withdraws the decision on a fai
     .find((b) => b.text() === '重新读取')!
     .trigger('click')
   await flushPromises()
-  expect(references.mock.lastCall![1]?.cursor).toBeUndefined()
+  expect(references.mock.lastCall![1]).toBeUndefined()
   expect(wrapper.emitted('loaded')?.at(-1)).toEqual([false])
 })
 
@@ -2383,11 +2421,13 @@ it('stops automatic observation after a member task fails and permits preview af
     await flushPromises()
     await vi.advanceTimersByTimeAsync(6000)
     await flushPromises()
-    await h.click('预览已保存版本')
-    await vi.advanceTimersByTimeAsync(4000)
-    await flushPromises()
-    await h.click('载入')
-    expect(h.wrapper.text()).toContain('当前已发布成员集: 否')
+    const before = await h.devices.groups.read(
+      h.requests.filter((r) => r.method === 'POST' && r.path === '/api/v1/groups/{id}').at(-1)!
+        .pathParams!['id'] as string,
+    )
+    await h.click('预览已保存条件样例')
+    expect(h.wrapper.text()).toContain('本次扫描完成；不发布成员')
+    expect((await h.devices.groups.read(before.group.id)).memberSet).toBe(before.memberSet)
     h.scenario.set('partial')
     await h.click('重算并发布成员')
     await vi.advanceTimersByTimeAsync(4000)
@@ -2428,7 +2468,7 @@ it('retains the running rule definition when its drawer is closed and preview is
     ).operationId
     await dialog.get('button[aria-label="关闭"]').trigger('click')
     await flushPromises()
-    const preview = h.wrapper.findAll('button').find((b) => b.text() === '预览已保存版本')!
+    const preview = h.wrapper.findAll('button').find((b) => b.text() === '预览已保存条件样例')!
     expect(preview.attributes('disabled')).toBeDefined()
     await preview.trigger('click')
     expect(h.requests.some((r) => r.method === 'POST' && r.path.endsWith('/previews'))).toBe(false)
@@ -2441,7 +2481,7 @@ it('retains the running rule definition when its drawer is closed and preview is
     expect(
       h.wrapper
         .findAll('button')
-        .find((b) => b.text() === '预览已保存版本')!
+        .find((b) => b.text() === '预览已保存条件样例')!
         .attributes('disabled'),
     ).toBeUndefined()
     h.wrapper.unmount()

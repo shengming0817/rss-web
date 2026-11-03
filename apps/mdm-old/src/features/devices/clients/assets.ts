@@ -1,12 +1,7 @@
 import * as wireSchemas from '@rss/api/mdm-schemas'
 import * as api from '@rss/api/mdm-operations'
 import { checked } from '../../../contracts/collection/check'
-import {
-  validateFieldWrite,
-  validateFieldImpact,
-  validateFieldMappingReference,
-  validateFieldReferenceQuery,
-} from '@rss/api/mdm-validators'
+import { validateFieldWrite, validateFieldReferenceQuery } from '@rss/api/mdm-validators'
 import type { FieldWrite } from '@rss/api/mdm-types'
 import { queryParameters, nextCursor, projectedRow, type DirectoryQuery } from '@rss/api/mdm-query'
 import type { Operation } from '../../../services/useOperation'
@@ -242,14 +237,11 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           },
         },
         (value) => {
-          const v = assetEnvelope(value, tenant, 'field_references')
-          if (v['field'] !== field) throw new Error('Wrong reference field')
+          if (!wireSchemas.getApiV1AssetFieldsByFieldReferencesResponse.validateRoot(value))
+            throw new Error('Invalid field references')
           return {
-            impact: checked(validateFieldImpact, v['impact']),
-            mappings: array(v['mappings'], (mapping) =>
-              checked(validateFieldMappingReference, mapping),
-            ),
-            nextCursor: nextCursor(v['nextCursor']),
+            ...value,
+            items: value.items.map((item) => ({ ...item, source: { ...item.source } })),
           }
         },
       ),
@@ -297,15 +289,15 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         (v) => decodeCollectionRun(v, tenant, id),
       ),
     scopes: (device: string, next?: string) =>
-      api.getApiV1DevicesByIdInventoryScopes(
+      api.postApiV1DevicesByIdInventoryScopes(
         transport,
-        { pathParams: { id: device }, query: { cursor: next, limit: 20 } },
+        { pathParams: { id: device }, body: { cursor: next, limit: 20 } },
         (value) => {
           const v = assetEnvelope(value, tenant, 'inventory_scopes')
           if (v['device'] !== device) throw new Error('Wrong scope directory device')
           return {
             device,
-            watermark: count(v['watermark']),
+            assetCut: { ...v['assetCut'] },
             items: unique(
               array(v['items'], (x) => {
                 const item = x
@@ -320,11 +312,11 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
         },
       ),
     listItems: (device: string, field: string, scope: CollectionScope, next: string) =>
-      api.getApiV1DevicesByIdInventoryListsByField(
+      api.postApiV1DevicesByIdInventoryListsByField(
         transport,
         {
           pathParams: { id: device, field: field },
-          query: { scope: JSON.stringify(collectionScope(scope)), cursor: next, limit: 20 },
+          body: { scope: collectionScope(scope), cursor: next, limit: 20 },
         },
         (value) => {
           const v = assetEnvelope(value, tenant, 'list_items')
@@ -332,7 +324,7 @@ export function createAssetsClient(transport: HttpTransport, tenant: string) {
           return {
             items: array(v['items'], readScalar),
             total: count(v['total']),
-            watermark: count(v['watermark']),
+            assetCut: { ...v['assetCut'] },
             nextCursor: cursor(v['nextCursor']),
           }
         },

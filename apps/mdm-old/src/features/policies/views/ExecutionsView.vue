@@ -521,7 +521,7 @@ function readProjected(row: Record<string, unknown>) {
                 item.evidence.kind === 'command'
                   ? (commandDetails[item.id]?.observation.effect ??
                     item.evidence.observation.effect)
-                  : item.evidence.effect
+                  : (item.evidence.effect ?? '—')
               "
             />
             <p

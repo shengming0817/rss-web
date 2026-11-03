@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Alert, Button, Card, Select, Space, Tag } from 'antd'
 import { declarationMaterials, variantKey, type Resource } from '@rss/mdm-resources'
-import { labels } from './AdminUi'
+import { CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'
 import { CollectionPlan } from './CollectionMappingEditor'
 import { DataTable } from './DataTable'
 import { ResourceMetadata } from './ResourceMetadata'
@@ -163,6 +163,13 @@ export function ResourceDetail({
                 'Resource version state does not confirm content commit, software admission, source publication or installation on devices.',
               )}
             />
+            <ResourceBlockers
+              key={`${resource.id}/${version.id}`}
+              resources={resources}
+              id={resource.id}
+              version={version.id}
+              locale={locale}
+            />
             <Space wrap>
               {(['activate', 'deprecate', 'archive'] as const).map((action) => (
                 <Button
@@ -211,5 +218,64 @@ export function ResourceDetail({
         blocked={blocked}
       />
     </div>
+  )
+}
+
+function ResourceBlockers({
+  resources,
+  id,
+  version,
+  locale,
+}: {
+  resources: ResourcesUseCases
+  id: string
+  version: string
+  locale: Locale
+}) {
+  const l = labels(locale),
+    [query, setQuery] = useState<Query>({ limit: 20 }),
+    read = usePageRead(`resource-references/${id}/${version}/${JSON.stringify(query)}`, () =>
+      resources.references(id, version, query),
+    )
+  return (
+    <Card title={l('归档引用检查', 'Archive references')}>
+      <Button onClick={read.reload}>{l('读取资源引用', 'Read resource references')}</Button>
+      <ReadState
+        locale={locale}
+        busy={read.busy}
+        error={read.error}
+        empty={read.value?.items.length === 0}
+      />
+      {read.value && (
+        <>
+          <DataTable
+            locale={locale}
+            rowKey={(row) => JSON.stringify([row.kind, row.id, row.version])}
+            dataSource={read.value.items}
+            columns={[
+              { title: l('来源类型', 'Source kind'), dataIndex: 'kind' },
+              { title: l('引用身份', 'Reference identity'), dataIndex: 'id' },
+              { title: l('版本', 'Version'), dataIndex: 'version' },
+              { title: l('用途', 'Role'), dataIndex: 'role' },
+              { title: l('保留状态', 'Retention'), dataIndex: 'retention' },
+              {
+                title: l('解除方式', 'Release'),
+                render: (_, row) =>
+                  row.release === 'retained_immutable'
+                    ? l('不可变引用记录保留', 'Immutable referencing record retained')
+                    : l('归档引用版本', 'Archive the referencing version'),
+              },
+            ]}
+          />
+          <CursorControls
+            locale={locale}
+            query={query}
+            onChange={setQuery}
+            next={read.value.nextCursor}
+            count={read.value.items.length}
+          />
+        </>
+      )}
+    </Card>
   )
 }

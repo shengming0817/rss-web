@@ -96,7 +96,7 @@ function change(action: 'reauthorize' | 'cancel') {
     !native.value ||
     typeof route.query['device'] !== 'string' ||
     (action === 'reauthorize' &&
-      (native.value.reauthorization.state !== 'available' ||
+      (native.value.reauthorization?.state !== 'available' ||
         (native.value.reauthorization.confirmationRequired &&
           (!confirmation.value ||
             !registration.value ||
@@ -110,7 +110,7 @@ function change(action: 'reauthorize' | 'cancel') {
       requestId: crypto.randomUUID(),
       expectedRevision: native.value.revision,
       ...(action === 'reauthorize' &&
-      native.value.reauthorization.state === 'available' &&
+      native.value.reauthorization?.state === 'available' &&
       native.value.reauthorization.confirmationRequired &&
       confirmation.value
         ? {
@@ -247,7 +247,7 @@ watch(
       />
       <PolicyFieldset
         v-if="
-          native.reauthorization.state === 'available' &&
+          native.reauthorization?.state === 'available' &&
           native.reauthorization.confirmationRequired
         "
         :disabled="busy || uncertain"
@@ -277,12 +277,12 @@ watch(
         >
       </PolicyFieldset>
       <VBtn
-        v-if="native.reauthorization.state === 'available'"
+        v-if="native.reauthorization?.state === 'available'"
         :disabled="
           !!(
             busy ||
             uncertain ||
-            (native.reauthorization.state === 'available' &&
+            (native.reauthorization?.state === 'available' &&
               native.reauthorization.confirmationRequired &&
               (!confirmation ||
                 !registration ||
@@ -328,9 +328,9 @@ watch(
       >
       <OperationStages
         kind="action_run"
-        :dispatch="software.state.delivery.kind"
-        :receipt="software.state.execution"
-        :effect="software.effect"
+        :dispatch="software.state?.delivery.kind ?? software.nativeDelivery ?? '—'"
+        :receipt="software.state?.execution ?? '—'"
+        :effect="software.effect ?? '—'"
       />
       <p class="device-help">{{ t('policies.ux.stagesHint') }}</p>
       <PolicyRunFacts :run="software" />

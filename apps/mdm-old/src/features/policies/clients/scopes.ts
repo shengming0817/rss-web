@@ -102,7 +102,16 @@ export function decodeScopePage(
     )
   const page =
     p.kind === 'members'
-      ? { kind: 'members' as const, items: unique(array(p['items'], objectRef), objectKey) }
+      ? {
+          kind: 'members' as const,
+          items: unique(
+            array(p['items'], (item) => ({
+              object: objectRef(item.object),
+              available: item.available,
+            })),
+            (item) => objectKey(item.object),
+          ),
+        }
       : {
           kind: 'decisions' as const,
           items: unique(
@@ -110,6 +119,7 @@ export function decodeScopePage(
               const d = value
               return {
                 object: objectRef(d['object']),
+                available: d.available,
                 qualification: eligibility(d['qualification']),
                 reasons: array(d['reasons'], (v) => v),
                 targets: sources(d['targets']),

@@ -452,8 +452,9 @@ directoryQuery.onClear(() => {
             {{ t(result.current ? 'policies.savedResult' : 'policies.historicalResult') }}
           </p>
           <ul v-if="result.page.kind === 'members'">
-            <li v-for="object in result.page.items" :key="objectKey(object)">
-              <ObjectLink :object="object" />
+            <li v-for="member in result.page.items" :key="objectKey(member.object)">
+              <ObjectLink :object="member.object" />
+              <span v-if="!member.available">— {{ t('policies.historicalResult') }}</span>
             </li>
           </ul>
           <div v-else class="device-table-scroll">

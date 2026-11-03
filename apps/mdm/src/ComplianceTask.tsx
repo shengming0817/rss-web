@@ -54,8 +54,8 @@ export function ComplianceTask({
               <dd>{read.value.ruleVersion}</dd>
             </div>
             <div>
-              <dt>{l('事实水位', 'Fact watermark')}</dt>
-              <dd>{read.value.factWatermark}</dd>
+              <dt>{l('输入快照世代', 'Input snapshot epoch')}</dt>
+              <dd>{read.value.assetCut.epoch}</dd>
             </div>
             <div>
               <dt>{l('已处理设备', 'Processed devices')}</dt>

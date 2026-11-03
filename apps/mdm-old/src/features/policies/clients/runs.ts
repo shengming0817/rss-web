@@ -13,6 +13,7 @@ import {
   identifier,
   integer,
   nullable,
+  record,
   string,
   uuid,
 } from '../../../services/decode'
@@ -37,29 +38,43 @@ function diagnostics(value: unknown, detail: boolean) {
       : {}),
   }
 }
-function result(value: unknown, detail: boolean) {
-  if (detail) {
-    if (!wireSchemas.getApiV1PoliciesByIdRunsByTaskResponse.validateRunResult(value))
-      throw new Error('Invalid run result')
-  } else if (!wireSchemas.getApiV1PoliciesByIdRunsResponse.validateSummaryResult(value))
-    throw new Error('Invalid run result')
+function result(value: unknown, detail: boolean, kind: string) {
+  const summaries = wireSchemas.getApiV1PoliciesByIdRunsResponse,
+    details = wireSchemas.getApiV1PoliciesByIdRunsByTaskResponse
+  const valid =
+    kind === 'software'
+      ? detail
+        ? details.validateRunResult(value)
+        : summaries.validateSummaryResult(value)
+      : kind === 'execution'
+        ? detail
+          ? details.validateRunResult3(value)
+          : summaries.validateSummaryResult2(value)
+        : kind === 'credential'
+          ? summaries.validateRunResult(value)
+          : kind === 'access'
+            ? summaries.validateAccessResult(value)
+            : kind === 'enrollment'
+              ? summaries.validateEnrollmentEntryOutcome(value)
+              : kind === 'script'
+                ? detail
+                  ? details.validateScriptRunResult(value)
+                  : summaries.validateScriptSummary(value)
+                : kind === 'collection' &&
+                  (detail
+                    ? details.validateAgentCollection(value)
+                    : summaries.validateAgentSummary(value))
+  if (!valid) throw new Error('Invalid run result')
+  if (kind === 'enrollment') return { kind: 'enrollment' as const, entryOutcome: value }
+  const raw = record(value)
   const materialText = (value: unknown) => {
     const text = string(value)
     if (!text || new TextEncoder().encode(text).byteLength > 1024 || /\p{Cc}/u.test(text))
       throw new Error('Invalid observed text')
     return text
   }
-  if ('entryOutcome' in value) {
-    const v = value
-    if ('diagnostics' in v && v['diagnostics'] !== null)
-      throw new Error('Invalid enrollment diagnostics')
-    return {
-      kind: 'enrollment' as const,
-      entryOutcome: v['entryOutcome'],
-    }
-  }
-  if ('recoveredByTask' in value) {
-    const v = value
+  if ('recoveredByTask' in raw) {
+    const v = raw
     if ('diagnostics' in v && v['diagnostics'] !== null)
       throw new Error('Invalid recovery diagnostics')
     return {
@@ -69,7 +84,8 @@ function result(value: unknown, detail: boolean) {
       recoveredByAttempt: nullable(v['recoveredByAttempt'], uuid),
     }
   }
-  if ('complete' in value && 'items' in value) {
+  if ('complete' in raw && 'items' in raw) {
+    if (!summaries.validateCredentialResult(value)) throw new Error('Invalid credential result')
     const v = value
     if ('diagnostics' in v && v['diagnostics'] !== null)
       throw new Error('Invalid credential diagnostics')
@@ -92,7 +108,9 @@ function result(value: unknown, detail: boolean) {
     }
   }
   // Native history spans immutable Policy versions, including prior script versions.
-  if ('exitCode' in value) {
+  if ('exitCode' in raw) {
+    if (!details.validateScriptRunResult(value) && !summaries.validateScriptSummary(value))
+      throw new Error('Invalid script result')
     const v = value
     const outputReference = nullable(v['outputReference'], (value) => {
       const r = value,
@@ -116,7 +134,9 @@ function result(value: unknown, detail: boolean) {
       ...('output' in v ? { output: jsonValue(v.output, 1024 * 1024) } : {}),
     }
   }
-  if ('queries' in value) {
+  if ('queries' in raw) {
+    if (!details.validateAgentCollection(value) && !summaries.validateAgentSummary(value))
+      throw new Error('Invalid collection result')
     const v = value
     if (!detail && 'diagnostics' in v && v['diagnostics'] !== null)
       throw new Error('Invalid collection diagnostics')
@@ -147,10 +167,12 @@ function result(value: unknown, detail: boolean) {
       ...('native' in v ? { native: jsonValue(v.native, 16 * 1024 * 1024) } : {}),
     }
   }
-  if ('bindingId' in value) return { kind: 'access' as const, evidence: value }
-  if ('unmanageOutcome' in value) return { kind: 'unmanage' as const, evidence: value }
-  if ('operation' in value) return { kind: 'native_software' as const, evidence: value }
-  if (!('intent' in value) || !('evidence' in value)) throw new Error('Unsupported run result')
+  if (kind === 'access') return { kind: 'access' as const, evidence: value }
+  if ('unmanageOutcome' in raw) return { kind: 'unmanage' as const, evidence: value }
+  if ('operation' in raw) return { kind: 'native_software' as const, evidence: value }
+  if (!('intent' in raw) || !('evidence' in raw)) throw new Error('Unsupported run result')
+  if (!details.validateSoftware(value) && !summaries.validateSoftware(value))
+    throw new Error('Invalid software result')
   const v = value,
     intent = v.intent,
     definitionDigest = digest(v['definitionDigest']),
@@ -284,24 +306,15 @@ function scriptAuthorization(value: unknown) {
   }
 }
 export function decodeRunEvidence(value: unknown) {
-  if (!wireSchemas.getApiV1OperationsResponse.validateRunEvidence(value))
-    throw new Error('Invalid contract value')
-
-  const v = value
+  if (!wireSchemas.getApiV1OperationsResponse.validateEvidence(value) || value.owner === 'native')
+    throw new Error('Invalid run evidence')
   return {
     kind: 'action_run' as const,
-    state: runState(v['state']),
-    effect: enumeration(v['effect'], [
-      'not_attempted',
-      'unchanged',
-      'applied',
-      'unverified',
-      'verified',
-      'unknown',
-      'waiting_reboot',
-      'failed',
-    ] as const),
-    result: nullable(v['result'], (value) => result(value, false)),
+    state: runState(value.state),
+    effect: 'effect' in value ? string(value.effect) : null,
+    result: nullable(value.result, (v) =>
+      result(v, false, value.owner === 'device' ? 'execution' : value.owner),
+    ),
   }
 }
 export function policyRun(value: unknown, detail: boolean) {
@@ -310,23 +323,31 @@ export function policyRun(value: unknown, detail: boolean) {
     !wireSchemas.getApiV1PoliciesByIdRunsResponse.validateRunSummary(value)
   )
     throw new Error('Invalid contract value')
-  if (detail !== 'nodes' in value) throw new Error('Wrong run representation')
+  if (
+    detail
+      ? !wireSchemas.getApiV1PoliciesByIdRunsByTaskResponse.validateRoot(value)
+      : !wireSchemas.getApiV1PoliciesByIdRunsResponse.validateRunSummary(value)
+  )
+    throw new Error('Wrong run representation')
 
   const v = value
-  const state = runState(v['state']),
+  const state = v.kind === 'collection' && v.channel === 'mdm' ? null : runState(v['state']),
     deadline = integer(v['deadline'])
   if (
     'attemptId' in v &&
     v.attemptId !== null &&
-    (state.delivery.kind === 'queued' || uuid(v['attemptId']) !== state.delivery.attempt)
+    (!state || state.delivery.kind === 'queued' || uuid(v['attemptId']) !== state.delivery.attempt)
   )
     throw new Error('Inconsistent run attempt')
-  if (state.deadline !== deadline) throw new Error('Inconsistent run deadline')
+  if (state && state.deadline !== deadline) throw new Error('Inconsistent run deadline')
   return {
     ...('attemptId' in v && v.attemptId !== null ? { attemptId: uuid(v['attemptId']) } : {}),
     ...('authorization' in v && v.authorization !== null
       ? { authorization: scriptAuthorization(v['authorization']) }
       : {}),
+    kind: v.kind,
+    nativeDelivery: v.kind === 'collection' && v.channel === 'mdm' ? v.delivery : null,
+    report: v.kind === 'collection' ? v.report : null,
     taskId: uuid(v['taskId']),
     device: identifier(v['device']),
     registrationId: uuid(v['registrationId']),
@@ -334,18 +355,24 @@ export function policyRun(value: unknown, detail: boolean) {
     availableAt: integer(v['availableAt']),
     deadline,
     state,
-    effect: enumeration(v['effect'], [
-      'not_attempted',
-      'unchanged',
-      'applied',
-      'unverified',
-      'verified',
-      'unknown',
-      'waiting_reboot',
-      'failed',
-    ] as const),
-    userAction: nullable(v['userAction'], (v) => enumeration(v, ['waiting_user'] as const)),
-    result: nullable(v['result'], (v) => result(v, detail)),
+    effect:
+      v.kind === 'software' || v.kind === 'execution'
+        ? enumeration(v['effect'], [
+            'not_attempted',
+            'unchanged',
+            'applied',
+            'unverified',
+            'verified',
+            'unknown',
+            'waiting_reboot',
+            'failed',
+          ] as const)
+        : null,
+    userAction:
+      v.kind === 'software' || v.kind === 'execution'
+        ? nullable(v['userAction'], (v) => enumeration(v, ['waiting_user'] as const))
+        : null,
+    result: 'result' in v ? nullable(v.result, (x) => result(x, detail, v.kind)) : null,
     ...(detail
       ? {
           ...('policyId' in v && v.policyId !== null ? { policyId: uuid(v['policyId']) } : {}),

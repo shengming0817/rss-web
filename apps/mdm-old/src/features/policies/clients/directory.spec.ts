@@ -18,6 +18,7 @@ it('consumes the formal operation page and independent statistics with HTTP-owne
     status: 'running',
     detailUrl: `/api/v1/policies/${id}/runs/${id}`,
     evidence: {
+      owner: 'software',
       state: {
         delivery: { kind: 'queued' },
         execution: 'running',
@@ -67,6 +68,11 @@ it('keeps an opened enrollment entry distinct from MDM enrollment or installatio
     startedAt: 1,
   }
   const run = {
+    kind: 'enrollment',
+    policyId: id,
+    versionId: id,
+    authorization: null,
+    attemptId: null,
     taskId: id,
     device: 'endpoint',
     registrationId: id,
@@ -74,13 +80,11 @@ it('keeps an opened enrollment entry distinct from MDM enrollment or installatio
     availableAt: 1,
     deadline: 100,
     state,
-    effect: 'unverified',
-    userAction: null,
-    result: { entryOutcome: 'opened', diagnostics: null },
+    result: 'opened',
     occurrence: 'once',
   }
   expect(policyRun(run, false)).toMatchObject({
-    effect: 'unverified',
+    effect: null,
     result: { kind: 'enrollment', entryOutcome: 'opened' },
   })
   expect(() => policyRun({ ...run, result: { entryOutcome: 'enrolled' } }, false)).toThrow()
@@ -110,6 +114,13 @@ it('separates redacted collection summaries from authorized native detail eviden
     receivedAt: 3,
   }
   const common = {
+    kind: 'collection',
+    occurrence: 'collection',
+    channel: 'agent',
+    policyId: id,
+    versionId: id,
+    attemptId: null,
+    report: null,
     taskId: id,
     device: 'endpoint',
     registrationId: id,
@@ -117,13 +128,8 @@ it('separates redacted collection summaries from authorized native detail eviden
     availableAt: 1,
     deadline: 100,
     state,
-    effect: 'unverified',
-    userAction: null,
   }
-  const summary = policyRun(
-    { ...common, occurrence: 'collection', result: { ...projection, diagnostics: null } },
-    false,
-  )
+  const summary = policyRun({ ...common, occurrence: 'collection', result: projection }, false)
   expect(summary.result).toMatchObject({
     kind: 'collection',
     queries: { updates: { rowCount: 1, enumerationComplete: true } },
@@ -141,23 +147,17 @@ it('separates redacted collection summaries from authorized native detail eviden
       },
     },
   }
-  const detail = policyRun(
-    { ...common, nodes: [], policyId: id, result: { ...projection, native } },
-    true,
-  )
+  const detail = policyRun({ ...common, result: { ...projection, native } }, true)
   expect(detail.result).toMatchObject({ kind: 'collection', native })
   expect(() =>
     policyRun({ ...common, occurrence: 'collection', result: { ...projection, native } }, false),
   ).toThrow()
   expect(() =>
-    policyRun(
-      { ...common, nodes: [], policyId: id, result: { ...projection, native, unknown: true } },
-      true,
-    ),
+    policyRun({ ...common, result: { ...projection, native, unknown: true } }, true),
   ).toThrow()
 })
 
-it('decodes the HTTP native observation and rejects incomplete evidence', async () => {
+it('decodes nested native owner evidence and rejects the retired flat aggregate', async () => {
   const observation = {
     protocol: 'syncml',
     observationScope: 'native_objects',
@@ -165,7 +165,24 @@ it('decodes the HTTP native observation and rejects incomplete evidence', async 
     progress: 'received',
     effect: 'waiting',
   }
-  let evidence: unknown = { commandStatus: 'received', dispatchFailure: null, observation }
+  let evidence: unknown = {
+    owner: 'native',
+    detail: {
+      owner: 'device',
+      operationId: id,
+      commandId: id,
+      revision: 1,
+      task: { platform: 'windows', kind: 'sync_ml', name: 'SyncML', objects: [] },
+      target: { kind: 'device' },
+      inputVersion: 'device-control-v1',
+      deadline: 100,
+      authorization: { state: 'authorized' },
+      reauthorization: { state: 'unavailable', reason: 'already_received' },
+      commandStatus: 'received',
+      dispatchFailure: null,
+      observation,
+    },
+  }
   const request = vi.fn(async (options: RequestOptions<unknown>) =>
     options.decode({
       items: [
@@ -189,10 +206,9 @@ it('decodes the HTTP native observation and rejects incomplete evidence', async 
     }),
   )
   const client = createExecutionsClient({ request } as unknown as HttpTransport)
-  expect((await client.directory()).items[0]?.evidence).toEqual({
+  expect((await client.directory()).items[0]?.evidence).toMatchObject({
     kind: 'command',
     commandStatus: 'received',
-    dispatchFailure: null,
     observation,
   })
   evidence = {

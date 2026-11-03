@@ -1,3 +1,4 @@
+import { comparison, nextCursor, queryParameters } from '@rss/api/mdm-query'
 import * as api from '@rss/api/mdm-operations'
 import * as schema from '@rss/api/mdm-schemas'
 import type { HttpTransport } from '@rss/api/mdm'
@@ -214,11 +215,34 @@ export function createDevicePkiAdapter(
         },
         (value) => candidate(value, input.issuance),
       ),
-    issuanceRecovery: (issuance, operation) =>
-      api.getApiV1AgentIssuancesByIdRecoveryOperationsByOperation(
+    issuanceRecovery: async (issuance, operation) => {
+      const page = await api.getApiV1AgentIssuancesByIdRecoveryOperations(
         transport,
-        { pathParams: { id: issuance, operation } },
+        {
+          pathParams: { id: uuid(issuance) },
+          query: queryParameters({
+            filter: comparison('operationId', '==', uuid(operation)),
+            fields: ['actor', 'instance', 'operationId'],
+            limit: 2,
+          }),
+        },
+        (value) => ({
+          items: value.items.map((row) => {
+            if (row.operationId !== operation || !row.actor || !row.instance)
+              throw new Error('Wrong original recovery identity')
+            return { actor: text(row.actor), instance: text(row.instance) }
+          }),
+          nextCursor: nextCursor(value.nextCursor),
+        }),
+      )
+      if (!page.items.length && !page.nextCursor) return null
+      if (page.items.length !== 1 || page.nextCursor)
+        throw new Error('Ambiguous original recovery identity')
+      return api.getApiV1AgentIssuancesByIdRecoveryOperationsByOperation(
+        transport,
+        { pathParams: { id: issuance, operation }, query: page.items[0]! },
         (value) => nullable(value, (value) => candidate(value, issuance)),
-      ),
+      )
+    },
   }
 }

@@ -25,7 +25,7 @@ export {
 } from './authoring'
 
 import { freeze, operation, revision, type Operation } from '@rss/mdm-inventory'
-import type { DirectoryQuery } from '@rss/mdm-devices'
+import type { DirectoryQuery, WindowQuery } from '@rss/mdm-devices'
 import type {
   MaterialTarget,
   Resource,
@@ -54,6 +54,8 @@ export { validateVersionDraft } from './version-authoring'
 /** Reads and explicit resource writes; no content, admission or device-effect authority. */
 export function createResources(port: ResourcesPort) {
   return Object.freeze({
+    references: (id: string, version: string, query: WindowQuery = {}) =>
+      port.references(resourceId(id), resourceId(version), query),
     list: (query: DirectoryQuery<keyof ResourceRow> = {}, kind?: ResourceKind) => {
       if (kind !== undefined && !resourceKinds.includes(kind))
         throw new Error('Invalid resource kind filter')

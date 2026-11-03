@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { Authorization, ReauthorizationEligibility } from '../clients/authorization'
-defineProps<{ authorization: Authorization; reauthorization: ReauthorizationEligibility }>()
+defineProps<{ authorization: Authorization; reauthorization: ReauthorizationEligibility | null }>()
 const { t } = useI18n()
 </script>
 <template>
@@ -13,7 +13,7 @@ const { t } = useI18n()
         · {{ t(`policies.authorization.${authorization.reason}`) }}</template
       >
     </p>
-    <p>
+    <p v-if="reauthorization">
       {{ t('policies.authorization.reauthorization') }}:
       {{ t(`policies.authorization.${reauthorization.state}`)
       }}<template v-if="reauthorization.state === 'unavailable'">

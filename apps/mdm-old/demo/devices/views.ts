@@ -368,7 +368,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
         )
       } catch (e) {
         if (e instanceof Error && e.message === 'Invalidated cursor')
-          return error('device_view_cursor_invalidated')
+          return error('query_cursor_invalidated')
         throw e
       }
     }
@@ -384,7 +384,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
       const key = decodeURIComponent(vm[3]),
         old = tokens.get(query.get('cursor') ?? '')
       if (!old?.source || old.binding !== binding(request, [ref, key]))
-        return error('device_view_cursor_invalidated')
+        return error('query_cursor_invalidated')
       const source = old.source,
         limit = Number(query.get('limit') ?? 20),
         items = source.values.slice(old.offset, old.offset + limit)
@@ -419,7 +419,7 @@ export function createDeviceViewsDemo(devices: () => Map<string, DemoDevice>, ca
         old = cursor ? tokens.get(cursor) : undefined
       const candidateBinding = binding(request, [id, channel])
       if (cursor && (!old || old.binding !== candidateBinding))
-        return error('device_view_cursor_invalidated', 409)
+        return error('query_cursor_invalidated', 409)
       const other = channel === 'mdm' ? 'agent' : 'mdm',
         items =
           scenario === 'empty'

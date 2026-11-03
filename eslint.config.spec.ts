@@ -295,6 +295,8 @@ it('keeps the MDM domain cores independent and their adapters out of feature com
     'mdm-enrollment',
     'mdm-connections',
     'mdm-inventory',
+    'mdm-policies',
+    'mdm-scopes',
     'mdm-groups',
     'mdm-compliance',
     'mdm-resources',

@@ -140,7 +140,7 @@ export interface ReferenceObject {
   readonly kind: ReferenceKind
   readonly id: string
 }
-export interface Reference {
+export interface Impact {
   readonly source: ReferenceObject
   readonly revision: number
   readonly relation: 'direct' | 'indirect'
@@ -149,21 +149,47 @@ export interface Reference {
   readonly lifecycleState: 'active' | 'enabled' | 'disabled' | 'archived'
   readonly freshness: 'current' | 'pending'
   readonly effective: boolean
-  readonly blocksDeletion: boolean
 }
-export interface ReferenceQuery extends WindowQuery {
+export interface ImpactQuery extends WindowQuery {
   readonly kind?: ReferenceKind
   readonly relation?: 'all' | 'direct' | 'indirect'
 }
-export interface References extends Page<Reference> {
-  readonly deletionBlocked: boolean
+export interface Reference {
+  readonly kind: 'group' | 'scope' | 'compliance_rule'
+  readonly id: string
+  readonly revision: number
+  readonly roles: readonly (
+    | 'group_condition'
+    | 'target'
+    | 'limitation'
+    | 'exclusion'
+    | 'compliance_target'
+  )[]
+  readonly release: 'edit_or_delete_referencing_object'
+}
+export type References = Page<Reference>
+export type ReferenceQuery = WindowQuery
+export interface GroupPreviewRequest {
+  readonly criteria: GroupCondition
+  readonly assetContext: AssetContext
+  readonly editing?: { readonly groupId: string; readonly expectedRevision: number }
+}
+export interface GroupPreview {
+  readonly items: readonly DeviceRef[]
+  readonly scanComplete: boolean
+  readonly inputFingerprint: string
+  readonly assetCut: { readonly tenant: string; readonly epoch: string; readonly snapshot: string }
+  readonly objectSnapshot: string | null
+  readonly sources: readonly { readonly group: string; readonly coordinates: SourceCoordinates }[]
+  readonly asOf: number
 }
 export interface GroupsPort {
   list(query: GroupQuery): Promise<Page<GroupRow>>
   read(id: string): Promise<GroupRead>
   change(id: string, change: Operation<GroupChange>): Promise<GroupReceipt | TaskAccepted>
-  preview(id: string, change: Operation<Record<string, never>>): Promise<TaskAccepted>
+  preview(request: GroupPreviewRequest): Promise<GroupPreview>
   task(group: string, task: string): Promise<GroupTask>
   result(group: string, result: string, kind: ResultKind, query: WindowQuery): Promise<GroupResult>
   references(group: string, query: ReferenceQuery): Promise<References>
+  impacts(group: string, query: ImpactQuery): Promise<Page<Impact>>
 }

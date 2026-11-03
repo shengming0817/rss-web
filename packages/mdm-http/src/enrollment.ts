@@ -470,7 +470,7 @@ export function createEnrollmentAdapter(
             {
               registrationId: uuid,
               enrollmentId: (v: unknown) => (v === null ? null : uuid(v)),
-              agentGrantId: (v: unknown) => (v === null ? null : uuid(v)),
+              certificateGrantId: (v: unknown) => (v === null ? null : uuid(v)),
               userContextId: (v: unknown) => (v === null ? null : uuid(v)),
               source: (v: unknown) =>
                 enumeration(v, ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),

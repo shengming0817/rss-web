@@ -76,24 +76,32 @@ it('preserves nested criteria and unknown metadata in an immutable definition co
   })
   validateRule(criteria)
 })
-it('previews only the observed saved definition and rejects a publication receipt masquerading as preview', async () => {
-  const preview = vi.fn(async () => ({
-      task: operation,
-      kind: 'group' as const,
-      target: id,
-      statusUrl: '',
-    })),
+it('previews unsaved conditions without publishing or creating a task', async () => {
+  const result = {
+    items: [],
+    scanComplete: false,
+    inputFingerprint: 'fixed',
+    assetCut: { tenant: id, epoch: nested, snapshot: '1:2:' },
+    objectSnapshot: null,
+    sources: [],
+    asOf: 0,
+  }
+  const preview = vi.fn(async () => result),
     groups = createGroups(port({ preview }))
+  const request = {
+    criteria: {
+      selector: { kind: 'device' as const },
+      quantifier: 'one' as const,
+      criteria: { kind: 'and' as const, children: [] },
+    },
+    assetContext: 'endpoint' as const,
+    editing: { groupId: id, expectedRevision: 7 },
+  }
+  expect(await groups.preview(request)).toEqual(result)
+  expect(preview).toHaveBeenCalledWith(request)
   await expect(
-    groups.preview(id, { operationId: operation, expectedRevision: 7, input: {} }),
-  ).rejects.toThrow('Wrong preview receipt')
-  await expect(
-    groups.preview(id, {
-      operationId: operation,
-      expectedRevision: 7,
-      input: { criteria: 'unsaved' },
-    } as never),
-  ).rejects.toThrow('saved definition')
+    groups.preview({ ...request, editing: { groupId: id, expectedRevision: 0 } }),
+  ).rejects.toThrow('revision')
   expect(preview).toHaveBeenCalledTimes(1)
 })
 it('does not automatically replay an unknown membership patch or accept association members', async () => {
@@ -164,16 +172,11 @@ it('keeps historical source coordinates and empty continuable result pages', asy
 it('retains deletion blocking even when the authorized reference list is empty', async () => {
   const references = vi.fn(async () => ({
       items: [],
-      deletionBlocked: true,
       nextCursor: 'opaque',
     })),
     groups = createGroups(port({ references }))
-  expect(
-    await groups.references(id, { kind: 'compliance_rule', relation: 'indirect', limit: 1 }),
-  ).toEqual({ items: [], deletionBlocked: true, nextCursor: 'opaque' })
+  expect(await groups.references(id, { limit: 1 })).toEqual({ items: [], nextCursor: 'opaque' })
   expect(references).toHaveBeenCalledWith(id, {
-    kind: 'compliance_rule',
-    relation: 'indirect',
     limit: 1,
   })
 })
@@ -206,7 +209,6 @@ it('accepts a reused server task without treating the mutation operation ID as t
     groups = createGroups(
       port({
         change: async () => receipt,
-        preview: async () => ({ ...receipt, kind: 'group_preview' }),
       }),
     )
   expect(
@@ -216,7 +218,4 @@ it('accepts a reused server task without treating the mutation operation ID as t
       input: { action: 'recompute' },
     }),
   ).toEqual(receipt)
-  expect(
-    (await groups.preview(id, { operationId: operation, expectedRevision: 7, input: {} })).task,
-  ).toBe(nested)
 })

@@ -214,7 +214,7 @@ function ListContents({
         <>
           <p className="subtitle">
             {l('来源集合总数', 'Source collection total')} · {read.value.total} ·{' '}
-            {l('水位', 'Watermark')} {read.value.watermark ?? '—'}
+            {l('输入快照世代', 'Input snapshot epoch')} {read.value.assetCut?.epoch ?? '—'}
           </p>
           {read.value.source && (
             <details>

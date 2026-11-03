@@ -62,7 +62,7 @@ export function Inventory({ runtime, locale }: { runtime: Runtime; locale: Local
                 inventory={inventory}
                 locale={locale}
                 canWrite={fieldsWrite}
-                canReadReferences={fieldsWrite && resourceRead}
+                canReadReferences={fieldsWrite}
               />
             ),
           },

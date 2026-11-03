@@ -534,7 +534,7 @@ groupQuery.onClear(() => {
             </tr>
             <tr>
               <th>{{ t('security.watermark') }}</th>
-              <td>{{ task.factWatermark }}</td>
+              <td>{{ task.assetCut.epoch }}</td>
             </tr>
             <tr>
               <th>{{ t('security.processed') }}</th>

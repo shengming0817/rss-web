@@ -32,7 +32,7 @@ from runtime_fixture import storage, readiness as readiness_status
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
-environment = Environment(BACKEND, group={'software-browser.mjs': 'software-browser', 'console-browser.mjs': 'console-browser', 'react-devices-browser.mjs': 'react-devices-browser', 'react-assets-browser.mjs': 'react-assets-browser', 'react-software-browser.mjs': 'react-software-browser', 'react-recovery-browser.mjs': 'react-recovery-browser', 'react-audit-webhooks-browser.mjs': 'react-audit-webhooks-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser'))
+environment = Environment(BACKEND, group={'software-browser.mjs': 'software-browser', 'console-browser.mjs': 'console-browser', 'react-devices-browser.mjs': 'react-devices-browser', 'react-assets-browser.mjs': 'react-assets-browser', 'react-software-browser.mjs': 'react-software-browser', 'react-recovery-browser.mjs': 'react-recovery-browser', 'react-audit-webhooks-browser.mjs': 'react-audit-webhooks-browser', 'react-policy-browser.mjs': 'react-policy-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser'))
 processes = []
 providers = ExitStack()
 phase = 'environment'
@@ -53,7 +53,7 @@ def q(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 browser_module = os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'device-browser.mjs')
-if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs', 'software-browser.mjs', 'console-browser.mjs', 'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs'}:
+if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs', 'software-browser.mjs', 'console-browser.mjs', 'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs', 'react-policy-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
 
 def seed_authority():
@@ -64,6 +64,8 @@ def seed_authority():
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write','webhook_replay','audit_read']] + [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_unmanage','device_control','security_operate','configuration_write','software_deploy']]
     if browser_module == 'react-audit-webhooks-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write','webhook_replay','audit_read']] + [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','operation_cancel','device_unmanage']]
+    if browser_module == 'react-policy-browser.mjs':
+        rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_unmanage', 'account_write']]
     if browser_module == 'react-recovery-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','security_operate','configuration_write','account_write']]
     if browser_module == 'react-software-browser.mjs':
@@ -98,8 +100,8 @@ def seed():
                     f"INSERT INTO mdm_access.requests(tenant_id,id,grant_id,source,windows_profile) VALUES('{tenant}','{request}','{grant}','{source}',CASE WHEN '{source}'='mdm.windows' THEN 'Device' END)"]
             column, origin = 'request_id', request
         else:
-            sql.append(f"INSERT INTO mdm_access.agent_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{grant}','{request}','download','fixture','{INSTANCE}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')")
-            column, origin = 'agent_grant_id', grant
+            sql.append(f"INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{grant}','{request}','download','fixture','{INSTANCE}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')")
+            column, origin = 'certificate_grant_id', grant
         sql += [f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,{column},state,purpose,epoch) VALUES('{tenant}','{registration}','{device}','{channel}',1,'{origin}','active','primary',gen_random_uuid())",
                 f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
         if browser_module in {'console-browser.mjs', 'react-recovery-browser.mjs'} and channel == 'mdm':
@@ -114,8 +116,8 @@ def seed():
     if browser_module == 'console-browser.mjs':
         # A superseded synthetic registration exercises history paging without another active identity.
         old_grant, old_operation, old_registration = [str(uuid.uuid4()) for _ in range(3)]
-        sql += [f"INSERT INTO mdm_access.agent_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{old_grant}','{old_operation}','download','fixture','{INSTANCE}','fixture-mdm','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')",
-                f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,agent_grant_id,state,purpose,epoch) VALUES('{tenant}','{old_registration}','fixture-mdm','agent',1,'{old_grant}','superseded','primary',gen_random_uuid())"]
+        sql += [f"INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{old_grant}','{old_operation}','download','fixture','{INSTANCE}','fixture-mdm','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')",
+                f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,certificate_grant_id,state,purpose,epoch) VALUES('{tenant}','{old_registration}','fixture-mdm','agent',1,'{old_grant}','superseded','primary',gen_random_uuid())"]
     # Explicit asset scenarios own their disposable array paging data.
     if browser_module in {'device-browser.mjs', 'react-assets-browser.mjs'}:
         definition=dict(key='custom.browser_list',version=1,valueType=dict(kind='array',items=dict(kind='integer'),maxItems=1000),nullable=True,manual=True,sources=dict(manual=0),platforms=['windows','macos'],sensitivity='standard',unit=None,searchable=True,itemKey=None)
@@ -165,7 +167,7 @@ def start(binary, initialized, log, expected=200):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module in {'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs'} else 'apps/mdm-old/dist'))
+    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module in {'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs', 'react-policy-browser.mjs'} else 'apps/mdm-old/dist'))
     initialized = environment.initialize()
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())

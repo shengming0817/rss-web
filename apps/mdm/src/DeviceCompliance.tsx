@@ -40,8 +40,8 @@ export function AssessmentFacts({
           <dd>{value.dictionaryVersion}</dd>
         </div>
         <div>
-          <dt>{l('事实水位', 'Fact watermark')}</dt>
-          <dd>{value.factWatermark}</dd>
+          <dt>{l('资产快照', 'Asset snapshot')}</dt>
+          <dd>{value.assetCut.epoch}</dd>
         </div>
         <div>
           <dt>{l('条件判定', 'Condition decision')}</dt>

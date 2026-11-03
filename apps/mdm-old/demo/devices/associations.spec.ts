@@ -58,7 +58,7 @@ it('invalidates directory and list cursors on association membership changes', a
   await h.associations.confirm(h.body)
   await expect(h.views.list({ cursor: page.nextCursor! })).rejects.toMatchObject({
     status: 409,
-    body: { code: 'device_view_cursor_invalidated' },
+    body: { code: 'query_cursor_invalidated' },
   })
   await expect(h.views.items(ref, 'device.software', source)).rejects.toMatchObject({ status: 409 })
 })
@@ -121,13 +121,13 @@ it('projects a singly authorized endpoint without revealing its hidden counterpa
   ).rejects.toMatchObject({ status: 403 })
 })
 
-it('preserves signed source cursors up to the formal 16 KiB limit without treating them as resource IDs', async () => {
+it('preserves signed source cursors up to the formal 256 KiB limit without treating them as resource IDs', async () => {
   const h = await confirmation(),
     ref = { kind: 'endpoint' as const, id: h.body.mdm.device },
     wire = await h.views.detail(ref)
   const token = 'opaque_'.repeat(2200)
   wire.lists['device.software']!.sources[0]!.cursor = token
   expect(decodeView(wire, ref).lists['device.software']!.sources[0]!.cursor).toBe(token)
-  wire.lists['device.software']!.sources[0]!.cursor = 'x'.repeat(16385)
+  wire.lists['device.software']!.sources[0]!.cursor = 'x'.repeat(262145)
   expect(() => decodeView(wire, ref)).toThrow('Invalid cursor')
 })

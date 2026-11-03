@@ -32,7 +32,9 @@
     "@rss/mdm-certificates": "workspace:*",
     "@rss/mdm-recovery-credentials": "workspace:*",
     "@rss/mdm-audit": "workspace:*",
-    "@rss/mdm-webhooks": "workspace:*"
+    "@rss/mdm-webhooks": "workspace:*",
+    "@rss/mdm-scopes": "workspace:*",
+    "@rss/mdm-policies": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

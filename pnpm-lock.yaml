@@ -364,12 +364,18 @@ importers:
       '@rss/mdm-inventory':
         specifier: workspace:*
         version: link:../../packages/mdm-inventory
+      '@rss/mdm-policies':
+        specifier: workspace:*
+        version: link:../../packages/mdm-policies
       '@rss/mdm-recovery-credentials':
         specifier: workspace:*
         version: link:../../packages/mdm-recovery-credentials
       '@rss/mdm-resources':
         specifier: workspace:*
         version: link:../../packages/mdm-resources
+      '@rss/mdm-scopes':
+        specifier: workspace:*
+        version: link:../../packages/mdm-scopes
       '@rss/mdm-software':
         specifier: workspace:*
         version: link:../../packages/mdm-software
@@ -851,12 +857,18 @@ importers:
       '@rss/mdm-inventory':
         specifier: workspace:*
         version: link:../mdm-inventory
+      '@rss/mdm-policies':
+        specifier: workspace:*
+        version: link:../mdm-policies
       '@rss/mdm-recovery-credentials':
         specifier: workspace:*
         version: link:../mdm-recovery-credentials
       '@rss/mdm-resources':
         specifier: workspace:*
         version: link:../mdm-resources
+      '@rss/mdm-scopes':
+        specifier: workspace:*
+        version: link:../mdm-scopes
       '@rss/mdm-software':
         specifier: workspace:*
         version: link:../mdm-software
@@ -896,6 +908,25 @@ importers:
         specifier: 'catalog:'
         version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
 
+  packages/mdm-policies:
+    dependencies:
+      '@rss/mdm-devices':
+        specifier: workspace:*
+        version: link:../mdm-devices
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
   packages/mdm-recovery-credentials:
     dependencies:
       '@rss/mdm-devices':
@@ -916,6 +947,25 @@ importers:
         version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
 
   packages/mdm-resources:
+    dependencies:
+      '@rss/mdm-devices':
+        specifier: workspace:*
+        version: link:../mdm-devices
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
+  packages/mdm-scopes:
     dependencies:
       '@rss/mdm-devices':
         specifier: workspace:*

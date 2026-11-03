@@ -8,6 +8,7 @@ import {
 } from './native'
 const id = '11111111-1111-4111-8111-111111111111'
 const read = {
+  owner: 'device',
   operationId: id,
   commandId: id,
   revision: 1,
@@ -24,7 +25,6 @@ const read = {
   authorization: { state: 'authorized' },
   reauthorization: { state: 'unavailable', reason: 'already_received' },
   commandStatus: 'queued',
-  agentInstallation: null,
   observation: {
     protocol: 'syncml',
     observationScope: 'native_objects',

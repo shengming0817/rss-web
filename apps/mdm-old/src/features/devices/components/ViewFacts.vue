@@ -9,7 +9,6 @@ import { useMdm } from '../../../context'
 import type { DeviceView } from '../clients/device-views'
 import type { EndpointDetail } from '../clients/endpoint-model'
 import type { FieldLayout } from '../clients/assets'
-import type { FieldMappingReference } from '@rss/api/mdm-types'
 import { scalarText, utc } from '../presentation'
 import AssetValue from './AssetValue.vue'
 import SourceList from './SourceList.vue'
@@ -161,13 +160,11 @@ async function readReferences(cursor?: string) {
     () => runtime.devices.assets.fieldReferences(detailKey.value, cursor),
     (value) => {
       refs.value =
-        cursor && refs.value
-          ? { ...value, mappings: [...refs.value.mappings, ...value.mappings] }
-          : value
+        cursor && refs.value ? { ...value, items: [...refs.value.items, ...value.items] } : value
     },
   )
 }
-async function readDefinition(reference: FieldMappingReference) {
+async function readDefinition(reference: { resource: string; version: string }) {
   delete definitions.value[reference.resource + ':' + reference.version]
   await mappingOperation.run(
     () => runtime.policies.resources.read(reference.resource),
@@ -405,31 +402,42 @@ function summary(row: (typeof rows.value)[number]) {
                 @click="readReferences()"
                 >{{ t('devices.workspace.readMappings') }}</v-btn
               >
-              <p v-if="refs && !refs.mappings.length">{{ t('devices.workspace.noMapping') }}</p>
+              <p v-if="refs && !refs.items.length">{{ t('devices.workspace.noMapping') }}</p>
               <article
-                v-for="reference in refs?.mappings"
-                :key="reference.resource + ':' + reference.version"
+                v-for="reference in refs?.items"
+                :key="JSON.stringify(reference)"
                 class="device-section"
               >
-                <h3>{{ reference.resource }} · {{ reference.version }}</h3>
-                <p>{{ reference.state }} · {{ reference.telemetry ? 'telemetry' : 'inventory' }}</p>
-                <v-btn
-                  variant="text"
-                  :disabled="mappingOperation.busy.value"
-                  @click="readDefinition(reference)"
-                  >{{ t('devices.workspace.readDefinition') }}</v-btn
-                >
-                <pre
-                  v-if="definitions[reference.resource + ':' + reference.version] !== undefined"
-                  class="device-json"
-                  >{{
-                    JSON.stringify(
-                      definitions[reference.resource + ':' + reference.version],
-                      null,
-                      2,
-                    )
-                  }}</pre
-                >
+                <h3>{{ reference.source.kind }} · {{ reference.source.id }}</h3>
+                <p>{{ reference.role }} · {{ reference.release }}</p>
+                <template v-if="reference.source.kind === 'resource_version'">
+                  <p>{{ reference.source.version }}</p>
+                  <v-btn
+                    variant="text"
+                    :disabled="mappingOperation.busy.value"
+                    @click="
+                      readDefinition({
+                        resource: reference.source.id,
+                        version: reference.source.version,
+                      })
+                    "
+                    >{{ t('devices.workspace.readDefinition') }}</v-btn
+                  >
+                  <pre
+                    v-if="
+                      definitions[reference.source.id + ':' + reference.source.version] !==
+                      undefined
+                    "
+                    class="device-json"
+                    >{{
+                      JSON.stringify(
+                        definitions[reference.source.id + ':' + reference.source.version],
+                        null,
+                        2,
+                      )
+                    }}</pre
+                  >
+                </template>
               </article>
               <v-btn
                 v-if="refs?.nextCursor"

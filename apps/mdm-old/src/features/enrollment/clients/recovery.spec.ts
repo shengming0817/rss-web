@@ -84,13 +84,16 @@ it('accepts only original public chains and device-generated grant inputs withou
 })
 it('queries the original administrative operation without confusing its locator with device signing identity', async () => {
   let reply: unknown = null
-  const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply)),
+  let identities: unknown = { items: [], nextCursor: null }
+  const request = vi.fn(async (o: RequestOptions<unknown>) =>
+      o.decode(o.path === '/api/v1/agent-issuances/{id}/recovery-operations' ? identities : reply),
+    ),
     client = createRecoveryClient({ request } as unknown as HttpTransport)
   expect(await client.operation(issuance, operation)).toBeNull()
   expect(request.mock.lastCall![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/agent-issuances/{id}/recovery-operations/{operation}',
-    pathParams: { id: issuance, operation },
+    path: '/api/v1/agent-issuances/{id}/recovery-operations',
+    pathParams: { id: issuance },
   })
   reply = {
     wireVersion: 1,
@@ -99,7 +102,14 @@ it('queries the original administrative operation without confusing its locator 
     certificateChain: ['YQ=='],
     activateBefore: 1700000000,
   }
+  identities = {
+    items: [{ actor: 'original-admin', instance: 'original-instance', operationId: operation }],
+    nextCursor: null,
+  }
   expect((await client.operation(issuance, operation))?.operationId).toBe(registration)
+  expect(request.mock.lastCall![0]).toMatchObject({
+    query: { actor: 'original-admin', instance: 'original-instance' },
+  })
   reply = { ...(reply as object), issuanceId: registration }
   await expect(client.operation(issuance, operation)).rejects.toThrow()
 })

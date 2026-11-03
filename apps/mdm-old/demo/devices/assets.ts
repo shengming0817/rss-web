@@ -20,7 +20,7 @@ import {
 import { catalog, fact, type DemoDevice } from './fixtures'
 import { asset } from './http'
 import { TENANT } from '../scenario'
-import { createPages, createReceipts, error, operation } from '../http'
+import { createPages, createReceipts, error, ok, operation } from '../http'
 import { evaluateCondition } from './criteria'
 interface Search {
   reads: number
@@ -118,21 +118,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
     if (fieldPath) {
       const key = decodeURIComponent(fieldPath[1]!),
         old = catalog.find((f) => f.key === key)
-      if (method === 'GET' && fieldPath[2])
-        return asset({
-          kind: 'field_references',
-          field: key,
-          mappings: [],
-          nextCursor: null,
-          impact: {
-            groups: 0,
-            templates: 0,
-            telemetryProfiles: old?.timeSeries ? 1 : 0,
-            archivedResourceVersions: 0,
-            compliance: 0,
-            savedQueries: 0,
-          },
-        })
+      if (method === 'GET' && fieldPath[2]) return ok({ items: [], nextCursor: null })
       if (method === 'GET' && !fieldPath[2])
         return old
           ? asset({
@@ -185,7 +171,7 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
       }
     }
     const directory = /^\/api\/v1\/devices\/([^/]+)\/inventory-scopes$/.exec(path)
-    if (directory && method === 'GET') {
+    if (directory && method === 'POST') {
       const device = devices().get(decodeURIComponent(directory[1]!))
       if (!device) return error('inventory_not_found', 404)
       const items = [
@@ -195,11 +181,21 @@ export function createAssetDemo(devices: () => Map<string, DemoDevice>) {
             .map((x) => [JSON.stringify(x.collectionScope), { scope: x.collectionScope }]),
         ).values(),
       ]
-      const page = pages.page(path, items, query)
+      const page = pages.page(
+        path,
+        items,
+        new URLSearchParams(
+          Object.entries(record(request.body)).map(([key, value]) => [key, String(value)]),
+        ),
+      )
       return asset({
         kind: 'inventory_scopes',
         device: device.summary.id,
-        watermark: 1,
+        assetCut: {
+          tenant: '11111111-1111-4111-8111-111111111111',
+          epoch: '22222222-2222-4222-8222-222222222222',
+          snapshot: '1:2:',
+        },
         items: page.items,
         nextCursor: page.nextCursor,
       })

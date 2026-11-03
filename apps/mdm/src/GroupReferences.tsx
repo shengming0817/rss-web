@@ -1,33 +1,34 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Select, Space } from 'antd'
-import type { ReferenceKind, ReferenceQuery } from '@rss/mdm-groups'
+import type { ReferenceKind, ImpactQuery } from '@rss/mdm-groups'
 import type { GroupsUseCases } from './GroupPicker'
 import type { Locale } from './i18n'
-import { CursorControls, firstPage, labels, ReadState, useRead } from './AdminUi'
+import { CursorControls, firstPage, labels, ReadState, useRead, type Query } from './AdminUi'
 import { DataTable } from './DataTable'
 import { CollectionPlan } from './CollectionMappingEditor'
 
-export function GroupReferences({
+function GroupImpacts({
   groups,
   locale,
   id,
-  onDeletionChange,
 }: {
   groups: GroupsUseCases
   locale: Locale
   id: string
-  onDeletionChange: (blocked: boolean | null) => void
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<ReferenceQuery>({ limit: 20 }),
+    [query, setQuery] = useState<ImpactQuery>({ limit: 20 }),
     read = useRead(`group-references/${id}/${JSON.stringify(query)}`, () =>
-      groups.references(id, query),
+      groups.impacts(id, query),
     )
-  useEffect(() => {
-    onDeletionChange(read.busy || read.error || !read.value ? null : read.value.deletionBlocked)
-  }, [read.busy, read.error, read.value, onDeletionChange])
   return (
-    <Card title={l('依赖与删除保护', 'Dependencies and deletion protection')}>
+    <Card title={l('递归影响', 'Recursive impacts')}>
+      <p className="subtitle">
+        {l(
+          '按来源读取权限展示递归影响；筛选结果不用于判断能否删除。',
+          'Recursive impacts follow source read permissions. Filtered results do not determine deletion eligibility.',
+        )}
+      </p>
       <Space wrap>
         <Select
           aria-label={l('引用类型', 'Reference kind')}
@@ -55,33 +56,17 @@ export function GroupReferences({
             { value: 'direct', label: l('直接引用', 'Direct') },
             { value: 'indirect', label: l('间接引用', 'Indirect') },
           ]}
-          onChange={(relation: NonNullable<ReferenceQuery['relation']>) => {
+          onChange={(relation: NonNullable<ImpactQuery['relation']>) => {
             const next = { ...query }
             delete next.cursor
             setQuery({ ...next, relation })
           }}
         />
-        <Button onClick={read.reload}>
-          {l('读取引用与删除保护', 'Read references and deletion protection')}
-        </Button>
+        <Button onClick={read.reload}>{l('读取影响', 'Read impacts')}</Button>
       </Space>
       <ReadState locale={locale} busy={read.busy} error={read.error} />
       {read.value && (
         <>
-          <Alert
-            type={read.value.deletionBlocked ? 'warning' : 'info'}
-            title={
-              read.value.deletionBlocked
-                ? l(
-                    '服务端报告仍有阻止删除的引用。授权范围内的列表可能为空。',
-                    'The server reports references that block deletion. The authorized list can still be empty.',
-                  )
-                : l(
-                    '当前服务端读取未报告删除阻止；删除事务仍会重新检查。',
-                    'The current server read reports no deletion block; the delete transaction checks again.',
-                  )
-            }
-          />
           <DataTable
             locale={locale}
             dataSource={read.value.items}
@@ -97,7 +82,6 @@ export function GroupReferences({
                 title: l('状态', 'State'),
                 render: (_, row) => `${row.lifecycleState} · ${row.freshness}`,
               },
-              { title: l('阻止删除', 'Blocks deletion'), dataIndex: 'blocksDeletion' },
               {
                 title: l('用途与代表路径', 'Roles and representative path'),
                 render: (_, row) => (
@@ -124,5 +108,77 @@ export function GroupReferences({
         </Button>
       )}
     </Card>
+  )
+}
+
+export function GroupReferences({
+  groups,
+  locale,
+  id,
+  onDeletionChange,
+}: {
+  groups: GroupsUseCases
+  locale: Locale
+  id: string
+  onDeletionChange: (blocked: boolean | null) => void
+}) {
+  const l = labels(locale),
+    [query, setQuery] = useState<Query>({ limit: 20 }),
+    read = useRead(`group-blockers/${id}/${JSON.stringify(query)}`, () =>
+      groups.references(id, query),
+    )
+  useEffect(() => {
+    onDeletionChange(
+      read.busy || read.error || !read.value
+        ? null
+        : !!query.cursor || read.value.items.length > 0 || read.value.nextCursor !== null,
+    )
+  }, [read.busy, read.error, read.value, query.cursor, onDeletionChange])
+  return (
+    <>
+      <Card title={l('直接引用与删除保护', 'Direct references and deletion protection')}>
+        <Button onClick={read.reload}>{l('读取直接引用', 'Read direct references')}</Button>
+        <ReadState
+          locale={locale}
+          busy={read.busy}
+          error={read.error}
+          empty={read.value?.items.length === 0}
+        />
+        <Alert
+          type="info"
+          title={l(
+            '这里只展示引用身份；空列表不构成删除许可，服务端会在删除时重新检查。',
+            'This lists reference identities. An empty page does not grant deletion; the server checks again.',
+          )}
+        />
+        {read.value && (
+          <>
+            <DataTable
+              locale={locale}
+              rowKey={(row) => `${row.kind}/${row.id}`}
+              dataSource={read.value.items}
+              columns={[
+                { title: l('来源类型', 'Source kind'), dataIndex: 'kind' },
+                { title: l('引用身份', 'Reference identity'), dataIndex: 'id' },
+                { title: l('修订', 'Revision'), dataIndex: 'revision' },
+                { title: l('用途', 'Roles'), render: (_, row) => row.roles.join(' · ') },
+                {
+                  title: l('解除方式', 'Release'),
+                  render: () => l('编辑或删除引用对象', 'Edit or delete the referencing object'),
+                },
+              ]}
+            />
+            <CursorControls
+              locale={locale}
+              query={query}
+              onChange={setQuery}
+              next={read.value.nextCursor}
+              count={read.value.items.length}
+            />
+          </>
+        )}
+      </Card>
+      <GroupImpacts groups={groups} locale={locale} id={id} />
+    </>
   )
 }
