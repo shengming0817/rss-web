@@ -11,6 +11,7 @@ import process from 'node:process'
 import { realBrowser } from './react-mdm-browser.mjs'
 const run = await realBrowser('MDM_DEVICE_BROWSER_FIXTURE', 'react-execution-access')
 let failure
+const screenshots = mkdtempSync(join(tmpdir(), 'rss-react-execution-access-'))
 try {
   const { fixture: f, origin, checks } = run,
     p = await run.page(),
@@ -37,19 +38,20 @@ try {
   }
   await run.login(p)
   run.step('device-confirmation-and-unknown-acceptance')
-  await run.nav(p, `/devices/endpoint/${f.mdm}`, f.mdm)
+  await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   await button('核对设备与动作').click()
   let dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
   await dialog.waitFor()
+  await p.screenshot({ path: join(screenshots, 'device-action-review.png'), fullPage: true })
   assert.equal(
     await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).isDisabled(),
     true,
   )
   // Changing device abandons the confirmation and cannot submit to the former device.
-  await run.nav(p, `/devices/endpoint/${f.alone}`, f.alone)
+  await run.nav(p, `/devices/endpoint/${f.alone}`, '设备详情')
   assert.equal(await p.getByRole('dialog', { name: '确认设备动作', exact: true }).count(), 0)
   assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.mdm}/operations`), 0)
-  await run.nav(p, `/devices/endpoint/${f.mdm}`, f.mdm)
+  await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   await button('核对设备与动作').click()
   dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
   await dialog.getByRole('checkbox').check()
@@ -100,7 +102,7 @@ try {
   checks.push('real-cancellation-reuses-original-request-id-and-cas-after-unknown')
 
   run.step('mac-lock-pin-and-danger-confirmation')
-  await run.nav(p, '/devices/endpoint/fixture-mac', 'fixture-mac')
+  await run.nav(p, '/devices/endpoint/fixture-mac', '设备详情')
   await run.choose(p, label('设备动作'), '锁定（macOS）')
   await button('核对设备与动作').click()
   dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
@@ -116,10 +118,16 @@ try {
     'POST',
     '/api/v1/devices/fixture-mac/operations',
     () => dialog.getByRole('button', { name: '确认提交此动作', exact: true }).click(),
-    202,
+    501,
   )
-  await p.getByText('已受理，设备效果另行核实', { exact: false }).waitFor()
-  assert.equal(await label('六位锁定 PIN').count(), 0)
+  // No Apple device/security protocol facts were supplied; the real owner rejects support.
+  await p.getByText('未确认受理', { exact: false }).waitFor()
+  await p.waitForFunction(() =>
+    [...document.querySelectorAll('input[aria-label="六位锁定 PIN"]')].every(
+      (input) => input.value === '',
+    ),
+  )
+  await label('六位锁定 PIN').waitFor({ state: 'hidden' })
   await run.choose(p, label('设备动作'), '擦除设备')
   await button('核对设备与动作').click()
   dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
@@ -131,7 +139,9 @@ try {
     true,
   )
   await dialog.getByRole('button', { name: 'Close', exact: true }).click()
-  checks.push('real-macos-lock-six-digit-pin-cleared-and-wipe-separate-danger-confirmation')
+  checks.push(
+    'real-rejected-macos-lock-six-digit-pin-cleared-and-wipe-separate-danger-confirmation',
+  )
 
   run.step('script-policy-real-agent-lifecycle')
   const base = '/api/v1',
@@ -273,7 +283,11 @@ try {
         policy,
         '0',
       ],
-      { timeoutMs: 60000, graceMs: 2000, stdio: ['ignore', 'pipe', 'pipe'] },
+      {
+        timeoutMs: action.startsWith('script_') ? 60000 : 150000,
+        graceMs: 2000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
     )
     assert.equal(result.status, 0, result.stdout.trim())
     return JSON.parse(result.stdout)
@@ -320,6 +334,10 @@ try {
     assert.equal(before.execution.kind, 'recurring')
     assert.equal(before.execution.latestRun, null)
     await p.getByText('尚无历史运行', { exact: true }).waitFor()
+    await p.screenshot({
+      path: join(screenshots, `policy-${terminal}-waiting.png`),
+      fullPage: true,
+    })
     const task = await agent('script_start', policy)
     const runPath = `${base}/policies/${policy}/runs/${task.task}`
     await until(
@@ -344,8 +362,81 @@ try {
     await button('重新查询原操作').click()
     await p.getByText(final.state.execution, { exact: true }).first().waitFor()
     assert.equal(final.taskId, task.task)
+    await mutate('policies', policy, { action: 'disable' }, 1)
     checks.push(`real-agent-script-${terminal}-policy-assignment-run-and-original-attempt`)
   }
+
+  run.step('collection-global-evidence')
+  const collectionResource = randomUUID(),
+    collectionPolicy = randomUUID()
+  const blueprint = (await api('GET', `${base}/collection-blueprints`)).items.find(
+    (i) => i.id === 'macos.agent.memory',
+  )
+  assert.ok(blueprint)
+  const collectionCreated = await mutate('resources', collectionResource, {
+    action: 'instantiate',
+    blueprint: blueprint.id,
+    version: blueprint.version,
+  })
+  const collectionVersion = collectionCreated.versions.find(
+    (i) => i.id === `builtin.${blueprint.id}.${blueprint.version}`,
+  )
+  assert.ok(collectionVersion)
+  await mutate(
+    'resources',
+    collectionResource,
+    { action: 'activate', version: collectionVersion.id },
+    collectionCreated.revision,
+  )
+  await mutate('policies', collectionPolicy, {
+    action: 'put',
+    enabled: true,
+    definition: {
+      scope,
+      action: {
+        kind: 'agent_collection',
+        resource: {
+          id: collectionResource,
+          version: collectionVersion.id,
+          platform: 'macos',
+          architecture: 'aarch64',
+          variant: 'aarch64',
+        },
+        schedule: {
+          trigger: { kind: 'interval', anchor: Math.floor(Date.now() / 1000), seconds: 60 },
+          misfire: { kind: 'coalesce_one' },
+          notBefore: 0,
+          until: null,
+          jitterSeconds: 0,
+          window: null,
+        },
+        frequency: 'every_trigger',
+        runLifetimeSeconds: 300,
+      },
+    },
+  })
+  const collected = await agent('memory', collectionResource)
+  const collectionDirectory = await until(
+    () =>
+      api(
+        'GET',
+        `${base}/operations?filter=${encodeURIComponent(`policy==${collectionPolicy}`)}&fields=id,kind,device,registrationId,generation,origin,policy,deadline,status,evidence&limit=20`,
+      ),
+    (v) => v.items.some((i) => i.id === collected.task),
+  )
+  const collectionItem = collectionDirectory.items.find((i) => i.id === collected.task)
+  assert.equal(collectionItem.kind, 'action_run')
+  assert.equal(collectionItem.evidence.owner, 'collection')
+  assert.equal(collectionItem.evidence.channel, 'agent')
+  await run.nav(
+    p,
+    `/operations?${new URLSearchParams({ filter: `policy==${collectionPolicy}` })}`,
+    '执行与结果',
+  )
+  await button(collected.task).click()
+  await p.getByText('原操作与结果', { exact: true }).waitFor()
+  await p.getByText('succeeded', { exact: true }).first().waitFor()
+  checks.push('real-collection-mtls-report-global-directory-evidence-and-original-run')
 
   run.step('configuration-publication-assignment-native-command')
   const configurationResource = randomUUID(),
@@ -546,6 +637,7 @@ try {
     ),
     1,
   )
+  await p.screenshot({ path: join(screenshots, 'device-access-binding.png'), fullPage: true })
   await button('结束或重新编辑此任务').click()
   await run.choose(p, label('绑定动作'), '重置因子')
   await button('冻结此绑定操作并核对').click()
@@ -606,7 +698,6 @@ try {
     `/api/v1/operations?filter=${encodeURIComponent(`device=='${f.mdm}'`)}&limit=100`,
   )
   assert.ok(directory.items.some((item) => item.id === original.operationId))
-  const screenshots = mkdtempSync(join(tmpdir(), 'rss-react-execution-access-'))
   for (const [name, width] of [
     ['desktop', 1440],
     ['tablet', 900],

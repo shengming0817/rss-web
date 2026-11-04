@@ -1296,3 +1296,7 @@ html:has(.mdm-overlay-open) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+/* Modal scroll locking uses static CSS under the host's external-style CSP. */
+body:has(.device-control-confirmation .ant-modal-wrap) {
+  overflow-y: hidden;
+}

@@ -149,6 +149,8 @@ export function DeviceControl({
       )}
       <Modal
         open={review !== null}
+        rootClassName="device-control-confirmation"
+        scrollLock={false}
         title={l('确认设备动作', 'Confirm device action')}
         onCancel={() => {
           setReview(null)

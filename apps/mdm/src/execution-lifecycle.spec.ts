@@ -8,6 +8,8 @@ import type { Runtime } from './runtime'
 import type { ControlIntent } from '@rss/mdm-execution'
 import type { ViewEndpoint } from '@rss/mdm-devices'
 import { DeviceControl } from './DeviceControl'
+import { isUnknown } from './AdminUi'
+import { decodeMdmError } from '@rss/api/mdm'
 let host: HTMLDivElement, root: Root
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -60,6 +62,11 @@ const endpoint: ViewEndpoint = {
   channels: [],
   enrollments: [],
 }
+it('separates a formal unsupported action rejection from an unknown server response', () => {
+  expect(isUnknown(decodeMdmError(501, { code: 'action_not_supported' }))).toBe(false)
+  expect(isUnknown(decodeMdmError(501, {}))).toBe(true)
+  expect(isUnknown(decodeMdmError(503, { code: 'service_unavailable' }))).toBe(true)
+})
 it('retains the original write as unknown across hiding and a late public receipt instead of enabling another UUID', async () => {
   let resolve!: (value: { operationId: string; revision: number }) => void
   const deferred = new Promise<{ operationId: string; revision: number }>((yes) => {
