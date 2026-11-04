@@ -1,9 +1,9 @@
 import { expect, it, vi } from 'vitest'
 import {
-  createMaterialAuthorization,
+  createOperationAuthorization,
   type MaterialDisclosureContext,
   type OperationAuthorizationPort,
-} from './material-authorization'
+} from './operation-authorization'
 const operationId = '11111111-1111-4111-8111-111111111111',
   material = '22222222-2222-4222-8222-222222222222',
   ceremony = '33333333-3333-4333-8333-333333333333'
@@ -32,7 +32,7 @@ function fixture(overrides: Partial<OperationAuthorizationPort> = {}) {
       classify: vi.fn(() => 'unknown' as const),
       ...overrides,
     },
-    controller = createMaterialAuthorization(
+    controller = createOperationAuthorization(
       port,
       () => bound,
       () => time,
@@ -225,4 +225,28 @@ it('fences changed sessions and does not cancel a new principal operation cookie
   expect(f.port.cancelAuthorization).not.toHaveBeenCalled()
   await f.controller.authorize(context(), f.begin, f.authenticate)
   expect(f.controller.getSnapshot().status).toBe('authorized')
+})
+
+it('binds the same cookie owner to exact binding and enterprise purposes and frozen input keys', async () => {
+  const f = fixture(),
+    target = {
+      purpose: 'mdm.device_access.change' as const,
+      device: 'da-device',
+      binding: material,
+      operationId,
+      inputKey: 'a'.repeat(64),
+    }
+  await f.controller.authorize(target, f.begin, f.authenticate)
+  expect(() => f.controller.consume({ ...target, inputKey: 'b'.repeat(64) })).toThrow('exact')
+  expect(() => f.controller.consume(context())).toThrow('exact')
+  f.controller.consume(target)
+  await f.controller.cancel()
+  const enterprise = {
+    purpose: 'mdm.enterprise.configuration' as const,
+    operationId,
+    inputKey: 'a'.repeat(64),
+  }
+  await f.controller.authorize(enterprise, f.begin, f.authenticate)
+  expect(() => f.controller.consume(target)).toThrow('exact')
+  f.controller.consume(enterprise)
 })

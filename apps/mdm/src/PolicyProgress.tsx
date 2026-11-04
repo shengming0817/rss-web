@@ -6,6 +6,7 @@ import type { Policy } from '@rss/mdm-policies'
 import type { PoliciesUseCases } from './PolicyPreview'
 import type { Locale } from './i18n'
 import { CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'
+import { Status, timestamp } from './DevicePresentation'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
 
@@ -63,9 +64,21 @@ export function PolicyAssignments({
               {
                 title: l('本轮准入', 'Current admission'),
                 render: (_, row) =>
-                  row.taskAdmission
-                    ? `${row.taskAdmission.state} · ${row.taskAdmission.stage ?? '—'}`
-                    : '—',
+                  row.taskAdmission ? (
+                    <>
+                      <Status locale={locale} value={row.taskAdmission.state} />
+                      {row.taskAdmission.stage ?? ''}
+                    </>
+                  ) : (
+                    '—'
+                  ),
+              },
+              {
+                title: l('服务端可证明的允许开始时间', 'Server-proven earliest allowed start'),
+                render: (_, row) =>
+                  row.taskAdmission?.nextAllowedStartAt != null
+                    ? timestamp(locale, row.taskAdmission.nextAllowedStartAt)
+                    : l('未知 / 等待事件', 'Unknown / waiting for an event'),
               },
               {
                 title: l('注册坐标', 'Registration coordinates'),
@@ -99,8 +112,63 @@ export function PolicyAssignments({
               {
                 title: l('原操作', 'Original operations'),
                 render: (_, row) =>
-                  row.operationIds.join(' · ') ||
-                  l('本轮尚无已受理操作', 'No accepted operation in this projection'),
+                  row.execution.kind === 'restricted' ? (
+                    l('无执行事实读取权限', 'Execution facts are restricted')
+                  ) : row.execution.kind === 'operations' ? (
+                    row.execution.operationIds.length ? (
+                      row.execution.operationIds.map((id) => (
+                        <p key={id}>
+                          <Link
+                            to={`/operations?${new URLSearchParams({ filter: `id=='${id}'` })}`}
+                          >
+                            {id}
+                          </Link>
+                        </p>
+                      ))
+                    ) : (
+                      l('尚无已受理操作', 'No accepted operation')
+                    )
+                  ) : (
+                    <>
+                      <p>
+                        {l('最近运行', 'Latest run')}:{' '}
+                        {row.execution.latestRun ? (
+                          <Link
+                            to={executionPath(
+                              'action_run',
+                              row.execution.latestRun.taskId,
+                              policy.id,
+                            )}
+                          >
+                            {row.execution.latestRun.taskId} ·{' '}
+                            {row.execution.latestRun.state?.execution ??
+                              row.execution.latestRun.nativeDelivery ??
+                              '—'}
+                          </Link>
+                        ) : (
+                          l('尚无历史运行', 'No historical run')
+                        )}
+                      </p>
+                      <p>
+                        {l('当前触发记录', 'Current trigger record')}:{' '}
+                        {row.execution.currentRecord.state === 'unknown' ? (
+                          l('未知', 'Unknown')
+                        ) : row.execution.currentRecord.state === 'absent' ? (
+                          l('已核对，尚无运行', 'Checked; no accepted run')
+                        ) : (
+                          <Link
+                            to={executionPath(
+                              'action_run',
+                              row.execution.currentRecord.taskId,
+                              policy.id,
+                            )}
+                          >
+                            {row.execution.currentRecord.taskId}
+                          </Link>
+                        )}
+                      </p>
+                    </>
+                  ),
               },
             ]}
           />

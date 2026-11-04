@@ -335,7 +335,7 @@ export function createConfigurationPolicies(
           ...row,
           ...(reason ? { availability: 'unavailable' as const, reason } : {}),
           taskAdmission: null,
-          operationIds,
+          execution: { kind: 'operations', operationIds },
         }
       }),
       nextCursor: page.nextCursor,

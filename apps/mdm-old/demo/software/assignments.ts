@@ -291,7 +291,7 @@ export function createSoftwarePolicyDemo(
                 ...row,
                 ...(!p.enabled ? { availability: 'unavailable', reason: 'policy_disabled' } : {}),
                 taskAdmission: state,
-                operationIds: [],
+                execution: { kind: 'operations', operationIds: [] },
               }
             }),
           })

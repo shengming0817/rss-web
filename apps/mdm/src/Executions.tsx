@@ -1,3 +1,5 @@
+import { TaskTrust } from './TaskTrust'
+import { ControlRecoveryPanel } from './ControlRecovery'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, Space } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -31,12 +33,42 @@ function ExecutionFacts({
       `${binding}/execution/${reference.kind}/${reference.id}/${reference.policy ?? ''}`,
       () => execution.detail(reference),
     )
+  const [recovery, setRecovery] = useState<Parameters<typeof ControlRecoveryPanel>[0] | null>(null)
+  useEffect(() => {
+    const value = read.value
+    if (!value) return
+    if (
+      value.item?.origin === 'direct' &&
+      value.detail.owner === 'device' &&
+      value.detail.revision !== null
+    )
+      setRecovery({
+        runtime,
+        locale,
+        device: value.detail.device,
+        id: value.detail.id,
+        revision: value.detail.revision,
+        registration: value.item.registrationId,
+        generation: value.item.generation,
+        canReauthorize: value.detail.reauthorization?.state === 'available',
+        confirmationRequired: value.detail.reauthorization?.confirmationRequired ?? false,
+        terminal: ['applied', 'rejected', 'cancelled', 'timed_out', 'superseded'].includes(
+          value.detail.delivery,
+        ),
+        onRefresh: read.reload,
+      })
+    else setRecovery(null)
+  }, [read.value, runtime, locale])
   return (
     <Card title={l('原操作与结果', 'Original operation and result')}>
       <ReadState locale={locale} busy={read.busy} error={read.error} empty={read.value === null} />
       <Button onClick={read.reload}>{l('重新查询原操作', 'Read original operation again')}</Button>
       {read.value && (
         <>
+          {read.value.detail.taskName && <h3>{read.value.detail.taskName}</h3>}
+          {read.value.detail.dispatchFailure && (
+            <Alert type="error" showIcon title={read.value.detail.dispatchFailure} />
+          )}
           <dl className="device-facts">
             <div>
               <dt>{l('操作', 'Operation')}</dt>
@@ -104,6 +136,7 @@ function ExecutionFacts({
               <dd>{timestamp(locale, read.value.detail.deadline)}</dd>
             </div>
           </dl>
+
           <Alert
             type="info"
             showIcon
@@ -113,6 +146,15 @@ function ExecutionFacts({
             )}
           />
         </>
+      )}
+      {recovery && (
+        <fieldset
+          className="permission-panel"
+          hidden={read.busy || !!read.error}
+          disabled={read.busy || !!read.error}
+        >
+          <ControlRecoveryPanel {...recovery} />
+        </fieldset>
       )}
     </Card>
   )
@@ -127,6 +169,9 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
     query: Query = { limit: 20, ...(filter ? { filter } : {}), ...(cursor ? { cursor } : {}) },
     read = usePageRead(`${binding}/executions/${JSON.stringify(query)}`, () =>
       execution.list(query),
+    ),
+    statistics = usePageRead(`${binding}/execution-statistics/${filter}`, () =>
+      execution.statistics(filter || undefined),
     ),
     operation = params.get('operation'),
     kind = params.get('kind'),
@@ -158,10 +203,31 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
       />
       <p className="subtitle">
         {l(
-          '此目录展示后端已支持的执行类型；脚本与采集的完整历史请从原策略读取。',
-          'This directory shows execution families supported by the server. Read complete script and collection history from the original policy.',
+          '目录包含脚本与采集；当前资格和最近结果分别观察，允许开始时间不是设备执行承诺。',
+          'The directory includes scripts and collections. Observe current eligibility separately from historical results; an earliest allowed start is not a device execution promise.',
         )}
       </p>
+      <ReadState locale={locale} busy={statistics.busy} error={statistics.error} />
+      {statistics.value && (
+        <>
+          <div className="execution-metrics">
+            {[
+              [l('执行总数', 'Total executions'), statistics.value.total],
+              [l('原生命令', 'Native commands'), statistics.value.commands],
+              [l('任务运行', 'Task runs'), statistics.value.actionRuns],
+              [l('结果未知', 'Unknown results'), statistics.value.unknown],
+            ].map(([title, value]) => (
+              <div key={title}>
+                <span>{title}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+          <p className="subtitle">
+            {l('统计快照', 'Statistics snapshot')}: {timestamp(locale, statistics.value.asOf)}
+          </p>
+        </>
+      )}
       <Form
         className="admin-toolbar"
         layout="inline"
@@ -176,7 +242,14 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
           />
         </Form.Item>
         <Button htmlType="submit">{l('应用筛选', 'Apply filter')}</Button>
-        <Button onClick={read.reload}>{l('刷新', 'Refresh')}</Button>
+        <Button
+          onClick={() => {
+            read.reload()
+            statistics.reload()
+          }}
+        >
+          {l('刷新', 'Refresh')}
+        </Button>
       </Form>
       <ReadState
         locale={locale}
@@ -215,7 +288,10 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
                   <Link to={devicePath('endpoint', row.device)}>{row.device}</Link>
                 ),
               },
-              { title: l('类型', 'Kind'), dataIndex: 'kind' },
+              {
+                title: l('类型', 'Kind'),
+                render: (_, row) => <Status locale={locale} value={row.family ?? row.kind} />,
+              },
               {
                 title: l('状态', 'State'),
                 render: (_, row) => <Status locale={locale} value={row.status} />,
@@ -236,6 +312,7 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
           />
         </>
       )}
+      <TaskTrust runtime={runtime} locale={locale} />
       {reference && (
         <>
           <Space>

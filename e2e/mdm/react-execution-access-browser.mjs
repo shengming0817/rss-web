@@ -1,0 +1,645 @@
+// Real HTTPS and browser operations. Existing DA registrar facts are prerequisites,
+// not proof of native enrollment, account creation, device wiping or PSSO login.
+import assert from 'node:assert/strict'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { executeBounded } from '../identity/process.mjs'
+import process from 'node:process'
+import { realBrowser } from './react-mdm-browser.mjs'
+const run = await realBrowser('MDM_DEVICE_BROWSER_FIXTURE', 'react-execution-access')
+let failure
+try {
+  const { fixture: f, origin, checks } = run,
+    p = await run.page(),
+    button = (name) => p.getByRole('button', { name, exact: true }).filter({ visible: true }),
+    label = (name) => p.getByLabel(name, { exact: true }).filter({ visible: true })
+  async function api(method, path, data, expected = 200) {
+    const headers = {}
+    if (method !== 'GET') {
+      const session = await p.request.get(`${origin}/api/v1/identity/tenants/${f.tenant}/session`)
+      assert.equal(session.status(), 200)
+      Object.assign(headers, {
+        Origin: origin,
+        'X-Identity-Request': '1',
+        'X-CSRF-Token': (await session.json()).csrfToken,
+      })
+    }
+    const response = await p.request.fetch(origin + path, {
+      method,
+      headers,
+      ...(data === undefined ? {} : { data }),
+    })
+    assert.equal(response.status(), expected, `${method} ${path.split('?')[0]}`)
+    return expected === 204 ? null : response.json()
+  }
+  await run.login(p)
+  run.step('device-confirmation-and-unknown-acceptance')
+  await run.nav(p, `/devices/endpoint/${f.mdm}`, f.mdm)
+  await button('核对设备与动作').click()
+  let dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
+  await dialog.waitFor()
+  assert.equal(
+    await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).isDisabled(),
+    true,
+  )
+  // Changing device abandons the confirmation and cannot submit to the former device.
+  await run.nav(p, `/devices/endpoint/${f.alone}`, f.alone)
+  assert.equal(await p.getByRole('dialog', { name: '确认设备动作', exact: true }).count(), 0)
+  assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.mdm}/operations`), 0)
+  await run.nav(p, `/devices/endpoint/${f.mdm}`, f.mdm)
+  await button('核对设备与动作').click()
+  dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
+  await dialog.getByRole('checkbox').check()
+  let original
+  await p.context().route(`**/api/v1/devices/${f.mdm}/operations`, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue()
+    original = route.request().postDataJSON()
+    const response = await route.fetch()
+    assert.equal(response.status(), 202)
+    await route.abort('failed')
+  })
+  await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).click()
+  await p.getByText('提交结果未知，请查询原操作，勿重新创建', { exact: false }).waitFor()
+  assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.mdm}/operations`), 1)
+  await p.context().unroute(`**/api/v1/devices/${f.mdm}/operations`)
+  await p.getByRole('link', { name: original.operationId, exact: true }).click()
+  await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
+  await p.getByText('原操作与结果', { exact: true }).waitFor()
+  await p.getByText('维护原设备动作', { exact: true }).waitFor()
+  const facts = await api('GET', `/api/v1/devices/${f.mdm}/operations/${original.operationId}`)
+  assert.equal(facts.commandId, original.operationId)
+  assert.notEqual(facts.observation.effect, 'verified')
+  checks.push(
+    'real-device-confirmation-discarded-on-device-change-and-202-response-loss-original-recovery-no-replay',
+  )
+  run.step('original-cancellation-cas-unknown')
+  await p
+    .getByRole('checkbox', { name: '我已核对原操作及注册，并明确确认本次恢复', exact: true })
+    .check()
+  let cancellation
+  const path = `/api/v1/devices/${f.mdm}/operations/${original.operationId}/cancel`
+  await p.context().route('**' + path, async (route) => {
+    cancellation = route.request().postDataJSON()
+    const response = await route.fetch()
+    assert.equal(response.status(), 200)
+    await route.abort('failed')
+  })
+  await button('请求取消原操作').click()
+  await button('显式重提同一恢复请求').waitFor()
+  await p.context().unroute('**' + path)
+  await button('查询原操作当前事实').click()
+  await button('显式重提同一恢复请求').waitFor()
+  const repeated = p.waitForRequest(
+    (request) => new URL(request.url()).pathname === path && request.method() === 'POST',
+  )
+  await button('显式重提同一恢复请求').click()
+  assert.deepEqual((await repeated).postDataJSON(), cancellation)
+  checks.push('real-cancellation-reuses-original-request-id-and-cas-after-unknown')
+
+  run.step('mac-lock-pin-and-danger-confirmation')
+  await run.nav(p, '/devices/endpoint/fixture-mac', 'fixture-mac')
+  await run.choose(p, label('设备动作'), '锁定（macOS）')
+  await button('核对设备与动作').click()
+  dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
+  await dialog.getByRole('checkbox').check()
+  await label('六位锁定 PIN').fill('12345')
+  assert.equal(
+    await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).isDisabled(),
+    true,
+  )
+  await label('六位锁定 PIN').fill('123456')
+  await run.response(
+    p,
+    'POST',
+    '/api/v1/devices/fixture-mac/operations',
+    () => dialog.getByRole('button', { name: '确认提交此动作', exact: true }).click(),
+    202,
+  )
+  await p.getByText('已受理，设备效果另行核实', { exact: false }).waitFor()
+  assert.equal(await label('六位锁定 PIN').count(), 0)
+  await run.choose(p, label('设备动作'), '擦除设备')
+  await button('核对设备与动作').click()
+  dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
+  await dialog
+    .getByText('擦除可能永久删除设备上的数据。确认已核对目标和恢复安排。', { exact: true })
+    .waitFor()
+  assert.equal(
+    await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).isDisabled(),
+    true,
+  )
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+  checks.push('real-macos-lock-six-digit-pin-cleared-and-wipe-separate-danger-confirmation')
+
+  run.step('script-policy-real-agent-lifecycle')
+  const base = '/api/v1',
+    group = randomUUID(),
+    scope = randomUUID(),
+    resource = randomUUID()
+  async function mutate(kind, id, input, expectedRevision = 0, expected = 200) {
+    return api(
+      'POST',
+      `${base}/${kind}/${id}`,
+      { operationId: randomUUID(), expectedRevision, input },
+      expected,
+    )
+  }
+  async function until(read, accept, budget = 45000) {
+    const end = Date.now() + budget
+    do {
+      const value = await read()
+      if (accept(value)) return value
+      await new Promise((done) => setTimeout(done, 500))
+    } while (Date.now() < end)
+    assert.fail('bounded execution fact convergence')
+  }
+  await mutate('groups', group, {
+    action: 'create',
+    presentation: { name: 'Execution browser', description: '' },
+    assetContext: 'endpoint',
+    criteria: null,
+  })
+  const membership = await mutate(
+    'groups',
+    group,
+    {
+      action: 'members',
+      add: [{ kind: 'endpoint', id: f.collector.runtime.deviceId }],
+      remove: [],
+    },
+    1,
+    202,
+  )
+  await until(
+    () => api('GET', `${base}/groups/${group}/tasks/${membership.task}`),
+    (v) => v.status === 'completed',
+  )
+  const scopeWrite = await mutate('scopes', scope, {
+    action: 'put',
+    definition: { targets: [{ kind: 'group', id: group }], limitations: null, exclusions: [] },
+  })
+  await until(
+    () => api('GET', `${base}/scopes/${scope}/tasks/${scopeWrite.task}`),
+    (v) => v.status === 'completed',
+  )
+  await until(
+    async () => {
+      const value = await api('GET', `${base}/scopes/${scope}`)
+      return value.resolution
+        ? api(
+            'GET',
+            `${base}/scopes/${scope}/results/${value.resolution}/members?channel=agent&limit=100`,
+          )
+        : { current: false }
+    },
+    (v) =>
+      v.current === true && v.page.items.some((i) => i.object.id === f.collector.runtime.deviceId),
+  )
+  const bytes = Buffer.from("#!/bin/sh\nprintf '{}'\n"),
+    upload = randomUUID()
+  await mutate('resources', resource, { action: 'create', kind: 'script' })
+  await mutate(
+    'resources',
+    resource,
+    {
+      action: 'version',
+      kind: 'script',
+      version: '1',
+      variants: [
+        {
+          platform: 'macos',
+          architecture: 'aarch64',
+          key: 'default',
+          declaration: {
+            kind: 'script',
+            artifact: {
+              reference: 'execution.sh',
+              length: bytes.length,
+              sha256: [...createHash('sha256').update(bytes).digest()],
+            },
+            definition: {
+              profile: 'posix_sh',
+              sql: null,
+              runAs: 'system',
+              encoding: 'utf8',
+              parameters: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+              },
+              bindings: {},
+              output: { type: 'object' },
+              purpose: { kind: 'action' },
+              timeoutSeconds: 30,
+              outputBytes: 1024,
+              maxRows: 1,
+            },
+          },
+        },
+      ],
+    },
+    1,
+  )
+  await api(
+    'POST',
+    `${base}/resources/${resource}/uploads/${upload}?version=1&platform=macos&architecture=aarch64&variant=default`,
+  )
+  const session = await api('GET', `${base}/identity/tenants/${f.tenant}/session`)
+  const appended = await p.request.patch(
+    `${origin}${base}/resources/${resource}/uploads/${upload}?offset=0`,
+    {
+      headers: {
+        Origin: origin,
+        'X-Identity-Request': '1',
+        'X-CSRF-Token': session.csrfToken,
+        'Content-Type': 'application/octet-stream',
+      },
+      data: bytes,
+    },
+  )
+  assert.equal(appended.status(), 200)
+  await api('POST', `${base}/resources/${resource}/uploads/${upload}/complete`, undefined, 201)
+  await mutate('resources', resource, { action: 'activate', version: '1' }, 2)
+  async function agent(action, policy) {
+    const result = await executeBounded(
+      'python3',
+      [
+        fileURLToPath(new URL('./device-agent.py', import.meta.url)),
+        process.env.MDM_DEVICE_BROWSER_FIXTURE,
+        action,
+        policy,
+        '0',
+      ],
+      { timeoutMs: 60000, graceMs: 2000, stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    assert.equal(result.status, 0, result.stdout.trim())
+    return JSON.parse(result.stdout)
+  }
+  for (const terminal of ['success', 'failure', 'unknown']) {
+    const policy = randomUUID()
+    await mutate('policies', policy, {
+      action: 'put',
+      enabled: true,
+      definition: {
+        scope,
+        action: {
+          kind: 'execution',
+          resource: {
+            id: resource,
+            version: '1',
+            platform: 'macos',
+            architecture: 'aarch64',
+            variant: 'default',
+          },
+          parameters: {},
+          schedule: {
+            trigger: { kind: 'check_in', minimumSeconds: 60 },
+            misfire: { kind: 'coalesce_one' },
+            notBefore: 0,
+            until: null,
+            jitterSeconds: 0,
+            window: null,
+          },
+          frequency: 'every_trigger',
+          runLifetimeSeconds: 60,
+        },
+      },
+    })
+    await run.nav(p, `/policies?policy=${policy}`, '策略与部署')
+    await button('打开定位策略').click()
+    await p.getByRole('tab', { name: '设备分配', exact: true }).click()
+    await p.getByText('当前设备分配资格', { exact: true }).waitFor()
+    const assignment = await until(
+      () => api('GET', `${base}/policies/${policy}/assignments?limit=100`),
+      (v) => v.items.some((i) => i.object.id === f.collector.runtime.deviceId),
+    )
+    const before = assignment.items.find((i) => i.object.id === f.collector.runtime.deviceId)
+    assert.equal(before.execution.kind, 'recurring')
+    assert.equal(before.execution.latestRun, null)
+    await p.getByText('尚无历史运行', { exact: true }).waitFor()
+    const task = await agent('script_start', policy)
+    const runPath = `${base}/policies/${policy}/runs/${task.task}`
+    await until(
+      () => api('GET', runPath),
+      (v) => v.state.execution === 'running',
+    )
+    await button('读取分配').click()
+    await p
+      .getByRole('link', { name: new RegExp(task.task) })
+      .first()
+      .click()
+    await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
+    await p.getByText('running', { exact: true }).waitFor()
+    if (terminal !== 'unknown') await agent(`script_${terminal}`, policy)
+    const final = await until(
+      () => api('GET', runPath),
+      (v) =>
+        v.state.execution ===
+        (terminal === 'success' ? 'succeeded' : terminal === 'failure' ? 'failed' : 'unknown'),
+      terminal === 'unknown' ? 120000 : 45000,
+    )
+    await button('重新查询原操作').click()
+    await p.getByText(final.state.execution, { exact: true }).first().waitFor()
+    assert.equal(final.taskId, task.task)
+    checks.push(`real-agent-script-${terminal}-policy-assignment-run-and-original-attempt`)
+  }
+
+  run.step('configuration-publication-assignment-native-command')
+  const configurationResource = randomUUID(),
+    configurationScope = randomUUID(),
+    configurationPolicy = randomUUID(),
+    configurationUpload = randomUUID()
+  const node = './Device/Vendor/MSFT/Policy/Config/Experience/AllowCortana'
+  const content = Buffer.from(
+    JSON.stringify({
+      target: { kind: 'device' },
+      apply: {
+        platform: 'windows',
+        request: {
+          kind: 'sync_ml',
+          request: {
+            kind: 'node',
+            node,
+            instance: [],
+            operation: 'replace',
+            value: { type: 'integer', value: '1' },
+          },
+        },
+      },
+      remove: {
+        platform: 'windows',
+        request: {
+          kind: 'sync_ml',
+          request: { kind: 'node', node, instance: [], operation: 'delete', value: null },
+        },
+      },
+    }),
+  )
+  await mutate('resources', configurationResource, { action: 'create', kind: 'configuration' })
+  await mutate(
+    'resources',
+    configurationResource,
+    {
+      action: 'version',
+      kind: 'configuration',
+      version: '1',
+      variants: [
+        {
+          platform: 'windows',
+          architecture: 'x86_64',
+          key: 'default',
+          declaration: {
+            kind: 'configuration',
+            artifact: {
+              reference: 'configuration.json',
+              length: content.length,
+              sha256: [...createHash('sha256').update(content).digest()],
+            },
+          },
+        },
+      ],
+    },
+    1,
+  )
+  await api(
+    'POST',
+    `${base}/resources/${configurationResource}/uploads/${configurationUpload}?version=1&platform=windows&architecture=x86_64&variant=default`,
+  )
+  const configurationSession = await api('GET', `${base}/identity/tenants/${f.tenant}/session`)
+  assert.equal(
+    (
+      await p.request.patch(
+        `${origin}${base}/resources/${configurationResource}/uploads/${configurationUpload}?offset=0`,
+        {
+          headers: {
+            Origin: origin,
+            'X-Identity-Request': '1',
+            'X-CSRF-Token': configurationSession.csrfToken,
+            'Content-Type': 'application/octet-stream',
+          },
+          data: content,
+        },
+      )
+    ).status(),
+    200,
+  )
+  await api(
+    'POST',
+    `${base}/resources/${configurationResource}/uploads/${configurationUpload}/complete`,
+    undefined,
+    201,
+  )
+  await mutate('resources', configurationResource, { action: 'activate', version: '1' }, 2)
+  const configurationScopeReceipt = await mutate('scopes', configurationScope, {
+    action: 'put',
+    definition: { targets: [{ kind: 'endpoint', id: f.mdm }], limitations: null, exclusions: [] },
+  })
+  await until(
+    () =>
+      api('GET', `${base}/scopes/${configurationScope}/tasks/${configurationScopeReceipt.task}`),
+    (v) => v.status === 'completed',
+  )
+  await mutate('policies', configurationPolicy, {
+    action: 'put',
+    enabled: true,
+    definition: {
+      scope: configurationScope,
+      action: {
+        kind: 'configuration',
+        resource: {
+          id: configurationResource,
+          version: '1',
+          platform: 'windows',
+          architecture: 'x86_64',
+          variant: 'default',
+        },
+        exit: 'remove',
+      },
+    },
+  })
+  const assignedConfiguration = await until(
+    () => api('GET', `${base}/policies/${configurationPolicy}/assignments?limit=100`),
+    (v) =>
+      v.items.some(
+        (i) =>
+          i.object.id === f.mdm &&
+          i.execution.kind === 'operations' &&
+          i.execution.operationIds.length,
+      ),
+  )
+  const command = assignedConfiguration.items.find((i) => i.object.id === f.mdm).execution
+    .operationIds[0]
+  await run.nav(p, `/policies?policy=${configurationPolicy}`, '策略与部署')
+  await button('打开定位策略').click()
+  await p.getByRole('tab', { name: '设备分配', exact: true }).click()
+  await p.getByRole('link', { name: command, exact: true }).click()
+  await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
+  await p.getByRole('button', { name: command, exact: true }).click()
+  await p.getByText('原操作与结果', { exact: true }).waitFor()
+  const native = await api('GET', `${base}/devices/${f.mdm}/operations/${command}`)
+  assert.equal(native.owner, 'configuration')
+  assert.notEqual(native.observation.effect, 'verified')
+  checks.push(
+    'real-published-configuration-policy-assignment-links-original-native-command-without-device-effect-claim',
+  )
+
+  run.step('purpose-bound-device-access-and-enterprise')
+  const cdp = await p.context().newCDPSession(p)
+  await cdp.send('WebAuthn.enable')
+  await cdp.send('WebAuthn.addVirtualAuthenticator', {
+    options: {
+      protocol: 'ctap2',
+      transport: 'internal',
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      automaticPresenceSimulation: true,
+    },
+  })
+  await run.nav(p, '/security', '安全设置')
+  await label('通行密钥名称').fill('Execution access browser key')
+  await button('添加通行密钥').click()
+  await p.getByText('Execution access browser key', { exact: true }).waitFor()
+  await run.nav(
+    p,
+    `/device-access?device=${encodeURIComponent(f.executionAccess.device)}`,
+    'Device Access',
+  )
+  await p.getByText('fixture-da', { exact: false }).first().waitFor()
+  await button('新建账户绑定').click()
+  await label('Identity 实例 UUID').fill(f.instance)
+  await label('账户主体 UUID').fill(f.principal)
+  await label('Device Access 策略 UUID').fill(f.executionAccess.policy)
+  await label('新账户名称').fill('browser-account')
+  await button('冻结此绑定操作并核对').click()
+  await button('验证此绑定用途').click()
+  await p.getByText('authorized', { exact: true }).waitFor()
+  await p.getByRole('checkbox', { name: '已核对当前设备、账户、策略和影响', exact: true }).check()
+  let bindingInput
+  const writeWait = p.waitForRequest(
+    (request) =>
+      request.method() === 'PUT' &&
+      /\/device-access\/bindings\//.test(new URL(request.url()).pathname),
+  )
+  await button('确认保存绑定操作').click()
+  const write = await writeWait
+  bindingInput = write.postDataJSON()
+  await p.getByText('当次回执:', { exact: false }).waitFor()
+  const bindingId = new URL(write.url()).pathname.split('/').at(-1)
+  const receipt = await api(
+    'GET',
+    `/api/v1/devices/${f.executionAccess.device}/device-access/operations/${bindingInput.operationId}`,
+  )
+  assert.equal(receipt.id, bindingId)
+  assert.equal(receipt.operationId, bindingInput.operationId)
+  assert.equal(receipt.serverState, 'pending')
+  assert.equal(receipt.appliedRevision, null)
+  assert.equal(receipt.effect, null)
+  assert.equal(
+    run.count(
+      p,
+      'PUT',
+      `/api/v1/devices/${f.executionAccess.device}/device-access/bindings/${bindingId}`,
+    ),
+    1,
+  )
+  await button('结束或重新编辑此任务').click()
+  await run.choose(p, label('绑定动作'), '重置因子')
+  await button('冻结此绑定操作并核对').click()
+  await button('验证此绑定用途').click()
+  await p.getByText('authorized', { exact: true }).waitFor()
+  await p.getByRole('checkbox', { name: '已核对当前设备、账户、策略和影响', exact: true }).check()
+  await run.response(
+    p,
+    'PUT',
+    `/api/v1/devices/${f.executionAccess.device}/device-access/bindings/${bindingId}`,
+    () => button('确认保存绑定操作').click(),
+  )
+  await button('结束或重新编辑此任务').click()
+  checks.push(
+    'real-cookie-webauthn-binding-acceptance-factor-reset-and-original-snapshot-without-fake-device-effect',
+  )
+  const psso = await api(
+    'GET',
+    `/api/v1/apple/platform-sso/configuration?deviceId=${encodeURIComponent(f.executionAccess.device)}`,
+  )
+  assert.equal(psso.configuration.teamId, 'ABCDEFGHIJ')
+  await p.getByText('Platform SSO 管理配置', { exact: true }).waitFor()
+  checks.push(
+    'real-current-psso-configuration-profile-without-registration-or-login-readiness-claim',
+  )
+
+  await button('配置企业应用或账户映射').click()
+  await run.choose(p, label('配置类型'), '账户主体映射')
+  await label('Provider UUID').fill(randomUUID())
+  await label('Identity 实例 UUID').last().fill(f.instance)
+  await label('主体 UUID').fill(f.principal)
+  await label('Provider subject').fill('browser-subject')
+  await label('Provider 用户名').fill('browser-user')
+  await button('冻结并核对企业配置').click()
+  await button('验证此企业配置用途').click()
+  await p.getByText('authorized', { exact: true }).last().waitFor()
+  await p.getByRole('checkbox', { name: '我已核对目标、版本及企业登录影响', exact: true }).check()
+  await run.response(p, 'POST', '/api/v1/device-access/enterprise/configuration', () =>
+    button('确认保存企业配置').click(),
+  )
+  await button('刷新当前配置以核对').click()
+  await p.getByText('已读取当前配置版本:', { exact: false }).waitFor()
+  await button('结束或重新编辑此任务').last().click()
+  checks.push('real-purpose-bound-enterprise-subject-save-and-current-configuration-comparison')
+
+  run.step('task-signing-trust-management-and-public-layout')
+  await run.nav(p, '/operations', '执行与结果')
+  await button('读取信任与当前权限').click()
+  await p.getByRole('checkbox', { name: '已核对信任版本、设备分发与轮换影响', exact: true }).check()
+  await run.response(p, 'POST', '/api/v1/task-signing/trust', () =>
+    button('准备新的签名 Key').click(),
+  )
+  await button('查询原信任变更').click()
+  await p.getByText('原回执版本:', { exact: false }).waitFor()
+  checks.push('real-trust-prepare-and-original-receipt-distinct-from-device-observations')
+  const directory = await api(
+    'GET',
+    `/api/v1/operations?filter=${encodeURIComponent(`device=='${f.mdm}'`)}&limit=100`,
+  )
+  assert.ok(directory.items.some((item) => item.id === original.operationId))
+  const screenshots = mkdtempSync(join(tmpdir(), 'rss-react-execution-access-'))
+  for (const [name, width] of [
+    ['desktop', 1440],
+    ['tablet', 900],
+    ['mobile', 390],
+  ]) {
+    await p.setViewportSize({ width, height: 960 })
+    for (const [path, title, file] of [
+      ['/operations', '执行与结果', 'executions'],
+      ['/device-access', 'Device Access', 'device-access'],
+    ]) {
+      await run.nav(p, path, title)
+      await p.waitForFunction(() => document.querySelectorAll('.admin-loading').length === 0)
+      assert.equal(
+        await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        true,
+      )
+      await p.screenshot({ path: join(screenshots, `${file}-${name}.png`), fullPage: true })
+    }
+  }
+  await p.getByRole('button', { name: '切换亮暗主题', exact: true }).click()
+  await p.screenshot({ path: join(screenshots, 'device-access-dark.png'), fullPage: true })
+  checks.push('real-public-desktop-tablet-mobile-dark-layout-and-no-viewport-overflow')
+  console.log(JSON.stringify({ journey: 'react-execution-access', screenshots }))
+} catch (error) {
+  console.error(
+    JSON.stringify({
+      journey: 'react-execution-access',
+      location: error.stack
+        ?.split('\n')
+        .filter((line) => /^\s+at /.test(line))
+        .slice(0, 3),
+    }),
+  )
+  failure = error
+}
+await run.finish(failure)

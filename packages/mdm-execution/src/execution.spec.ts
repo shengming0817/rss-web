@@ -3,6 +3,7 @@ import { createExecution, type Execution, type ExecutionDetail, type ExecutionPo
 const id = '11111111-1111-4111-8111-111111111111',
   registrationId = '22222222-2222-4222-8222-222222222222'
 const item: Execution = {
+  family: null,
   id,
   kind: 'command',
   device: 'device',
@@ -15,6 +16,10 @@ const item: Execution = {
 }
 const detail: ExecutionDetail = {
   id,
+  revision: 1,
+  reauthorization: null,
+  taskName: null,
+  dispatchFailure: null,
   device: 'device',
   registrationId: null,
   generation: null,
@@ -29,6 +34,14 @@ const detail: ExecutionDetail = {
 }
 function fixture(rows: readonly Execution[] = [item]) {
   const port: ExecutionPort = {
+    create: vi.fn(async (input) => ({ operationId: input.operationId, revision: 1 })),
+    cancel: vi.fn(async (_device, id) => ({ operationId: id, revision: 2 })),
+    reauthorize: vi.fn(async (_device, id) => ({ operationId: id, revision: 2 })),
+    statistics: vi.fn(async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 0 })),
+    trust: vi.fn(),
+    changeTrust: vi.fn(),
+    trustOperation: vi.fn(),
+    trustObservation: vi.fn(),
     list: vi.fn(async () => ({ items: rows, nextCursor: null })),
     command: vi.fn(async () => detail),
     run: vi.fn(async () => detail),
@@ -55,4 +68,31 @@ it('returns not found without inventing an execution result', async () => {
   const f = fixture([])
   expect(await f.core.detail({ kind: 'command', id })).toBeNull()
   expect(f.port.command).not.toHaveBeenCalled()
+})
+
+it('requires exact dangerous confirmation and a six-digit ephemeral PIN without retaining it in the intent', async () => {
+  const f = fixture(),
+    intent = {
+      device: 'device',
+      operationId: id,
+      deadline: 100,
+      action: {
+        kind: 'lock' as const,
+        confirmed: true as const,
+        expectedRegistrationId: registrationId,
+        expectedGeneration: 2,
+      },
+    }
+  await expect(f.core.create(intent, '１２３４５６')).rejects.toThrow('Six ASCII')
+  expect(f.port.create).not.toHaveBeenCalled()
+  await f.core.create(intent, '123456')
+  expect(f.port.create).toHaveBeenCalledWith(intent, '123456')
+  expect(JSON.stringify(intent)).not.toContain('123456')
+})
+it('keeps an explicit recovery request identity and CAS instead of creating another command', async () => {
+  const f = fixture(),
+    input = { requestId: registrationId, expectedRevision: 1 }
+  await f.core.cancel('device', id, input)
+  expect(f.port.cancel).toHaveBeenCalledWith('device', id, input)
+  expect(f.port.create).not.toHaveBeenCalled()
 })

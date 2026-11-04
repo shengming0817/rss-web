@@ -1,4 +1,4 @@
-/** The only business purpose currently exposed by the formal MDM WebAuthn contract. */
+/** Exact contexts for the formally supported uses of the single operation cookie. */
 export interface MaterialDisclosureContext {
   readonly purpose: 'mdm.device_access.disclose'
   readonly device: string
@@ -6,7 +6,21 @@ export interface MaterialDisclosureContext {
   readonly version: number
   readonly operationId: string
 }
-export interface MaterialAuthorizationChallenge {
+export type OperationAuthorizationContext =
+  | MaterialDisclosureContext
+  | {
+      readonly purpose: 'mdm.device_access.change'
+      readonly device: string
+      readonly binding: string
+      readonly operationId: string
+      readonly inputKey: string
+    }
+  | {
+      readonly purpose: 'mdm.enterprise.configuration'
+      readonly operationId: string
+      readonly inputKey: string
+    }
+export interface OperationAuthorizationChallenge {
   readonly id: string
   readonly publicKey: Readonly<Record<string, unknown>>
 }
@@ -16,7 +30,7 @@ export interface OperationAuthorizationPort {
   cancelAuthorization(): Promise<void>
   classify(error: unknown): 'denied' | 'unavailable' | 'unknown' | 'cancelled'
 }
-export interface MaterialAuthorizationState {
+export interface OperationAuthorizationState {
   readonly status:
     | 'idle'
     | 'challenging'
@@ -29,7 +43,7 @@ export interface MaterialAuthorizationState {
     | 'unknown'
     | 'cancelling'
     | 'cancellation_unconfirmed'
-  readonly context: MaterialDisclosureContext | null
+  readonly context: OperationAuthorizationContext | null
   readonly expiresAt: number | null
 }
 function uuid(value: string): void {
@@ -39,7 +53,31 @@ function uuid(value: string): void {
   )
     throw new Error('Invalid disclosure identifier')
 }
-function key(context: MaterialDisclosureContext): string {
+function key(context: OperationAuthorizationContext): string {
+  uuid(context.operationId)
+  if (
+    context.purpose === 'mdm.device_access.change' ||
+    context.purpose === 'mdm.enterprise.configuration'
+  ) {
+    if (!/^[0-9a-f]{64}$/.test(context.inputKey)) throw new Error('Invalid operation input key')
+    if (context.purpose === 'mdm.device_access.change') {
+      uuid(context.binding)
+      if (
+        !context.device ||
+        new TextEncoder().encode(context.device).length > 256 ||
+        /\p{Cc}/u.test(context.device)
+      )
+        throw new Error('Invalid operation device')
+      return JSON.stringify([
+        context.purpose,
+        context.operationId,
+        context.device,
+        context.binding,
+        context.inputKey,
+      ])
+    }
+    return JSON.stringify([context.purpose, context.operationId, context.inputKey])
+  }
   if (
     context.purpose !== 'mdm.device_access.disclose' ||
     !context.device ||
@@ -60,7 +98,7 @@ function key(context: MaterialDisclosureContext): string {
   ])
 }
 interface Attempt {
-  readonly context: MaterialDisclosureContext
+  readonly context: OperationAuthorizationContext
   readonly key: string
   readonly scope: string
   readonly controller: AbortController
@@ -70,12 +108,12 @@ interface Attempt {
   cleanup: Promise<void> | null
 }
 /** Local ceremony ownership only. Authority remains the HttpOnly, server-verified operation cookie. */
-export function createMaterialAuthorization(
+export function createOperationAuthorization(
   port: OperationAuthorizationPort,
   scope: () => string | null,
   now: () => number = Date.now,
 ) {
-  let state: MaterialAuthorizationState = Object.freeze({
+  let state: OperationAuthorizationState = Object.freeze({
       status: 'idle',
       context: null,
       expiresAt: null,
@@ -83,7 +121,7 @@ export function createMaterialAuthorization(
     active: Attempt | null = null
   const listeners = new Set<() => void>()
   function publish(
-    status: MaterialAuthorizationState['status'],
+    status: OperationAuthorizationState['status'],
     attempt: Attempt | null,
     expiresAt: number | null = null,
   ) {
@@ -139,8 +177,8 @@ export function createMaterialAuthorization(
     },
     getSnapshot: () => state,
     async authorize(
-      context: MaterialDisclosureContext,
-      begin: (signal: AbortSignal) => Promise<MaterialAuthorizationChallenge>,
+      context: OperationAuthorizationContext,
+      begin: (signal: AbortSignal) => Promise<OperationAuthorizationChallenge>,
       authenticate: (
         options: Readonly<Record<string, unknown>>,
         signal: AbortSignal,
@@ -156,13 +194,29 @@ export function createMaterialAuthorization(
       }
       if (active) throw new Error('Cancel the current operation authorization first')
       const attempt: Attempt = {
-        context: Object.freeze({
-          purpose: context.purpose,
-          device: context.device,
-          material: context.material,
-          version: context.version,
-          operationId: context.operationId,
-        }),
+        context: Object.freeze(
+          context.purpose === 'mdm.device_access.disclose'
+            ? {
+                purpose: context.purpose,
+                device: context.device,
+                material: context.material,
+                version: context.version,
+                operationId: context.operationId,
+              }
+            : context.purpose === 'mdm.device_access.change'
+              ? {
+                  purpose: context.purpose,
+                  device: context.device,
+                  binding: context.binding,
+                  operationId: context.operationId,
+                  inputKey: context.inputKey,
+                }
+              : {
+                  purpose: context.purpose,
+                  operationId: context.operationId,
+                  inputKey: context.inputKey,
+                },
+        ),
         key: contextKey,
         scope: bound,
         controller: new AbortController(),
@@ -211,7 +265,7 @@ export function createMaterialAuthorization(
       }
     },
     /** Call once immediately before the explicit exact material POST; no automatic disclosure. */
-    consume(context: MaterialDisclosureContext): void {
+    consume(context: OperationAuthorizationContext): void {
       const attempt = active
       if (
         !attempt ||
@@ -239,4 +293,4 @@ export function createMaterialAuthorization(
     cancel,
   })
 }
-export type MaterialAuthorization = ReturnType<typeof createMaterialAuthorization>
+export type OperationAuthorization = ReturnType<typeof createOperationAuthorization>

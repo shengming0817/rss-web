@@ -171,6 +171,42 @@ def claim_policy(fixture, policy):
         time.sleep(.5)
 
 
+def script_event(fixture, action, policy):
+    # Device-authenticated protocol facts; never seed Run state or execute an OS effect.
+    agent = fixture['collector']
+    def request(path, body):
+        return call(agent['origin'], agent['ca'], path, body, agent['cert'], agent['key'])
+    if action == 'script_start':
+        deadline = time.monotonic() + 45
+        while True:
+            response = request('/api/v1/agent/runtime/tasks/claim', dict(wireVersion=1, operationId=str(uuid.uuid4()), profiles=['posix_sh'], environment=dict(edition=None, tools={}, nativeEngines={}), executionContext=agent['executionContext']))
+            if response['task'] is not None:
+                payload = response['task']['payload']
+                task = payload['task']
+                check(task['deviceId'] == agent['runtime']['deviceId'] and task['registrationId'] == agent['runtime']['registrationId'], 'script-device-binding')
+                wanted = payload['kind'] == 'script' and task['authorization']['policyId'] == policy
+                kinds = ['received', 'start'] if wanted else ['received', 'cancelled']
+                for kind in kinds:
+                    receipt = request('/api/v1/agent/runtime/tasks/'+task['taskId']+'/events', dict(wireVersion=1, operationId=str(uuid.uuid4()), attemptId=task['attemptId'], executionContext=agent['executionContext'], event=dict(kind=kind)))
+                    check(receipt['accepted'], 'script-'+kind)
+                    if kind == 'start':
+                        check(receipt['permit']['payload']['task']['taskId'] == task['taskId'] and receipt['permit']['payload']['task']['permit'] == 'start', 'script-start-permit')
+                if wanted:
+                    agent.setdefault('scriptTasks', {})[policy] = task
+                    return dict(result='passed', task=task['taskId'], attempt=task['attemptId'])
+            check(time.monotonic() < deadline, 'script-claim-deadline')
+            time.sleep(.5)
+    task = agent['scriptTasks'][policy]
+    now = int(time.time())
+    success = action == 'script_success'
+    event = dict(kind='result', exitCode=0 if success else 1, quality='complete' if success else 'failed', output={}, diagnostics=dict(stdout='', stderr='', durationMs=1, executedAt=now, failure=None if success else 'non_zero_exit'), collectedAt=now)
+    body = dict(wireVersion=1, operationId=str(uuid.uuid4()), attemptId=task['attemptId'], executionContext=agent['executionContext'], event=event)
+    path = '/api/v1/agent/runtime/tasks/'+task['taskId']+'/events'
+    receipt = request(path, body)
+    check(receipt['accepted'] and request(path, body) == receipt, 'script-terminal-replay')
+    return dict(result='passed', task=task['taskId'], attempt=task['attemptId'])
+
+
 def acknowledge_pki(path):
     file = Path(path)
     check(file.stat().st_mode & 0o077 == 0, 'collector-private-fixture')
@@ -201,7 +237,7 @@ if __name__ == '__main__':
         file = Path(path)
         check(file.stat().st_mode & 0o077 == 0, 'collector-private-fixture')
         fixture = json.loads(file.read_text())
-        result = claim_policy(fixture, resource) if action == 'policy_claim' else collect(fixture, action, resource, int(cycle))
+        result = script_event(fixture, action, resource) if action.startswith('script_') else claim_policy(fixture, resource) if action == 'policy_claim' else collect(fixture, action, resource, int(cycle))
         file.write_text(json.dumps(fixture))
         print(json.dumps(result))
     except Exception as error:

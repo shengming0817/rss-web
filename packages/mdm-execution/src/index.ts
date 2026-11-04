@@ -1,3 +1,7 @@
+export type * from './control'
+export type * from './trust'
+import { createControl, type ControlPort } from './control'
+import { createTrust, type TrustPort } from './trust'
 import type { DirectoryQuery, Page } from '@rss/mdm-devices'
 import { uuid } from '@rss/mdm-inventory'
 
@@ -7,6 +11,7 @@ export interface ExecutionRef {
   readonly id: string
 }
 export interface Execution extends ExecutionRef {
+  readonly family: string | null
   readonly device: string
   readonly registrationId: string
   readonly generation: number
@@ -16,6 +21,15 @@ export interface Execution extends ExecutionRef {
   readonly status: string
 }
 export interface ExecutionDetail {
+  readonly revision: number | null
+  readonly reauthorization: {
+    readonly state: 'available' | 'unavailable' | 'not_applicable'
+    readonly confirmationRequired: boolean
+    readonly reason: string | null
+  } | null
+  readonly dispatchFailure: string | null
+  readonly taskName: string | null
+
   readonly id: string
   readonly device: string
   readonly registrationId: string | null
@@ -29,13 +43,24 @@ export interface ExecutionDetail {
   readonly deadline: number
   readonly authorization: string | null
 }
-export interface ExecutionPort {
+export interface ExecutionStatistics {
+  readonly total: number
+  readonly commands: number
+  readonly actionRuns: number
+  readonly unknown: number
+  readonly asOf: number
+}
+export interface ExecutionPort extends ControlPort, TrustPort {
+  statistics(filter?: string): Promise<ExecutionStatistics>
   list(query: DirectoryQuery): Promise<Page<Execution>>
   command(device: string, id: string): Promise<ExecutionDetail>
   run(policy: string, id: string): Promise<ExecutionDetail>
 }
 export function createExecution(port: ExecutionPort) {
   return Object.freeze({
+    ...createControl(port),
+    ...createTrust(port),
+    statistics: (filter?: string) => port.statistics(filter),
     list: (query: DirectoryQuery = {}) => port.list(query),
     async detail(reference: ExecutionRef & { readonly policy?: string }) {
       uuid(reference.id)

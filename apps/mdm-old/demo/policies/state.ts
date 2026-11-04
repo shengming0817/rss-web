@@ -126,7 +126,7 @@ export function createAutomationDemo(devices: ReturnType<typeof createDeviceDemo
               ...row,
               ...(!p.enabled ? { availability: 'unavailable', reason: 'policy_disabled' } : {}),
               taskAdmission: null,
-              operationIds: [],
+              execution: { kind: 'operations', operationIds: [] },
             })),
           })
         }

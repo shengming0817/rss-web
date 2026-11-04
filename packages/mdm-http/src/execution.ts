@@ -2,8 +2,8 @@ import * as api from '@rss/api/mdm-operations'
 import * as schema from '@rss/api/mdm-schemas'
 import { nextCursor, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import type { Execution, ExecutionPort, ExecutionDetail } from '@rss/mdm-execution'
-import { enumeration, nullable, positive, text, uuid } from './decode'
+import type { Execution, ExecutionPort, ExecutionDetail, Trust } from '@rss/mdm-execution'
+import { enumeration, nullable, positive, text, uuid, count } from './decode'
 import { integer, requestInput } from './inventory-values'
 const fields = [
   'id',
@@ -15,9 +15,118 @@ const fields = [
   'policy',
   'deadline',
   'status',
+  'evidence',
 ] as const
-export function createExecutionAdapter(transport: HttpTransport): ExecutionPort {
+export function createExecutionAdapter(
+  transport: HttpTransport,
+  tenant: string,
+  serviceId: string,
+): ExecutionPort {
+  function trust(value: unknown): Trust {
+    if (
+      !schema.getApiV1TaskSigningTrustResponse.validateRoot(value) ||
+      value.version !== 1 ||
+      value.tenant !== tenant ||
+      value.service_id !== serviceId
+    )
+      throw new Error('Wrong task signing trust')
+    return {
+      tenant: uuid(value.tenant),
+      serviceId: uuid(value.service_id),
+      revision: count(value.revision),
+      keys: value.keys.map((key) => ({
+        id: text(key.id),
+        publicKey: text(key.public_key),
+        state: key.state,
+      })),
+    }
+  }
   return {
+    statistics: (filter) =>
+      api.getApiV1OperationsStatistics(
+        transport,
+        { query: queryParameters(filter ? { filter } : {}) },
+        (value) => ({
+          total: count(value.statistics.total),
+          commands: count(value.statistics.commands),
+          actionRuns: count(value.statistics.actionRuns),
+          unknown: count(value.statistics.unknown),
+          asOf: integer(value.asOf),
+        }),
+      ),
+    create: (input, pin) =>
+      api.postApiV1DevicesByDeviceOperations(
+        transport,
+        {
+          pathParams: { device: input.device },
+          body: requestInput(
+            {
+              operationId: input.operationId,
+              deadline: input.deadline,
+              action: input.action.kind === 'lock' ? { ...input.action, pin } : input.action,
+            },
+            schema.postApiV1DevicesByDeviceOperationsBody.validateRoot,
+          ),
+        },
+        (value) => {
+          if (value.operationId !== input.operationId || value.commandId !== input.operationId)
+            throw new Error('Wrong control receipt')
+          return { operationId: uuid(value.operationId), revision: positive(value.revision) }
+        },
+      ),
+    cancel: (device, id, input) =>
+      api.postApiV1DevicesByDeviceOperationsByIdCancel(
+        transport,
+        {
+          pathParams: { device, id },
+          body: requestInput(
+            { requestId: input.requestId, expectedRevision: input.expectedRevision },
+            schema.postApiV1DevicesByDeviceOperationsByIdCancelBody.validateRoot,
+          ),
+        },
+        (value) => ({ operationId: uuid(value.operationId), revision: positive(value.revision) }),
+      ),
+    reauthorize: (device, id, input) =>
+      api.postApiV1DevicesByDeviceOperationsByIdReauthorize(
+        transport,
+        {
+          pathParams: { device, id },
+          body: requestInput(
+            input,
+            schema.postApiV1DevicesByDeviceOperationsByIdReauthorizeBody.validateRoot,
+          ),
+        },
+        (value) => ({ operationId: uuid(value.operationId), revision: positive(value.revision) }),
+      ),
+    trust: () => api.getApiV1TaskSigningTrust(transport, {}, trust),
+    changeTrust: (operationId, input) =>
+      api.postApiV1TaskSigningTrust(
+        transport,
+        {
+          body: requestInput(input, schema.postApiV1TaskSigningTrustBody.validateRoot),
+          headers: { 'Idempotency-Key': operationId },
+        },
+        trust,
+      ),
+    trustOperation: (id) =>
+      api.getApiV1TaskSigningOperationsById(transport, { pathParams: { id } }, trust),
+    trustObservation: (device) =>
+      api.getApiV1TaskSigningTrustDevicesByDeviceObservation(
+        transport,
+        { pathParams: { device } },
+        (value) =>
+          value === null
+            ? null
+            : {
+                registration: uuid(value.observation.registration),
+                generation: positive(value.observation.generation),
+                state: value.observation.state,
+                reason: value.observation.reason,
+                targetRevision: nullable(value.observation.target_revision, positive),
+                actualRevision: nullable(value.observation.actual_revision, positive),
+                receivedAt: integer(value.received_at),
+              },
+      ),
     list: (query) =>
       api.getApiV1Operations(
         transport,
@@ -25,6 +134,7 @@ export function createExecutionAdapter(transport: HttpTransport): ExecutionPort 
         (value) => {
           const items: Execution[] = value.items.map((item) => ({
             id: uuid(item.id),
+            family: item.evidence === null ? null : text(item.evidence?.owner),
             kind: enumeration(item.kind, ['command', 'action_run'] as const),
             device: text(item.device),
             registrationId: uuid(item.registrationId),
@@ -50,8 +160,26 @@ export function createExecutionAdapter(transport: HttpTransport): ExecutionPort 
             value.commandId !== id
           )
             throw new Error('Wrong command detail')
+          const recovery =
+            value.owner === 'device'
+              ? requestInput(
+                  value.reauthorization,
+                  schema.getApiV1DevicesByDeviceOperationsByIdResponse.validateReauthorization,
+                )
+              : null
           return {
             id,
+            revision: positive(value.revision),
+            taskName: text(value.task.name),
+            dispatchFailure: value.dispatchFailure?.reason ?? null,
+            reauthorization: recovery
+              ? {
+                  state: recovery.state,
+                  confirmationRequired:
+                    recovery.state === 'available' && recovery.confirmationRequired,
+                  reason: recovery.state === 'unavailable' ? recovery.reason : null,
+                }
+              : null,
             device,
             registrationId: null,
             generation: null,
@@ -93,6 +221,10 @@ export function createExecutionAdapter(transport: HttpTransport): ExecutionPort 
               : null
           const detail: ExecutionDetail = {
             id,
+            revision: null,
+            reauthorization: null,
+            taskName: null,
+            dispatchFailure: null,
             device: text(value.device),
             registrationId: uuid(value.registrationId),
             generation: positive(value.generation),

@@ -56,7 +56,8 @@
     "test:mdm:react-software-browser": "node e2e/mdm/react-software-run.mjs",
     "test:mdm:react-certificates-browser": "node e2e/mdm/react-certificates-run.mjs",
     "test:mdm:react-audit-webhooks-browser": "node e2e/mdm/react-audit-webhooks-run.mjs",
-    "test:mdm:react-policy-browser": "node e2e/mdm/react-policy-run.mjs"
+    "test:mdm:react-policy-browser": "node e2e/mdm/react-policy-run.mjs",
+    "test:mdm:react-execution-access-browser": "node e2e/mdm/react-execution-access-run.mjs"
   },
   "lint-staged": {
     "*.{ts,vue}": [

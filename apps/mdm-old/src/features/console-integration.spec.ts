@@ -121,7 +121,7 @@ it('decodes the current nullable preview and retained assignment facts', async (
     sources: [],
     scopeResult: null,
     taskAdmission: null,
-    operationIds: [b],
+    execution: { kind: 'operations', operationIds: [b] },
   }
   const previewRow = {
     object: row.object,
@@ -1654,4 +1654,30 @@ it('keeps webhook navigation at its accepted position when the required event co
   await flushPromises()
   expect(w.get('.directory-results').text()).toContain(a)
   expect(button(q, '下一页').attributes('disabled')).toBeUndefined()
+})
+
+it('decodes native collection global evidence without inventing an Agent run state', () => {
+  const value = decodeRunEvidence({
+    owner: 'collection',
+    channel: 'mdm',
+    taskId: a,
+    policyId: a,
+    versionId: a,
+    device: 'device',
+    registrationId: b,
+    generation: 1,
+    occurrence: 'collection:1',
+    availableAt: 1,
+    deadline: 100,
+    delivery: 'sent',
+    report: null,
+  })
+  expect(value).toMatchObject({
+    kind: 'action_run',
+    state: null,
+    nativeDelivery: 'sent',
+    report: null,
+    effect: null,
+    result: null,
+  })
 })

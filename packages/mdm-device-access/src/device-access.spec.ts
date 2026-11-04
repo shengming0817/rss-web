@@ -3,6 +3,11 @@ import { createDeviceAccess, type Binding, type DeviceAccessPort } from './index
 const id = '11111111-1111-4111-8111-111111111111',
   operationId = '22222222-2222-4222-8222-222222222222'
 const binding: Binding = {
+  instance: id,
+  principal: id,
+  account: null,
+  accountIntent: { kind: 'create', platform: 'windows', name: 'user' },
+  disposition: 'keep',
   id,
   operationId,
   device: 'device',
@@ -20,6 +25,12 @@ const binding: Binding = {
 }
 function fixture(value = binding) {
   const port: DeviceAccessPort = {
+    beginBinding: vi.fn(),
+    changeBinding: vi.fn(),
+    enterpriseDetail: vi.fn(),
+    beginEnterprise: vi.fn(),
+    changeEnterprise: vi.fn(),
+    platformSso: vi.fn(),
     bindings: vi.fn(async () => ({ items: [], nextCursor: null })),
     binding: vi.fn(async () => value),
     operation: vi.fn(async () => value),

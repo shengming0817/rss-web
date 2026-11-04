@@ -417,7 +417,12 @@ directoryQuery.onClear(() => {
           <AssignmentFacts :item="item" />
           <p>{{ item.qualification.state }}</p>
           <ul>
-            <li v-for="operationId in item.operationIds" :key="operationId">
+            <li
+              v-for="operationId in item.execution.kind === 'operations'
+                ? item.execution.operationIds
+                : []"
+              :key="operationId"
+            >
               {{ operationId }}
             </li>
           </ul>

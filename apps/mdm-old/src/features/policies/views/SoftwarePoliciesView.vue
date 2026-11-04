@@ -1067,8 +1067,11 @@ directoryQuery.onClear(() => {
           <li v-for="d in devices.items" :key="objectKey(d.object)">
             <AssignmentFacts :item="d" /> {{ t(`software.eligibility_${d.qualification.state}`) }} ·
             {{ d.taskAdmission ? t(`software.admission_${d.taskAdmission.state}`) : '—' }}
-            <ul v-if="d.operationIds.length">
-              <li v-for="op in d.operationIds" :key="op">
+            <ul v-if="d.execution.kind === 'operations' ? d.execution.operationIds.length : 0">
+              <li
+                v-for="op in d.execution.kind === 'operations' ? d.execution.operationIds : []"
+                :key="op"
+              >
                 {{ t('policies.operation') }} · {{ op }}
               </li>
             </ul>

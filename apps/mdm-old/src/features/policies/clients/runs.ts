@@ -308,8 +308,19 @@ function scriptAuthorization(value: unknown) {
 export function decodeRunEvidence(value: unknown) {
   if (!wireSchemas.getApiV1OperationsResponse.validateEvidence(value) || value.owner === 'native')
     throw new Error('Invalid run evidence')
+  if (value.owner === 'collection' && value.channel === 'mdm')
+    return {
+      kind: 'action_run' as const,
+      state: null,
+      nativeDelivery: value.delivery,
+      report: value.report,
+      effect: null,
+      result: null,
+    }
   return {
     kind: 'action_run' as const,
+    nativeDelivery: null,
+    report: value.owner === 'collection' ? value.report : null,
     state: runState(value.state),
     effect: 'effect' in value ? string(value.effect) : null,
     result: nullable(value.result, (v) =>
