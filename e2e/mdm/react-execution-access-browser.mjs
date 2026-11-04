@@ -2,6 +2,7 @@
 // not proof of native enrollment, account creation, device wiping or PSSO login.
 import assert from 'node:assert/strict'
 import { createHash, randomUUID } from 'node:crypto'
+import { Buffer } from 'node:buffer'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
