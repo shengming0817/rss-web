@@ -1269,3 +1269,9 @@ html:has(.mdm-overlay-open) {
   color: #79ba9f;
   background: #20352c;
 }
+
+.execution-page,
+.device-access-page {
+  display: grid;
+  gap: 16px;
+}

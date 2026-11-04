@@ -34,7 +34,9 @@
     "@rss/mdm-audit": "workspace:*",
     "@rss/mdm-webhooks": "workspace:*",
     "@rss/mdm-scopes": "workspace:*",
-    "@rss/mdm-policies": "workspace:*"
+    "@rss/mdm-policies": "workspace:*",
+    "@rss/mdm-execution": "workspace:*",
+    "@rss/mdm-device-access": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

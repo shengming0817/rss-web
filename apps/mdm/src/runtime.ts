@@ -1,3 +1,7 @@
+import { createExecution } from '@rss/mdm-execution'
+import { createDeviceAccess } from '@rss/mdm-device-access'
+import { createExecutionAdapter } from '@rss/mdm-http/execution'
+import { createDeviceAccessAdapter } from '@rss/mdm-http/device-access'
 import { createPolicies, createPolicyEvents } from '@rss/mdm-policies'
 import { createPoliciesAdapter } from '@rss/mdm-http/policies'
 import { createPolicyEventsAdapter } from '@rss/mdm-http/policy-events'
@@ -133,6 +137,8 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         mappings: createMappings(createResourceMappingsAdapter(transport, content)),
         software: createSoftware(createSoftwareAdapter(transport)),
         publications: createPublications(createPublicationsAdapter(transport)),
+        execution: createExecution(createExecutionAdapter(transport)),
+        deviceAccess: createDeviceAccess(createDeviceAccessAdapter(transport)),
         policies: createPolicies(createPoliciesAdapter(transport)),
         policyEvents: createPolicyEvents(createPolicyEventsAdapter(transport)),
         scopes: createScopes(createScopesAdapter(transport)),

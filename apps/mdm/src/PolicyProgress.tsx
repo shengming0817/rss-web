@@ -1,3 +1,4 @@
+import { executionPath } from './Executions'
 import { useState } from 'react'
 import { Alert, Button, Card } from 'antd'
 import { Link } from 'react-router-dom'
@@ -145,7 +146,12 @@ export function PolicyRuns({
             rowKey="taskId"
             dataSource={read.value.items}
             columns={[
-              { title: l('运行', 'Run'), dataIndex: 'taskId' },
+              {
+                title: l('运行', 'Run'),
+                render: (_, row) => (
+                  <Link to={executionPath('action_run', row.taskId, policy.id)}>{row.taskId}</Link>
+                ),
+              },
               {
                 title: l('设备', 'Device'),
                 render: (_, row) => (

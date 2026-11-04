@@ -131,3 +131,5 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 新 React `/software` 复用软件 Resource 目录，详情按需读取。来源支持注册不可变版本、发现及精确导入；软件准入、WinGet/Brew 源发布与撤回各自保留版本与原操作。发布目标由宿主配置并只读展示；Direct 材料不要求先配置或发布原生源。目录名称筛选仅作用于本页，服务端查询使用高级目录筛选。
 
 新软件真实 HTTPS Chromium 入口：`MDM_REACT_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-software-browser`。复用独立 PG、存储、测试 PKI、受控 TLS WinGet 来源、构建租约与退出清理；旅程包含精确导入、丢失写响应、材料续传与回执、准入、私有下载和源发布撤回，并输出桌面、移动和暗色截图。受控来源与合成材料证明 HTTP/界面接缝，不证明设备安装效果；该 WinGet 夹具不证明真实 Brew 来源接入。
+
+新 React `/operations` 读取正式执行目录及原生操作 / Policy Run 详情，保留筛选与续页返回上下文；设备详情可跳转设备执行与 `/device-access`。后者读取设备账户绑定、原绑定操作快照与企业配置目录。当前 Script/Collection 完整历史仍从 Policy 读取；这些只读页面不提供设备动作写入、企业配置写入或 Platform SSO 就绪判定。#3071 的剩余旅程和真实浏览器/设备效果验收仍待 #3133 后端合同补齐。

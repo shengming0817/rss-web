@@ -349,12 +349,18 @@ importers:
       '@rss/mdm-content':
         specifier: workspace:*
         version: link:../../packages/mdm-content
+      '@rss/mdm-device-access':
+        specifier: workspace:*
+        version: link:../../packages/mdm-device-access
       '@rss/mdm-devices':
         specifier: workspace:*
         version: link:../../packages/mdm-devices
       '@rss/mdm-enrollment':
         specifier: workspace:*
         version: link:../../packages/mdm-enrollment
+      '@rss/mdm-execution':
+        specifier: workspace:*
+        version: link:../../packages/mdm-execution
       '@rss/mdm-groups':
         specifier: workspace:*
         version: link:../../packages/mdm-groups
@@ -776,6 +782,25 @@ importers:
         specifier: 'catalog:'
         version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
 
+  packages/mdm-device-access:
+    dependencies:
+      '@rss/mdm-devices':
+        specifier: workspace:*
+        version: link:../mdm-devices
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
   packages/mdm-devices:
     devDependencies:
       '@vitest/coverage-v8':
@@ -789,6 +814,25 @@ importers:
         version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
 
   packages/mdm-enrollment:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
+  packages/mdm-execution:
+    dependencies:
+      '@rss/mdm-devices':
+        specifier: workspace:*
+        version: link:../mdm-devices
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
@@ -845,12 +889,18 @@ importers:
       '@rss/mdm-content':
         specifier: workspace:*
         version: link:../mdm-content
+      '@rss/mdm-device-access':
+        specifier: workspace:*
+        version: link:../mdm-device-access
       '@rss/mdm-devices':
         specifier: workspace:*
         version: link:../mdm-devices
       '@rss/mdm-enrollment':
         specifier: workspace:*
         version: link:../mdm-enrollment
+      '@rss/mdm-execution':
+        specifier: workspace:*
+        version: link:../mdm-execution
       '@rss/mdm-groups':
         specifier: workspace:*
         version: link:../mdm-groups
