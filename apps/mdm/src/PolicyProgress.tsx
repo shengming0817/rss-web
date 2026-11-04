@@ -6,7 +6,7 @@ import type { Policy } from '@rss/mdm-policies'
 import type { PoliciesUseCases } from './PolicyPreview'
 import type { Locale } from './i18n'
 import { CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'
-import { Status, timestamp } from './DevicePresentation'
+import { Status, statusText, timestamp } from './DevicePresentation'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
 
@@ -25,7 +25,10 @@ export function PolicyAssignments({
       policies.assignments(policy.id, query),
     )
   return (
-    <Card title={l('当前设备分配资格', 'Current device assignment qualification')}>
+    <Card
+      className="policy-assignments"
+      title={l('当前设备分配资格', 'Current device assignment qualification')}
+    >
       <Button onClick={read.reload}>{l('读取分配', 'Read assignments')}</Button>
       <ReadState
         locale={locale}
@@ -49,64 +52,49 @@ export function PolicyAssignments({
               {
                 title: l('设备', 'Device'),
                 render: (_, row) => (
-                  <Link to={devicePath(row.object.kind, row.object.id)}>{row.object.id}</Link>
+                  <>
+                    <Link to={devicePath(row.object.kind, row.object.id)}>{row.object.id}</Link>
+                    <p className="subtitle">
+                      {row.channel
+                        ? statusText(locale, row.channel)
+                        : l('未知通道', 'Unknown channel')}
+                    </p>
+                    <details>
+                      <summary>{l('注册坐标', 'Registration coordinates')}</summary>
+                      {row.target ? `${row.target.registrationId} @${row.target.generation}` : '—'}
+                    </details>
+                  </>
                 ),
               },
-              { title: l('通道', 'Channel'), dataIndex: 'channel' },
               {
                 title: l('范围资格', 'Scope qualification'),
-                render: (_, row) => row.qualification.state,
-              },
-              {
-                title: l('通道可用性', 'Channel availability'),
-                render: (_, row) => `${row.availability} · ${row.reason ?? '—'}`,
+                render: (_, row) => (
+                  <>
+                    <Status locale={locale} value={row.qualification.state} />
+                    <p>{statusText(locale, row.availability)}</p>
+                    {row.reason && <p className="subtitle">{statusText(locale, row.reason)}</p>}
+                  </>
+                ),
               },
               {
                 title: l('本轮准入', 'Current admission'),
-                render: (_, row) =>
-                  row.taskAdmission ? (
-                    <>
-                      <Status locale={locale} value={row.taskAdmission.state} />
-                      {row.taskAdmission.stage ?? ''}
-                    </>
-                  ) : (
-                    '—'
-                  ),
-              },
-              {
-                title: l('服务端可证明的允许开始时间', 'Server-proven earliest allowed start'),
-                render: (_, row) =>
-                  row.taskAdmission?.nextAllowedStartAt != null
-                    ? timestamp(locale, row.taskAdmission.nextAllowedStartAt)
-                    : l('未知 / 等待事件', 'Unknown / waiting for an event'),
-              },
-              {
-                title: l('注册坐标', 'Registration coordinates'),
-                render: (_, row) =>
-                  row.target ? `${row.target.registrationId} @${row.target.generation}` : '—',
-              },
-              {
-                title: l('来源与范围结果', 'Sources and scope result'),
                 render: (_, row) => (
-                  <details>
-                    <summary>{row.scopeResult ?? '—'}</summary>
-                    {row.sources.map((source) => (
-                      <p key={`${source.object.kind}/${source.object.id}`}>
-                        {source.object.kind}/{source.object.id} · {source.associationVersion ?? '—'}{' '}
-                        ·{' '}
-                        {source.verified
-                          ? l('已核实关联', 'Verified association')
-                          : l('关联未核实', 'Unverified association')}{' '}
-                        ·{' '}
-                        {source.members
-                          .map(
-                            (member) =>
-                              `${member.channel}/${member.registrationId}@${member.generation}`,
-                          )
-                          .join(' · ')}
-                      </p>
-                    ))}
-                  </details>
+                  <>
+                    {row.taskAdmission ? (
+                      <>
+                        <Status locale={locale} value={row.taskAdmission.state} />
+                        {row.taskAdmission.stage ?? ''}
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                    <p className="subtitle">
+                      {l('允许开始', 'Earliest allowed start')}:{' '}
+                      {row.taskAdmission?.nextAllowedStartAt != null
+                        ? timestamp(locale, row.taskAdmission.nextAllowedStartAt)
+                        : l('未知 / 等待事件', 'Unknown / waiting for an event')}
+                    </p>
+                  </>
                 ),
               },
               {
@@ -141,9 +129,12 @@ export function PolicyAssignments({
                             )}
                           >
                             {row.execution.latestRun.taskId} ·{' '}
-                            {row.execution.latestRun.state?.execution ??
-                              row.execution.latestRun.nativeDelivery ??
-                              '—'}
+                            {statusText(
+                              locale,
+                              row.execution.latestRun.state?.execution ??
+                                row.execution.latestRun.nativeDelivery ??
+                                'unknown',
+                            )}
                           </Link>
                         ) : (
                           l('尚无历史运行', 'No historical run')
@@ -169,6 +160,31 @@ export function PolicyAssignments({
                       </p>
                     </>
                   ),
+              },
+              {
+                title: l('来源与范围结果', 'Sources and scope result'),
+                render: (_, row) => (
+                  <details>
+                    <summary>{l('查看来源', 'Inspect sources')}</summary>
+                    <p>{row.scopeResult ?? '—'}</p>
+                    {row.sources.map((source) => (
+                      <p key={`${source.object.kind}/${source.object.id}`}>
+                        {source.object.kind}/{source.object.id} · {source.associationVersion ?? '—'}{' '}
+                        ·{' '}
+                        {source.verified
+                          ? l('已核实关联', 'Verified association')
+                          : l('关联未核实', 'Unverified association')}{' '}
+                        ·{' '}
+                        {source.members
+                          .map(
+                            (member) =>
+                              `${member.channel}/${member.registrationId}@${member.generation}`,
+                          )
+                          .join(' · ')}
+                      </p>
+                    ))}
+                  </details>
+                ),
               },
             ]}
           />

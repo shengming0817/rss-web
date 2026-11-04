@@ -150,9 +150,15 @@ def start(binary, initialized, log, expected=200):
                 readiness = dict(classification=role+'-exit', exitCode=child.returncode)
                 raise RuntimeError('readiness')
         try:
-            if readiness_status(environment, initialized['origin']) == expected:
+            observed = readiness_status(environment, initialized['origin'])
+            if expected is None and observed in (200, 503):
+                # This frontend journey proves the requested management seams below.
+                # A reachable 503 remains an observed degraded backend, never readiness proof.
+                print(json.dumps(dict(phase='management-transport', readinessStatus=observed, backendReady=observed == 200)),flush=True)
+                return observed
+            if observed == expected:
                 print(json.dumps(dict(phase='readiness',status=expected)),flush=True)
-                break
+                return observed
             readiness = dict(classification='http-status')
         except ssl.SSLCertVerificationError:
             readiness = dict(classification='tls-verification')
@@ -277,7 +283,16 @@ try:
     if browser_module == 'react-execution-access-browser.mjs':
         execution_access_fixture.seed(environment, execution_access, TENANTS[0], INSTANCE, ADMIN)
     phase = 'readiness'
-    start(binary, initialized, log)
+    backend_readiness = start(binary, initialized, log, expected=None if browser_module == 'react-execution-access-browser.mjs' else 200)
+    if browser_module == 'react-execution-access-browser.mjs':
+        phase = 'management-seams'
+        # These are actual authenticated reads, not substitute health/authority facts.
+        for path in ('/api/v1/authorization', '/api/v1/operations?limit=1'):
+            status, _ = operator.call('GET', path)
+            if status != 200:
+                print(json.dumps(dict(phase=phase, path=path.split('?')[0], status=status)), flush=True)
+                raise RuntimeError('management-seam-unavailable')
+        print(json.dumps(dict(phase='management-seams', result='passed', readinessStatus=backend_readiness, backendReady=backend_readiness == 200)), flush=True)
     if browser_module in {'device-browser.mjs', 'react-assets-browser.mjs'}:
         phase = 'manual-array-seed'
         # The product owner stores immutable array versions and ordinal indexes atomically.

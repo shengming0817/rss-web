@@ -1273,6 +1273,8 @@ html:has(.mdm-overlay-open) {
 .execution-page,
 .device-access-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 16px;
 }
 
@@ -1291,12 +1293,20 @@ html:has(.mdm-overlay-open) {
   font-size: 24px;
   margin-top: 8px;
 }
-@media (max-width: 640px) {
+@media (max-width: 920px) {
   .execution-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-/* Modal scroll locking uses static CSS under the host's external-style CSP. */
-body:has(.device-control-confirmation .ant-modal-wrap) {
-  overflow-y: hidden;
+.policy-assignments .data-table {
+  min-width: 920px;
+}
+.policy-assignments .data-table th {
+  white-space: nowrap;
+}
+.policy-assignments .data-table td {
+  min-width: 140px;
+}
+.policy-assignments .data-table td:first-child {
+  min-width: 180px;
 }

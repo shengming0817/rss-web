@@ -103,20 +103,28 @@ function ExecutionFacts({
             </div>
             <div>
               <dt>{l('投递 / 命令状态', 'Delivery / command state')}</dt>
-              <dd>{read.value.detail.delivery}</dd>
+              <dd>
+                <Status locale={locale} value={read.value.detail.delivery} />
+              </dd>
             </div>
             <div>
               <dt>{l('设备执行', 'Device execution')}</dt>
               <dd>
-                {read.value.detail.execution ??
-                  l('无独立执行回执', 'No separate execution receipt')}
+                {read.value.detail.execution ? (
+                  <Status locale={locale} value={read.value.detail.execution} />
+                ) : (
+                  l('无独立执行回执', 'No separate execution receipt')
+                )}
               </dd>
             </div>
             <div>
               <dt>{l('效果证据', 'Effect evidence')}</dt>
               <dd>
-                {read.value.detail.effect ??
-                  l('未提供独立效果投影', 'No separate effect projection provided')}
+                {read.value.detail.effect ? (
+                  <Status locale={locale} value={read.value.detail.effect} />
+                ) : (
+                  l('未提供独立效果投影', 'No separate effect projection provided')
+                )}
               </dd>
             </div>
             <div>

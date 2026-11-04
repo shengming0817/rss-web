@@ -42,7 +42,9 @@ export function ControlRecoveryPanel({
     ),
     grants = permissions.value?.grants ?? [],
     canCancel = devicePermission(grants, device, 'operation_cancel'),
-    canControl = devicePermission(grants, device, 'device_control'),
+    canRecover =
+      devicePermission(grants, device, 'device_control') ||
+      devicePermission(grants, device, 'device_wipe'),
     [approved, setApproved] = useState(false),
     [pending, setPending] = useState<{
       kind: 'cancel' | 'reauthorize'
@@ -50,7 +52,7 @@ export function ControlRecoveryPanel({
     } | null>(null),
     [outcome, setOutcome] = useState('none'),
     action = useAction(),
-    delivery = useProtectedDelivery(() => setApproved(false), canCancel || canControl)
+    delivery = useProtectedDelivery(() => setApproved(false), canCancel || canRecover)
   usePendingSelection(action.busy || outcome === 'unknown')
   async function submit(kind: 'cancel' | 'reauthorize', original?: NonNullable<typeof pending>) {
     if (!approved && !original) return
@@ -118,7 +120,7 @@ export function ControlRecoveryPanel({
         </Button>
         <Button
           disabled={
-            !canControl || !approved || !!pending || action.busy || !canReauthorize || terminal
+            !canRecover || !approved || !!pending || action.busy || !canReauthorize || terminal
           }
           onClick={() => void submit('reauthorize')}
         >
@@ -149,7 +151,7 @@ export function ControlRecoveryPanel({
           </p>
           {outcome === 'unknown' && (
             <Button
-              disabled={action.busy || (pending.kind === 'cancel' ? !canCancel : !canControl)}
+              disabled={action.busy || (pending.kind === 'cancel' ? !canCancel : !canRecover)}
               onClick={() => void submit(pending.kind, pending)}
             >
               {l('显式重提同一恢复请求', 'Explicitly resubmit the same recovery request')}

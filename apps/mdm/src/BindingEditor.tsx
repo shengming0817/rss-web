@@ -15,6 +15,7 @@ import { useAdministration } from './useAdministration'
 import { devicePermission } from './DeviceSecurity'
 import { inputFingerprint } from './useProtectedDelivery'
 import { useOperationAuthorization } from './useOperationAuthorization'
+import { Status } from './DevicePresentation'
 import { usePendingSelection } from './SelectionGuard'
 interface Values {
   kind: 'put' | 'reset_factors' | 'unbind'
@@ -390,7 +391,9 @@ export function BindingEditor({
               {l('结束或重新编辑此任务', 'Finish or edit this task')}
             </Button>
           </Space>
-          <p>{proof.state.status}</p>
+          <p>
+            <Status locale={locale} value={proof.status} />
+          </p>
           <Checkbox
             checked={approved}
             disabled={!proof.authorized || outcome !== 'none'}

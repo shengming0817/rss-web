@@ -79,3 +79,29 @@ it('validates enterprise composite identity rather than trusting display names o
     fixture({ items: [{ id: 'rp:app' }], nextCursor: null }).core.enterprise(),
   ).rejects.toThrow()
 })
+it('sends the exact binding CAS and operation intent while preserving pending application facts', async () => {
+  const f = fixture({ ...binding, serverState: 'pending', appliedRevision: null, effect: null }),
+    input = {
+      operationId: id,
+      expectedRevision: 1,
+      action: {
+        kind: 'put' as const,
+        instance: other,
+        principal: id,
+        policy: id,
+        account: { kind: 'create' as const, platform: 'windows' as const, name: 'rss' },
+      },
+    }
+  expect(await f.core.changeBinding('pc', id, input)).toMatchObject({
+    serverState: 'pending',
+    appliedRevision: null,
+    effect: null,
+  })
+  expect(f.request).toHaveBeenCalledTimes(1)
+  expect(f.request.mock.calls[0]![0]).toMatchObject({
+    method: 'PUT',
+    path: '/api/v1/devices/{device}/device-access/bindings/{id}',
+    pathParams: { device: 'pc', id },
+    body: input,
+  })
+})

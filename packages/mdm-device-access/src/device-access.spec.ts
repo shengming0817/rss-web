@@ -52,3 +52,26 @@ it('rejects mismatched device, binding and original operation identities', async
     'Wrong binding',
   )
 })
+it('binds a write receipt to its original intent, subject and next revision without replay', async () => {
+  const f = fixture(),
+    input = {
+      operationId,
+      expectedRevision: 3,
+      action: {
+        kind: 'put' as const,
+        instance: id,
+        principal: id,
+        policy: id,
+        account: { kind: 'create' as const, platform: 'windows' as const, name: 'user' },
+      },
+    }
+  vi.mocked(f.port.changeBinding).mockResolvedValue(binding)
+  expect(await f.core.changeBinding('device', id, input)).toEqual(binding)
+  vi.mocked(f.port.changeBinding).mockResolvedValue({ ...binding, principal: operationId })
+  await expect(f.core.changeBinding('device', id, input)).rejects.toThrow('subject')
+  vi.mocked(f.port.changeBinding).mockResolvedValue({ ...binding, revision: 5 })
+  await expect(f.core.changeBinding('device', id, input)).rejects.toThrow('receipt')
+  vi.mocked(f.port.changeBinding).mockRejectedValue({ cause: 'transport' })
+  await expect(f.core.changeBinding('device', id, input)).rejects.toEqual({ cause: 'transport' })
+  expect(f.port.changeBinding).toHaveBeenCalledTimes(4)
+})

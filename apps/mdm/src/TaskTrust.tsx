@@ -56,7 +56,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
   }
   return (
     <Card title={l('任务签名信任', 'Task signing trust')}>
-      <Space>
+      <Space wrap>
         <Button
           onClick={() => {
             permissions.reload()
@@ -101,7 +101,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
               {
                 title: l('操作', 'Action'),
                 render: (_, row) => (
-                  <Space>
+                  <Space wrap>
                     <Button
                       disabled={
                         !canWrite ||

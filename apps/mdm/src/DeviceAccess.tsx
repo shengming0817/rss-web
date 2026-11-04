@@ -42,7 +42,7 @@ function Bindings({
     <SelectionGuard.Provider value={guard.register}>
       <Card title={l('设备账户绑定', 'Device account bindings')}>
         <p className="mono">{device}</p>
-        <Space>
+        <Space wrap>
           <Link to="/device-access">{l('返回 DA 定位', 'Back to DA selection')}</Link>
           <Button onClick={read.reload}>{l('刷新绑定', 'Refresh bindings')}</Button>
           <Button

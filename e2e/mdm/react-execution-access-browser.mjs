@@ -12,6 +12,7 @@ import process from 'node:process'
 import { realBrowser } from './react-mdm-browser.mjs'
 const run = await realBrowser('MDM_DEVICE_BROWSER_FIXTURE', 'react-execution-access')
 let failure
+const blocked = []
 const screenshots = mkdtempSync(join(tmpdir(), 'rss-react-execution-access-'))
 try {
   const { fixture: f, origin, checks } = run,
@@ -34,8 +35,19 @@ try {
       headers,
       ...(data === undefined ? {} : { data }),
     })
+    if (response.status() !== expected)
+      console.error(
+        JSON.stringify({
+          phase: 'http-status',
+          method,
+          path: path.split('?')[0],
+          actual: response.status(),
+          expected,
+        }),
+      )
     assert.equal(response.status(), expected, `${method} ${path.split('?')[0]}`)
-    return expected === 204 ? null : response.json()
+    const raw = await response.text()
+    return raw ? JSON.parse(raw) : null
   }
   await run.login(p)
   run.step('device-confirmation-and-unknown-acceptance')
@@ -43,7 +55,21 @@ try {
   await button('核对设备与动作').click()
   let dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
   await dialog.waitFor()
-  await p.screenshot({ path: join(screenshots, 'device-action-review.png'), fullPage: true })
+  await p.waitForFunction(() => {
+    const dialog = document.querySelector('[role=dialog]')
+    return (
+      dialog &&
+      getComputedStyle(dialog).opacity === '1' &&
+      getComputedStyle(dialog).transform === 'none' &&
+      dialog
+        .getAnimations({ subtree: true })
+        .every((animation) => animation.playState !== 'running')
+    )
+  })
+  await dialog.screenshot({
+    path: join(screenshots, 'device-action-review.png'),
+    animations: 'disabled',
+  })
   assert.equal(
     await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).isDisabled(),
     true,
@@ -139,7 +165,8 @@ try {
     await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).isDisabled(),
     true,
   )
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+  await p.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'hidden' })
   checks.push(
     'real-rejected-macos-lock-six-digit-pin-cleared-and-wipe-separate-danger-confirmation',
   )
@@ -334,10 +361,21 @@ try {
     const before = assignment.items.find((i) => i.object.id === f.collector.runtime.deviceId)
     assert.equal(before.execution.kind, 'recurring')
     assert.equal(before.execution.latestRun, null)
-    await p.getByText('尚无历史运行', { exact: true }).waitFor()
+    run.step('policy-waiting-no-run-ui')
+    console.log(
+      JSON.stringify({
+        phase: 'script-waiting',
+        admission: before.taskAdmission?.state,
+        currentRecord: before.execution.currentRecord.state,
+        hasLatest: before.execution.latestRun !== null,
+      }),
+    )
+    await button('读取分配').click()
+    await p.getByText('尚无历史运行', { exact: false }).first().waitFor()
     await p.screenshot({
       path: join(screenshots, `policy-${terminal}-waiting.png`),
       fullPage: true,
+      animations: 'disabled',
     })
     const task = await agent('script_start', policy)
     const runPath = `${base}/policies/${policy}/runs/${task.task}`
@@ -351,7 +389,7 @@ try {
       .first()
       .click()
     await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
-    await p.getByText('running', { exact: true }).waitFor()
+    await p.locator('.device-facts').getByText('运行中', { exact: true }).waitFor()
     if (terminal !== 'unknown') await agent(`script_${terminal}`, policy)
     const final = await until(
       () => api('GET', runPath),
@@ -361,7 +399,13 @@ try {
       terminal === 'unknown' ? 120000 : 45000,
     )
     await button('重新查询原操作').click()
-    await p.getByText(final.state.execution, { exact: true }).first().waitFor()
+    await p
+      .locator('.device-facts')
+      .getByText({ succeeded: '成功', failed: '失败', unknown: '未知' }[final.state.execution], {
+        exact: true,
+      })
+      .first()
+      .waitFor()
     assert.equal(final.taskId, task.task)
     await mutate('policies', policy, { action: 'disable' }, 1)
     checks.push(`real-agent-script-${terminal}-policy-assignment-run-and-original-attempt`)
@@ -436,7 +480,7 @@ try {
   )
   await button(collected.task).click()
   await p.getByText('原操作与结果', { exact: true }).waitFor()
-  await p.getByText('succeeded', { exact: true }).first().waitFor()
+  await p.locator('.device-facts').getByText('成功', { exact: true }).first().waitFor()
   checks.push('real-collection-mtls-report-global-directory-evidence-and-original-run')
 
   run.step('configuration-publication-assignment-native-command')
@@ -527,7 +571,7 @@ try {
   await mutate('resources', configurationResource, { action: 'activate', version: '1' }, 2)
   const configurationScopeReceipt = await mutate('scopes', configurationScope, {
     action: 'put',
-    definition: { targets: [{ kind: 'endpoint', id: f.mdm }], limitations: null, exclusions: [] },
+    definition: { targets: [{ kind: 'device', id: f.mdm }], limitations: null, exclusions: [] },
   })
   await until(
     () =>
@@ -578,111 +622,147 @@ try {
     'real-published-configuration-policy-assignment-links-original-native-command-without-device-effect-claim',
   )
 
-  run.step('purpose-bound-device-access-and-enterprise')
-  const cdp = await p.context().newCDPSession(p)
-  await cdp.send('WebAuthn.enable')
-  await cdp.send('WebAuthn.addVirtualAuthenticator', {
-    options: {
-      protocol: 'ctap2',
-      transport: 'internal',
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-      automaticPresenceSimulation: true,
-    },
-  })
-  await run.nav(p, '/security', '安全设置')
-  await label('通行密钥名称').fill('Execution access browser key')
-  await button('添加通行密钥').click()
-  await p.getByText('Execution access browser key', { exact: true }).waitFor()
-  await run.nav(
-    p,
-    `/device-access?device=${encodeURIComponent(f.executionAccess.device)}`,
-    'Device Access',
+  run.step('device-access-authority-boundary')
+  const enterpriseRead = await p.request.get(
+    `${origin}/api/v1/device-access/enterprise/configuration?limit=1`,
   )
-  await p.getByText('fixture-da', { exact: false }).first().waitFor()
-  await button('新建账户绑定').click()
-  await label('Identity 实例 UUID').fill(f.instance)
-  await label('账户主体 UUID').fill(f.principal)
-  await label('Device Access 策略 UUID').fill(f.executionAccess.policy)
-  await label('新账户名称').fill('browser-account')
-  await button('冻结此绑定操作并核对').click()
-  await button('验证此绑定用途').click()
-  await p.getByText('authorized', { exact: true }).waitFor()
-  await p.getByRole('checkbox', { name: '已核对当前设备、账户、策略和影响', exact: true }).check()
-  let bindingInput
-  const writeWait = p.waitForRequest(
-    (request) =>
-      request.method() === 'PUT' &&
-      /\/device-access\/bindings\//.test(new URL(request.url()).pathname),
-  )
-  await button('确认保存绑定操作').click()
-  const write = await writeWait
-  bindingInput = write.postDataJSON()
-  await p.getByText('当次回执:', { exact: false }).waitFor()
-  const bindingId = new URL(write.url()).pathname.split('/').at(-1)
-  const receipt = await api(
-    'GET',
-    `/api/v1/devices/${f.executionAccess.device}/device-access/operations/${bindingInput.operationId}`,
-  )
-  assert.equal(receipt.id, bindingId)
-  assert.equal(receipt.operationId, bindingInput.operationId)
-  assert.equal(receipt.serverState, 'pending')
-  assert.equal(receipt.appliedRevision, null)
-  assert.equal(receipt.effect, null)
-  assert.equal(
-    run.count(
+  if (enterpriseRead.status() === 403) {
+    assert.equal((await enterpriseRead.json()).code, 'permission_denied')
+    for (const path of [
+      `/api/v1/devices/${f.executionAccess.device}/device-access?limit=1`,
+      `/api/v1/apple/platform-sso/configuration?deviceId=${f.executionAccess.device}`,
+    ])
+      assert.equal((await api('GET', path, undefined, 403)).code, 'permission_denied')
+    await run.nav(
+      p,
+      `/device-access?device=${encodeURIComponent(f.executionAccess.device)}`,
+      'Device Access',
+    )
+    await p.getByText('当前账户没有此操作权限。', { exact: true }).first().waitFor()
+    assert.equal(run.count(p, 'POST', '/api/v1/device-access/enterprise/configuration'), 0)
+    await p.screenshot({
+      path: join(screenshots, 'device-access-permission-denied.png'),
+      fullPage: true,
+      animations: 'disabled',
+    })
+    checks.push('real-da-http-denial-visible-without-enterprise-configuration-write')
+    blocked.push({
+      area: 'device-access-binding-enterprise-psso-success',
+      status: 403,
+      code: 'permission_denied',
+    })
+  } else {
+    assert.equal(enterpriseRead.status(), 200)
+    run.step('purpose-bound-device-access-and-enterprise')
+    const cdp = await p.context().newCDPSession(p)
+    await cdp.send('WebAuthn.enable')
+    await cdp.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        transport: 'internal',
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+        automaticPresenceSimulation: true,
+      },
+    })
+    await run.nav(p, '/security', '安全设置')
+    await label('通行密钥名称').fill('Execution access browser key')
+    await button('添加通行密钥').click()
+    await p.getByText('Execution access browser key', { exact: true }).waitFor()
+    await run.nav(
+      p,
+      `/device-access?device=${encodeURIComponent(f.executionAccess.device)}`,
+      'Device Access',
+    )
+    await p.getByText('fixture-da', { exact: false }).first().waitFor()
+    await button('新建账户绑定').click()
+    await label('Identity 实例 UUID').fill(f.instance)
+    await label('账户主体 UUID').fill(f.principal)
+    await label('Device Access 策略 UUID').fill(f.executionAccess.policy)
+    await label('新账户名称').fill('browser-account')
+    await button('冻结此绑定操作并核对').click()
+    await button('验证此绑定用途').click()
+    await p.getByText('用途验证已完成', { exact: true }).waitFor()
+    await p.getByRole('checkbox', { name: '已核对当前设备、账户、策略和影响', exact: true }).check()
+    let bindingInput
+    const writeWait = p.waitForRequest(
+      (request) =>
+        request.method() === 'PUT' &&
+        /\/device-access\/bindings\//.test(new URL(request.url()).pathname),
+    )
+    await button('确认保存绑定操作').click()
+    const write = await writeWait
+    bindingInput = write.postDataJSON()
+    await p.getByText('当次回执:', { exact: false }).waitFor()
+    const bindingId = new URL(write.url()).pathname.split('/').at(-1)
+    const receipt = await api(
+      'GET',
+      `/api/v1/devices/${f.executionAccess.device}/device-access/operations/${bindingInput.operationId}`,
+    )
+    assert.equal(receipt.id, bindingId)
+    assert.equal(receipt.operationId, bindingInput.operationId)
+    assert.equal(receipt.serverState, 'pending')
+    assert.equal(receipt.appliedRevision, null)
+    assert.equal(receipt.effect, null)
+    assert.equal(
+      run.count(
+        p,
+        'PUT',
+        `/api/v1/devices/${f.executionAccess.device}/device-access/bindings/${bindingId}`,
+      ),
+      1,
+    )
+    await p.screenshot({
+      path: join(screenshots, 'device-access-binding.png'),
+      fullPage: true,
+      animations: 'disabled',
+    })
+    await button('结束或重新编辑此任务').click()
+    await run.choose(p, label('绑定动作'), '重置因子')
+    await button('冻结此绑定操作并核对').click()
+    await button('验证此绑定用途').click()
+    await p.getByText('用途验证已完成', { exact: true }).waitFor()
+    await p.getByRole('checkbox', { name: '已核对当前设备、账户、策略和影响', exact: true }).check()
+    await run.response(
       p,
       'PUT',
       `/api/v1/devices/${f.executionAccess.device}/device-access/bindings/${bindingId}`,
-    ),
-    1,
-  )
-  await p.screenshot({ path: join(screenshots, 'device-access-binding.png'), fullPage: true })
-  await button('结束或重新编辑此任务').click()
-  await run.choose(p, label('绑定动作'), '重置因子')
-  await button('冻结此绑定操作并核对').click()
-  await button('验证此绑定用途').click()
-  await p.getByText('authorized', { exact: true }).waitFor()
-  await p.getByRole('checkbox', { name: '已核对当前设备、账户、策略和影响', exact: true }).check()
-  await run.response(
-    p,
-    'PUT',
-    `/api/v1/devices/${f.executionAccess.device}/device-access/bindings/${bindingId}`,
-    () => button('确认保存绑定操作').click(),
-  )
-  await button('结束或重新编辑此任务').click()
-  checks.push(
-    'real-cookie-webauthn-binding-acceptance-factor-reset-and-original-snapshot-without-fake-device-effect',
-  )
-  const psso = await api(
-    'GET',
-    `/api/v1/apple/platform-sso/configuration?deviceId=${encodeURIComponent(f.executionAccess.device)}`,
-  )
-  assert.equal(psso.configuration.teamId, 'ABCDEFGHIJ')
-  await p.getByText('Platform SSO 管理配置', { exact: true }).waitFor()
-  checks.push(
-    'real-current-psso-configuration-profile-without-registration-or-login-readiness-claim',
-  )
+      () => button('确认保存绑定操作').click(),
+    )
+    await button('结束或重新编辑此任务').click()
+    checks.push(
+      'real-cookie-webauthn-binding-acceptance-factor-reset-and-original-snapshot-without-fake-device-effect',
+    )
+    const psso = await api(
+      'GET',
+      `/api/v1/apple/platform-sso/configuration?deviceId=${encodeURIComponent(f.executionAccess.device)}`,
+    )
+    assert.equal(psso.configuration.teamId, 'ABCDEFGHIJ')
+    await p.getByText('Platform SSO 管理配置', { exact: true }).waitFor()
+    checks.push(
+      'real-current-psso-configuration-profile-without-registration-or-login-readiness-claim',
+    )
 
-  await button('配置企业应用或账户映射').click()
-  await run.choose(p, label('配置类型'), '账户主体映射')
-  await label('Provider UUID').fill(randomUUID())
-  await label('Identity 实例 UUID').last().fill(f.instance)
-  await label('主体 UUID').fill(f.principal)
-  await label('Provider subject').fill('browser-subject')
-  await label('Provider 用户名').fill('browser-user')
-  await button('冻结并核对企业配置').click()
-  await button('验证此企业配置用途').click()
-  await p.getByText('authorized', { exact: true }).last().waitFor()
-  await p.getByRole('checkbox', { name: '我已核对目标、版本及企业登录影响', exact: true }).check()
-  await run.response(p, 'POST', '/api/v1/device-access/enterprise/configuration', () =>
-    button('确认保存企业配置').click(),
-  )
-  await button('刷新当前配置以核对').click()
-  await p.getByText('已读取当前配置版本:', { exact: false }).waitFor()
-  await button('结束或重新编辑此任务').last().click()
-  checks.push('real-purpose-bound-enterprise-subject-save-and-current-configuration-comparison')
+    await button('配置企业应用或账户映射').click()
+    await run.choose(p, label('配置类型'), '账户主体映射')
+    await label('Provider UUID').fill(randomUUID())
+    await label('Identity 实例 UUID').last().fill(f.instance)
+    await label('主体 UUID').fill(f.principal)
+    await label('Provider subject').fill('browser-subject')
+    await label('Provider 用户名').fill('browser-user')
+    await button('冻结并核对企业配置').click()
+    await button('验证此企业配置用途').click()
+    await p.getByText('用途验证已完成', { exact: true }).last().waitFor()
+    await p.getByRole('checkbox', { name: '我已核对目标、版本及企业登录影响', exact: true }).check()
+    await run.response(p, 'POST', '/api/v1/device-access/enterprise/configuration', () =>
+      button('确认保存企业配置').click(),
+    )
+    await button('刷新当前配置以核对').click()
+    await p.getByText('已读取当前配置版本:', { exact: false }).waitFor()
+    await button('结束或重新编辑此任务').last().click()
+    checks.push('real-purpose-bound-enterprise-subject-save-and-current-configuration-comparison')
+  }
 
   run.step('task-signing-trust-management-and-public-layout')
   await run.nav(p, '/operations', '执行与结果')
@@ -711,17 +791,73 @@ try {
     ]) {
       await run.nav(p, path, title)
       await p.waitForFunction(() => document.querySelectorAll('.admin-loading').length === 0)
-      assert.equal(
-        await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-        true,
-      )
-      await p.screenshot({ path: join(screenshots, `${file}-${name}.png`), fullPage: true })
+      const fits = await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+      if (!fits)
+        console.error(
+          JSON.stringify({
+            phase: 'viewport-overflow',
+            name,
+            file,
+            width,
+            offenders: await p.evaluate(() =>
+              [...document.querySelectorAll('main *')]
+                .map((el) => ({
+                  tag: el.tagName,
+                  classes: el.className,
+                  right: Math.round(el.getBoundingClientRect().right),
+                  width: Math.round(el.getBoundingClientRect().width),
+                  overflow: getComputedStyle(el).overflowX,
+                }))
+                .filter((el) => el.right > innerWidth + 1)
+                .slice(0, 12),
+            ),
+          }),
+        )
+      await p.screenshot({
+        path: join(screenshots, `${file}-${name}.png`),
+        fullPage: true,
+        animations: 'disabled',
+      })
+      assert.equal(fits, true)
+      await p.screenshot({
+        path: join(screenshots, `${file}-${name}.png`),
+        fullPage: true,
+        animations: 'disabled',
+      })
     }
   }
   await p.getByRole('button', { name: '切换亮暗主题', exact: true }).click()
-  await p.screenshot({ path: join(screenshots, 'device-access-dark.png'), fullPage: true })
+  await p.screenshot({
+    path: join(screenshots, 'device-access-dark.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
   checks.push('real-public-desktop-tablet-mobile-dark-layout-and-no-viewport-overflow')
-  console.log(JSON.stringify({ journey: 'react-execution-access', screenshots }))
+  run.step('session-change-discards-device-confirmation')
+  await run.nav(p, `/devices/endpoint/${f.alone}`, '设备详情')
+  await button('核对设备与动作').click()
+  dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
+  await dialog.getByRole('checkbox').check()
+  const otherTab = await p.context().newPage()
+  await otherTab.goto(origin + '/security')
+  await otherTab.getByRole('button', { name: '退出登录', exact: true }).click()
+  await otherTab.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
+  await p.bringToFront()
+  if (!(await p.getByRole('heading', { name: '欢迎回来', exact: true }).isVisible())) {
+    if (await dialog.isVisible())
+      await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).click()
+    else await button('读取最新设备事实').click()
+  }
+  await p.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
+  assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.alone}/operations`), 0)
+  await run.login(p)
+  await run.nav(p, `/devices/endpoint/${f.alone}`, '设备详情')
+  assert.equal(await p.getByRole('dialog', { name: '确认设备动作', exact: true }).count(), 0)
+  await otherTab.close()
+  checks.push(
+    'real-cross-tab-session-end-and-new-login-discard-old-device-confirmation-without-post',
+  )
+  console.log(JSON.stringify({ journey: 'react-execution-access', screenshots, blocked }))
 } catch (error) {
   console.error(
     JSON.stringify({
@@ -734,4 +870,4 @@ try {
   )
   failure = error
 }
-await run.finish(failure)
+await run.finish(failure ?? (blocked.length ? new Error('backend-seams-unverified') : undefined))

@@ -11,6 +11,10 @@ export function useOperationAuthorization(
 ) {
   const owner = runtime.operationAuthorization,
     state = useSyncExternalStore(owner.subscribe, owner.getSnapshot),
+    ownsContext =
+      !!context &&
+      state.context?.operationId === context.operationId &&
+      state.context?.purpose === context.purpose,
     current = useRef(context)
   current.current = context
   const delivery = useProtectedDelivery(() => {
@@ -21,12 +25,8 @@ export function useOperationAuthorization(
   }, permitted)
   return {
     delivery,
-    state,
-    authorized:
-      !!context &&
-      state.status === 'authorized' &&
-      state.context?.operationId === context.operationId &&
-      state.context?.purpose === context.purpose,
+    status: ownsContext ? state.status : 'idle',
+    authorized: ownsContext && state.status === 'authorized',
     async authorize(begin: (signal: AbortSignal) => Promise<AuthorizationChallenge>) {
       if (
         !context ||

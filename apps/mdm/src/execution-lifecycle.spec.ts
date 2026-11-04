@@ -5,9 +5,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Runtime } from './runtime'
-import type { ControlIntent } from '@rss/mdm-execution'
+import type { ControlIntent, ControlRecovery } from '@rss/mdm-execution'
 import type { ViewEndpoint } from '@rss/mdm-devices'
 import { DeviceControl } from './DeviceControl'
+import { ControlRecoveryPanel } from './ControlRecovery'
 import { isUnknown } from './AdminUi'
 import { decodeMdmError } from '@rss/api/mdm'
 let host: HTMLDivElement, root: Root
@@ -113,4 +114,57 @@ it('retains the original write as unknown across hiding and a late public receip
   expect(button('核对设备与动作').disabled).toBe(true)
   expect(host.textContent).toContain('提交结果未知')
   expect(create).toHaveBeenCalledOnce()
+})
+it('allows a wipe-only principal to confirm backend-authorized recovery without a separate restart grant', async () => {
+  const reauthorize = vi.fn(
+      async (_device: string, operationId: string, _input: ControlRecovery) => ({
+        operationId,
+        revision: 5,
+      }),
+    ),
+    runtime = {
+      administration: () => ({
+        binding: 'session-a',
+        authorization: {
+          effective: async () => ({
+            grants: [{ operation: 'device_wipe', scope: { kind: 'all_devices' } }],
+          }),
+        },
+        execution: { reauthorize },
+      }),
+    } as unknown as Runtime
+  await act(async () =>
+    root.render(
+      h(ControlRecoveryPanel, {
+        runtime,
+        locale: 'zh',
+        device: 'device-a',
+        id: '11111111-1111-4111-8111-111111111111',
+        revision: 4,
+        registration: '22222222-2222-4222-8222-222222222222',
+        generation: 7,
+        canReauthorize: true,
+        confirmationRequired: true,
+        terminal: false,
+        onRefresh() {},
+      }),
+    ),
+  )
+  await act(async () => document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  expect(button('重新授权原操作').disabled).toBe(false)
+  expect(button('请求取消原操作').disabled).toBe(true)
+  await act(async () => button('重新授权原操作').click())
+  expect(reauthorize).toHaveBeenCalledOnce()
+  expect(reauthorize.mock.calls[0]).toEqual([
+    'device-a',
+    '11111111-1111-4111-8111-111111111111',
+    expect.objectContaining({
+      expectedRevision: 4,
+      confirmation: {
+        confirmed: true,
+        expectedRegistrationId: '22222222-2222-4222-8222-222222222222',
+        expectedGeneration: 7,
+      },
+    }),
+  ])
 })

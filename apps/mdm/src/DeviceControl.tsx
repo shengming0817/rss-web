@@ -149,7 +149,10 @@ export function DeviceControl({
       )}
       <Modal
         open={review !== null}
-        rootClassName="device-control-confirmation"
+        rootClassName={
+          review ? 'device-control-confirmation mdm-overlay-open' : 'device-control-confirmation'
+        }
+        getContainer={false}
         scrollLock={false}
         title={l('确认设备动作', 'Confirm device action')}
         onCancel={() => {
