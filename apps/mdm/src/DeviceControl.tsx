@@ -34,8 +34,9 @@ export function DeviceControl({
     [review, setReview] = useState<ControlIntent | null>(null),
     [pending, setPending] = useState<ControlIntent | null>(null),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
-    allowed = devicePermission(grants, endpoint.id, 'device_control'),
+    controlAllowed = devicePermission(grants, endpoint.id, 'device_control'),
     wipeAllowed = devicePermission(grants, endpoint.id, 'device_wipe'),
+    allowed = kind === 'wipe' ? wipeAllowed : controlAllowed,
     delivery = useProtectedDelivery(() => {
       setPin('')
       setReview(null)
@@ -51,8 +52,7 @@ export function DeviceControl({
   async function prepare() {
     const epoch = delivery.capture(),
       result = await action.run(async () => {
-        if (!allowed || (kind === 'wipe' && !wipeAllowed))
-          throw { cause: 'client', code: 'forbidden' }
+        if (!allowed) throw { cause: 'client', code: 'forbidden' }
         const registration = await current()
         if (kind === 'lock' && registration.source !== 'mdm.apple')
           throw { cause: 'client', code: 'unsupported' }
@@ -84,6 +84,7 @@ export function DeviceControl({
     setApproved(false)
     if (!input || !approved) return
     const result = await action.run(async () => {
+      if (!allowed) throw { cause: 'client', code: 'forbidden' }
       const registration = await current()
       if (
         input.action.kind !== 'restart' &&
@@ -109,18 +110,18 @@ export function DeviceControl({
         <Select
           aria-label={l('设备动作', 'Device action')}
           value={kind}
-          disabled={!allowed || action.busy || outcome === 'unknown'}
+          disabled={(!controlAllowed && !wipeAllowed) || action.busy || outcome === 'unknown'}
           onChange={(value) => {
             setKind(value)
             setReview(null)
             setPin('')
           }}
           options={[
-            { value: 'restart', label: l('重启', 'Restart') },
+            { value: 'restart', label: l('重启', 'Restart'), disabled: !controlAllowed },
             {
               value: 'lock',
               label: l('锁定（macOS）', 'Lock (macOS)'),
-              disabled: endpoint.primaryMdmRegistration?.source !== 'mdm.apple',
+              disabled: !controlAllowed || endpoint.primaryMdmRegistration?.source !== 'mdm.apple',
             },
             { value: 'wipe', label: l('擦除设备', 'Wipe device'), disabled: !wipeAllowed },
           ]}
@@ -208,6 +209,7 @@ export function DeviceControl({
               type="primary"
               danger={review.action.kind === 'wipe'}
               disabled={
+                !allowed ||
                 !approved ||
                 action.busy ||
                 (review.action.kind === 'lock' && !/^[0-9]{6}$/.test(pin))

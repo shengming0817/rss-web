@@ -1,7 +1,6 @@
 import { executionPath } from './Executions'
-import { useState } from 'react'
 import { Alert, Button, Card } from 'antd'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import type { Policy } from '@rss/mdm-policies'
 import type { PoliciesUseCases } from './PolicyPreview'
 import type { Locale } from './i18n'
@@ -20,10 +19,21 @@ export function PolicyAssignments({
   locale: Locale
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    location = useLocation(),
+    [params, setParams] = useSearchParams(),
+    query: Query = {
+      limit: 20,
+      ...(params.get('assignmentCursor') ? { cursor: params.get('assignmentCursor')! } : {}),
+    },
     read = usePageRead(`policy-assignments/${policy.id}/${JSON.stringify(query)}`, () =>
       policies.assignments(policy.id, query),
     )
+  function setQuery(next: Query) {
+    const value = new URLSearchParams(params)
+    if (next.cursor) value.set('assignmentCursor', next.cursor)
+    else value.delete('assignmentCursor')
+    setParams(value, { replace: true })
+  }
   return (
     <Card
       className="policy-assignments"
@@ -107,7 +117,7 @@ export function PolicyAssignments({
                       row.execution.operationIds.map((id) => (
                         <p key={id}>
                           <Link
-                            to={`/operations?${new URLSearchParams({ filter: `id=='${id}'` })}`}
+                            to={`/operations?${new URLSearchParams({ filter: `id=='${id}'`, returnTo: location.pathname + location.search })}`}
                           >
                             {id}
                           </Link>
@@ -126,6 +136,7 @@ export function PolicyAssignments({
                               'action_run',
                               row.execution.latestRun.taskId,
                               policy.id,
+                              location.pathname + location.search,
                             )}
                           >
                             {row.execution.latestRun.taskId} ·{' '}
@@ -152,6 +163,7 @@ export function PolicyAssignments({
                               'action_run',
                               row.execution.currentRecord.taskId,
                               policy.id,
+                              location.pathname + location.search,
                             )}
                           >
                             {row.execution.currentRecord.taskId}
@@ -210,10 +222,21 @@ export function PolicyRuns({
   locale: Locale
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    location = useLocation(),
+    [params, setParams] = useSearchParams(),
+    query: Query = {
+      limit: 20,
+      ...(params.get('runCursor') ? { cursor: params.get('runCursor')! } : {}),
+    },
     read = usePageRead(`policy-runs/${policy.id}/${JSON.stringify(query)}`, () =>
       policies.runs(policy.id, query),
     )
+  function setQuery(next: Query) {
+    const value = new URLSearchParams(params)
+    if (next.cursor) value.set('runCursor', next.cursor)
+    else value.delete('runCursor')
+    setParams(value, { replace: true })
+  }
   return (
     <Card title={l('已发生的运行', 'Existing runs')}>
       <Button onClick={read.reload}>{l('读取运行', 'Read runs')}</Button>
@@ -233,7 +256,16 @@ export function PolicyRuns({
               {
                 title: l('运行', 'Run'),
                 render: (_, row) => (
-                  <Link to={executionPath('action_run', row.taskId, policy.id)}>{row.taskId}</Link>
+                  <Link
+                    to={executionPath(
+                      'action_run',
+                      row.taskId,
+                      policy.id,
+                      location.pathname + location.search,
+                    )}
+                  >
+                    {row.taskId}
+                  </Link>
                 ),
               },
               {

@@ -11,8 +11,22 @@ import { useAdministration } from './useAdministration'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
 import { timestamp, Status } from './DevicePresentation'
-export function executionPath(kind: 'command' | 'action_run', id: string, policy?: string) {
-  return `/operations?${new URLSearchParams({ kind, operation: id, ...(policy ? { policy } : {}) })}`
+export function executionPath(
+  kind: 'command' | 'action_run',
+  id: string,
+  policy?: string,
+  returnTo?: string,
+) {
+  return `/operations?${new URLSearchParams({ kind, operation: id, ...(policy ? { policy } : {}), ...(returnTo ? { returnTo } : {}) })}`
+}
+/** Return context is a resource locator, never authority or a redirect to another host. */
+export function policyReturnPath(policy: string, returnTo: string | null) {
+  if (returnTo?.startsWith('/policies?')) {
+    const url = new URL(returnTo, 'https://mdm.invalid')
+    if (url.pathname === '/policies' && url.searchParams.get('policy') === policy)
+      return url.pathname + url.search
+  }
+  return `/policies?${new URLSearchParams({ policy })}`
 }
 export function deviceExecutionsPath(device: string) {
   const literal = `'${device.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
@@ -28,6 +42,7 @@ function ExecutionFacts({
   reference: ExecutionRef & { readonly policy?: string }
 }) {
   const l = labels(locale),
+    [params] = useSearchParams(),
     { execution, binding } = useAdministration(runtime),
     read = usePageRead(
       `${binding}/execution/${reference.kind}/${reference.id}/${reference.policy ?? ''}`,
@@ -93,7 +108,7 @@ function ExecutionFacts({
               <dt>{l('原策略', 'Original policy')}</dt>
               <dd>
                 {read.value.policy ? (
-                  <Link to={`/policies?${new URLSearchParams({ policy: read.value.policy })}`}>
+                  <Link to={policyReturnPath(read.value.policy, params.get('returnTo'))}>
                     {read.value.policy}
                   </Link>
                 ) : (

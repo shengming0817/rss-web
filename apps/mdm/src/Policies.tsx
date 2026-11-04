@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Button, Collapse, Modal, Segmented, Space, Tag } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Policy, PolicyRow } from '@rss/mdm-policies'
@@ -9,7 +9,6 @@ import {
   DirectoryControls,
   directoryQuery,
   Failure,
-  firstPage,
   Heading,
   labels,
   ReadState,
@@ -51,13 +50,23 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           grant.operation === name &&
           (grant.scope.kind === 'tenant' || (allDevices && grant.scope.kind === 'all_devices')),
       ) ?? false,
-    [query, setQuery] = useState<Query>({ limit: 20 }),
-    [state, setState] = useState('all'),
+    [params, setParams] = useSearchParams(),
+    pageLimit = Number(params.get('limit') ?? 20),
+    query: Query = {
+      limit:
+        Number.isSafeInteger(pageLimit) && pageLimit >= 1 && pageLimit <= 1000 ? pageLimit : 20,
+      ...(params.get('filter') ? { filter: params.get('filter')! } : {}),
+      ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
+      ...(params.has('sort') ? { sort: params.getAll('sort') } : {}),
+      ...(params.has('field') ? { fields: params.getAll('field') } : {}),
+    },
+    state = ['enabled', 'disabled', 'archived'].includes(params.get('state') ?? '')
+      ? params.get('state')!
+      : 'all',
     listFilter = [state === 'all' ? '' : `state=='${state}'`, query.filter]
       .filter(Boolean)
       .map((part) => `(${part})`)
       .join(';'),
-    [params, setParams] = useSearchParams(),
     action = useAction(),
     guard = useSelectionGuard(),
     read = usePageRead(
@@ -82,23 +91,55 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     } | null>(null),
     [generation, setGeneration] = useState(0)
   usePendingSelection(action.busy || guard.locked)
+  const linkedPolicy = params.get('policy'),
+    canRead = has('policy_read'),
+    canInventory = has('inventory_read', true),
+    canOperations = has('operation_read', true)
+  useEffect(() => {
+    if (!linkedPolicy || !params.has('tab') || !canRead || selected?.id === linkedPolicy) return
+    let current = true
+    void action
+      .run(() => policies.read(linkedPolicy))
+      .then((result) => {
+        if (current && result.ok) {
+          setGeneration((value) => value + 1)
+          setSelected({ id: linkedPolicy, baseline: result.value, generation: 0 })
+        }
+      })
+    return () => {
+      current = false
+    }
+  }, [binding, linkedPolicy, canRead, selected?.id])
+  function setQuery(next: Query) {
+    const value = new URLSearchParams(params)
+    for (const key of ['limit', 'filter', 'cursor', 'sort', 'field']) value.delete(key)
+    if (next.limit) value.set('limit', String(next.limit))
+    if (next.filter) value.set('filter', next.filter)
+    if (next.cursor) value.set('cursor', next.cursor)
+    next.sort?.forEach((item) => value.append('sort', item))
+    next.fields?.forEach((item) => value.append('field', item))
+    setParams(value, { replace: true })
+  }
   async function open(id: string) {
     const result = await action.run(() => policies.read(id))
     if (result.ok) {
       setGeneration((value) => value + 1)
       setSelected({ id, baseline: result.value, generation: generation + 1 })
-      setParams({ policy: id })
+      const next = new URLSearchParams(params)
+      next.set('policy', id)
+      next.set('tab', 'definition')
+      next.delete('assignmentCursor')
+      next.delete('runCursor')
+      setParams(next, { replace: true })
     }
   }
   function close() {
     setSelected(null)
-    setParams({})
-    setQuery(firstPage(query))
+    const next = new URLSearchParams(params)
+    for (const key of ['policy', 'tab', 'assignmentCursor', 'runCursor']) next.delete(key)
+    setParams(next, { replace: true })
     read.reload()
   }
-  const canRead = has('policy_read'),
-    canInventory = has('inventory_read', true),
-    canOperations = has('operation_read', true)
   return (
     <SelectionGuard.Provider value={guard.register}>
       <div className="policies-page">
@@ -119,10 +160,12 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                     setGeneration((value) => value + 1)
                     const id = crypto.randomUUID()
                     setSelected({ id, baseline: null, generation: generation + 1 })
-                    setParams({
-                      ...(params.get('scope') ? { scope: params.get('scope')! } : {}),
-                      policy: id,
-                    })
+                    const next = new URLSearchParams(params)
+                    next.set('policy', id)
+                    next.set('tab', 'definition')
+                    next.delete('assignmentCursor')
+                    next.delete('runCursor')
+                    setParams(next, { replace: true })
                   }}
                 >
                   {l('新建部署', 'New deployment')}
@@ -156,8 +199,10 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                     { value: 'archived', label: l('已归档', 'Archived') },
                   ]}
                   onChange={(value) => {
-                    setState(value)
-                    setQuery(firstPage(query))
+                    const next = new URLSearchParams(params)
+                    next.set('state', value)
+                    next.delete('cursor')
+                    setParams(next, { replace: true })
                   }}
                 />
                 <Button onClick={read.reload}>{l('刷新', 'Refresh')}</Button>
@@ -287,6 +332,12 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
             <SecretTabs
               key={selected.generation}
               uiLocale={locale}
+              activeKey={params.get('tab') ?? 'definition'}
+              onChange={(tab) => {
+                const next = new URLSearchParams(params)
+                next.set('tab', tab)
+                setParams(next, { replace: true })
+              }}
               authorizedKeys={[
                 ...(canRead || has('policy_write') ? ['definition'] : []),
                 ...(canRead && canInventory && selected.baseline ? ['assignments'] : []),

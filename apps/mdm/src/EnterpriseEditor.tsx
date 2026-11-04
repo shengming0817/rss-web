@@ -340,10 +340,58 @@ export function EnterpriseEditor({
         />
       )}
       {observed && (
-        <p>
-          {l('已读取当前配置版本', 'Current configuration revision read')}: {observed.revision} ·{' '}
-          {observed.id} · {observed.configuration?.kind}
-        </p>
+        <section aria-label={l('服务端当前配置', 'Current server configuration')}>
+          <h3>{l('服务端当前配置', 'Current server configuration')}</h3>
+          <p>
+            {l('已读取当前配置版本', 'Current configuration revision read')}: {observed.revision} ·{' '}
+            {observed.id} · {observed.configuration?.kind}
+          </p>
+          {observed.configuration ? (
+            <dl className="device-facts">
+              {[
+                [
+                  l('启用', 'Enabled'),
+                  observed.configuration.enabled ? l('是', 'Yes') : l('否', 'No'),
+                ],
+                ...(observed.configuration.kind === 'relying_party'
+                  ? [
+                      [l('已部署的 Client ID', 'Deployed client ID'), observed.configuration.id],
+                      [
+                        l('规范 HTTPS 回调', 'Canonical HTTPS callback'),
+                        observed.configuration.callback,
+                      ],
+                      [
+                        l('允许证明类型', 'Allowed proof types'),
+                        observed.configuration.capabilities
+                          .map((value) =>
+                            value === 'native_key'
+                              ? l('原生密钥', 'Native key')
+                              : l('密码', 'Password'),
+                          )
+                          .join(' · ') || '—',
+                      ],
+                    ]
+                  : [
+                      [l('Provider UUID', 'Provider UUID'), observed.configuration.provider],
+                      [
+                        l('Identity 实例 UUID', 'Identity instance UUID'),
+                        observed.configuration.person.instance,
+                      ],
+                      [l('主体 UUID', 'Principal UUID'), observed.configuration.person.principal],
+                      [l('Provider subject', 'Provider subject'), observed.configuration.subject],
+                      [l('Provider 用户名', 'Provider username'), observed.configuration.username],
+                    ]),
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p>{l('未提供可比较的配置值', 'Comparable configuration values were not provided')}</p>
+          )}
+        </section>
       )}
     </Card>
   )
