@@ -1,10 +1,10 @@
-// Process lifecycle regression for the device, software and settings fixture owners.
+// Process lifecycle regression for the React fixture owners.
 import { test } from 'node:test'
 import process from 'node:process'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
-import { tmpdir, homedir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -53,8 +53,7 @@ async function exercise(failure, feature, selection = 'all') {
     `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path')
 const args = process.argv.slice(2), base = process.env['${backendEnv}']
-const compose = '${feature}' === 'settings' && args.includes('--cleanup-compose')
-const device = ['device', 'react-devices-enrollment', 'react-assets', 'react-software', 'react-audit-webhooks'].includes('${feature}') && args.some((arg) => arg.endsWith('/device-cleanup.py'))
+const device = ['react-devices-enrollment', 'react-assets', 'react-software', 'react-audit-webhooks'].includes('${feature}') && args.some((arg) => arg.endsWith('/device-cleanup.py'))
 if ('${feature}' === 'react-certificates' || ('${feature}' === 'react-audit-webhooks' && '${selection}' === 'cleanup')) {
   const cleanup = args.some((arg) => arg.endsWith('/enrollment-cleanup.py') || arg.endsWith('/device-cleanup.py'))
   fs.appendFileSync(path.join(base, cleanup ? 'cleanup-groups' : 'journeys'), args.join(' ')+'\\n')
@@ -65,16 +64,13 @@ if ('${feature}' === 'react-certificates' || ('${feature}' === 'react-audit-webh
     fs.writeFileSync(path.join(base, 'cleanup-finished'), '')
     process.exit(0)
   }, 700)
-} else if (args.includes('reset') || device || compose || ('${feature}' === 'settings' && args.includes('-c'))) {
-  const target = args.includes('-c')
-  if (device ? args.at(-2) !== new URL('./device-cleanup.py', 'file://' + process.env.WEB_ROOT + '/e2e/mdm/').pathname || args.at(-1) !== process.env.WEB_ROOT : compose ? args.at(-1) !== '--cleanup-compose' || !args.at(-3).endsWith('/settings-fixture.py') : target ? !args.at(-1).includes("group='settings-browser-target'") : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
-  fs.appendFileSync(path.join(base,'cleanup-groups'), (compose ? 'settings-compose' : target ? '${group}-target' : '${group}')+'\\n')
+} else if (args.includes('reset') || device) {
+  if (device ? args.at(-2) !== new URL('./device-cleanup.py', 'file://' + process.env.WEB_ROOT + '/e2e/mdm/').pathname || args.at(-1) !== process.env.WEB_ROOT : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
+  fs.appendFileSync(path.join(base,'cleanup-groups'), '${group}'+'\\n')
   fs.writeFileSync(path.join(base, 'cleanup-start'), '')
   setTimeout(() => {
     if (process.env.CLEANUP_FAILURE === '1') process.exit(3)
-    if (compose) fs.writeFileSync(path.join(base,'compose-cleanup-finished'),'')
-    else if (target) fs.writeFileSync(path.join(base,'target-cleanup-finished'),'')
-    else fs.rmSync(path.join(base, 'artifacts/dev-environment/${group}'), { recursive: true })
+    fs.rmSync(path.join(base, 'artifacts/dev-environment/${group}'), { recursive: true })
     fs.writeFileSync(path.join(base, 'cleanup-finished'), '')
     process.exit(0)
   }, process.env.CLEANUP_FAILURE === '1' ? 0 : 7000)
@@ -126,23 +122,12 @@ if ('${feature}' === 'react-certificates' || ('${feature}' === 'react-audit-webh
     }
     const code = await closed
     assert.equal(code, 1)
-    if (feature === 'settings')
-      assert.deepEqual(
-        readFileSync(resolve(backend, 'cleanup-groups'), 'utf8').trim().split('\n'),
-        ['settings-compose', group + '-target', group],
-      )
     if (failure) {
-      if (feature === 'settings')
-        assert.ok(output.includes(JSON.stringify(resolve(homedir(), '.cache/rss-mdm-dev-ports'))))
       assert.ok(existsSync(recovery))
       assert.ok(output.includes(JSON.stringify(recovery)))
       assert.ok(output.includes('"phase":"cleanup","result":"failed"'))
     } else {
       assert.ok(existsSync(resolve(backend, 'cleanup-finished')))
-      if (feature === 'settings') {
-        assert.ok(existsSync(resolve(backend, 'compose-cleanup-finished')))
-        assert.ok(existsSync(resolve(backend, 'target-cleanup-finished')))
-      }
       assert.equal(existsSync(recovery), false)
       assert.ok(output.includes('"classification":"interrupted"'))
       assert.ok(output.includes('"phase":"cleanup","result":"passed"'))
@@ -179,9 +164,6 @@ for (const selection of ['certificates', 'recovery', 'all']) {
   )
 }
 for (const feature of [
-  'device',
-  'software',
-  'settings',
   'react-devices-enrollment',
   'react-assets',
   'react-software',
@@ -189,7 +171,7 @@ for (const feature of [
 ]) {
   test(
     `${feature}: waits for independent cleanup after cancellation and a second signal`,
-    { timeout: feature === 'settings' ? 40000 : 30000 },
+    { timeout: 30000 },
     () => exercise(false, feature),
   )
   test(
@@ -368,7 +350,7 @@ class Environment:
         with (self.root/'actions').open('a') as f: f.write(self.group+':ports\\n')
 `,
   )
-  const groups = ['windows', 'agent', 'agent:next'].map(
+  const groups = ['windows', 'agent', 'next:agent'].map(
     (purpose) =>
       't2-pki-' +
       createHash('sha256')
@@ -398,9 +380,7 @@ class Environment:
       assert.equal(existsSync(resolve(backend, 'host-inputs')), failed)
       assert.deepEqual(
         actions.slice(3),
-        failed
-          ? []
-          : ['enrollment-native:ports', 'enrollment-agent:ports', 'react-enrollment-browser'],
+        failed ? [] : ['enrollment-native:ports', 'react-enrollment-browser'],
       )
     }
   } finally {

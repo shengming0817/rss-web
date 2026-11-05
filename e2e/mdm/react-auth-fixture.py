@@ -1,6 +1,7 @@
 """New React authentication against the real MDM/Identity HTTPS host, without device fixtures."""
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import ssl
@@ -37,6 +38,17 @@ try:
     environment.reset()
     os.environ['MDM_WEB_ROOT'] = str(WEB / 'apps/mdm/dist')
     initialized = environment.initialize()
+    if os.environ.get('MDM_REACT_WEB_IMAGE'):
+        # The existing environment owns this web container and its independent reset.
+        private(environment.root/'images.json', dict(MDM_WEB_IMAGE=os.environ['MDM_REACT_WEB_IMAGE']))
+        overlay = private(environment.root/'web.compose.json', dict(services=dict(web=dict(ports=['127.0.0.1::8080'], networks=['default']))))
+        environment.compose('-f', str(overlay), '--profile', 'product', 'up', '-d', '--no-deps', 'web')
+        endpoint = environment.compose('-f', str(overlay), 'port', 'web', '8080').strip()
+        gateway = Path(initialized['gateway'])
+        source = 'location / { root "'+str(WEB/'apps/mdm/dist')+'"; try_files $uri $uri/ /index.html; }'
+        configuration = gateway.read_text()
+        if source not in configuration: raise RuntimeError('web-gateway-location')
+        private(gateway, configuration.replace(source, 'location / { proxy_pass http://'+endpoint+'; }'))
     log_path = private(environment.root / 'product.log', '')
     phase = 'host'
     with log_path.open('w') as log:
@@ -47,6 +59,8 @@ try:
         context = ssl.create_default_context(cafile=str(environment.root / 'ca.crt'))
         while True:
             if any(child.poll() is not None for child in children):
+                log.flush()
+                print(json.dumps(dict(phase='host-exit', processes=[dict(name=Path(child.args[0]).name, exitCode=child.poll()) for child in children], nginxErrors=re.findall(r'nginx: \[emerg\] ([a-z ]+(?:"[a-z_]+")?)', log_path.read_text())[-3:])), flush=True)
                 raise RuntimeError('host-exit')
             try:
                 with urllib.request.urlopen(initialized['origin'] + f'/api/v1/identity/tenants/{TENANTS[0]}/session', context=context, timeout=3):

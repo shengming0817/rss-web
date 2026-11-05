@@ -9,7 +9,6 @@ it('allows 2 MiB only on exact current authorization PUT targets', () => {
     expect(mdmJsonBodyLimit('POST', `/api/v1/authorization/${name}/{id}`)).toBe(16384)
     expect(mdmJsonBodyLimit('PUT', `/api/v1/authorization/${name}/{id}/extra`)).toBe(16384)
   }
-  expect(mdmJsonBodyLimit('PUT', '/api/v1/mdm-candidate/authorization/rules/{id}')).toBe(16384)
 })
 
 it.each([

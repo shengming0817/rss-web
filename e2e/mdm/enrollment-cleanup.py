@@ -10,7 +10,7 @@ sys.path.insert(0, str(backend / 'hack'))
 from t2_environment import Environment
 
 failed = False
-for purpose in ('windows', 'agent', 'agent:next'):
+for purpose in ('windows', 'agent', 'next:agent'):
     case = hashlib.sha256((str(web) + ':enrollment-browser:' + purpose).encode()).hexdigest()[:20]
     try:
         Environment(backend, group='t2-pki-' + case).reset()
@@ -18,7 +18,6 @@ for purpose in ('windows', 'agent', 'agent:next'):
         failed = True
 if failed:
     raise RuntimeError('enrollment PKI cleanup unconfirmed; keep host inputs for recovery')
-for group in ('enrollment-native', 'enrollment-agent'):
-    Environment(backend, group=group).host_ports(release=True)
-group = {'react-enrollment-browser.mjs':'react-enrollment-browser','react-certificates-browser.mjs':'react-certificates-browser'}.get(os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE'),'enrollment-browser')
+Environment(backend, group='enrollment-native').host_ports(release=True)
+group = {'react-enrollment-browser.mjs': 'react-enrollment-browser', 'react-certificates-browser.mjs': 'react-certificates-browser'}.get(os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE'), 'react-enrollment-browser')
 Environment(backend, group=group).reset()

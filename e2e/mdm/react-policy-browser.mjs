@@ -441,9 +441,16 @@ try {
       }),
     )
   assert.ok(assigned, 'bounded authored policy assignment projection')
-  await run.response(p, 'GET', `/api/v1/policies/${assignmentPolicy.id}/assignments`, () =>
-    button('读取分配').click(),
+  const displayedAssignments = await run.response(
+    p,
+    'GET',
+    `/api/v1/policies/${assignmentPolicy.id}/assignments`,
+    () => button('读取分配').click(),
   )
+  const displayed = (await displayedAssignments.json()).items.find(
+    (item) => item.object.kind === 'endpoint' && item.object.id === f.agent,
+  )
+  assert.ok(displayed)
   assert.equal(assigned.channel, 'agent')
   assert.equal(assigned.object.kind, 'endpoint')
   assert.ok(['eligible', 'pending', 'excluded'].includes(assigned.qualification.state))
@@ -453,9 +460,18 @@ try {
     .filter({ has: p.getByRole('link', { name: f.agent, exact: true }) })
     .filter({ visible: true })
   await assignmentRow.waitFor()
-  assert.ok((await assignmentRow.innerText()).includes(assigned.qualification.state))
-  if (assigned.target)
-    assert.ok((await assignmentRow.innerText()).includes(assigned.target.registrationId))
+  await assignmentRow
+    .getByText(
+      { eligible: '资格满足', pending: '待处理', excluded: '已排除' }[
+        displayed.qualification.state
+      ],
+      { exact: true },
+    )
+    .waitFor()
+  if (displayed.target) {
+    await assignmentRow.getByText('注册坐标', { exact: true }).click()
+    assert.ok((await assignmentRow.innerText()).includes(displayed.target.registrationId))
+  }
   checks.push('real-device-access-policy-assignment-qualification-and-result-coordinate')
   await p.getByRole('tab', { name: '定义与发布', exact: true }).click()
   await button('返回并重新读取策略').click()

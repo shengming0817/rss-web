@@ -47,6 +47,22 @@ try {
       ...(headers ? { headers } : {}),
       ...(data === undefined ? {} : { data }),
     })
+    if (response.status() !== expected) {
+      const value = await response.json().catch(() => null)
+      console.error(
+        JSON.stringify({
+          journey: 'react-software',
+          method,
+          path: path.split('?')[0],
+          expected,
+          status: response.status(),
+          code:
+            typeof value?.code === 'string' && /^[a-z0-9_]{1,96}$/.test(value.code)
+              ? value.code
+              : 'unclassified',
+        }),
+      )
+    }
     assert.equal(response.status(), expected, `${method} ${path.split('?')[0]}`)
     return [201, 204].includes(expected) ? undefined : response.json()
   }
@@ -356,6 +372,141 @@ try {
     directResource.versions[0].variants[0].declaration.definition.export.kind,
     'disabled',
   )
+  run.step('software-self-service-and-rollout')
+  if (directResource.activeVersion !== 'resource-v1')
+    await api('POST', resourcePath(direct), {
+      operationId: randomUUID(),
+      expectedRevision: directResource.revision,
+      input: { action: 'activate', version: 'resource-v1' },
+    })
+  const scope = randomUUID(),
+    laterScope = randomUUID(),
+    policyId = randomUUID()
+  for (const id of [scope, laterScope])
+    await api('POST', '/api/v1/scopes/' + id, {
+      operationId: randomUUID(),
+      expectedRevision: 0,
+      input: {
+        action: 'put',
+        definition: {
+          targets: [{ kind: 'device', id: f.agent }],
+          limitations: null,
+          exclusions: [],
+        },
+      },
+    })
+  const opensAt = Math.floor(Date.now() / 1000) + 7200,
+    schedule = {
+      trigger: { kind: 'check_in', minimumSeconds: 60 },
+      misfire: { kind: 'coalesce_one' },
+      notBefore: 0,
+      until: null,
+      jitterSeconds: 0,
+      window: null,
+    }
+  await api('POST', '/api/v1/policies/' + policyId, {
+    operationId: randomUUID(),
+    expectedRevision: 0,
+    input: {
+      action: 'put',
+      enabled: false,
+      definition: {
+        scope,
+        alias: null,
+        customEvent: null,
+        action: {
+          kind: 'software',
+          channel: 'agent',
+          delivery: { kind: 'direct' },
+          resource: {
+            kind: 'software',
+            id: direct,
+            version: 'resource-v1',
+            variants: { windows_x86_64: 'direct' },
+          },
+          intent: 'available_install',
+          schedule,
+          runLifetimeSeconds: 86400,
+          rollout: {
+            stages: [
+              { scope, opensAt: 0, minimumVerifiedPercent: null },
+              { scope: laterScope, opensAt, minimumVerifiedPercent: 85 },
+            ],
+          },
+        },
+        selfService: {
+          access: { kind: 'device' },
+          published: false,
+          allowAi: false,
+          riskLevel: 1,
+          presentation: {
+            displayName: 'Self-service software',
+            description: '',
+            prerequisites: '',
+            sideEffects: '',
+            category: 'Software',
+            keywords: [],
+            future: { retained: false, count: 0 },
+          },
+        },
+      },
+    },
+  })
+  for (const [kind, caption] of [
+    ['device', '当前范围内的受信设备'],
+    ['authenticated_user', '已认证企业用户'],
+    ['users', '指定用户与组织'],
+  ]) {
+    await run.nav(p, '/policies?policy=' + policyId, '策略与部署')
+    await button('打开定位策略').click()
+    await run.choose(p, label('访问主体'), caption)
+    if (kind === 'users') {
+      await button('添加访问引用').click()
+      await label('账户主体标识').fill(f.principal)
+    }
+    await label('发布到自助目录').check()
+    await label('确认范围、资源、调度与潜在影响').check()
+    const saved = await run.response(p, 'POST', '/api/v1/policies/' + policyId, () =>
+      button('保存策略定义').click(),
+    )
+    const current = await saved.json()
+    assert.equal(current.definition.selfService.access.kind, kind)
+    assert.equal(current.definition.selfService.published, true)
+    assert.equal(current.definition.selfService.allowAi, false)
+    assert.equal(current.definition.selfService.riskLevel, 1)
+    assert.deepEqual(current.definition.selfService.presentation.future, {
+      retained: false,
+      count: 0,
+    })
+    assert.deepEqual(current.definition.action.rollout.stages, [
+      { scope, opensAt: 0, minimumVerifiedPercent: null },
+      { scope: laterScope, opensAt, minimumVerifiedPercent: 85 },
+    ])
+    if (kind === 'users')
+      assert.equal(current.definition.selfService.access.selectors[0].principalId, f.principal)
+  }
+  await run.nav(p, '/policies?policy=' + policyId, '策略与部署')
+  await button('打开定位策略').click()
+  await label('发布到自助目录').uncheck()
+  await label('批次开放时间 2').fill(String(opensAt + 3600))
+  await label('最低核实成功率（%）').fill('90')
+  await label('确认范围、资源、调度与潜在影响').check()
+  await run.response(p, 'POST', '/api/v1/policies/' + policyId, () =>
+    button('保存策略定义').click(),
+  )
+  const withdrawn = await api('GET', '/api/v1/policies/' + policyId)
+  assert.equal(withdrawn.definition.selfService.published, false)
+  assert.equal(withdrawn.definition.selfService.allowAi, false)
+  assert.equal(withdrawn.definition.selfService.riskLevel, 1)
+  assert.equal(withdrawn.definition.action.rollout.stages[1].opensAt, opensAt + 3600)
+  assert.equal(withdrawn.definition.action.rollout.stages[1].minimumVerifiedPercent, 90)
+  checks.push(
+    'real-software-self-service-three-access-modes-publication-withdrawal-preserves-metadata-and-explicit-risk',
+    'real-software-rollout-exact-scopes-time-and-success-gate',
+  )
+
+  await run.nav(p, '/software', '软件目录')
+  await tab('组织软件')
   await admission(direct, 'withdraw')
   assert.equal(
     (

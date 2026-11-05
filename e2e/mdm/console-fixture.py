@@ -1,44 +1,11 @@
 """Prerequisites for the production console journey; no business result substitution."""
 import base64
-import hashlib
 import json
-import os
 import socket
 import ssl
-import subprocess
 import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-
-def configure(environment, config, providers, private, binary):
-    from build_run import lease_fds
-    from candidate_fixture import TENANTS
-    root = environment.root / 'console-materials'
-    root.mkdir(mode=0o700)
-    key = private(root / 'escrow-key', '')
-    key.write_bytes(os.urandom(32))
-    recipient_key = private(root / 'recipient.key', '')
-    certificate = root / 'recipient.pem'
-    subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=Console escrow recipient', '-days', '2', '-keyout', str(recipient_key), '-out', str(certificate)], check=True, capture_output=True, timeout=30)
-    der = subprocess.check_output(['openssl', 'x509', '-in', str(certificate), '-outform', 'DER'], timeout=30)
-    config['recovery_credentials'] = dict(active_key='console', key_files={'console': str(key)}, active_recipient=hashlib.sha256(der).hexdigest(), recipients=[dict(certificate_file=str(certificate), private_key_file=str(recipient_key))])
-    management = environment.sql('SELECT management_tenant_id FROM public.mdm_installation', 'mdm_dev').strip()
-    operator = environment.root / 'host/operator'
-    initialize = json.loads((operator / 'initialize.json').read_text())
-    initialize['tenant_id'] = management
-    authorization = json.loads((operator / 'authorization.json').read_text())
-    authorization['user']['tenantId'] = management
-    authorization['operationId'] = str(uuid.uuid4())
-    for verb, data in [('initialize', initialize), ('initialize-authorization', authorization)]:
-        source = private(root / (verb + '.json'), data)
-        subprocess.run([str(binary), verb, '--config', str(source)], check=True, capture_output=True, timeout=180, pass_fds=lease_fds())
-    def database(role, password):
-        return dict(config['access_database'], user=role, password_file=str(private(root / (role + '-password'), password)))
-    config['tenant_administration'] = dict(registry_database=database('mdm_tenant_registry', 'tenant-registry-fixture'), provisioning_database=database('mdm_identity_provisioning', 'identity-provisioning-fixture'), fingerprint_key_file=str(private(root / 'tenant-operation-key', 'x' * 32)))
-    # Registry, source and provisioning add 8 + 10 + 2 physical connections.
-    config['background']['database_connection_budget'] += 20
-    return dict(managementTenant=management, **configure_webhooks(environment, config, providers))
 
 
 def configure_webhooks(environment, config, providers):

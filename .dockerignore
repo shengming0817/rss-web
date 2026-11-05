@@ -38,23 +38,17 @@
 !scripts/
 !scripts/check-identity-app-build.mjs
 
-!apps/mdm-old/
-!apps/mdm-old/package.json
-!apps/mdm-old/tsconfig*.json
-!apps/mdm-old/vite.config.ts
-!apps/mdm-old/env.d.ts
-!apps/mdm-old/index.html
-!apps/mdm-old/public/
-!apps/mdm-old/public/theme-init.js
-!apps/mdm-old/src/
-!apps/mdm-old/src/**/
-!apps/mdm-old/src/**/*.ts
-!apps/mdm-old/src/**/*.vue
-!apps/mdm-old/src/**/*.css
-!apps/mdm-old/demo/
-!apps/mdm-old/demo/*.ts
-!apps/mdm-old/demo/*.vue
-!scripts/check-mdm-app-build.mjs
+!apps/mdm/
+!apps/mdm/package.json
+!apps/mdm/tsconfig.json
+!apps/mdm/vite.config.ts
+!apps/mdm/index.html
+!apps/mdm/src/
+!apps/mdm/src/**/
+!apps/mdm/src/**/*.ts
+!apps/mdm/src/**/*.tsx
+!apps/mdm/src/**/*.css
+!scripts/check-react-mdm-build.mjs
 !deploy/
 !deploy/mdm/
 !deploy/mdm/static.conf
@@ -75,8 +69,6 @@
 # Rebuild generated API code inside the image from the local contract input.
 packages/api/src/generated/
 
-!apps/mdm/
-!apps/mdm/package.json
 !packages/auth-core/
 !packages/auth-http/
 !packages/mdm-http/

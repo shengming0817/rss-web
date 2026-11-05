@@ -196,9 +196,7 @@ export function PolicySelfService({
           <BooleanField
             label={l('发布到自助目录', 'Publish to the self-service directory')}
             value={value.published}
-            onChange={(published) =>
-              onChange({ ...value, published, ...(software ? { riskLevel: 2 } : {}) })
-            }
+            onChange={(published) => onChange({ ...value, published })}
           />
           <p className="subtitle">
             {l(

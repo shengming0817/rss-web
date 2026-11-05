@@ -31,7 +31,9 @@ try {
     (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/v1/devices',
   )
   await p.getByRole('tab', { name: '终端目录', exact: true }).click()
-  const endpointPage = await (await endpointResponse).json()
+  const endpointRead = await endpointResponse
+  assert.equal(endpointRead.status(), 200, 'formal endpoint directory')
+  const endpointPage = await endpointRead.json()
   assert.equal(endpointPage.items.length, 20)
   const next = p
     .getByRole('tabpanel', { name: '终端目录', exact: true })
