@@ -59,7 +59,7 @@ try {
           'hack/build_run.py',
           '--',
           'python3',
-          'hack/t2_environment.py',
+          'hack/dev_environment.py',
           'reset',
           '--group',
           'react-administration-browser',
