@@ -91,7 +91,7 @@ try {
         current.steps.map((s) => s.id + ':' + s.status).join(','),
     )
   await page.getByRole('button', { name: '确认完成初始化', exact: true }).click()
-  await page.locator('.ant-modal').getByRole('button', { name: '确定', exact: true }).click()
+  await page.locator('.ant-modal-footer .ant-btn-primary').click()
   await page.getByText('初始化已确认，后续健康仍按当前观察更新。', { exact: true }).waitFor()
   assert.equal((await progress()).complete, true)
   checks.push('actual-owner-navigation', 'server-confirmed-completion')
@@ -129,7 +129,7 @@ try {
     fullPage: true,
     animations: 'disabled',
   })
-  await page.getByRole('button', { name: '切换主题' }).click()
+  await page.getByRole('button', { name: '切换亮暗主题' }).click()
   await page.screenshot({
     path: join(shots, 'setup-dark.png'),
     fullPage: true,
@@ -157,6 +157,10 @@ try {
       (g) => !g.operation.startsWith('registration_configuration_'),
     ),
   }
+  const renewedSession = await (
+    await page.request.get(origin + `/api/v1/identity/tenants/${fixture.tenant}/session`)
+  ).json()
+  writeHeaders['X-CSRF-Token'] = renewedSession.csrfToken
   const response = await page.request.put(
     origin + `/api/v1/authorization/rules/${fixture.ruleId}`,
     {
