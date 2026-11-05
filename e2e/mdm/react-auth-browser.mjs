@@ -120,6 +120,17 @@ try {
       if (responses.length > 12) responses.shift()
     }
   })
+  phase = 'public-static-routes'
+  for (const [path, heading] of [
+    ['/downloads/agent', 'Agent 安装包'],
+    ['/enrollment/windows/entra/terms', 'Windows 注册条款'],
+  ]) {
+    await page.goto(origin.origin + path)
+    await page.getByRole('heading', { name: heading, exact: true }).waitFor()
+    await page.reload()
+    await page.getByRole('heading', { name: heading, exact: true }).waitFor()
+    assert.equal(new URL(page.url()).pathname, path)
+  }
   phase = 'login-landing'
   await page.goto(origin.origin)
   await page.getByLabel('账户', { exact: true }).fill(fixture.login)

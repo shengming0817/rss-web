@@ -13,7 +13,7 @@ async function ruleIds(code: string, file: string): Promise<string[]> {
 
 describe('ESLint package boundaries', () => {
   it('requires generated MDM operations while preserving ordinary request data', async () => {
-    const file = 'apps/mdm-old/src/features/policies/clients/policies.ts'
+    const file = 'packages/device-access/src/clients/live.ts'
     for (const code of [
       'export const send = (transport: {request(): void}) => transport.request()',
       "export const send = (transport: {request(): void}) => transport['request']()",
@@ -74,81 +74,6 @@ describe('ESLint package boundaries', () => {
   })
 })
 
-it('keeps both app compositions and shared auth behind declared public exports', async () => {
-  for (const file of ['apps/identity/src/main.ts', 'packages/auth/src/index.ts']) {
-    expect(await ruleIds("import { x } from '@rss/api/mdm'\nexport const y = x", file)).toContain(
-      'no-restricted-imports',
-    )
-  }
-  for (const file of ['apps/mdm-old/src/main.ts', 'packages/auth/src/index.ts']) {
-    expect(await ruleIds("import axios from 'axios'\nexport const y = axios", file)).toContain(
-      'no-restricted-imports',
-    )
-  }
-  expect(
-    await ruleIds("import { x } from '@rss/auth'\nexport const y = x", 'apps/mdm-old/src/main.ts'),
-  ).not.toContain('no-restricted-imports')
-  expect(
-    await ruleIds(
-      "import { x } from '@rss/mdm-old-app'\nexport const y = x",
-      'apps/identity/src/main.ts',
-    ),
-  ).toContain('no-restricted-imports')
-})
-
-it('permits owner factories only in the MDM composition roots', async () => {
-  for (const [name, dependency] of [
-    ['createSession', '@rss/auth'],
-    ['createMdmTransport', '@rss/api/mdm'],
-  ]) {
-    const code = `import { ${name} } from '${dependency}'\nexport const factory = ${name}`
-    expect(await ruleIds(code, 'apps/mdm-old/src/features.ts')).toContain('no-restricted-imports')
-    expect(await ruleIds(code, 'apps/mdm-old/src/bootstrap.ts')).not.toContain(
-      'no-restricted-imports',
-    )
-  }
-})
-
-it('allows sanitized transport failure factories only in MDM tests', async () => {
-  const code =
-    "import { networkErrorForTest } from '@rss/api/testing'\nexport const x = networkErrorForTest"
-  expect(await ruleIds(code, 'apps/mdm-old/src/services/useOperation.spec.ts')).not.toContain(
-    'no-restricted-imports',
-  )
-  expect(await ruleIds(code, 'apps/mdm-old/src/services/useOperation.ts')).toContain(
-    'no-restricted-imports',
-  )
-})
-
-it('allows the pure MDM budget export in the demo without opening private API modules', async () => {
-  const file = 'apps/mdm-old/demo/plugin.ts'
-  expect(
-    await ruleIds(
-      "import { MDM_JSON_BODY_LIMIT } from '@rss/api/mdm-limits'\nexport const x = MDM_JSON_BODY_LIMIT",
-      file,
-    ),
-  ).not.toContain('no-restricted-imports')
-  expect(
-    await ruleIds("import { execute } from '@rss/api/transport'\nexport const x = execute", file),
-  ).toContain('no-restricted-imports')
-})
-
-it('allows the shared upload limit in feature views while keeping transport factories forbidden', async () => {
-  const file = 'apps/mdm-old/src/features/policies/client.ts'
-  expect(
-    await ruleIds(
-      "import { MDM_CONTENT_BODY_LIMIT } from '@rss/api/mdm-limits'\nexport const x = MDM_CONTENT_BODY_LIMIT",
-      file,
-    ),
-  ).not.toContain('no-restricted-imports')
-  expect(
-    await ruleIds(
-      "import { createMdmTransport } from '@rss/api/mdm'\nexport const x = createMdmTransport",
-      file,
-    ),
-  ).toContain('no-restricted-imports')
-})
-
 it('isolates the component preview from product and authentication clients', async () => {
   const file = 'apps/ui-preview/src/main.ts'
   expect(await ruleIds("import { x } from '@rss/core'; export const y = x", file)).not.toContain(
@@ -158,7 +83,6 @@ it('isolates the component preview from product and authentication clients', asy
     '@rss/auth',
     '@rss/api/mdm',
     '@rss/api/identity',
-    '@rss/mdm-old-app',
     '@rss/core/src/index',
   ]) {
     expect(await ruleIds(`import { x } from '${dependency}'; export const y = x`, file)).toContain(
@@ -166,42 +90,6 @@ it('isolates the component preview from product and authentication clients', asy
     )
   }
   expect(await ruleIds("fetch('/api/example')", file)).toContain('no-restricted-globals')
-})
-
-it('allows the stateless public profile JSON decoder without exposing auth internals', async () => {
-  const file = 'apps/mdm-old/src/features/settings/clients/profiles.ts'
-  expect(
-    await ruleIds(
-      "import { profileJson } from '@rss/auth/profile-json'; export const decode = profileJson",
-      file,
-    ),
-  ).not.toContain('no-restricted-imports')
-  expect(
-    await ruleIds(
-      "import { createSession } from '@rss/auth/session'; export const owner = createSession",
-      file,
-    ),
-  ).toContain('no-restricted-imports')
-})
-
-it('blocks production MDM imports of demo modules for static and lazy dependencies', async () => {
-  for (const code of [
-    "import { demoKey } from '../demo/context'; export const x = demoKey",
-    "export const x = () => import('../demo/bootstrap')",
-  ]) {
-    expect(await ruleIds(code, 'apps/mdm-old/src/bootstrap.ts')).toContain(
-      'identity-boundary/contained',
-    )
-    expect(await ruleIds(code, 'apps/mdm-old/src/bootstrap.spec.ts')).not.toContain(
-      'identity-boundary/contained',
-    )
-  }
-  expect(
-    await ruleIds(
-      "import { createMdm } from '../src/bootstrap'; export const x = createMdm",
-      'apps/mdm-old/demo/bootstrap.ts',
-    ),
-  ).not.toContain('identity-boundary/contained')
 })
 
 it('keeps the standalone DA and its HTTP demo separate', async () => {
@@ -232,7 +120,7 @@ it('keeps the standalone DA and its HTTP demo separate', async () => {
 })
 
 it('allows only the shared stylesheet generator from application build configs', async () => {
-  for (const app of ['identity', 'mdm-old']) {
+  for (const app of ['identity']) {
     expect(
       await ruleIds(
         "import { vuetifyStyles } from '../../build/vuetify-styles.mjs'; export const x = vuetifyStyles",
@@ -263,12 +151,6 @@ it('keeps React core, adapter and UI dependencies directed, including relative e
   expect(
     await ruleIds("export * from '@rss/auth-core'", 'packages/auth-http/src/index.ts'),
   ).not.toContain('no-restricted-imports')
-  expect(
-    await ruleIds(
-      "export const x = import('../../mdm-old/src/bootstrap')",
-      'apps/mdm/src/main.tsx',
-    ),
-  ).toContain('react-boundary/contained')
 })
 
 it('keeps the DA stylesheet build helper out of product source imports', async () => {

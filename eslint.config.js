@@ -179,11 +179,7 @@ export default tseslint.config(
 
   // The application owns one same-origin Identity session.
   {
-    files: [
-      'apps/identity/**/*.{js,ts,vue}',
-      'packages/auth/**/*.{js,ts,vue}',
-      'apps/mdm-old/**/*.{js,ts,vue}',
-    ],
+    files: ['apps/identity/**/*.{js,ts,vue}', 'packages/auth/**/*.{js,ts,vue}'],
     plugins: {
       'identity-boundary': {
         rules: {
@@ -192,7 +188,6 @@ export default tseslint.config(
               type: 'problem',
               schema: [],
               messages: {
-                demo: 'Production MDM imports cannot depend on the explicit demo composition.',
                 escape:
                   'Identity relative imports must stay inside apps/identity; use approved public package exports.',
               },
@@ -204,19 +199,10 @@ export default tseslint.config(
                 const filename = context.filename
                 const marker = filename.includes(`${sep}packages${sep}auth${sep}`)
                   ? `${sep}packages${sep}auth${sep}`
-                  : filename.includes(`${sep}apps${sep}mdm-old${sep}`)
-                    ? `${sep}apps${sep}mdm-old${sep}`
-                    : `${sep}apps${sep}identity${sep}`
+                  : `${sep}apps${sep}identity${sep}`
                 const index = filename.lastIndexOf(marker)
                 const root = filename.slice(0, index) + marker
                 const target = resolve(dirname(filename), value)
-                if (
-                  marker === `${sep}apps${sep}mdm-old${sep}` &&
-                  filename.startsWith(root + 'src' + sep) &&
-                  !filename.endsWith('.spec.ts') &&
-                  (target === root + 'demo' || target.startsWith(root + 'demo' + sep))
-                )
-                  context.report({ node, messageId: 'demo' })
                 const buildHelper =
                   ['vite.config.ts', 'vitest.config.ts'].includes(path.basename(filename)) &&
                   target === resolve(__dirname, 'build/vuetify-styles.mjs')
@@ -267,81 +253,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/mdm-old/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-limits|mdm-query|mdm-filter|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
-            message: 'Use public product boundaries.',
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-  {
-    files: ['apps/mdm-old/src/**/*.{ts,vue}'],
-    ignores: ['apps/mdm-old/src/main.ts', 'apps/mdm-old/src/bootstrap.ts', '**/*.spec.ts'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/(?:profile-json|account-query))?$|api/(?:mdm|mdm-limits|mdm-query|mdm-filter|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
-            message: 'Features consume injected clients and public UI.',
-          },
-        ],
-        [
-          NO_AXIOS_PATH,
-          {
-            name: '@rss/auth',
-            importNames: ['createSession', 'createApi', 'createFlows', 'identityRouter'],
-            message: 'Only bootstrap assembles authentication.',
-          },
-          {
-            name: '@rss/api/mdm',
-            importNames: ['createMdmTransport'],
-            message: 'Only bootstrap assembles the business transport.',
-          },
-        ],
-      ),
-    },
-  },
-  {
-    files: ['apps/mdm-old/demo/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-demo|mdm-limits|mdm-query|mdm-filter|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
-            message: 'Demo uses explicit public boundaries.',
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-  {
-    files: ['apps/mdm-old/**/*.spec.ts'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|testing|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
-            message: 'Tests use public product exports and sanitized failures only.',
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-  {
-    files: ['apps/mdm-old/src/**/*.{ts,vue}', 'packages/device-access/src/clients/live.ts'],
-    ignores: ['apps/mdm-old/src/main.ts', 'apps/mdm-old/src/bootstrap.ts', '**/*.spec.ts'],
+    files: ['packages/device-access/src/clients/live.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -557,8 +469,9 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?:auth(?:/|$)|core(?:/|$)|mdm-old-app))',
-            message: 'React MDM must not load the retired Vue composition.',
+              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?:auth(?:/|$)|core(?:/|$)))',
+            message:
+              'React MDM uses its own composition and framework-independent domain packages.',
           },
         ],
         [NO_AXIOS_PATH],

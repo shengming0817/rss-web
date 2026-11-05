@@ -24,8 +24,7 @@ from build_run import lease_fds
 sys.path.insert(0,str(IDENTITY/'hack'))
 import providers
 
-REACT_ADMIN = '--react-administration' in sys.argv
-GROUP = 'react-administration-browser' if REACT_ADMIN else 'profiles-browser'
+GROUP = 'react-administration-browser'
 environment=Environment(BACKEND,group=GROUP)
 children=[]
 phase='prepare'
@@ -63,7 +62,7 @@ def idp_admin(issuer,ca):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT']=str(WEB/('apps/mdm/dist' if REACT_ADMIN else 'apps/mdm-old/dist'))
+    os.environ['MDM_WEB_ROOT']=str(WEB/'apps/mdm/dist')
     initialized=environment.initialize()
     origin=initialized['origin'];config_path=Path(initialized['configuration'])
     binary=Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
@@ -75,28 +74,27 @@ try:
         config['identity']['oidc']=dict(group_facts_max_age_seconds=300,state_key_file=keys['state'],active_credential_key='current',credential_keys={'current':keys['credential']},return_targets={'resume':origin+'/auth/resume'},assurance_profiles=[],private_providers=[dict(tenant_id=TENANTS[0],issuer=issuer,client_id='identity-test',cidrs=[host+'/32'])])
         management = None
         unused = None
-        if REACT_ADMIN:
-            from runtime_fixture import storage
-            storage(environment,binary,config,TENANTS[0])
-            management=environment.sql('SELECT management_tenant_id FROM public.mdm_installation','mdm_dev').strip()
-            operator=environment.root/'host/operator'
-            def command(verb,value):
-                path=private(environment.root/(verb+'-'+uuid.uuid4().hex+'.json'),value)
-                result=subprocess.run([str(binary),verb,'--config',str(path)],cwd=BACKEND,capture_output=True,text=True,timeout=75,pass_fds=lease_fds())
-                if result.returncode:raise RuntimeError('fixture-cli-'+verb)
-            value=json.loads((operator/'initialize.json').read_text());value['tenant_id']=management
-            command('initialize',value)
-            value=json.loads((operator/'authorization.json').read_text());value['user']['tenantId']=management;value['operationId']=str(uuid.uuid4())
-            command('initialize-authorization',value)
-            def database(role,password):
-                value=copy.deepcopy(config['access_database']);value['user']=role
-                value['password_file']=str(private(environment.root/(role+'-password'),password))
-                return value
-            config['tenant_administration']=dict(registry_database=database('mdm_tenant_registry','tenant-registry-fixture'),provisioning_database=database('mdm_identity_provisioning','identity-provisioning-fixture'),fingerprint_key_file=str(private(environment.root/'tenant-operation-key','x'*32)))
-            # Registry, source and provisioning add 8 + 10 + 2 physical connections.
-            config['background']['database_connection_budget'] += 20
-            unused=str(uuid.uuid4())
-            environment.sql(f"SELECT public.create_new_tenant('{unused}',1,'Disposable unused tenant',NULL)",'mdm_dev')
+        from runtime_fixture import storage
+        storage(environment,binary,config,TENANTS[0])
+        management=environment.sql('SELECT management_tenant_id FROM public.mdm_installation','mdm_dev').strip()
+        operator=environment.root/'host/operator'
+        def command(verb,value):
+            path=private(environment.root/(verb+'-'+uuid.uuid4().hex+'.json'),value)
+            result=subprocess.run([str(binary),verb,'--config',str(path)],cwd=BACKEND,capture_output=True,text=True,timeout=75,pass_fds=lease_fds())
+            if result.returncode:raise RuntimeError('fixture-cli-'+verb)
+        value=json.loads((operator/'initialize.json').read_text());value['tenant_id']=management
+        command('initialize',value)
+        value=json.loads((operator/'authorization.json').read_text());value['user']['tenantId']=management;value['operationId']=str(uuid.uuid4())
+        command('initialize-authorization',value)
+        def database(role,password):
+            value=copy.deepcopy(config['access_database']);value['user']=role
+            value['password_file']=str(private(environment.root/(role+'-password'),password))
+            return value
+        config['tenant_administration']=dict(registry_database=database('mdm_tenant_registry','tenant-registry-fixture'),provisioning_database=database('mdm_identity_provisioning','identity-provisioning-fixture'),fingerprint_key_file=str(private(environment.root/'tenant-operation-key','x'*32)))
+        # Registry, source and provisioning add 8 + 10 + 2 physical connections.
+        config['background']['database_connection_budget'] += 20
+        unused=str(uuid.uuid4())
+        environment.sql(f"SELECT public.create_new_tenant('{unused}',1,'Disposable unused tenant',NULL)",'mdm_dev')
         private(config_path,config)
         public=subprocess.run([str(binary),'public-host-config','--config',str(config_path)],cwd=BACKEND,capture_output=True,text=True,check=True,timeout=30)
         for name,value in json.loads(public.stdout).items():private(Path(initialized['gateway']).parent/name,value)
@@ -116,7 +114,7 @@ try:
             # The anonymous session response proves the actual backend listener is usable.
             wait_http(origin+'/api/v1/identity/tenants/'+TENANTS[0]+'/session',environment.root/'ca.crt',401)
             phase='browser'
-            browser=subprocess.Popen(['node',str(WEB/('e2e/mdm/react-administration-browser.mjs' if REACT_ADMIN else 'e2e/mdm/profiles-browser.mjs'))],cwd=WEB,env={**os.environ,'MDM_PROFILE_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
+            browser=subprocess.Popen(['node',str(WEB/'e2e/mdm/react-administration-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_PROFILE_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
             children.append(browser)
             end=time.monotonic()+850;handled=None
             while browser.poll() is None:

@@ -42,14 +42,7 @@ try {
   started = true
   await run(
     'python3',
-    [
-      'hack/build_run.py',
-      '--',
-      'python3',
-      resolve(root, 'e2e/mdm/profiles-fixture.py'),
-      root,
-      '--react-administration',
-    ],
+    ['hack/build_run.py', '--', 'python3', resolve(root, 'e2e/mdm/profiles-fixture.py'), root],
     resolve(backend),
     1500000,
   )

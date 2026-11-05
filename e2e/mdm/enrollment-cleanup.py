@@ -20,5 +20,5 @@ if failed:
     raise RuntimeError('enrollment PKI cleanup unconfirmed; keep host inputs for recovery')
 for group in ('enrollment-native', 'enrollment-agent'):
     Environment(backend, group=group).host_ports(release=True)
-group = {'react-enrollment-browser.mjs':'react-enrollment-browser','react-certificates-browser.mjs':'react-certificates-browser'}.get(os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE'),'enrollment-browser')
+group = {'react-enrollment-browser.mjs': 'react-enrollment-browser', 'react-certificates-browser.mjs': 'react-certificates-browser'}.get(os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE'), 'react-enrollment-browser')
 Environment(backend, group=group).reset()

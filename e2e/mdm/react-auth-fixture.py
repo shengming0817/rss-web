@@ -37,6 +37,17 @@ try:
     environment.reset()
     os.environ['MDM_WEB_ROOT'] = str(WEB / 'apps/mdm/dist')
     initialized = environment.initialize()
+    if os.environ.get('MDM_REACT_WEB_IMAGE'):
+        # The existing environment owns this web container and its independent reset.
+        private(environment.root/'images.json', dict(MDM_WEB_IMAGE=os.environ['MDM_REACT_WEB_IMAGE']))
+        overlay = private(environment.root/'web.compose.json', dict(services=dict(web=dict(ports=['127.0.0.1::8080']))))
+        environment.compose('-f', str(overlay), '--profile', 'product', 'up', '-d', '--no-deps', 'web')
+        endpoint = environment.compose('-f', str(overlay), 'port', 'web', '8080').strip()
+        gateway = Path(initialized['gateway'])
+        source = 'location / { root "'+str(WEB/'apps/mdm/dist')+'"; try_files $uri $uri/ /index.html; }'
+        configuration = gateway.read_text()
+        if source not in configuration: raise RuntimeError('web-gateway-location')
+        private(gateway, configuration.replace(source, 'location / { proxy_pass http://'+endpoint+'; }'))
     log_path = private(environment.root / 'product.log', '')
     phase = 'host'
     with log_path.open('w') as log:

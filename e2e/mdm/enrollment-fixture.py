@@ -30,11 +30,11 @@ from windows_fixtures import generate
 from candidate_installation_driver import Browser
 from pki_fixtures import running as pki
 
-browser_module = os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE', 'enrollment-browser.mjs')
-if browser_module not in {'enrollment-browser.mjs', 'react-enrollment-browser.mjs', 'react-certificates-browser.mjs'}:
+browser_module = os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE', 'react-enrollment-browser.mjs')
+if browser_module not in {'react-enrollment-browser.mjs', 'react-certificates-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
-group = {'react-enrollment-browser.mjs':'react-enrollment-browser','react-certificates-browser.mjs':'react-certificates-browser'}.get(browser_module,'enrollment-browser')
-environment = Environment(BACKEND, group=group)
+group = Path(browser_module).stem
+environment = Environment(BACKEND, group=Path(os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'react-devices-browser.mjs')).stem)
 processes = []
 providers = ExitStack()
 phase = 'environment'
@@ -124,7 +124,7 @@ def prepare_signer(origin, reader_password):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module in {'react-enrollment-browser.mjs','react-certificates-browser.mjs'} else 'apps/mdm-old/dist'))
+    os.environ['MDM_WEB_ROOT'] = str(WEB/'apps/mdm/dist')
     initialized = environment.initialize()
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     config_path = Path(initialized['configuration'])
@@ -222,7 +222,7 @@ try:
         browser = subprocess.Popen(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,
             env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
         processes.append(browser)
-        if browser.wait(timeout=780 if browser_module in {'react-enrollment-browser.mjs','react-certificates-browser.mjs'} else 360):
+        if browser.wait(timeout=780 if browser_module in {'react-enrollment-browser.mjs', 'react-certificates-browser.mjs'} else 360):
             raise RuntimeError('browser')
     result = 'passed'
 except BaseException as error:
