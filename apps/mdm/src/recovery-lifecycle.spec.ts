@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto'
 import { act, createElement as h, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createMaterialAuthorization, type OperationAuthorizationPort } from '@rss/auth-core'
+import { createOperationAuthorization, type OperationAuthorizationPort } from '@rss/auth-core'
 import type { Material, RecoveryCredentials } from '@rss/mdm-recovery-credentials'
 import type { ViewEndpoint } from '@rss/mdm-devices'
 import type { Runtime } from './runtime'
@@ -123,9 +123,9 @@ function fixture(overrides: Partial<OperationAuthorizationPort> = {}) {
       classify: () => 'unknown',
       ...overrides,
     },
-    authorization = createMaterialAuthorization(port, () => 'tenant/principal/session'),
+    authorization = createOperationAuthorization(port, () => 'tenant/principal/session'),
     runtime = {
-      materialAuthorization: authorization,
+      operationAuthorization: authorization,
       ...createCeremonyHandoff(authorization, async () => {}),
     } as unknown as Runtime
   return { runtime, authorization, port }

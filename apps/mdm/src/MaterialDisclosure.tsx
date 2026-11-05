@@ -45,7 +45,7 @@ export function MaterialDisclosure({
   locale: Locale
 }) {
   const l = labels(locale),
-    authorization = runtime.materialAuthorization,
+    authorization = runtime.operationAuthorization,
     state = useSyncExternalStore(authorization.subscribe, authorization.getSnapshot),
     action = useAction(),
     [original, setOriginal] = useState<LoginDisclosure | null>(null),
@@ -60,24 +60,27 @@ export function MaterialDisclosure({
     transfer = useRef<AbortController | null>(null),
     delivery = useProtectedDelivery(clearOwned, permitted)
   usePendingSelection(!!original || action.busy || secret !== null)
+  const disclosure = state.context?.purpose === 'mdm.device_access.disclose' ? state.context : null
   const owns =
       original !== null &&
-      state.context?.operationId === original.operationId &&
-      state.context.device === target.device &&
-      state.context.material === target.id &&
-      state.context.version === target.version,
+      disclosure?.operationId === original.operationId &&
+      disclosure?.device === target.device &&
+      disclosure?.material === target.id &&
+      disclosure?.version === target.version,
     deadline = owns && state.expiresAt !== null ? state.expiresAt : until
   function clearOwned() {
     transfer.current?.abort()
     setSecret(null)
     setUntil(null)
-    const current = originalNow.current
+    const current = originalNow.current,
+      owned = authorization.getSnapshot().context
     if (
       current &&
-      authorization.getSnapshot().context?.operationId === current.operationId &&
-      authorization.getSnapshot().context?.device === current.target.device &&
-      authorization.getSnapshot().context?.material === current.target.id &&
-      authorization.getSnapshot().context?.version === current.target.version
+      owned?.purpose === 'mdm.device_access.disclose' &&
+      owned.operationId === current.operationId &&
+      owned.device === current.target.device &&
+      owned.material === current.target.id &&
+      owned.version === current.target.version
     )
       void authorization.cancel().catch(() => setCleanupUnknown(true))
   }
@@ -118,7 +121,7 @@ export function MaterialDisclosure({
       const input = originalInput()
       setExpired(false)
       setCleanupUnknown(false)
-      await runtime.authorizeMaterial(
+      await runtime.authorizeOperation(
         context(input),
         (signal) => credentials.beginLoginDisclosure(input, signal),
         async (options, signal) => {

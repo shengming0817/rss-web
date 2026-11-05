@@ -559,7 +559,9 @@ directoryQuery.onClear(() => {
     }}</VBtn>
     <article v-for="(row, index) in assignments?.items" :key="index">
       <AssignmentFacts :item="row" /><RouterLink
-        v-for="op in kind === 'credential' ? row.operationIds : []"
+        v-for="op in kind === 'credential' && row.execution.kind === 'operations'
+          ? row.execution.operationIds
+          : []"
         :key="op"
         :to="{
           name: 'policy-execution',
@@ -570,7 +572,9 @@ directoryQuery.onClear(() => {
       >
       <p>{{ row.qualification.state }}</p>
       <VBtn
-        v-for="op in kind === 'unmanage_device' ? row.operationIds : []"
+        v-for="op in kind === 'unmanage_device' && row.execution.kind === 'operations'
+          ? row.execution.operationIds
+          : []"
         :key="op"
         @click="retirementId = op"
         >{{ op }}</VBtn

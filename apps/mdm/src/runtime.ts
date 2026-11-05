@@ -1,3 +1,7 @@
+import { createExecution } from '@rss/mdm-execution'
+import { createDeviceAccess } from '@rss/mdm-device-access'
+import { createExecutionAdapter } from '@rss/mdm-http/execution'
+import { createDeviceAccessAdapter } from '@rss/mdm-http/device-access'
 import { createPolicies, createPolicyEvents } from '@rss/mdm-policies'
 import { createPoliciesAdapter } from '@rss/mdm-http/policies'
 import { createPolicyEventsAdapter } from '@rss/mdm-http/policy-events'
@@ -51,7 +55,7 @@ import {
   createFlows,
   createSession,
   createIdentityAdministration,
-  createMaterialAuthorization,
+  createOperationAuthorization,
 } from '@rss/auth-core'
 import {
   createAuthPort,
@@ -77,7 +81,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
   const tenant = management ? host.managementTenant : host.tenant
   const oidcEnabled = !management && identityHost.oidcEnabled
   const owner = createSession(createAuthPort(identity), { oidcEnabled })
-  const materialAuthorization = createMaterialAuthorization(
+  const operationAuthorization = createOperationAuthorization(
     createOperationAuthorizationPort(identity, owner),
     () => {
       const state = owner.getSnapshot()
@@ -90,8 +94,8 @@ export async function createRuntime(origin: string, pathname: string, storage: S
   return Object.freeze({
     owner,
     webhookMaterialRecovery: createWebhookMaterialRecovery(owner),
-    materialAuthorization,
-    ...createCeremonyHandoff(materialAuthorization, passkeys.cancelAuthorization),
+    operationAuthorization,
+    ...createCeremonyHandoff(operationAuthorization, passkeys.cancelAuthorization),
     host,
     tenant,
     management,
@@ -133,6 +137,8 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         mappings: createMappings(createResourceMappingsAdapter(transport, content)),
         software: createSoftware(createSoftwareAdapter(transport)),
         publications: createPublications(createPublicationsAdapter(transport)),
+        execution: createExecution(createExecutionAdapter(transport, tenant, host.serviceId)),
+        deviceAccess: createDeviceAccess(createDeviceAccessAdapter(transport)),
         policies: createPolicies(createPoliciesAdapter(transport)),
         policyEvents: createPolicyEvents(createPolicyEventsAdapter(transport)),
         scopes: createScopes(createScopesAdapter(transport)),

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { executionPath } from './Executions'
 import { Alert, Button, Card } from 'antd'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import type { Policy } from '@rss/mdm-policies'
 import type { PoliciesUseCases } from './PolicyPreview'
 import type { Locale } from './i18n'
 import { CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'
+import { Status, statusText, timestamp } from './DevicePresentation'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
 
@@ -18,12 +19,26 @@ export function PolicyAssignments({
   locale: Locale
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    location = useLocation(),
+    [params, setParams] = useSearchParams(),
+    query: Query = {
+      limit: 20,
+      ...(params.get('assignmentCursor') ? { cursor: params.get('assignmentCursor')! } : {}),
+    },
     read = usePageRead(`policy-assignments/${policy.id}/${JSON.stringify(query)}`, () =>
       policies.assignments(policy.id, query),
     )
+  function setQuery(next: Query) {
+    const value = new URLSearchParams(params)
+    if (next.cursor) value.set('assignmentCursor', next.cursor)
+    else value.delete('assignmentCursor')
+    setParams(value, { replace: true })
+  }
   return (
-    <Card title={l('当前设备分配资格', 'Current device assignment qualification')}>
+    <Card
+      className="policy-assignments"
+      title={l('当前设备分配资格', 'Current device assignment qualification')}
+    >
       <Button onClick={read.reload}>{l('读取分配', 'Read assignments')}</Button>
       <ReadState
         locale={locale}
@@ -47,35 +62,123 @@ export function PolicyAssignments({
               {
                 title: l('设备', 'Device'),
                 render: (_, row) => (
-                  <Link to={devicePath(row.object.kind, row.object.id)}>{row.object.id}</Link>
+                  <>
+                    <Link to={devicePath(row.object.kind, row.object.id)}>{row.object.id}</Link>
+                    <p className="subtitle">
+                      {row.channel
+                        ? statusText(locale, row.channel)
+                        : l('未知通道', 'Unknown channel')}
+                    </p>
+                    <details>
+                      <summary>{l('注册坐标', 'Registration coordinates')}</summary>
+                      {row.target ? `${row.target.registrationId} @${row.target.generation}` : '—'}
+                    </details>
+                  </>
                 ),
               },
-              { title: l('通道', 'Channel'), dataIndex: 'channel' },
               {
                 title: l('范围资格', 'Scope qualification'),
-                render: (_, row) => row.qualification.state,
-              },
-              {
-                title: l('通道可用性', 'Channel availability'),
-                render: (_, row) => `${row.availability} · ${row.reason ?? '—'}`,
+                render: (_, row) => (
+                  <>
+                    <Status locale={locale} value={row.qualification.state} />
+                    <p>{statusText(locale, row.availability)}</p>
+                    {row.reason && <p className="subtitle">{statusText(locale, row.reason)}</p>}
+                  </>
+                ),
               },
               {
                 title: l('本轮准入', 'Current admission'),
-                render: (_, row) =>
-                  row.taskAdmission
-                    ? `${row.taskAdmission.state} · ${row.taskAdmission.stage ?? '—'}`
-                    : '—',
+                render: (_, row) => (
+                  <>
+                    {row.taskAdmission ? (
+                      <>
+                        <Status locale={locale} value={row.taskAdmission.state} />
+                        {row.taskAdmission.stage ?? ''}
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                    <p className="subtitle">
+                      {l('允许开始', 'Earliest allowed start')}:{' '}
+                      {row.taskAdmission?.nextAllowedStartAt != null
+                        ? timestamp(locale, row.taskAdmission.nextAllowedStartAt)
+                        : l('未知 / 等待事件', 'Unknown / waiting for an event')}
+                    </p>
+                  </>
+                ),
               },
               {
-                title: l('注册坐标', 'Registration coordinates'),
+                title: l('原操作', 'Original operations'),
                 render: (_, row) =>
-                  row.target ? `${row.target.registrationId} @${row.target.generation}` : '—',
+                  row.execution.kind === 'restricted' ? (
+                    l('无执行事实读取权限', 'Execution facts are restricted')
+                  ) : row.execution.kind === 'operations' ? (
+                    row.execution.operationIds.length ? (
+                      row.execution.operationIds.map((id) => (
+                        <p key={id}>
+                          <Link
+                            to={`/operations?${new URLSearchParams({ filter: `id=='${id}'`, returnTo: location.pathname + location.search })}`}
+                          >
+                            {id}
+                          </Link>
+                        </p>
+                      ))
+                    ) : (
+                      l('尚无已受理操作', 'No accepted operation')
+                    )
+                  ) : (
+                    <>
+                      <p>
+                        {l('最近运行', 'Latest run')}:{' '}
+                        {row.execution.latestRun ? (
+                          <Link
+                            to={executionPath(
+                              'action_run',
+                              row.execution.latestRun.taskId,
+                              policy.id,
+                              location.pathname + location.search,
+                            )}
+                          >
+                            {row.execution.latestRun.taskId} ·{' '}
+                            {statusText(
+                              locale,
+                              row.execution.latestRun.state?.execution ??
+                                row.execution.latestRun.nativeDelivery ??
+                                'unknown',
+                            )}
+                          </Link>
+                        ) : (
+                          l('尚无历史运行', 'No historical run')
+                        )}
+                      </p>
+                      <p>
+                        {l('当前触发记录', 'Current trigger record')}:{' '}
+                        {row.execution.currentRecord.state === 'unknown' ? (
+                          l('未知', 'Unknown')
+                        ) : row.execution.currentRecord.state === 'absent' ? (
+                          l('已核对，尚无运行', 'Checked; no accepted run')
+                        ) : (
+                          <Link
+                            to={executionPath(
+                              'action_run',
+                              row.execution.currentRecord.taskId,
+                              policy.id,
+                              location.pathname + location.search,
+                            )}
+                          >
+                            {row.execution.currentRecord.taskId}
+                          </Link>
+                        )}
+                      </p>
+                    </>
+                  ),
               },
               {
                 title: l('来源与范围结果', 'Sources and scope result'),
                 render: (_, row) => (
                   <details>
-                    <summary>{row.scopeResult ?? '—'}</summary>
+                    <summary>{l('查看来源', 'Inspect sources')}</summary>
+                    <p>{row.scopeResult ?? '—'}</p>
                     {row.sources.map((source) => (
                       <p key={`${source.object.kind}/${source.object.id}`}>
                         {source.object.kind}/{source.object.id} · {source.associationVersion ?? '—'}{' '}
@@ -94,12 +197,6 @@ export function PolicyAssignments({
                     ))}
                   </details>
                 ),
-              },
-              {
-                title: l('原操作', 'Original operations'),
-                render: (_, row) =>
-                  row.operationIds.join(' · ') ||
-                  l('本轮尚无已受理操作', 'No accepted operation in this projection'),
               },
             ]}
           />
@@ -125,10 +222,21 @@ export function PolicyRuns({
   locale: Locale
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    location = useLocation(),
+    [params, setParams] = useSearchParams(),
+    query: Query = {
+      limit: 20,
+      ...(params.get('runCursor') ? { cursor: params.get('runCursor')! } : {}),
+    },
     read = usePageRead(`policy-runs/${policy.id}/${JSON.stringify(query)}`, () =>
       policies.runs(policy.id, query),
     )
+  function setQuery(next: Query) {
+    const value = new URLSearchParams(params)
+    if (next.cursor) value.set('runCursor', next.cursor)
+    else value.delete('runCursor')
+    setParams(value, { replace: true })
+  }
   return (
     <Card title={l('已发生的运行', 'Existing runs')}>
       <Button onClick={read.reload}>{l('读取运行', 'Read runs')}</Button>
@@ -145,7 +253,21 @@ export function PolicyRuns({
             rowKey="taskId"
             dataSource={read.value.items}
             columns={[
-              { title: l('运行', 'Run'), dataIndex: 'taskId' },
+              {
+                title: l('运行', 'Run'),
+                render: (_, row) => (
+                  <Link
+                    to={executionPath(
+                      'action_run',
+                      row.taskId,
+                      policy.id,
+                      location.pathname + location.search,
+                    )}
+                  >
+                    {row.taskId}
+                  </Link>
+                ),
+              },
               {
                 title: l('设备', 'Device'),
                 render: (_, row) => (

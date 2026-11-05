@@ -1098,9 +1098,20 @@ directoryQuery.onClear(() => {
         t(`policies.preview_${row.qualification.state}`)
       }}</template
       ><template #[`item.operations`]="{ item: row }"
-        ><MdmDisclosure v-if="row.operationIds.length">
-          <template #title>{{ row.operationIds.length }} {{ t('policies.operation') }}</template>
-          <p v-for="op in row.operationIds" :key="op" class="coordinate">{{ op }}</p>
+        ><MdmDisclosure
+          v-if="row.execution.kind === 'operations' ? row.execution.operationIds.length : 0"
+        >
+          <template #title
+            >{{ row.execution.kind === 'operations' ? row.execution.operationIds.length : 0 }}
+            {{ t('policies.operation') }}</template
+          >
+          <p
+            v-for="op in row.execution.kind === 'operations' ? row.execution.operationIds : []"
+            :key="op"
+            class="coordinate"
+          >
+            {{ op }}
+          </p>
         </MdmDisclosure>
         <span v-else>—</span></template
       ></VDataTable

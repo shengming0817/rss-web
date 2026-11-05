@@ -102,7 +102,10 @@ async function fixture(unknown = false, configuration = false) {
           sources: [],
           scopeResult: crypto.randomUUID(),
           taskAdmission: null,
-          operationIds: [crypto.randomUUID(), crypto.randomUUID()],
+          execution: {
+            kind: 'operations',
+            operationIds: [crypto.randomUUID(), crypto.randomUUID()],
+          },
           reason: 'configuration_conflict',
         },
       ],
@@ -347,7 +350,8 @@ it('shows the current configuration preview and all progress operations and diag
   await flushPromises()
   expect(f.devices).toHaveBeenCalledTimes(1)
   const row = (await f.devices.mock.results[0]!.value).items[0]!
-  for (const fact of row.operationIds) expect(f.wrapper.text()).toContain(fact)
+  for (const fact of row.execution.kind === 'operations' ? row.execution.operationIds : [])
+    expect(f.wrapper.text()).toContain(fact)
   expect(f.wrapper.text()).toContain('配置归属冲突')
   f.wrapper.unmount()
 })

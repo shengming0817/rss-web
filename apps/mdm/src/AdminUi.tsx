@@ -15,6 +15,13 @@ export function isUnknown(error: unknown): boolean {
   const e = error && typeof error === 'object' ? error : {}
   const status = 'status' in e && typeof e.status === 'number' ? e.status : 0
   if ('cause' in e && e.cause === 'client') return false
+  if (
+    'cause' in e &&
+    e.cause === 'wire' &&
+    status === 501 &&
+    codeOf(error) === 'action_not_supported'
+  )
+    return false
   return (
     !status ||
     status >= 500 ||

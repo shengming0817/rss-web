@@ -131,3 +131,9 @@ MDM_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:software-browser
 新 React `/software` 复用软件 Resource 目录，详情按需读取。来源支持注册不可变版本、发现及精确导入；软件准入、WinGet/Brew 源发布与撤回各自保留版本与原操作。发布目标由宿主配置并只读展示；Direct 材料不要求先配置或发布原生源。目录名称筛选仅作用于本页，服务端查询使用高级目录筛选。
 
 新软件真实 HTTPS Chromium 入口：`MDM_REACT_SOFTWARE_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-software-browser`。复用独立 PG、存储、测试 PKI、受控 TLS WinGet 来源、构建租约与退出清理；旅程包含精确导入、丢失写响应、材料续传与回执、准入、私有下载和源发布撤回，并输出桌面、移动和暗色截图。受控来源与合成材料证明 HTTP/界面接缝，不证明设备安装效果；该 WinGet 夹具不证明真实 Brew 来源接入。
+
+新 React `/operations` 提供包含 Script/Collection 的正式执行目录、统计、原生命令和 Policy Run/当前 Attempt 详情，并从设备与策略双向定位。周期资格、最近结果、当前触发记录与服务端可证明的允许开始时间分别显示；未知时间不推算。设备详情提供重启、适用平台的锁定和擦除；危险确认绑定已核对注册，PIN 提交即清除。取消与重授权保持原动作和请求坐标，不自动重放未知提交。持续配置的安装/移除意图仍在 Policy 的 Resource 与退出方式维护。
+
+`/device-access` 使用正式 DA 注册的设备标识，管理账户绑定、因子重置、解绑、原操作快照及用途绑定材料披露，并读取现有 Platform SSO 配置。DA 与 MDM/Agent 标识不自动互换。企业应用/账户映射保存后可显式刷新核对当前值；未知提交不会自动重放，当前值一致不证明原操作完成。新增 PSSO 注册/恢复状态与全局原操作排障分别留在 #3134/#3135，不展示为已交付。
+
+执行与接入的真实 HTTPS Chromium 入口为 `MDM_REACT_EXECUTION_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-execution-access-browser`，复用现有隔离 PG、Identity、HTTPS、构建租约与独立清理。既有合法 DA 注册/配置前态仅用于业务验证，不证明注册协议、账户/因子本地应用或 Windows/macOS 真机效果。

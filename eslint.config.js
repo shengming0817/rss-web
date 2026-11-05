@@ -515,7 +515,7 @@ export default tseslint.config(
   {
     files: [
       'apps/mdm/**/*.{ts,tsx}',
-      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections,mdm-inventory,mdm-policies,mdm-scopes,mdm-groups,mdm-compliance,mdm-resources,mdm-content,mdm-software,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks}/**/*.ts',
+      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections,mdm-inventory,mdm-policies,mdm-scopes,mdm-groups,mdm-compliance,mdm-resources,mdm-content,mdm-software,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-execution,mdm-device-access}/**/*.ts',
     ],
     languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
     plugins: {
@@ -593,7 +593,7 @@ export default tseslint.config(
   },
   {
     files: [
-      'packages/{mdm-policies,mdm-scopes,mdm-groups,mdm-compliance,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks}/**/*.ts',
+      'packages/{mdm-policies,mdm-scopes,mdm-groups,mdm-compliance,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-execution,mdm-device-access}/**/*.ts',
     ],
     rules: {
       'no-restricted-imports': boundaryRule([
@@ -636,7 +636,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|api/))',
+              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|api/))',
             message: 'Adapters depend only on core ports and the API executor.',
           },
         ],
@@ -666,7 +666,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$))',
+              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$))',
             message: 'Feature pages consume domain use cases; only runtime assembles adapters.',
           },
         ],

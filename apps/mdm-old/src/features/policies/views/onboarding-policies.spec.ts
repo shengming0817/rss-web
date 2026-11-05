@@ -103,7 +103,7 @@ it('binds explicit Agent releases in the common Policy and reads canonical regis
         reason: null,
         target: { device: 'endpoint', channel: 'mdm', registrationId: id, generation: 2 },
         qualification: { state: 'eligible', entry: 1 },
-        operationIds: [],
+        execution: { kind: 'operations', operationIds: [] },
         sources: [],
       },
     ],

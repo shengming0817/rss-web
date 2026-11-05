@@ -1,6 +1,8 @@
 export type Locale = 'zh' | 'en'
 const zh = {
   devices: '设备',
+  executions: '执行与结果',
+  deviceAccess: 'Device Access',
   inventory: '资产查询',
   resources: '资源库',
   software: '软件目录',
@@ -106,6 +108,8 @@ const en: Messages = {
   policies: 'Policies and deployments',
   compliance: 'Security and compliance',
   devices: 'Devices',
+  executions: 'Executions and results',
+  deviceAccess: 'Device Access',
   enrollment: 'Device enrollment',
   connections: 'Connections',
   authorization: 'Authorization',

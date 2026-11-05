@@ -1,3 +1,5 @@
+import { DeviceControl } from './DeviceControl'
+import { deviceExecutionsPath } from './Executions'
 import { DeviceSecurity, hasDeviceSecurity } from './DeviceSecurity'
 import { SelectionGuard, useSelectionGuard, usePendingSelection } from './SelectionGuard'
 import { useEffect, useState } from 'react'
@@ -440,6 +442,20 @@ function Detail({
                           runtime={runtime}
                           locale={locale}
                           endpoint={mountedEndpoint}
+                        />
+                        <div>
+                          <Link to={deviceExecutionsPath(mountedEndpoint.id)}>
+                            {l('查看设备执行', 'View device executions')}
+                          </Link>
+                          <br />
+                          <Link to="/device-access">Device Access</Link>
+                        </div>
+                        <DeviceControl
+                          key={`${binding}/${mountedEndpoint.id}/${mountedEndpoint.primaryMdmRegistration?.registrationId}/${mountedEndpoint.primaryMdmRegistration?.generation}`}
+                          runtime={runtime}
+                          locale={locale}
+                          endpoint={mountedEndpoint}
+                          grants={permissions.value?.grants ?? []}
                         />
                         <AgentObservation
                           runtime={runtime}

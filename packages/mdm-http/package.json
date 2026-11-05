@@ -28,7 +28,9 @@
     "./webhooks": "./src/webhooks.ts",
     "./scopes": "./src/scopes.ts",
     "./policies": "./src/policies.ts",
-    "./policy-events": "./src/policy-events.ts"
+    "./policy-events": "./src/policy-events.ts",
+    "./execution": "./src/execution.ts",
+    "./device-access": "./src/device-access.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -55,7 +57,9 @@
     "@rss/mdm-audit": "workspace:*",
     "@rss/mdm-webhooks": "workspace:*",
     "@rss/mdm-scopes": "workspace:*",
-    "@rss/mdm-policies": "workspace:*"
+    "@rss/mdm-policies": "workspace:*",
+    "@rss/mdm-execution": "workspace:*",
+    "@rss/mdm-device-access": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

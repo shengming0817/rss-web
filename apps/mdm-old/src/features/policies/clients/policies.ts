@@ -172,7 +172,7 @@ export function createPoliciesClient(transport: HttpTransport) {
                 qualification: eligibility(d['qualification']),
                 sources: array(d['sources'], deviceObject),
                 scopeResult: nullable(d['scopeResult'], uuid),
-                operationIds: array(d['operationIds'], uuid),
+                execution: d.execution,
               }
             }),
             nextCursor: nextCursor(v['nextCursor']),

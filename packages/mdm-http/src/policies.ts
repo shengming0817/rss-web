@@ -3,7 +3,7 @@ import * as schema from '@rss/api/mdm-schemas'
 import { validatePolicyDefinition } from '@rss/api/mdm-validators'
 import { nextCursor, projectedPage, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import type { PoliciesPort, Policy, PolicyDefinition } from '@rss/mdm-policies'
+import type { PoliciesPort, Policy, PolicyDefinition, PolicyRun } from '@rss/mdm-policies'
 import { boolean, count, enumeration, nullable, positive, text, uuid } from './decode'
 import { boundedObject, requestInput, windowQuery } from './inventory-values'
 
@@ -69,6 +69,29 @@ const fields = {
       'ensure_agent_installed',
       'request_mdm_enrollment',
     ] as const),
+}
+function policyRun(item: api.getApiV1PoliciesByIdRunsContract.Output['items'][number]): PolicyRun {
+  return {
+    kind: item.kind,
+    nativeDelivery: item.kind === 'collection' && item.channel === 'mdm' ? item.delivery : null,
+    report: item.kind === 'collection' ? item.report : null,
+    taskId: uuid(item.taskId),
+    device: text(item.device),
+    registrationId: uuid(item.registrationId),
+    generation: positive(item.generation),
+    occurrence: item.occurrence,
+    availableAt: item.availableAt,
+    deadline: item.deadline,
+    state:
+      item.kind === 'collection' && item.channel === 'mdm'
+        ? null
+        : requestInput(item.state, schema.getApiV1PoliciesByIdRunsResponse.validateRunState),
+    effect: item.kind === 'software' || item.kind === 'execution' ? text(item.effect) : null,
+    userAction:
+      item.kind === 'software' || item.kind === 'execution'
+        ? nullable(item.userAction, text)
+        : null,
+  }
 }
 export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
   return {
@@ -181,7 +204,27 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
           return {
             items: value.items.map((item) => ({
               ...item,
-              operationIds: item.operationIds.map(uuid),
+              execution:
+                item.execution.kind === 'operations'
+                  ? {
+                      kind: 'operations' as const,
+                      operationIds: item.execution.operationIds.map(uuid),
+                    }
+                  : item.execution.kind === 'restricted'
+                    ? { kind: 'restricted' as const }
+                    : {
+                        kind: 'recurring' as const,
+                        latestRun: item.execution.latestRun
+                          ? policyRun(item.execution.latestRun)
+                          : null,
+                        currentRecord:
+                          item.execution.currentRecord.state === 'present'
+                            ? {
+                                state: 'present' as const,
+                                taskId: uuid(item.execution.currentRecord.taskId),
+                              }
+                            : item.execution.currentRecord,
+                      },
               scopeResult: nullable(item.scopeResult, uuid),
             })),
             nextCursor: nextCursor(value.nextCursor),
@@ -195,32 +238,7 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         (value) => {
           safeNumbers(value)
           return {
-            items: value.items.map((item) => ({
-              kind: item.kind,
-              nativeDelivery:
-                item.kind === 'collection' && item.channel === 'mdm' ? item.delivery : null,
-              report: item.kind === 'collection' ? item.report : null,
-              taskId: uuid(item.taskId),
-              device: text(item.device),
-              registrationId: uuid(item.registrationId),
-              generation: positive(item.generation),
-              occurrence: item.occurrence,
-              availableAt: item.availableAt,
-              deadline: item.deadline,
-              state:
-                item.kind === 'collection' && item.channel === 'mdm'
-                  ? null
-                  : requestInput(
-                      item.state,
-                      schema.getApiV1PoliciesByIdRunsResponse.validateRunState,
-                    ),
-              effect:
-                item.kind === 'software' || item.kind === 'execution' ? text(item.effect) : null,
-              userAction:
-                item.kind === 'software' || item.kind === 'execution'
-                  ? nullable(item.userAction, text)
-                  : null,
-            })),
+            items: value.items.map(policyRun),
             nextCursor: nextCursor(value.nextCursor),
           }
         },

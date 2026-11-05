@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { createMaterialAuthorization, type OperationAuthorizationPort } from '@rss/auth-core'
+import { createOperationAuthorization, type OperationAuthorizationPort } from '@rss/auth-core'
 import { createCeremonyHandoff } from './ceremony-handoff'
 const context = {
     purpose: 'mdm.device_access.disclose' as const,
@@ -24,7 +24,7 @@ function fixture(overrides: Partial<OperationAuthorizationPort> = {}) {
       classify: () => 'unknown',
       ...overrides,
     },
-    material = createMaterialAuthorization(port, () => 'tenant/principal/session'),
+    material = createOperationAuthorization(port, () => 'tenant/principal/session'),
     cancelPasskey = vi.fn(async () => {})
   return { port, material, cancelPasskey, handoff: createCeremonyHandoff(material, cancelPasskey) }
 }
@@ -38,7 +38,7 @@ it('waits for the whole passkey ceremony before clearing its proof and beginning
     await finish.promise
   })
   await entered.promise
-  const next = f.handoff.authorizeMaterial(context, begin, async () => ({}))
+  const next = f.handoff.authorizeOperation(context, begin, async () => ({}))
   expect(begin).not.toHaveBeenCalled()
   expect(f.cancelPasskey).not.toHaveBeenCalled()
   finish.resolve()
@@ -60,7 +60,7 @@ it('waits for an already-sent material finish and its cancellation before starti
       }),
     })
   const old = f.handoff
-    .authorizeMaterial(
+    .authorizeOperation(
       context,
       async () => challenge,
       async () => ({}),
@@ -82,9 +82,9 @@ it('waits for an already-sent material finish and its cancellation before starti
 it('does not overwrite a current material authorization or clear its cookie when another begin is requested', async () => {
   const f = fixture(),
     begin = vi.fn(async () => challenge)
-  await f.handoff.authorizeMaterial(context, begin, async () => ({}))
+  await f.handoff.authorizeOperation(context, begin, async () => ({}))
   await expect(
-    f.handoff.authorizeMaterial({ ...context, version: 2 }, begin, async () => ({})),
+    f.handoff.authorizeOperation({ ...context, version: 2 }, begin, async () => ({})),
   ).rejects.toThrow('Cancel')
   expect(f.cancelPasskey).toHaveBeenCalledOnce()
   expect(begin).toHaveBeenCalledOnce()

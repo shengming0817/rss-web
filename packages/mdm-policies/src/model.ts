@@ -258,13 +258,28 @@ export type AdmissionState =
   | 'recovery_observation_pending'
   | 'recovery_retry_exhausted'
   | 'eligible'
+  | 'waiting_check_in'
+  | 'waiting_trigger'
+  | 'interval_not_elapsed'
+  | 'execution_pending'
+  | 'frequency_consumed'
+  | 'effect_unknown'
+  | 'capacity_busy'
+  | 'schedule_ended'
+  | 'input_required'
+  | 'lifecycle_blocked'
+  | 'report_source_unavailable'
 export interface TargetFacts {
   readonly object: DeviceRef
   readonly channel: Channel | null
   readonly availability: 'ready' | 'unavailable'
   readonly reason: string | null
   readonly target: PrimaryRegistration | null
-  readonly taskAdmission: { readonly state: AdmissionState; readonly stage?: number | null } | null
+  readonly taskAdmission: {
+    readonly state: AdmissionState
+    readonly stage?: number | null
+    readonly nextAllowedStartAt?: number | null
+  } | null
 }
 export interface Assignment extends TargetFacts {
   readonly qualification: Qualification
@@ -275,7 +290,17 @@ export interface Assignment extends TargetFacts {
     readonly members: readonly PrimaryRegistration[]
   }[]
   readonly scopeResult: string | null
-  readonly operationIds: readonly string[]
+  readonly execution:
+    | { readonly kind: 'operations'; readonly operationIds: readonly string[] }
+    | {
+        readonly kind: 'recurring'
+        readonly latestRun: PolicyRun | null
+        readonly currentRecord:
+          | { readonly state: 'unknown' }
+          | { readonly state: 'absent' }
+          | { readonly state: 'present'; readonly taskId: string }
+      }
+    | { readonly kind: 'restricted' }
 }
 export interface PolicyPreview {
   readonly action: PolicyAction

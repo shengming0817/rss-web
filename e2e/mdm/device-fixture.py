@@ -32,7 +32,7 @@ from runtime_fixture import storage, readiness as readiness_status
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
-environment = Environment(BACKEND, group={'software-browser.mjs': 'software-browser', 'console-browser.mjs': 'console-browser', 'react-devices-browser.mjs': 'react-devices-browser', 'react-assets-browser.mjs': 'react-assets-browser', 'react-software-browser.mjs': 'react-software-browser', 'react-recovery-browser.mjs': 'react-recovery-browser', 'react-audit-webhooks-browser.mjs': 'react-audit-webhooks-browser', 'react-policy-browser.mjs': 'react-policy-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser'))
+environment = Environment(BACKEND, group={'software-browser.mjs': 'software-browser', 'console-browser.mjs': 'console-browser', 'react-devices-browser.mjs': 'react-devices-browser', 'react-assets-browser.mjs': 'react-assets-browser', 'react-software-browser.mjs': 'react-software-browser', 'react-recovery-browser.mjs': 'react-recovery-browser', 'react-audit-webhooks-browser.mjs': 'react-audit-webhooks-browser', 'react-policy-browser.mjs': 'react-policy-browser', 'react-execution-access-browser.mjs': 'react-execution-access-browser'}.get(os.environ.get('MDM_DEVICE_BROWSER_MODULE'), 'device-browser'))
 processes = []
 providers = ExitStack()
 phase = 'environment'
@@ -53,7 +53,7 @@ def q(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 browser_module = os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'device-browser.mjs')
-if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs', 'software-browser.mjs', 'console-browser.mjs', 'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs', 'react-policy-browser.mjs'}:
+if browser_module not in {'device-browser.mjs', 'operations-browser.mjs', 'telemetry-browser.mjs', 'software-browser.mjs', 'console-browser.mjs', 'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs', 'react-policy-browser.mjs', 'react-execution-access-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
 
 def seed_authority():
@@ -64,7 +64,7 @@ def seed_authority():
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write','webhook_replay','audit_read']] + [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_unmanage','device_control','security_operate','configuration_write','software_deploy']]
     if browser_module == 'react-audit-webhooks-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write','webhook_replay','audit_read']] + [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','operation_cancel','device_unmanage']]
-    if browser_module == 'react-policy-browser.mjs':
+    if browser_module in {'react-policy-browser.mjs','react-execution-access-browser.mjs'}:
         rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_unmanage', 'account_write']]
     if browser_module == 'react-recovery-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','security_operate','configuration_write','account_write']]
@@ -78,10 +78,12 @@ def seed_authority():
         rule['grants'].append(dict(operation='compliance_read', scope=dict(kind='all_devices')))
     if browser_module == 'react-assets-browser.mjs':
         rule['grants'].append(dict(operation='compliance_recompute', scope=dict(kind='tenant')))
-    if browser_module == 'operations-browser.mjs':
+    if browser_module in {'operations-browser.mjs','react-execution-access-browser.mjs'}:
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['audit_read','runtime_diagnostics_read']]
         # Explicit authority for disposable HTTP acceptance, never production account initialization.
-        rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','device_wipe','operation_cancel']]
+        rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','device_wipe','operation_cancel','configuration_write']]
+    if browser_module == 'react-execution-access-browser.mjs':
+        rule['grants'] += [dict(operation=o,scope=dict(kind='tenant')) for o in ['enterprise_applications_read','enterprise_applications_write']]
     rule_id = str(uuid.uuid4())
     sql = [f"SET rss.tenant_id = '{tenant}'", f"INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{tenant}','{INSTANCE}','{rule_id}',1,{q(json.dumps(rule))}::jsonb)"]
     environment.sql(';'.join(sql)+';', 'mdm_dev')
@@ -91,7 +93,7 @@ def seed():
     tenant = TENANTS[0]
     sql = [f"SET rss.tenant_id = '{tenant}'"]
     devices = [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin'), ('fixture-alone','mdm','mdm.windows')]
-    if browser_module in {'console-browser.mjs', 'react-recovery-browser.mjs'}: devices.append(('fixture-mac','mdm','mdm.apple'))
+    if browser_module in {'console-browser.mjs', 'react-recovery-browser.mjs', 'react-execution-access-browser.mjs'}: devices.append(('fixture-mac','mdm','mdm.apple'))
     for device, channel, source in devices:
         registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
         sql.append(f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','{device}')")
@@ -106,11 +108,11 @@ def seed():
                 f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
         if browser_module in {'console-browser.mjs', 'react-recovery-browser.mjs'} and channel == 'mdm':
             sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
-        if browser_module in {'operations-browser.mjs','console-browser.mjs','react-audit-webhooks-browser.mjs'} and device == 'fixture-mdm':
-            # Same synthetic Windows capability fixture as rss-mdm execution/support.rs; no device effect claim.
+        if browser_module in {'operations-browser.mjs','console-browser.mjs','react-audit-webhooks-browser.mjs','react-execution-access-browser.mjs'} and device == 'fixture-mdm':
+            # Same controlled Windows capability prerequisite as rss-mdm device/mod.rs; no device effect claim.
             if browser_module != 'console-browser.mjs':
                 sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'mdm.windows',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
-            sql.append(f"INSERT INTO mdm_commands.capabilities(tenant_id,registration,generation,os_version,edition,session,observed_at) VALUES('{tenant}','{registration}',1,'10.0.22621.0',48,1,1)")
+            sql.append(f"INSERT INTO mdm_windows.capabilities(tenant_id,registration,generation,os_version,edition,session,observed_at) VALUES('{tenant}','{registration}',1,'10.0.22621.0',48,1,1)")
         fact=dict(state=dict(kind='known',value=dict(kind='string',value=device)),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
         sql.append(f"INSERT INTO mdm.manual_assignments(tenant_id,device,field,revision,fact) VALUES('{tenant}','{device}','custom.asset_tag',1,{q(json.dumps(fact))}::jsonb)")
     if browser_module == 'console-browser.mjs':
@@ -148,9 +150,15 @@ def start(binary, initialized, log, expected=200):
                 readiness = dict(classification=role+'-exit', exitCode=child.returncode)
                 raise RuntimeError('readiness')
         try:
-            if readiness_status(environment, initialized['origin']) == expected:
+            observed = readiness_status(environment, initialized['origin'])
+            if expected is None and observed in (200, 503):
+                # This frontend journey proves the requested management seams below.
+                # A reachable 503 remains an observed degraded backend, never readiness proof.
+                print(json.dumps(dict(phase='management-transport', readinessStatus=observed, backendReady=observed == 200)),flush=True)
+                return observed
+            if observed == expected:
                 print(json.dumps(dict(phase='readiness',status=expected)),flush=True)
-                break
+                return observed
             readiness = dict(classification='http-status')
         except ssl.SSLCertVerificationError:
             readiness = dict(classification='tls-verification')
@@ -167,7 +175,7 @@ def start(binary, initialized, log, expected=200):
 
 try:
     environment.reset()
-    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module in {'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs', 'react-policy-browser.mjs'} else 'apps/mdm-old/dist'))
+    os.environ['MDM_WEB_ROOT'] = str(WEB/('apps/mdm/dist' if browser_module in {'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs', 'react-policy-browser.mjs', 'react-execution-access-browser.mjs'} else 'apps/mdm-old/dist'))
     initialized = environment.initialize()
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
@@ -242,6 +250,11 @@ try:
         module = importlib.util.spec_from_file_location('recovery_fixture', WEB/'e2e/mdm/recovery-fixture.py')
         recovery_fixture = importlib.util.module_from_spec(module); module.loader.exec_module(recovery_fixture)
         recovery = recovery_fixture.configure(environment, config, private)
+    execution_access = {}
+    if browser_module == 'react-execution-access-browser.mjs':
+        module = importlib.util.spec_from_file_location('execution_access_fixture', WEB/'e2e/mdm/execution-access-fixture.py')
+        execution_access_fixture = importlib.util.module_from_spec(module); module.loader.exec_module(execution_access_fixture)
+        execution_access = execution_access_fixture.configure(environment, config, private)
     private(config_path, config)
     phase = 'authority'
     rule_id, rule = seed_authority()
@@ -267,8 +280,19 @@ try:
     private(config_path, config)
     phase = 'seed'
     seed()
+    if browser_module == 'react-execution-access-browser.mjs':
+        execution_access_fixture.seed(environment, execution_access, TENANTS[0], INSTANCE, ADMIN)
     phase = 'readiness'
-    start(binary, initialized, log)
+    backend_readiness = start(binary, initialized, log, expected=None if browser_module == 'react-execution-access-browser.mjs' else 200)
+    if browser_module == 'react-execution-access-browser.mjs':
+        phase = 'management-seams'
+        # These are actual authenticated reads, not substitute health/authority facts.
+        for path in ('/api/v1/authorization', '/api/v1/operations?limit=1'):
+            status, _ = operator.call('GET', path)
+            if status != 200:
+                print(json.dumps(dict(phase=phase, path=path.split('?')[0], status=status)), flush=True)
+                raise RuntimeError('management-seam-unavailable')
+        print(json.dumps(dict(phase='management-seams', result='passed', readinessStatus=backend_readiness, backendReady=backend_readiness == 200)), flush=True)
     if browser_module in {'device-browser.mjs', 'react-assets-browser.mjs'}:
         phase = 'manual-array-seed'
         # The product owner stores immutable array versions and ordinal indexes atomically.
@@ -318,11 +342,11 @@ try:
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)
     module.loader.exec_module(collector)
-    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module in {'telemetry-browser.mjs','console-browser.mjs'} else None)
+    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module in {'telemetry-browser.mjs','console-browser.mjs','react-execution-access-browser.mjs'} else None)
     if browser_module == 'react-recovery-browser.mjs':
         phase = 'recovery-prerequisites'
         recovery_fixture.prepare(operator, recovery, environment, private)
-    fixture=private(environment.root/'browser.json',dict(recovery=recovery,otherTenant=TENANTS[1], foreignDevice='foreign-assets-endpoint' if browser_module == 'react-assets-browser.mjs' else None, personB=person_b, console=console, backendRevision=backend_revision, devices=['fixture-agent','fixture-alone'], target='internal', upstream=upstream if browser_module in {'software-browser.mjs', 'react-software-browser.mjs'} else None, collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
+    fixture=private(environment.root/'browser.json',dict(executionAccess=execution_access,recovery=recovery,otherTenant=TENANTS[1], foreignDevice='foreign-assets-endpoint' if browser_module == 'react-assets-browser.mjs' else None, personB=person_b, console=console, backendRevision=backend_revision, devices=['fixture-agent','fixture-alone'], target='internal', upstream=upstream if browser_module in {'software-browser.mjs', 'react-software-browser.mjs'} else None, collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
     phase='browser'
     browser=subprocess.run(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture), 'MDM_SOFTWARE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')
@@ -333,7 +357,16 @@ except BaseException as error:
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
     if phase == 'collector-registration' and isinstance(error, RuntimeError) and re.fullmatch(r'collector-[a-z0-9_-]+', str(error)):
         print(json.dumps(dict(phase=phase, reason=str(error))), flush=True)
-    if browser_module in {'console-browser.mjs', 'react-recovery-browser.mjs'}:
+    if phase == 'readiness' and browser_module == 'react-execution-access-browser.mjs':
+        try:
+            diagnostic_operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
+            diagnostic_operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
+            diagnostic_status, diagnostic_snapshot = diagnostic_operator.call('GET', '/api/v1/runtime/diagnostics')
+            if diagnostic_status == 200:
+                print(json.dumps(dict(phase='readiness-components', components=[{key: component[key] for key in ('name','readiness','health','reasons')} for component in diagnostic_snapshot['components']])), flush=True)
+        except Exception:
+            print(json.dumps(dict(phase='readiness-components', result='unavailable')), flush=True)
+    if browser_module in {'console-browser.mjs', 'react-recovery-browser.mjs', 'react-execution-access-browser.mjs'}:
         diagnostics = subprocess.run(['docker', 'logs', environment.container()], capture_output=True, text=True, timeout=10, pass_fds=lease_fds())
         for line in (diagnostics.stdout + diagnostics.stderr).splitlines():
             if 'ERROR:' not in line:

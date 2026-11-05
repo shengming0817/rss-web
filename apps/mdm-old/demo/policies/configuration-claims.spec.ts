@@ -186,8 +186,10 @@ it('publishes exact immutable native bindings, previews without admission, and s
   ).toEqual([a.id, b.id].sort())
   const da = (await f.policies.assignments(a.id)).items[0]!,
     db = (await f.policies.assignments(b.id)).items[0]!
-  expect(da.operationIds).toHaveLength(1)
-  expect(db.operationIds).toEqual(da.operationIds)
+  expect(da.execution.kind === 'operations' ? da.execution.operationIds : []).toHaveLength(1)
+  expect(db.execution.kind === 'operations' ? db.execution.operationIds : []).toEqual(
+    da.execution.kind === 'operations' ? da.execution.operationIds : [],
+  )
   expect(da.reason).toBeNull()
   expect(f.automation.configurationPolicies.plans()).toHaveLength(1)
   expect(f.automation.configurationPolicies.plans()[0]!.effect).toBe('unknown')

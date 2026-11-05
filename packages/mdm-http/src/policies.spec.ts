@@ -186,3 +186,47 @@ it('consumes access run state without inventing a software effect', async () => 
     nativeDelivery: null,
   })
 })
+
+it('keeps recurring eligibility, current trigger knowledge and restricted execution facts separate', async () => {
+  const base = {
+    object: { kind: 'endpoint', id: 'endpoint-1' },
+    channel: 'agent',
+    availability: 'ready',
+    reason: null,
+    target: { device: 'endpoint-1', channel: 'agent', registrationId: id, generation: 1 },
+    qualification: { state: 'eligible', entry: 1 },
+    sources: [],
+    scopeResult: versionId,
+    taskAdmission: { state: 'waiting_trigger', nextAllowedStartAt: 1700000000 },
+  }
+  const recurring = {
+    ...base,
+    execution: { kind: 'recurring', latestRun: null, currentRecord: { state: 'unknown' } },
+  }
+  const page = await createPoliciesAdapter(
+    fixture({
+      items: [recurring, { ...base, execution: { kind: 'restricted' } }],
+      nextCursor: null,
+    }).transport,
+  ).assignments(id, {})
+  expect(page.items[0]?.execution).toEqual(recurring.execution)
+  expect(page.items[0]?.taskAdmission?.nextAllowedStartAt).toBe(1700000000)
+  expect(page.items[1]?.execution).toEqual({ kind: 'restricted' })
+  expect(page.items[1]?.qualification.state).toBe('eligible')
+  const absent = await createPoliciesAdapter(
+    fixture({
+      items: [
+        {
+          ...base,
+          execution: { kind: 'recurring', latestRun: null, currentRecord: { state: 'absent' } },
+        },
+      ],
+      nextCursor: null,
+    }).transport,
+  ).assignments(id, {})
+  expect(absent.items[0]?.execution).toEqual({
+    kind: 'recurring',
+    latestRun: null,
+    currentRecord: { state: 'absent' },
+  })
+})

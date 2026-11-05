@@ -1,7 +1,7 @@
-import type { MaterialAuthorization } from '@rss/auth-core'
+import type { OperationAuthorization } from '@rss/auth-core'
 /** Order the two actual WebAuthn consumers of the app's one HttpOnly operation cookie. */
 export function createCeremonyHandoff(
-  material: MaterialAuthorization,
+  material: OperationAuthorization,
   cancelPasskeyAuthorization: () => Promise<void>,
 ) {
   let passkey: Promise<unknown> | null = null
@@ -19,10 +19,10 @@ export function createCeremonyHandoff(
         if (passkey === running) passkey = null
       }
     },
-    authorizeMaterial(
-      context: Parameters<MaterialAuthorization['authorize']>[0],
-      begin: Parameters<MaterialAuthorization['authorize']>[1],
-      authenticate: Parameters<MaterialAuthorization['authorize']>[2],
+    authorizeOperation(
+      context: Parameters<OperationAuthorization['authorize']>[0],
+      begin: Parameters<OperationAuthorization['authorize']>[1],
+      authenticate: Parameters<OperationAuthorization['authorize']>[2],
     ) {
       const previous = passkey
       return material.authorize(
