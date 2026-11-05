@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { ConfigProvider, Select, Button, Space } from 'antd'
 import { StyleProvider } from '@ant-design/cssinjs'
-import { createMdmTransport } from '@rss/api/mdm'
+import { createMdmDemoTransport } from '@rss/api/mdm-demo'
 import { createRuntimeDiagnostics } from '@rss/mdm-runtime-diagnostics'
 import type { Snapshot } from '@rss/mdm-runtime-diagnostics'
 import { Diagnostics } from '../src/Diagnostics'
@@ -12,7 +12,7 @@ import type { Runtime } from '../src/runtime'
 import 'virtual:mdm-theme.css'
 import '../src/style.css'
 // Only the explicit demo composition consumes this endpoint. No product failure routes here.
-const transport = createMdmTransport()
+const transport = createMdmDemoTransport()
 function Demo() {
   const [scenario, setScenario] = useState('unknown'),
     [allowed, setAllowed] = useState(true),
@@ -22,7 +22,7 @@ function Demo() {
     snapshot: () =>
       transport.request({
         method: 'GET',
-        path: '/__demo/diagnostics',
+        path: '/api/v1/mdm-candidate/runtime-diagnostics',
         query: { scenario },
         successStatus: 200,
         decode: (value) => {

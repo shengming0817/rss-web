@@ -41,13 +41,21 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
                     column={1}
                     size="small"
                     items={[
-                      { key: 'scope', label: l('范围', 'Scope'), children: item.scope },
+                      {
+                        key: 'scope',
+                        label: l('范围', 'Scope'),
+                        children: setupName(locale, item.scope),
+                      },
                       { key: 'owner', label: l('所属模块', 'Owner'), children: item.owner },
-                      { key: 'custody', label: l('托管方', 'Custody'), children: item.custody },
+                      {
+                        key: 'custody',
+                        label: l('托管方', 'Custody'),
+                        children: setupName(locale, item.custody),
+                      },
                       {
                         key: 'lifecycle',
                         label: l('生命周期', 'Lifecycle'),
-                        children: item.lifecycle,
+                        children: setupName(locale, item.lifecycle),
                       },
                       {
                         key: 'revision',
@@ -61,7 +69,7 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
                       },
                     ]}
                   />
-                  {item.reason && <p className="subtitle">{item.reason}</p>}
+                  {item.reason && <p className="subtitle">{setupName(locale, item.reason)}</p>}
                   {item.scope !== 'deployment' && setupDestination(item.id) && (
                     <Link
                       to={

@@ -570,7 +570,7 @@ function Evidence({ progress, locale }: { progress: Progress; locale: Locale }) 
             <SetupStatus locale={locale} value={s.status} />
           </div>
           <div className="panel-body admin-stack">
-            {s.reason && <p>{s.reason}</p>}
+            {s.reason && <p>{setupName(locale, s.reason)}</p>}
             {s.evidence.map((e) => (
               <div className="setup-evidence" key={e.id}>
                 <Space wrap>
@@ -581,7 +581,7 @@ function Evidence({ progress, locale }: { progress: Progress; locale: Locale }) 
                   {l('登记 / 期望 / 应用版本', 'Recorded / desired / applied revision')}:{' '}
                   {e.revision ?? '—'} / {e.desiredRevision ?? '—'} / {e.appliedRevision ?? '—'}
                 </p>
-                {e.reason && <p className="subtitle">{e.reason}</p>}
+                {e.reason && <p className="subtitle">{setupName(locale, e.reason)}</p>}
               </div>
             ))}
             {setupDestination(s.id) && (

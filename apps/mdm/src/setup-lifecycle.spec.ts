@@ -321,3 +321,33 @@ it('offers explicit server-version adoption when another session saved identical
   await click('保存意图')
   expect(f.port.update).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 3 }))
 })
+
+it('clears recent-authentication input before awaiting and leaves an unknown write for explicit continuation', async () => {
+  const f = fixture()
+  vi.mocked(f.port.update).mockRejectedValueOnce({ status: 503, code: 'outcome_unknown' })
+  let authenticated!: () => void
+  vi.mocked(f.runtime.owner.reauthenticate).mockImplementationOnce(
+    () =>
+      new Promise<void>((done) => {
+        authenticated = done
+      }),
+  )
+  await render(f.runtime)
+  await click('保存意图')
+  const original = f.setup.getSnapshot()
+  await click('重新认证')
+  const password = document.querySelector('input[type=password]') as HTMLInputElement
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+      password,
+      'synthetic-test-password',
+    )
+    password.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await click('确认认证')
+  expect(password.value).toBe('')
+  expect(f.runtime.owner.reauthenticate).toHaveBeenCalledWith('synthetic-test-password')
+  await act(async () => authenticated())
+  expect(f.setup.getSnapshot()).toBe(original)
+  expect(f.port.update).toHaveBeenCalledTimes(1)
+})

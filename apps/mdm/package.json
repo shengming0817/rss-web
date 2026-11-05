@@ -48,6 +48,7 @@
     "@types/react-dom": "catalog:",
     "@types/node": "catalog:",
     "vite": "catalog:",
-    "@ant-design/static-style-extract": "catalog:"
+    "@ant-design/static-style-extract": "catalog:",
+    "@rss/api": "workspace:*"
   }
 }

@@ -13,7 +13,7 @@ export default mergeConfig(
         configureServer(server) {
           server.middlewares.use((req, res, next) => {
             const url = new URL(req.url ?? '/', 'http://127.0.0.1')
-            if (url.pathname !== '/__demo/diagnostics') return next()
+            if (url.pathname !== '/api/v1/mdm-candidate/runtime-diagnostics') return next()
             if (req.method !== 'GET') {
               res.statusCode = 405
               res.end()

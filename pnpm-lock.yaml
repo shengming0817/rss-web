@@ -419,6 +419,9 @@ importers:
       '@ant-design/static-style-extract':
         specifier: 'catalog:'
         version: 2.1.0(antd@6.6.8(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@rss/api':
+        specifier: workspace:*
+        version: link:../../packages/api
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19

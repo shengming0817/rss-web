@@ -1435,3 +1435,14 @@ html:has(.mdm-overlay-open) {
     grid-template-columns: 1fr;
   }
 }
+
+.sidebar nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.sidebar > .brand,
+.sidebar > .organization,
+.sidebar-bottom {
+  flex-shrink: 0;
+}
