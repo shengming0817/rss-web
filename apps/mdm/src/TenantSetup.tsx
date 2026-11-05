@@ -12,7 +12,7 @@ import {
   Steps,
 } from 'antd'
 import { Link } from 'react-router-dom'
-import { capabilities, channels, sameIntent } from '@rss/mdm-tenant-setup'
+import { capabilities, channels } from '@rss/mdm-tenant-setup'
 import type { Capability, Command, Intent, Progress } from '@rss/mdm-tenant-setup'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
@@ -98,7 +98,7 @@ function SetupJourney({
     canWrite = has('registration_configuration_write'),
     current = canRead ? progress.value : undefined,
     selection = draft ?? empty,
-    dirty = !!draft && !!current && !sameIntent(draft, current.saved.intent),
+    dirty = !!draft && !!current && JSON.stringify(draft) !== JSON.stringify(current.saved.intent),
     locked = action.busy || !!pending || !canWrite || !current,
     stages = [
       l('选择管理方式', 'Choose management'),
@@ -118,6 +118,7 @@ function SetupJourney({
       setReceipt(result.value.operationId)
       progress.reload()
     } else {
+      if (isUnknown(result.error)) setup.uncertain(command)
       if (codeOf(result.error) === 'forbidden') {
         setDenied(true)
         progress.reload()
@@ -397,7 +398,7 @@ function SetupJourney({
             >
               {l('保存意图', 'Save intent')}
             </Button>
-            {dirty && (
+            {(dirty || baseRevision !== current.saved.revision) && (
               <Button
                 disabled={!!pending || action.busy}
                 onClick={() => {

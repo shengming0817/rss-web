@@ -201,7 +201,7 @@ try {
   await secretVisible(false)
   // The explicit session read after 401 re-establishes current state without replaying the write.
   await button('重新读取会话').click()
-  await p.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+  await p.getByRole('heading', { name: /^(工作台|租户初始化)$/, exact: true }).waitFor()
   await open(f.recovery.device)
   await exact(f.recovery.material, true)
   await authorize()

@@ -121,3 +121,13 @@ it('queries a durable receipt after reload without manufacturing a new request',
 it('rejects a revision whose successor cannot be represented exactly', () => {
   expect(() => fixture().setup.prepare(operation, Number.MAX_SAFE_INTEGER, selection)).toThrow()
 })
+
+it('never releases an uncertain original request after a later authorization or CAS rejection', async () => {
+  const f = fixture(),
+    command = f.setup.prepare(operation, 0, selection)
+  f.setup.uncertain(command)
+  f.setup.rejected(command)
+  expect(f.setup.getSnapshot()).toBe(command)
+  await f.setup.operation(operation)
+  expect(f.setup.getSnapshot()).toBeNull()
+})

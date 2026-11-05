@@ -9,28 +9,48 @@ import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..'),
   shots = mkdtempSync(join(tmpdir(), 'rss-react-diagnostics-mock-'))
-let server, browser, closing, timer
+let server,
+  browser,
+  serverStarting,
+  browserStarting,
+  closing,
+  timer,
+  stopping = false
 const close = () =>
   (closing ??= (async () => {
+    const started = await Promise.allSettled([serverStarting, browserStarting])
+    const cleanup = await Promise.allSettled([
+      started[0].status === 'fulfilled' ? started[0].value?.close() : undefined,
+      started[1].status === 'fulfilled' ? started[1].value?.close() : undefined,
+    ])
     clearTimeout(timer)
-    await browser?.close()
-    await server?.close()
+    if (cleanup.some((result) => result.status === 'rejected'))
+      throw new Error('cleanup-unconfirmed')
   })())
 const stop = () => {
+  stopping = true
   process.exitCode = 1
-  void close()
+  void close().catch(() => {
+    process.exitCode = 1
+  })
 }
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)
 timer = setTimeout(stop, 120000)
 try {
-  server = await createServer({
+  serverStarting = createServer({
     configFile: resolve(root, 'apps/mdm/demo/vite.config.ts'),
     server: { host: '127.0.0.1', port: 0 },
+  }).then(async (value) => {
+    await value.listen()
+    return value
   })
-  await server.listen()
+  server = await serverStarting
+  if (stopping) throw new Error('interrupted')
   const origin = server.resolvedUrls.local[0]
-  browser = await chromium.launch()
+  browserStarting = chromium.launch({ timeout: 30000 })
+  browser = await browserStarting
+  if (stopping) throw new Error('interrupted')
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } }),
     errors = []
   page.on('pageerror', (e) => errors.push(e.name))

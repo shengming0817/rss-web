@@ -63,6 +63,7 @@ export function sameIntent(a: Intent, b: Intent): boolean {
 export function createTenantSetup(port: SetupPort, tenant: string) {
   identifier(tenant)
   let pending: Command | null = null
+  let uncertain = false
   const listeners = new Set<() => void>()
   const emit = () => listeners.forEach((listener) => listener())
   function accept(receipt: Receipt, command?: Command) {
@@ -98,6 +99,7 @@ export function createTenantSetup(port: SetupPort, tenant: string) {
       if (pending) throw new Error('Original request unresolved')
       if (expectedRevision >= Number.MAX_SAFE_INTEGER)
         throw new Error('Revision cannot advance safely')
+      uncertain = false
       pending = Object.freeze({
         operationId: identifier(operationId),
         expectedRevision: revision(expectedRevision),
@@ -129,8 +131,11 @@ export function createTenantSetup(port: SetupPort, tenant: string) {
       return receipt
     },
     /** Only an explicit known business rejection may release an original intent. */
+    uncertain(command: Command) {
+      if (pending === command) uncertain = true
+    },
     rejected(command: Command) {
-      if (pending === command) {
+      if (pending === command && !uncertain) {
         pending = null
         emit()
       }

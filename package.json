@@ -61,7 +61,7 @@
     "test:mdm:react-telemetry-browser": "node e2e/mdm/react-telemetry-run.mjs",
     "dev:mdm:diagnostics:demo": "pnpm -F @rss/mdm-app exec vite --config demo/vite.config.ts --host 127.0.0.1",
     "test:mdm:react-setup-browser": "node e2e/mdm/react-setup-run.mjs",
-    "test:mdm:react-diagnostics-demo-browser": "node e2e/mdm/react-diagnostics-demo-browser.mjs"
+    "test:mdm:react-diagnostics-demo-browser": "node e2e/mdm/react-diagnostics-demo-run.mjs"
   },
   "lint-staged": {
     "*.{ts,vue}": [

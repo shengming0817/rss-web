@@ -272,3 +272,52 @@ it('routes an unconfirmed configuration writer to setup, but keeps a read-only u
   await act(async () => root.render(entry()))
   expect(host.textContent).toContain('daily workspace')
 })
+
+it('retains unknown original identity through a later 403 and restored presentation permissions', async () => {
+  const f = fixture()
+  vi.mocked(f.port.update)
+    .mockRejectedValueOnce({ status: 503, code: 'outcome_unknown' })
+    .mockRejectedValueOnce({ status: 403, code: 'forbidden' })
+  await render(f.runtime)
+  await click('保存意图')
+  const original = f.setup.getSnapshot()
+  await click('显式重提原请求')
+  expect(f.setup.getSnapshot()).toBe(original)
+  await click('刷新当前状态')
+  expect(button('保存意图').disabled).toBe(true)
+  await click('查询原操作')
+  expect(f.setup.getSnapshot()).toBeNull()
+  expect(f.port.update).toHaveBeenCalledTimes(2)
+})
+it('keeps temporarily invalid channel drafts editable rather than validating them during rendering', async () => {
+  const f = fixture()
+  vi.mocked(f.port.read).mockResolvedValue({
+    ...f.progress,
+    saved: {
+      revision: 2,
+      intent: {
+        channels: ['agent'],
+        capabilities: { task_signing: { kind: 'configure' } },
+        completionRequested: false,
+      },
+    },
+  })
+  await render(f.runtime)
+  await act(async () => (host.querySelector('input[value=agent]') as HTMLInputElement).click())
+  expect(host.textContent).toContain('有未保存的意图')
+  await click('保存意图')
+  expect(f.port.update).not.toHaveBeenCalled()
+})
+
+it('offers explicit server-version adoption when another session saved identical intent', async () => {
+  const f = fixture()
+  await render(f.runtime)
+  vi.mocked(f.port.read).mockResolvedValue({
+    ...f.progress,
+    saved: { ...f.progress.saved, revision: 3 },
+  })
+  await click('刷新当前状态')
+  await click('使用后端当前意图')
+  await click('保存意图')
+  expect(f.port.update).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 3 }))
+})
