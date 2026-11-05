@@ -385,6 +385,9 @@ importers:
       '@rss/mdm-software':
         specifier: workspace:*
         version: link:../../packages/mdm-software
+      '@rss/mdm-telemetry':
+        specifier: workspace:*
+        version: link:../../packages/mdm-telemetry
       '@rss/mdm-tenant-administration':
         specifier: workspace:*
         version: link:../../packages/mdm-tenant-administration
@@ -922,6 +925,9 @@ importers:
       '@rss/mdm-software':
         specifier: workspace:*
         version: link:../mdm-software
+      '@rss/mdm-telemetry':
+        specifier: workspace:*
+        version: link:../mdm-telemetry
       '@rss/mdm-tenant-administration':
         specifier: workspace:*
         version: link:../mdm-tenant-administration
@@ -1045,6 +1051,22 @@ importers:
       '@rss/mdm-resources':
         specifier: workspace:*
         version: link:../mdm-resources
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.6(vitest@3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.7.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
+
+  packages/mdm-telemetry:
+    dependencies:
+      '@rss/mdm-inventory':
+        specifier: workspace:*
+        version: link:../mdm-inventory
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 'catalog:'

@@ -1310,3 +1310,84 @@ html:has(.mdm-overlay-open) {
 .policy-assignments .data-table td:first-child {
   min-width: 180px;
 }
+
+.telemetry-page {
+  max-width: 1560px;
+}
+.telemetry-page .ant-form-item {
+  min-width: 0;
+}
+.telemetry-health-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.telemetry-health-grid > *,
+.telemetry-results,
+.telemetry-preview {
+  min-width: 0;
+}
+.telemetry-coordinate {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  font-size: 12px;
+}
+.telemetry-value {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.telemetry-chart {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.telemetry-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--muted);
+}
+.telemetry-chart text {
+  fill: currentColor;
+  font-size: 11px;
+}
+.telemetry-axis {
+  fill: none;
+  stroke: currentColor;
+  opacity: 0.35;
+}
+.telemetry-point {
+  fill: #5374c6;
+}
+.telemetry-chart-times {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.telemetry-aggregate-form {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.telemetry-unavailable {
+  margin: 16px 0;
+}
+@media (max-width: 1100px) {
+  .telemetry-health-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .telemetry-chart {
+    padding: 8px;
+  }
+  .telemetry-chart-times {
+    flex-direction: column;
+  }
+}

@@ -15,6 +15,8 @@ import type { ContentUseCases } from './ContentUpload'
 
 export function ResourceDetail({
   resources,
+  initialVersion,
+  initialVariant,
   content,
   resource,
   locale,
@@ -22,6 +24,8 @@ export function ResourceDetail({
   blocked,
   canReadSoftware,
 }: {
+  initialVersion?: string | undefined
+  initialVariant?: string | undefined
   resources: ResourcesUseCases
   content: ContentUseCases
   resource: Resource
@@ -33,14 +37,16 @@ export function ResourceDetail({
   const l = labels(locale),
     command = useResourceCommand(resources),
     [versionId, setVersionId] = useState(
-      resource.versions.find((version) => version.state === 'active')?.id ??
+      initialVersion ??
+        resource.versions.find((version) => version.state === 'active')?.id ??
         resource.versions[0]?.id ??
         '',
     ),
     version = resource.versions.find((version) => version.id === versionId),
-    [selection, setSelection] = useState(''),
+    [selection, setSelection] = useState(initialVariant ?? ''),
     selected =
-      version?.variants.find((variant) => variantKey(variant) === selection) ?? version?.variants[0]
+      version?.variants.find((variant) => variantKey(variant) === selection) ??
+      (selection ? undefined : version?.variants[0])
   return (
     <div className="resource-detail">
       <div className="resource-detail-heading">
@@ -53,6 +59,15 @@ export function ResourceDetail({
         </div>
         <Tag>{resourceKindName(resource.kind, locale)}</Tag>
       </div>
+      {((initialVersion && !version) || (selection && !selected)) && (
+        <Alert
+          type="error"
+          title={l(
+            '所选精确版本或变体不可用，请重新选择。',
+            'The exact version or variant is unavailable. Select explicitly.',
+          )}
+        />
+      )}
       {resource.origin && (
         <Card title={l('Blueprint 来源', 'Blueprint origin')} size="small">
           <CollectionPlan value={resource.origin} />

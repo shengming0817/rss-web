@@ -1,3 +1,5 @@
+import { createTelemetry } from '@rss/mdm-telemetry'
+import { createTelemetryAdapter } from '@rss/mdm-http/telemetry'
 import { createExecution } from '@rss/mdm-execution'
 import { createDeviceAccess } from '@rss/mdm-device-access'
 import { createExecutionAdapter } from '@rss/mdm-http/execution'
@@ -119,6 +121,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
       })
       const content = createContent(createContentAdapter(transport))
       return Object.freeze({
+        telemetry: createTelemetry(createTelemetryAdapter(transport, tenant), tenant),
         binding: `${tenant}/${state.identity.principalId}/${state.session.id}`,
         identity: createIdentityAdministration(
           createIdentityAdministrationAdapter(identity, owner, oidcEnabled),

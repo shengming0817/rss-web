@@ -30,7 +30,8 @@
     "./policies": "./src/policies.ts",
     "./policy-events": "./src/policy-events.ts",
     "./execution": "./src/execution.ts",
-    "./device-access": "./src/device-access.ts"
+    "./device-access": "./src/device-access.ts",
+    "./telemetry": "./src/telemetry.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -59,7 +60,8 @@
     "@rss/mdm-scopes": "workspace:*",
     "@rss/mdm-policies": "workspace:*",
     "@rss/mdm-execution": "workspace:*",
-    "@rss/mdm-device-access": "workspace:*"
+    "@rss/mdm-device-access": "workspace:*",
+    "@rss/mdm-telemetry": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

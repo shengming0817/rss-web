@@ -1,3 +1,4 @@
+import { TelemetryWorkspace } from './Telemetry'
 import { DeviceControl } from './DeviceControl'
 import { deviceExecutionsPath } from './Executions'
 import { DeviceSecurity, hasDeviceSecurity } from './DeviceSecurity'
@@ -424,6 +425,7 @@ function Detail({
                         'retirement',
                         'asset',
                         ...(has('inventory_read') ? ['inventory'] : []),
+                        ...(has('inventory_read') ? ['telemetry'] : []),
                         ...(has('compliance_read') ? ['compliance'] : []),
                         ...(has('audit_read') || has('operation_read') ? ['history'] : []),
                         ...(hasDeviceSecurity(permissions.value?.grants ?? [], mountedEndpoint.id)
@@ -511,6 +513,17 @@ function Detail({
                         reference={reference}
                         endpoint={mountedEndpoint.id}
                         canAssign={has('inventory_assign')}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'telemetry',
+                    label: l('遥测与采集', 'Telemetry and collection'),
+                    children: (
+                      <TelemetryWorkspace
+                        runtime={runtime}
+                        locale={locale}
+                        device={mountedEndpoint.id}
                       />
                     ),
                   },
