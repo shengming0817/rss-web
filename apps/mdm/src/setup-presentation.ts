@@ -165,6 +165,8 @@ export function setupDestination(id: string): string | null {
     'recovery-key': '/recovery-credentials',
     'recovery-rsa': '/recovery-credentials',
     'user-attributes': '/user-profiles',
+    tenants: '/platform/tenants',
+    provisionings: '/platform/tenants',
     organization: '/platform/tenants',
     prefix: '/platform/tenants',
     password: '/identity',

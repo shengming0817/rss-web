@@ -130,7 +130,9 @@ try {
   phase = 'login-success'
   await page.getByLabel('密码', { exact: true }).fill(readFileSync(fixture.passwordFile, 'utf8'))
   await page.getByRole('button', { name: '登录', exact: true }).click()
-  await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+  await page.getByRole('heading', { name: '租户初始化', exact: true }).waitFor()
+  assert.equal(new URL(page.url()).pathname, '/setup')
+  await page.getByRole('button', { name: '保存意图', exact: true }).waitFor()
   phase = 'design'
   const sidebar = await page.locator('.sidebar').boundingBox(),
     topbar = await page.locator('.topbar').boundingBox()
@@ -142,15 +144,15 @@ try {
   )
   screenshots = mkdtempSync(resolve(tmpdir(), 'rss-react-mdm-browser-'))
   await page.screenshot({
-    path: resolve(screenshots, 'workspace-light.png'),
+    path: resolve(screenshots, 'landing-light.png'),
     fullPage: true,
     animations: 'disabled',
   })
   await page.getByRole('button', { name: 'English', exact: true }).click()
-  await page.getByRole('heading', { name: 'Workspace', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Tenant setup', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Toggle color theme' }).click()
   await page.screenshot({
-    path: resolve(screenshots, 'workspace-dark.png'),
+    path: resolve(screenshots, 'landing-dark.png'),
     fullPage: true,
     animations: 'disabled',
   })
@@ -213,7 +215,7 @@ try {
   // A failed password verification returns 401 but need not revoke the cookie session.
   // Recover only through an explicit authoritative read, never by replaying the rejected write.
   await page.getByRole('button', { name: 'Read session again', exact: true }).click()
-  await page.getByRole('heading', { name: 'Workspace', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Tenant setup', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Open navigation' }).click()
   await page.getByRole('dialog').getByRole('link', { name: 'Security', exact: true }).click()
   await page.getByRole('dialog').waitFor({ state: 'hidden' })
@@ -321,7 +323,7 @@ try {
   await page.getByRole('button', { name: 'Read session again', exact: true }).waitFor()
   await page.unroute('**/identity/tenants/*/login', loseLogin)
   await page.getByRole('button', { name: 'Read session again', exact: true }).click()
-  await page.getByRole('heading', { name: 'Workspace', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Tenant setup', exact: true }).waitFor()
   phase = 'invalid-host'
   const invalid = async (route) => {
     const response = await route.fetch(),
@@ -336,7 +338,7 @@ try {
   await page.goto(`${origin.origin}/auth/resume`)
   await page.getByText('登录流程已过期或不属于当前租户。', { exact: true }).waitFor()
   await page.getByRole('link', { name: '登录', exact: true }).click()
-  await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+  await page.getByRole('heading', { name: '租户初始化', exact: true }).waitFor()
   phase = 'callback-cancellation'
   await page.evaluate(
     (tenant) =>
@@ -353,7 +355,7 @@ try {
     null,
   )
   await page.getByRole('link', { name: '登录', exact: true }).click()
-  await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+  await page.getByRole('heading', { name: '租户初始化', exact: true }).waitFor()
   phase = 'management-entry'
   await page.goto(`${origin.origin}/platform/login`)
   await page.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()

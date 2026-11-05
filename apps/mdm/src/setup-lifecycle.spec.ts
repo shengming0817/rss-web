@@ -48,7 +48,7 @@ afterEach(async () => {
 })
 function button(label: string) {
   const button = [...document.querySelectorAll('button')].find(
-    (b) => b.textContent === label && !b.closest('[hidden]'),
+    (b) => b.textContent?.replace(/\s/g, '') === label.replace(/\s/g, '') && !b.closest('[hidden]'),
   )
   if (!button) throw new Error('Missing button ' + label)
   return button
@@ -350,4 +350,49 @@ it('clears recent-authentication input before awaiting and leaves an unknown wri
   await act(async () => authenticated())
   expect(f.setup.getSnapshot()).toBe(original)
   expect(f.port.update).toHaveBeenCalledTimes(1)
+})
+
+it('uses the filtered directory once and hides supplemental entries until their permissions are confirmed', async () => {
+  const f = fixture()
+  vi.mocked(f.port.catalog).mockResolvedValue({
+    items: [],
+    domains: [
+      { id: 'scopes', href: '/api/v1/scopes' },
+      { id: 'policies', href: '/api/v1/policies' },
+    ],
+  })
+  await render(f.runtime, Settings)
+  const paths = () => [...host.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+  expect(paths().filter((p) => p === '/scopes')).toHaveLength(1)
+  expect(paths().filter((p) => p === '/policies')).toHaveLength(1)
+  expect(paths()).not.toContain('/resources')
+  f.effective.mockResolvedValue({
+    grants: [{ operation: 'resource_read', scope: { kind: 'tenant' } }],
+  })
+  await click('刷新')
+  expect(paths().filter((p) => p === '/resources')).toHaveLength(1)
+  f.effective.mockRejectedValueOnce({ status: 403, code: 'forbidden' })
+  await click('刷新')
+  expect(paths()).not.toContain('/resources')
+})
+it('deduplicates management tenant locators and gates authorization independently', async () => {
+  const f = fixture()
+  const runtime = { ...f.runtime, management: true }
+  vi.mocked(f.port.catalog).mockResolvedValue({
+    items: [],
+    domains: [
+      { id: 'tenants', href: '/api/v1/tenant-administration/tenants' },
+      { id: 'provisionings', href: '/api/v1/tenant-administration/provisionings' },
+    ],
+  })
+  await render(runtime, Settings)
+  const paths = () => [...host.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+  expect(paths().filter((p) => p === '/platform/tenants')).toHaveLength(1)
+  expect(paths()).not.toContain('/platform/identity')
+  expect(paths()).not.toContain('/platform/authorization')
+  f.effective.mockResolvedValue({
+    grants: [{ operation: 'authorization_read', scope: { kind: 'tenant' } }],
+  })
+  await click('刷新')
+  expect(paths().filter((p) => p === '/platform/authorization')).toHaveLength(1)
 })

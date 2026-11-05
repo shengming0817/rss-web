@@ -99,7 +99,14 @@ try {
     await p.getByLabel('账户', { exact: true }).fill(login)
     await p.getByLabel('密码', { exact: true }).fill(secret)
     await p.getByRole('button', { name: '登录', exact: true }).click()
-    await p.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+    const initialSetup = !management && login === 'admin'
+    await p
+      .getByRole('heading', { name: initialSetup ? '租户初始化' : '工作台', exact: true })
+      .waitFor()
+    assert.equal(
+      new URL(p.url()).pathname,
+      initialSetup ? '/setup' : management ? '/platform' : '/',
+    )
   }
   const dialog = (p, name) => p.getByRole('dialog', { name, exact: true })
   async function shut(p, name) {

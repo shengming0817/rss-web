@@ -8,9 +8,32 @@ import { setupDestination, setupName } from './setup-presentation'
 import { SetupStatus } from './SetupStatus'
 export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
-    { settingsCatalog, binding } = useAdministration(runtime),
+    { settingsCatalog, binding, authorization } = useAdministration(runtime),
+    permissions = usePageRead(`${binding}/settings-permissions`, authorization.effective),
     catalog = usePageRead(`${binding}/settings`, settingsCatalog)
   const prefix = runtime.management ? '/platform' : ''
+  const has = (operation: string) =>
+    !permissions.busy &&
+    !permissions.error &&
+    (permissions.value?.grants.some(
+      (g) => g.operation === operation && g.scope.kind === 'tenant',
+    ) ??
+      false)
+  const links = new Map<string, string>()
+  for (const domain of catalog.value?.domains ?? []) {
+    const destination = setupDestination(domain.id)
+    if (destination) {
+      const path =
+        runtime.management && !destination.startsWith('/platform/')
+          ? `${prefix}${destination}`
+          : destination
+      if (!links.has(path)) links.set(path, setupName(locale, domain.id))
+    }
+  }
+  if (!runtime.management && has('resource_read')) links.set('/resources', l('资源库', 'Resources'))
+  if (runtime.management && has('authorization_read'))
+    links.set('/platform/authorization', l('授权目录', 'Authorization'))
+
   return (
     <div className="admin-stack settings-page">
       <Heading
@@ -19,7 +42,16 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
           '按当前权限查看配置和所属模块。登记、应用与实际健康分别展示。',
           'Inspect configuration and its owner with current permissions. Recorded, applied and healthy are separate observations.',
         )}
-        actions={<Button onClick={catalog.reload}>{l('刷新', 'Refresh')}</Button>}
+        actions={
+          <Button
+            onClick={() => {
+              catalog.reload()
+              permissions.reload()
+            }}
+          >
+            {l('刷新', 'Refresh')}
+          </Button>
+        }
       />
       <Space wrap>
         {!runtime.management && <Link to="/setup">{l('租户初始化', 'Tenant setup')}</Link>}
@@ -27,6 +59,7 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
         <Link to={`${prefix}/security`}>{l('安全与重认证', 'Security and reauthentication')}</Link>
       </Space>
       <ReadState locale={locale} busy={catalog.busy} error={catalog.error} />
+      <ReadState locale={locale} busy={permissions.busy} error={permissions.error} />
       {catalog.value && (
         <>
           <div className="group-grid">
@@ -105,28 +138,16 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
             </div>
             <div className="panel-body">
               <Space wrap>
-                {runtime.management ? (
-                  <>
-                    <Link to="/platform/tenants">{l('租户管理', 'Tenant administration')}</Link>
-                    <Link to="/platform/authorization">{l('授权目录', 'Authorization')}</Link>
-                    <Link to="/platform/identity">{l('身份管理', 'Identity administration')}</Link>
-                  </>
-                ) : (
-                  <>
-                    {catalog.value.domains.map((d) =>
-                      setupDestination(d.id) ? (
-                        <Link key={d.id} to={setupDestination(d.id)!}>
-                          {setupName(locale, d.id)}
-                        </Link>
-                      ) : (
-                        <span key={d.id}>{d.id}</span>
-                      ),
-                    )}
-                    <Link to="/resources">{l('资源库', 'Resources')}</Link>
-                    <Link to="/scopes">{l('范围', 'Scopes')}</Link>
-                    <Link to="/policies">{l('策略', 'Policies')}</Link>
-                  </>
-                )}
+                {[...links].map(([path, name]) => (
+                  <Link key={path} to={path}>
+                    {name}
+                  </Link>
+                ))}
+                {catalog.value.domains
+                  .filter((domain) => !setupDestination(domain.id))
+                  .map((domain) => (
+                    <span key={domain.id}>{domain.id}</span>
+                  ))}
               </Space>
             </div>
           </section>
