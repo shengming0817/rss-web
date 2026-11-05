@@ -93,7 +93,9 @@ export interface AggregateQuery {
   readonly dimensions: Readonly<Record<string, string>>
   readonly resolutionMicros: number
   readonly operation: Aggregation
-  readonly coverage: { readonly coverage: 'observedOnly' }
+  readonly coverage:
+    | { readonly coverage: 'observedOnly' }
+    | { readonly coverage: 'holdLast'; readonly maxHoldMicros: number }
   readonly maxGapMicros: number | null
 }
 export interface Unavailable {

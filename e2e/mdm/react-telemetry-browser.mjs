@@ -11,6 +11,7 @@ import process from 'node:process'
 import { realBrowser } from './react-mdm-browser.mjs'
 const run = await realBrowser('MDM_DEVICE_BROWSER_FIXTURE', 'react-telemetry')
 let failure
+const shots = mkdtempSync(join(tmpdir(), 'rss-react-telemetry-'))
 try {
   const { fixture, origin, checks: coverage } = run,
     page = await run.page(),
@@ -225,7 +226,7 @@ try {
       projection: 'both',
       sampleMillis: 5000,
       uploadMillis: 10000,
-      budget: { points: 256, bytes: 65536, resources: 1, executionMillis: 1000, outputBytes: 4096 },
+      budget: { points: 256, bytes: 65536, resources: 3, executionMillis: 1000, outputBytes: 4096 },
       boost: null,
       backfillSeconds: 86400,
     },
@@ -275,9 +276,10 @@ try {
   const policyId = randomUUID()
   await write('POST', `/api/v1/policies/${policyId}`, {
     action: 'put',
+    enabled: true,
     definition: {
       scope,
-      alias: '遥测浏览器方案',
+      alias: 'browser.telemetry',
       customEvent: null,
       action: {
         kind: 'telemetry_profile',
@@ -321,13 +323,37 @@ try {
     assert.ok(i < 79, 'observation publication deadline')
     await new Promise((done) => setTimeout(done, 250))
   }
+  run.step('cursor-coordinate-rejection')
+  const small = await api('POST', '/api/v1/telemetry/history', { ...query, maxPoints: 2 })
+  assert.ok(small.next, 'history continuation')
+  for (const changed of [
+    { device: fixture.alone },
+    { field: 'custom.browser.counter' },
+    { resource: 'other' },
+  ]) {
+    const response = await page.request.post(origin + '/api/v1/telemetry/history', {
+      headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
+      data: { ...query, maxPoints: 2, after: small.next, ...changed },
+    })
+    assert.equal(response.status(), 400, 'cursor rejects changed coordinates')
+  }
+  const foreign = await page.request.post(origin + '/api/v1/telemetry/history', {
+    headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
+    data: { ...query, tenant: fixture.otherTenant },
+  })
+  assert.equal(foreign.status(), 400, 'tenant cannot be overridden through the query DTO')
+  const otherSession = await page.request.get(
+    origin + `/api/v1/identity/tenants/${fixture.otherTenant}/session`,
+  )
+  assert.equal(otherSession.status(), 401, 'session is bound to the original tenant')
+  coverage.push('real-cursor-device-field-resource-rejection-and-tenant-session-isolation')
   run.step('history-query-and-series')
   await run.nav(page, `/telemetry?device=${encodeURIComponent(device)}`, '遥测与采集')
   const label = (name) => page.getByLabel(name, { exact: true }).filter({ visible: true }),
     button = (name) => page.getByRole('button', { name, exact: true }).filter({ visible: true })
   await label('字段键').fill(query.field)
   await label('序列资源').fill('device')
-  await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 19))
+  await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 16))
   const firstHistoryResponse = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
     button('查询已上报数据').click(),
   )
@@ -372,6 +398,12 @@ try {
       { exact: true },
     )
     .waitFor()
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({
+    path: join(shots, 'query-desktop.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
   coverage.push('real-health-quality-counts-and-capacity-gap-registration')
   await page.locator('.telemetry-aggregate').waitFor()
   await page.getByText('仅统计已观察数据', { exact: true }).waitFor()
@@ -409,6 +441,7 @@ try {
     .waitFor()
   await queryField('custom.browser.state')
   await selectSeries()
+  await run.choose(page, label('状态覆盖策略'), '有界保持上一状态')
   assert.equal(
     await page.locator('.telemetry-chart').count(),
     0,
@@ -432,15 +465,17 @@ try {
   run.step('no-data-and-unsafe-integer-fixture')
   await label('字段键').fill(query.field)
   await label('序列资源').fill('device')
-  await label('开始时间（UTC）').fill('1970-01-01T00:00:00')
-  await label('结束时间（UTC，不含）').fill('1970-01-01T00:00:01')
+  await label('开始时间（UTC）').fill(new Date(Date.now() - 86_400_000).toISOString().slice(0, 16))
+  await label('结束时间（UTC，不含）').fill(
+    new Date(Date.now() - 82_800_000).toISOString().slice(0, 16),
+  )
   const emptyResponse = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
     button('查询已上报数据').click(),
   )
   assert.equal((await emptyResponse.json()).rows.length, 0)
   await page.locator('.telemetry-results').getByText('没有数据', { exact: true }).first().waitFor()
-  await label('开始时间（UTC）').fill(new Date(query.startMicros / 1000).toISOString().slice(0, 19))
-  await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 19))
+  await label('开始时间（UTC）').fill(new Date(query.startMicros / 1000).toISOString().slice(0, 16))
+  await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 16))
   const unsafe = structuredClone(representativeHistory),
     unsafeRow = unsafe.rows.find((r) => r.sample.reading.quality === 'valid')
   unsafeRow.sample.series.definition.metric = { kind: 'gauge', number: 'i64' }
@@ -471,17 +506,30 @@ try {
   coverage.push('latest-server-selected-source-without-continuation')
   run.step('configuration-preview-and-links')
   await page.getByRole('tab', { name: '配置发现与预览', exact: true }).click()
-  await button('预览精确配置').first().click()
-  await page.getByRole('heading', { name: '精确采集方案预览', exact: true }).waitFor()
+  await page
+    .getByRole('row')
+    .filter({ hasText: profile })
+    .getByRole('button', { name: '预览精确配置', exact: true })
+    .click()
+  await page.getByText('精确采集方案预览', { exact: true }).waitFor()
   await page.getByText('custom.browser.gauge', { exact: true }).filter({ visible: true }).waitFor()
   assert.ok((await page.locator('.telemetry-preview').innerText()).includes('profile-v1'))
+  await page
+    .locator('.telemetry-preview')
+    .getByRole('link', { name: 'browser.telemetry', exact: true })
+    .waitFor()
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({
+    path: join(shots, 'preview-desktop.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
   await page.getByRole('link', { name: '在资源库打开精确方案', exact: true }).click()
   await button('读取精确资源').click()
   await label('资源固定版本').waitFor()
   assert.ok((await page.locator('.resource-detail').innerText()).includes('profile-v1'))
   coverage.push('configuration-registration-exact-resource-version-template-policy-scope-links')
   run.step('responsive-design')
-  const shots = mkdtempSync(join(tmpdir(), 'rss-react-telemetry-'))
   for (const [name, width] of [
     ['desktop', 1440],
     ['tablet', 820],
@@ -491,21 +539,63 @@ try {
     await run.nav(page, `/telemetry?device=${encodeURIComponent(device)}`, '遥测与采集')
     await page.getByRole('tab', { name: '配置发现与预览', exact: true }).click()
     await button('预览精确配置').first().waitFor()
+    await page
+      .getByRole('row')
+      .filter({ hasText: profile })
+      .getByRole('button', { name: '预览精确配置', exact: true })
+      .click()
+    await page
+      .locator('.telemetry-preview')
+      .getByText('custom.browser.gauge', { exact: true })
+      .waitFor()
     assert.ok(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
       'page fits viewport',
     )
-    await page.screenshot({ path: join(shots, name + '.png'), fullPage: true })
+    await page
+      .locator('.telemetry-preview')
+      .getByRole('link', { name: 'browser.telemetry', exact: true })
+      .waitFor()
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.screenshot({
+      path: join(shots, name + '.png'),
+      fullPage: true,
+      animations: 'disabled',
+    })
   }
-  await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'))
-  await page.screenshot({ path: join(shots, 'dark.png'), fullPage: true })
+  await page.getByRole('button', { name: '切换亮暗主题', exact: true }).click()
+  await page.waitForFunction(
+    () =>
+      document.documentElement.dataset.theme === 'dark' &&
+      getComputedStyle(document.querySelector('.ant-card')).backgroundColor !==
+        'rgb(255, 255, 255)',
+  )
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: join(shots, 'dark.png'), fullPage: true, animations: 'disabled' })
+  assert.notEqual(
+    await page
+      .getByRole('button', { name: '切换亮暗主题', exact: true })
+      .evaluate((e) => getComputedStyle(e).backgroundColor),
+    'rgb(255, 255, 255)',
+    'dark controls have dark tokens',
+  )
+  assert.ok(
+    await page
+      .locator('.ant-tabs-tab-btn')
+      .first()
+      .evaluate((e) => {
+        const values = getComputedStyle(e).color.match(/\d+/g)?.map(Number)
+        return values && values[0] > 150
+      }),
+    'dark tabs remain readable',
+  )
   coverage.push('desktop-tablet-mobile-dark-public-screenshots:' + shots)
   run.step('revoked-permission-clears-results')
   await page.setViewportSize({ width: 1440, height: 960 })
   await run.nav(page, `/telemetry?device=${encodeURIComponent(device)}`, '遥测与采集')
   await label('字段键').fill(query.field)
   await label('序列资源').fill('device')
-  await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 19))
+  await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 16))
   await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
     button('查询已上报数据').click(),
   )

@@ -1,6 +1,8 @@
 import type { Aggregation, Observation } from '@rss/mdm-telemetry'
 export function utcMicros(value: number): string {
-  return new Date(Math.floor(value / 1000)).toISOString()
+  const millis = new Date(Math.floor(value / 1000)).toISOString(),
+    micros = ((value % 1000) + 1000) % 1000
+  return millis.slice(0, -1) + String(micros).padStart(3, '0') + 'Z'
 }
 export function parseUtc(value: string): number {
   const n = Date.parse(value + 'Z') * 1000
@@ -12,7 +14,9 @@ export function allowedAggregations(row: Observation): readonly Aggregation[] {
   return metric.kind === 'bool' || metric.kind === 'state'
     ? ['timeline', 'transitions', 'coverage']
     : metric.kind === 'counter'
-      ? ['min', 'max', 'sum', 'count', 'mean', 'increase', 'rate']
+      ? metric.temporality === 'cumulative'
+        ? ['increase', 'rate']
+        : ['sum', 'rate']
       : ['min', 'max', 'sum', 'count', 'mean']
 }
 export function seriesLabel(row: Observation): string {
@@ -57,4 +61,20 @@ export function diagnosticName(value: string, locale: 'zh' | 'en'): string {
       } as Record<string, string>
     )[value] ?? value
   )
+}
+
+/** Current directory restrictions cannot replace an observation's frozen definition. */
+export function queryAggregations(
+  row: Observation,
+  current: {
+    readonly version: number
+    readonly definition: {
+      readonly timeSeries: { readonly aggregations: readonly Aggregation[] } | null
+    } | null
+  },
+): readonly Aggregation[] {
+  const valid = allowedAggregations(row)
+  return current.version === row.sample.series.definition.version
+    ? valid.filter((v) => current.definition?.timeSeries?.aggregations.includes(v))
+    : valid
 }

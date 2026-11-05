@@ -172,3 +172,43 @@ it('rejects overlapping aggregate windows and preserves coverage information', a
     f.telemetry.aggregate(aggregateSelection(query, row(), 'mean', 10, null)),
   ).rejects.toThrow('window')
 })
+
+it('uses counter gap and explicit state hold semantics without inventing coverage', () => {
+  const gauge = row(),
+    counter = {
+      ...gauge,
+      sample: {
+        ...gauge.sample,
+        series: {
+          ...gauge.sample.series,
+          definition: {
+            ...gauge.sample.series.definition,
+            metric: { kind: 'counter', number: 'u64', temporality: 'cumulative' },
+          },
+        },
+      },
+    } as Observation
+  expect(aggregateSelection(query, gauge, 'mean', 10, 300).maxGapMicros).toBeNull()
+  expect(() => aggregateSelection(query, counter, 'rate', 10, null)).toThrow('gap required')
+  expect(aggregateSelection(query, counter, 'rate', 10, 300).maxGapMicros).toBe(300)
+  const state = {
+    ...gauge,
+    sample: {
+      ...gauge.sample,
+      series: {
+        ...gauge.sample.series,
+        definition: {
+          ...gauge.sample.series.definition,
+          metric: { kind: 'state', members: ['running', 'stopped'] },
+        },
+      },
+    },
+  } as Observation
+  expect(() => aggregateSelection(query, state, 'coverage', 10, null)).toThrow('coverage')
+  expect(
+    aggregateSelection(query, state, 'coverage', 10, null, {
+      coverage: 'holdLast',
+      maxHoldMicros: 300,
+    }).coverage,
+  ).toEqual({ coverage: 'holdLast', maxHoldMicros: 300 })
+})

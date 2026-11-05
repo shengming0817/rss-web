@@ -19,6 +19,7 @@ import {
   aggregationName,
   diagnosticName,
   allowedAggregations,
+  queryAggregations,
   seriesLabel,
   utcMicros,
 } from './telemetry-format'
@@ -90,7 +91,11 @@ function AggregateResults({
     <Card title={l('服务端聚合', 'Server aggregation')} className="telemetry-aggregate">
       <Space wrap>
         <Tag>{aggregationName(request.operation, locale)}</Tag>
-        <span>{l('仅统计已观察数据', 'Observed data only')}</span>
+        <span>
+          {request.coverage.coverage === 'observedOnly'
+            ? l('仅统计已观察数据', 'Observed data only')
+            : `${l('有界保持上一状态', 'Bounded hold of the last state')} · ${request.coverage.maxHoldMicros / 1_000_000} ${l('秒', 'seconds')}`}
+        </span>
         <Button onClick={read.reload}>{l('重新读取聚合', 'Read aggregation again')}</Button>
       </Space>
       <ReadState
@@ -195,16 +200,17 @@ export function TelemetryResults({
     [operation, setOperation] = useState<AggregateQuery['operation']>('mean'),
     [resolution, setResolution] = useState(300),
     [gap, setGap] = useState<number | null>(300),
+    [hold, setHold] = useState<number | null>(null),
     [aggregate, setAggregate] = useState<AggregateQuery | null>(null),
     [error, setError] = useState<unknown>(null),
     rows = read.value?.rows ?? [],
     series = [...new Map(rows.map((row) => [seriesKey(row), row])).values()],
     selected = series.find((row) => seriesKey(row) === selection),
-    choices = selected
-      ? allowedAggregations(selected).filter((v) =>
-          field.value?.definition?.timeSeries?.aggregations.includes(v),
-        )
-      : [],
+    choices = selected && field.value ? queryAggregations(selected, field.value) : [],
+    isState =
+      selected?.sample.series.definition.metric.kind === 'state' ||
+      selected?.sample.series.definition.metric.kind === 'bool',
+    isCounter = selected?.sample.series.definition.metric.kind === 'counter',
     selectedOperation = choices.includes(operation) ? operation : choices[0]
   function reset() {
     setAggregate(null)
@@ -370,7 +376,10 @@ export function TelemetryResults({
                         selected,
                         selectedOperation!,
                         resolution * 1_000_000,
-                        gap === null ? null : gap * 1_000_000,
+                        isCounter && gap !== null ? gap * 1_000_000 : null,
+                        isState && hold !== null
+                          ? { coverage: 'holdLast', maxHoldMicros: hold * 1_000_000 }
+                          : { coverage: 'observedOnly' },
                       )
                     })
                     setAggregate(request)
@@ -380,6 +389,15 @@ export function TelemetryResults({
                 }}
               >
                 <h3>{l('查询此序列的服务端聚合', 'Query server aggregation for this series')}</h3>
+                {field.value &&
+                  field.value.version !== selected.sample.series.definition.version && (
+                    <p className="subtitle">
+                      {l(
+                        '当前字段目录已推进；聚合保留此观察的冻结定义，允许的操作由服务端校验。',
+                        'The field directory has advanced. Aggregation retains this observation’s frozen definition; the server validates permitted operations.',
+                      )}
+                    </p>
+                  )}
                 <div className="admin-form-grid">
                   <Form.Item label={l('聚合含义', 'Aggregation')}>
                     <Select
@@ -405,24 +423,74 @@ export function TelemetryResults({
                       }}
                     />
                   </Form.Item>
-                  <Form.Item
-                    label={l(
-                      '最大连续间隔（秒，空为无上限）',
-                      'Maximum gap (seconds, empty for unbounded)',
-                    )}
-                  >
-                    <InputNumber
-                      min={1}
-                      value={gap}
-                      onChange={(v) => {
-                        setGap(v)
-                        setAggregate(null)
-                      }}
-                    />
-                  </Form.Item>
+                  {isCounter && (
+                    <Form.Item
+                      label={l(
+                        '最大连续间隔（秒，计数器必填）',
+                        'Maximum gap (seconds, required for counters)',
+                      )}
+                    >
+                      <InputNumber
+                        min={1}
+                        value={gap}
+                        onChange={(v) => {
+                          setGap(v)
+                          setAggregate(null)
+                        }}
+                      />
+                    </Form.Item>
+                  )}
+                  {isState && (
+                    <>
+                      <Form.Item label={l('状态覆盖策略', 'State coverage policy')}>
+                        <Select
+                          aria-label={l('状态覆盖策略', 'State coverage policy')}
+                          value={hold === null ? 'observed' : 'hold'}
+                          options={[
+                            { value: 'observed', label: l('仅观察点', 'Observed points only') },
+                            {
+                              value: 'hold',
+                              label: l('有界保持上一状态', 'Bounded hold of the last state'),
+                            },
+                          ]}
+                          onChange={(v) => {
+                            setHold(v === 'hold' ? 300 : null)
+                            setAggregate(null)
+                          }}
+                        />
+                      </Form.Item>
+                      {hold !== null && (
+                        <Form.Item label={l('最长保持时长（秒）', 'Maximum hold (seconds)')}>
+                          <InputNumber
+                            min={1}
+                            value={hold}
+                            onChange={(v) => {
+                              setHold(v ?? 300)
+                              setAggregate(null)
+                            }}
+                          />
+                        </Form.Item>
+                      )}
+                    </>
+                  )}
                 </div>
+                {isState && (
+                  <p className="subtitle">
+                    {l(
+                      '状态持续时间要求显式选择有界保持；保持是查询策略，不是设备观察证明。',
+                      'State duration requires an explicit bounded hold. Holding is a query policy, not proof of device observation.',
+                    )}
+                  </p>
+                )}
                 <ReadState locale={locale} busy={field.busy} error={field.error} />
-                <Button htmlType="submit" disabled={!selectedOperation}>
+                <Button
+                  htmlType="submit"
+                  disabled={
+                    !selectedOperation ||
+                    (isCounter && gap === null) ||
+                    (selectedOperation === 'coverage' && hold === null)
+                  }
+                >
                   {l('查询聚合', 'Query aggregation')}
                 </Button>
               </Form>

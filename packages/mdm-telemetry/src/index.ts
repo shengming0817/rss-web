@@ -56,6 +56,7 @@ export function aggregateSelection(
   operation: AggregateQuery['operation'],
   resolutionMicros: number,
   maxGapMicros: number | null,
+  coverage: AggregateQuery['coverage'] = { coverage: 'observedOnly' },
 ): AggregateQuery {
   if (
     row.sample.series.subject !== query.device ||
@@ -70,6 +71,14 @@ export function aggregateSelection(
     (maxGapMicros !== null && (!Number.isSafeInteger(maxGapMicros) || maxGapMicros < 1))
   )
     throw new Error('Invalid aggregate selection')
+  const metric = row.sample.series.definition.metric
+  if (
+    (coverage.coverage === 'holdLast' && !['state', 'bool'].includes(metric.kind)) ||
+    (operation === 'coverage' && coverage.coverage === 'observedOnly')
+  )
+    throw new Error('Invalid state coverage policy')
+  if (row.sample.series.definition.metric.kind === 'counter' && maxGapMicros === null)
+    throw new Error('Counter gap required')
   return {
     query: { ...query, mode: 'history', after: null },
     definitionVersion: row.sample.series.definition.version,
@@ -79,8 +88,8 @@ export function aggregateSelection(
     dimensions: row.sample.series.dimensions,
     operation,
     resolutionMicros,
-    maxGapMicros,
-    coverage: { coverage: 'observedOnly' },
+    maxGapMicros: row.sample.series.definition.metric.kind === 'counter' ? maxGapMicros : null,
+    coverage,
   }
 }
 /** Authorization, latest source selection, aggregation and scheduling stay on the server. */
@@ -128,7 +137,10 @@ export function createTelemetry(port: TelemetryPort, tenant: string) {
         request.definitionVersion < 1 ||
         !Number.isSafeInteger(request.resolutionMicros) ||
         request.resolutionMicros < 1 ||
-        request.coverage.coverage !== 'observedOnly' ||
+        !['observedOnly', 'holdLast'].includes(request.coverage.coverage) ||
+        (request.coverage.coverage === 'holdLast' &&
+          (!Number.isSafeInteger(request.coverage.maxHoldMicros) ||
+            request.coverage.maxHoldMicros < 1)) ||
         (request.maxGapMicros !== null &&
           (!Number.isSafeInteger(request.maxGapMicros) || request.maxGapMicros < 1))
       )
