@@ -1,3 +1,7 @@
+import { TenantSetup } from './TenantSetup'
+import { Settings } from './Settings'
+import { Diagnostics } from './Diagnostics'
+import { SetupEntry } from './SetupEntry'
 import { Telemetry } from './Telemetry'
 import { Executions } from './Executions'
 import { DeviceAccess } from './DeviceAccess'
@@ -225,7 +229,23 @@ export interface FeatureRoute {
 }
 /** Product features register implemented routes here; they do not assemble authentication. */
 const featureRoutes: readonly FeatureRoute[] = [
-  { path: '/', label: 'workspace', render: (ui) => <Workspace {...ui} /> },
+  {
+    path: '/',
+    label: 'workspace',
+    render: (ui) => (
+      <SetupEntry {...ui}>
+        <Workspace {...ui} />
+      </SetupEntry>
+    ),
+  },
+  {
+    path: '/setup',
+    label: 'tenantSetup',
+    realm: 'tenant',
+    render: (ui) => <TenantSetup {...ui} />,
+  },
+  { path: '/settings', label: 'settings', render: (ui) => <Settings {...ui} /> },
+  { path: '/diagnostics', label: 'diagnostics', render: (ui) => <Diagnostics {...ui} /> },
   { path: '/devices', label: 'devices', realm: 'tenant', render: (ui) => <Devices {...ui} /> },
   {
     path: '/inventory',

@@ -11,6 +11,7 @@ export default defineConfig({
             '*.spec.ts',
             'apps/mdm/src/lifecycle.spec.ts',
             'apps/mdm/src/telemetry-lifecycle.spec.ts',
+            'apps/mdm/src/setup-lifecycle.spec.ts',
             'apps/mdm/src/execution-lifecycle.spec.ts',
             'apps/mdm/src/policy-lifecycle.spec.ts',
             'apps/mdm/src/assets-lifecycle.spec.ts',

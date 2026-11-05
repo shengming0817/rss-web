@@ -463,3 +463,21 @@ it('keeps telemetry pure and permits only public adapter and page dependencies',
     ),
   ).not.toContain('no-restricted-imports')
 })
+
+it('keeps setup and runtime diagnostics as pure domains with public adapters', async () => {
+  for (const domain of ['mdm-tenant-setup', 'mdm-runtime-diagnostics']) {
+    for (const dependency of [
+      'react',
+      'antd',
+      '@rss/api/mdm-operations',
+      '@rss/mdm-http',
+      '@rss/auth-core',
+    ]) {
+      const result = await ruleIds(
+        `import {x} from '${dependency}'; export const y=x`,
+        `packages/${domain}/src/probe.ts`,
+      )
+      expect(result).toContain('no-restricted-imports')
+    }
+  }
+})

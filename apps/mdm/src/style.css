@@ -1391,3 +1391,47 @@ html:has(.mdm-overlay-open) {
     flex-direction: column;
   }
 }
+
+.setup-choice {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(130px, 1fr) minmax(150px, 2fr);
+  gap: 12px;
+  align-items: center;
+}
+.setup-evidence {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.setup-page code,
+.diagnostics-page code {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .setup-choice {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.setup-page,
+.diagnostics-page,
+.settings-page,
+.setup-page .admin-stack,
+.diagnostics-page .admin-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-page .group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.settings-page .group-grid .panel {
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .settings-page .group-grid {
+    grid-template-columns: 1fr;
+  }
+}

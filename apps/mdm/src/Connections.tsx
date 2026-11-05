@@ -1,5 +1,5 @@
 import { Alert, Button, Space } from 'antd'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { SecretTabs } from './SecretTabs'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
@@ -87,6 +87,9 @@ function Evidence({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   )
 }
 export function Connections({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
+  const [params, setParams] = useSearchParams()
+  const requested = params.get('tab')
+  const tabs = ['storage', 'mail', 'wns', 'apple', 'agent', 'observations']
   const l = labels(locale),
     { authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/connection-presentation`, authorization.effective),
@@ -193,6 +196,8 @@ export function Connections({ runtime, locale }: { runtime: Runtime; locale: Loc
       </Space>
       <ReadState busy={permissions.busy} error={permissions.error} locale={locale} />
       <SecretTabs
+        activeKey={requested && tabs.includes(requested) ? requested : tabs[0]!}
+        onChange={(key) => setParams({ tab: key })}
         items={items}
         uiLocale={locale}
         authorizedKeys={[

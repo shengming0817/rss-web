@@ -1,3 +1,7 @@
+import { createTenantSetup } from '@rss/mdm-tenant-setup'
+import { createRuntimeDiagnostics } from '@rss/mdm-runtime-diagnostics'
+import { createTenantSetupAdapter, createCatalogAdapter } from '@rss/mdm-http/tenant-setup'
+import { createRuntimeDiagnosticsAdapter } from '@rss/mdm-http/runtime-diagnostics'
 import { createTelemetry } from '@rss/mdm-telemetry'
 import { createTelemetryAdapter } from '@rss/mdm-http/telemetry'
 import { createExecution } from '@rss/mdm-execution'
@@ -93,6 +97,8 @@ export async function createRuntime(origin: string, pathname: string, storage: S
     },
   )
   const passkeys = createPasskeyClient(identity, owner)
+  let setupBinding = ''
+  let setup: ReturnType<typeof createTenantSetup> | undefined
   return Object.freeze({
     owner,
     webhookMaterialRecovery: createWebhookMaterialRecovery(owner),
@@ -119,8 +125,18 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         principalId: state.identity.principalId,
         sessionId: state.session.id,
       })
+      const binding = `${tenant}/${state.identity.principalId}/${state.session.id}`
+      if (setupBinding !== binding) {
+        setupBinding = binding
+        setup = management
+          ? undefined
+          : createTenantSetup(createTenantSetupAdapter(transport, tenant), tenant)
+      }
       const content = createContent(createContentAdapter(transport))
       return Object.freeze({
+        tenantSetup: setup,
+        settingsCatalog: createCatalogAdapter(transport, management),
+        diagnostics: createRuntimeDiagnostics(createRuntimeDiagnosticsAdapter()),
         telemetry: createTelemetry(createTelemetryAdapter(transport, tenant), tenant),
         binding: `${tenant}/${state.identity.principalId}/${state.session.id}`,
         identity: createIdentityAdministration(

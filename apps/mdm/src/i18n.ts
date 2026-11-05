@@ -1,5 +1,8 @@
 export type Locale = 'zh' | 'en'
 const zh = {
+  tenantSetup: '租户初始化',
+  settings: '设置',
+  diagnostics: '运行诊断',
   devices: '设备',
   executions: '执行与结果',
   deviceAccess: 'Device Access',
@@ -97,6 +100,9 @@ const zh = {
 }
 type Messages = { [K in keyof typeof zh]: string }
 const en: Messages = {
+  tenantSetup: 'Tenant setup',
+  settings: 'Settings',
+  diagnostics: 'Runtime diagnostics',
   inventory: 'Inventory',
   resources: 'Resources',
   software: 'Software',
