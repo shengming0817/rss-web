@@ -1,113 +1,209 @@
-import { gapZh, gapEn } from './features/gapMessages'
-import { telemetryZh, telemetryEn } from './features/telemetry/i18n'
-import { profilesZh, profilesEn } from './features/settings/profileMessages'
-import { settingsZh, settingsEn } from './features/settings/i18n'
-import { consoleZh, consoleEn } from './components/messages'
-import { onboardingZh, onboardingEn } from './features/enrollment/i18n'
-import { registrationZh, registrationEn } from './features/devices/i18n-registration'
-import { softwareZh, softwareEn } from './features/software/i18n'
-import { identityI18n } from '@rss/auth'
-import { policiesZh, policiesEn } from './features/policies/i18n'
-import { devicesZh, devicesEn } from './features/devices/i18n'
-import { securityZh, securityEn } from './features/security/i18n'
-import { operationsZh, operationsEn } from './features/operations/i18n'
+export type Locale = 'zh' | 'en'
 const zh = {
-  scenarios: {
-    normal: '正常',
-    empty: '空数据',
-    forbidden: '查询被拒',
-    denied: '无模块入口',
-    offline: '服务离线',
-    unsupported: '不支持',
-    partial: '部分结果',
-    conflict: '版本冲突',
-    unknown: '提交结果未知',
-    late: '迟到响应',
-  },
-  home: '管理工作区',
-  title: '企业终端管理',
-  intro: '管理 Windows 与 macOS 设备。受理、设备回执、实际效果与合规分别呈现。',
-  source: '数据来源',
-  real: '真实接口',
-  mock: 'Mock · 仅模拟',
-  unavailable: '当前无法读取导航。不会回退模拟数据。',
-  unknown: '导航未知',
-  unknownSource: '来源未知',
-  queryDenied: '工作区查询被拒绝。请联系管理员核实权限。',
-  denied: '无访问入口',
-  planned: '业务模块尚未交付',
-  open: '打开',
-  reload: '重新读取',
-  devices: '设备与资产',
-  policies: '配置与执行',
-  software: '应用、软件与更新',
-  security: '安全与支持',
-  operations: '权限与运营',
-  boundary: '导航仅为展示提示，真实权限由后端判定。Mock 不证明设备效果或生产能力。',
+  tenantSetup: '租户初始化',
+  settings: '设置',
+  diagnostics: '运行诊断',
+  devices: '设备',
+  executions: '执行与结果',
+  deviceAccess: 'Device Access',
+  telemetry: '遥测与采集',
+  inventory: '资产查询',
+  resources: '资源库',
+  software: '软件目录',
+  certificates: '证书与 PKI',
+  audit: '审计与活动',
+  webhooks: 'Webhook 集成',
+  recoveryCredentials: '恢复凭据',
+  groups: '设备组',
+  scopes: '策略范围',
+  policies: '策略与部署',
+  compliance: '安全与合规',
+  enrollment: '设备注册',
+  connections: '连接配置',
+  authorization: '授权管理',
+  tenantAdministration: '租户管理',
+  userProfiles: '用户资料',
+  identityAdministration: '账户与身份来源',
+  authenticator_already_registered: '此认证器已添加，请使用其他认证器。',
+  passkeys: '通行密钥',
+  readPasskeys: '读取通行密钥',
+  passkeysUnsupported: '当前浏览器不支持所需的通行密钥接口。',
+  passkeysUnread: '尚未确认通行密钥状态，请读取后操作。',
+  noPasskeys: '尚未添加通行密钥。',
+  passkeyPurpose: '已有通行密钥时，添加新密钥需要绑定此用途的认证；验证后请显式提交添加。',
+  passkeyAuthorized: '添加通行密钥的验证已完成，请显式提交添加。',
+  authorizePasskey: '使用已有通行密钥验证添加',
+  authorizeWithProvider: '通过组织验证添加',
+  cancelAuthorization: '取消添加授权',
+  passkeyLabel: '通行密钥名称',
+  passkeyLabelBudget: '名称最多128字节。',
+  addPasskey: '添加通行密钥',
+  callbackCancelled: '组织认证已取消。',
+  callbackFailed: '组织认证未完成，请重新开始。',
+  callbackUnavailable: '组织认证服务暂不可用。',
+  stepUpReturned: '已从操作验证返回。请重新选择并显式提交原操作；服务端会确认验证是否有效。',
+  product: 'RSS MDM',
+  business: '业务租户',
+  management: '管理租户',
+  login: '登录',
+  loginTitle: '欢迎回来',
+  loginHint: '使用组织账户安全访问设备管理工作台。',
+  account: '账户',
+  password: '密码',
+  sso: '组织单点登录',
+  checking: '正在确认会话…',
+  unavailable: '暂时无法确认会话',
+  retry: '重新读取会话',
+  unavailableHint: '连接或会话结果未确认。请重新读取后再操作。',
+  invalidated: '会话已过期或失效，请重新登录。',
+  unknown: '操作结果未确认。请读取当前状态，勿重复提交。',
+  rejected: '请求未完成，请检查账户、权限或当前状态。',
+  invalid_credential: '账户或密码不正确。',
+  insufficient_privilege: '当前账户没有此操作权限。',
+  reauthentication_required: '请先重新认证，再显式提交原操作。',
+  reauthentication_failed: '认证未通过，请检查密码后重试。',
+  revision_conflict: '内容已变化，请重新读取后编辑。',
+  rate_limited: '操作过于频繁，请稍后再试。',
+  csrf_rejected: '会话凭据已变化，请重新读取会话。',
+  authentication_cancelled: '认证已取消。',
+  interaction_required: '需要交互认证才能继续。',
+  configuration_changed: '配置已变化，请重新读取。',
+  logout: '退出登录',
+  logoutAll: '退出所有会话',
+  refresh: '刷新会话',
+  logoutUnknown: '退出结果尚未确认，请重新读取会话。',
+  reauthenticate: '重新认证',
+  reauthenticateHint: '完成后请返回原操作并显式提交。',
+  cancel: '取消',
+  theme: '切换亮暗主题',
+  language: 'English',
+  skip: '跳到主内容',
+  openNavigation: '打开导航',
+  navigation: '主导航',
+  workspace: '工作台',
+  session: '当前会话',
+  principal: '当前账户',
+  tenant: '租户',
+  expires: '会话到期',
+  security: '安全设置',
+  securityUnavailable: '安全信息不可用',
+  securityHint: '认证事实仅用于展示，操作权限由服务端确认。',
+  navigationUnavailable: '导航上下文不可用，请重新读取。',
+  notFound: '页面不存在',
+  back: '返回工作台',
+  resumeFailed: '登录流程已过期或不属于当前租户。',
+  source: '认证方式',
+  strength: '认证强度',
+  noSecurity: '读取安全信息',
+  close: '关闭',
+  success: '已完成',
 }
-const en: typeof zh = {
-  scenarios: {
-    normal: 'Normal',
-    empty: 'Empty',
-    forbidden: 'Query denied',
-    denied: 'No module entry',
-    offline: 'Service offline',
-    unsupported: 'Unsupported',
-    partial: 'Partial results',
-    conflict: 'Revision conflict',
-    unknown: 'Unknown submission result',
-    late: 'Late response',
-  },
-  home: 'Workspace',
-  title: 'Enterprise device management',
-  intro:
-    'Manage Windows and macOS devices. Acceptance, receipt, effect and compliance remain separate facts.',
-  source: 'Data source',
-  real: 'Live API',
-  mock: 'Mock · simulation only',
-  unavailable: 'Navigation is unavailable. Live failures never fall back to simulated data.',
-  unknown: 'Navigation unknown',
-  unknownSource: 'Source unknown',
-  queryDenied: 'Workspace query denied. Ask an administrator to verify access.',
-  denied: 'No entry available',
-  planned: 'Feature not delivered yet',
-  open: 'Open',
-  reload: 'Reload',
-  devices: 'Devices & assets',
-  policies: 'Configuration & execution',
-  software: 'Applications, software & updates',
-  security: 'Security & support',
-  operations: 'Authorization & operations',
-  boundary:
-    'Navigation is a display hint; the server enforces authorization. Mock data proves neither device effects nor production capability.',
+type Messages = { [K in keyof typeof zh]: string }
+const en: Messages = {
+  tenantSetup: 'Tenant setup',
+  settings: 'Settings',
+  diagnostics: 'Runtime diagnostics',
+  inventory: 'Inventory',
+  resources: 'Resources',
+  software: 'Software',
+  certificates: 'Certificates and PKI',
+  audit: 'Audit and activity',
+  webhooks: 'Webhook integrations',
+  recoveryCredentials: 'Recovery credentials',
+  groups: 'Device groups',
+  scopes: 'Policy scopes',
+  policies: 'Policies and deployments',
+  compliance: 'Security and compliance',
+  devices: 'Devices',
+  executions: 'Executions and results',
+  deviceAccess: 'Device Access',
+  telemetry: 'Telemetry and collection',
+  enrollment: 'Device enrollment',
+  connections: 'Connections',
+  authorization: 'Authorization',
+  tenantAdministration: 'Tenant administration',
+  userProfiles: 'User profiles',
+  identityAdministration: 'Accounts and identity sources',
+  authenticator_already_registered:
+    'This authenticator is already registered. Use another authenticator.',
+  passkeys: 'Passkeys',
+  readPasskeys: 'Read passkeys',
+  passkeysUnsupported: 'This browser does not support the required passkey interfaces.',
+  passkeysUnread: 'Passkey state is unconfirmed. Read it before continuing.',
+  noPasskeys: 'No passkeys have been added.',
+  passkeyPurpose:
+    'Adding another passkey requires authentication bound to this purpose. Explicitly submit Add after verification.',
+  passkeyAuthorized: 'Verification for adding a passkey completed. Explicitly submit Add.',
+  authorizePasskey: 'Verify adding with an existing passkey',
+  authorizeWithProvider: 'Verify adding through organization',
+  cancelAuthorization: 'Cancel adding authorization',
+  passkeyLabel: 'Passkey name',
+  passkeyLabelBudget: 'Names must fit within 128 bytes.',
+  addPasskey: 'Add passkey',
+  callbackCancelled: 'Organization authentication was cancelled.',
+  callbackFailed: 'Organization authentication did not complete. Start again.',
+  callbackUnavailable: 'Organization authentication is temporarily unavailable.',
+  stepUpReturned:
+    'Returned from operation verification. Select and explicitly submit the original operation; the server will validate the verification.',
+  product: 'RSS MDM',
+  business: 'Business tenant',
+  management: 'Management tenant',
+  login: 'Sign in',
+  loginTitle: 'Welcome back',
+  loginHint: 'Sign in with your organization account to manage devices securely.',
+  account: 'Account',
+  password: 'Password',
+  sso: 'Organization single sign-on',
+  checking: 'Checking your session…',
+  unavailable: 'Session could not be confirmed',
+  retry: 'Read session again',
+  unavailableHint:
+    'The connection or session result is unconfirmed. Read the session before continuing.',
+  invalidated: 'Your session expired or was invalidated. Sign in again.',
+  unknown: 'The operation result is unconfirmed. Read current state before submitting again.',
+  rejected: 'The request was not completed. Check your account, permissions and current state.',
+  invalid_credential: 'Incorrect account or password.',
+  insufficient_privilege: 'Your account cannot perform this operation.',
+  reauthentication_required: 'Reauthenticate, then explicitly submit the original operation.',
+  reauthentication_failed: 'Authentication failed. Check your password and try again.',
+  revision_conflict: 'Content changed. Read current state before editing.',
+  rate_limited: 'Too many requests. Try again later.',
+  csrf_rejected: 'Session credentials changed. Read the session again.',
+  authentication_cancelled: 'Authentication was cancelled.',
+  interaction_required: 'Interactive authentication is required.',
+  configuration_changed: 'Configuration changed. Read current state again.',
+  logout: 'Sign out',
+  logoutAll: 'Sign out all sessions',
+  refresh: 'Refresh session',
+  logoutUnknown: 'Sign-out is unconfirmed. Read the session again.',
+  reauthenticate: 'Reauthenticate',
+  reauthenticateHint: 'Return to the original operation and explicitly submit it afterwards.',
+  cancel: 'Cancel',
+  theme: 'Toggle color theme',
+  language: '中文',
+  skip: 'Skip to main content',
+  openNavigation: 'Open navigation',
+  navigation: 'Main navigation',
+  workspace: 'Workspace',
+  session: 'Current session',
+  principal: 'Current account',
+  tenant: 'Tenant',
+  expires: 'Session expires',
+  security: 'Security',
+  securityUnavailable: 'Security information is unavailable',
+  securityHint:
+    'Authentication facts are presentation only. The server decides operation permissions.',
+  navigationUnavailable: 'Navigation context is unavailable. Read it again.',
+  notFound: 'Page not found',
+  back: 'Back to workspace',
+  resumeFailed: 'The sign-in flow expired or belongs to another tenant.',
+  source: 'Authentication method',
+  strength: 'Authentication strength',
+  noSecurity: 'Read security information',
+  close: 'Close',
+  success: 'Completed',
 }
-export function mdmI18n() {
-  const i18n = identityI18n()
-  i18n.global.mergeLocaleMessage('zh-CN', { gap: gapZh })
-  i18n.global.mergeLocaleMessage('en-US', { gap: gapEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { profiles: profilesZh })
-  i18n.global.mergeLocaleMessage('en-US', { profiles: profilesEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { console: consoleZh })
-  i18n.global.mergeLocaleMessage('en-US', { console: consoleEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { onboarding: onboardingZh })
-  i18n.global.mergeLocaleMessage('en-US', { onboarding: onboardingEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { registration: registrationZh })
-  i18n.global.mergeLocaleMessage('en-US', { registration: registrationEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { mdm: zh })
-  i18n.global.mergeLocaleMessage('en-US', { mdm: en })
-  i18n.global.mergeLocaleMessage('zh-CN', { devices: devicesZh })
-  i18n.global.mergeLocaleMessage('en-US', { devices: devicesEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { policies: policiesZh })
-  i18n.global.mergeLocaleMessage('en-US', { policies: policiesEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { software: softwareZh })
-  i18n.global.mergeLocaleMessage('en-US', { software: softwareEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { security: securityZh })
-  i18n.global.mergeLocaleMessage('en-US', { security: securityEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { operations: operationsZh })
-  i18n.global.mergeLocaleMessage('en-US', { operations: operationsEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { settings: settingsZh })
-  i18n.global.mergeLocaleMessage('en-US', { settings: settingsEn })
-  i18n.global.mergeLocaleMessage('zh-CN', { telemetry: telemetryZh })
-  i18n.global.mergeLocaleMessage('en-US', { telemetry: telemetryEn })
-  return i18n
+export function messages(locale: Locale): Messages {
+  return locale === 'zh' ? zh : en
 }
+export type MessageKey = keyof Messages

@@ -21,14 +21,25 @@ export type RequestOptions<T> = RequestBase & {
   responseType?: 'arraybuffer'
   decode: Decoder<T>
 } & (
-    | { successStatus: 200 | 201 | 202 | readonly [200 | 201 | 202, ...(200 | 201 | 202)[]] }
+    | {
+        successStatus:
+          | 200
+          | 201
+          | 202
+          | 206
+          | readonly [200 | 201 | 202 | 206, ...(200 | 201 | 202 | 206)[]]
+      }
     | { method: 'GET'; path: '/readyz'; successStatus: readonly [200, 503]; responseType?: never }
   )
 
 export interface BinaryResponse {
   bytes: ArrayBuffer
+  status: number
   contentType: string | null
   contentDisposition: string | null
+  contentLength: string | null
+  contentRange: string | null
+  etag: string | null
 }
 
 export type NoContentRequest = RequestBase & { decode?: never } & (

@@ -179,11 +179,7 @@ export default tseslint.config(
 
   // The application owns one same-origin Identity session.
   {
-    files: [
-      'apps/identity/**/*.{js,ts,vue}',
-      'packages/auth/**/*.{js,ts,vue}',
-      'apps/mdm/**/*.{js,ts,vue}',
-    ],
+    files: ['apps/identity/**/*.{js,ts,vue}', 'packages/auth/**/*.{js,ts,vue}'],
     plugins: {
       'identity-boundary': {
         rules: {
@@ -192,7 +188,6 @@ export default tseslint.config(
               type: 'problem',
               schema: [],
               messages: {
-                demo: 'Production MDM imports cannot depend on the explicit demo composition.',
                 escape:
                   'Identity relative imports must stay inside apps/identity; use approved public package exports.',
               },
@@ -204,19 +199,10 @@ export default tseslint.config(
                 const filename = context.filename
                 const marker = filename.includes(`${sep}packages${sep}auth${sep}`)
                   ? `${sep}packages${sep}auth${sep}`
-                  : filename.includes(`${sep}apps${sep}mdm${sep}`)
-                    ? `${sep}apps${sep}mdm${sep}`
-                    : `${sep}apps${sep}identity${sep}`
+                  : `${sep}apps${sep}identity${sep}`
                 const index = filename.lastIndexOf(marker)
                 const root = filename.slice(0, index) + marker
                 const target = resolve(dirname(filename), value)
-                if (
-                  marker === `${sep}apps${sep}mdm${sep}` &&
-                  filename.startsWith(root + 'src' + sep) &&
-                  !filename.endsWith('.spec.ts') &&
-                  (target === root + 'demo' || target.startsWith(root + 'demo' + sep))
-                )
-                  context.report({ node, messageId: 'demo' })
                 const buildHelper =
                   ['vite.config.ts', 'vitest.config.ts'].includes(path.basename(filename)) &&
                   target === resolve(__dirname, 'build/vuetify-styles.mjs')
@@ -267,81 +253,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/mdm/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-limits|mdm-query|mdm-filter|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
-            message: 'Use public product boundaries.',
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-  {
-    files: ['apps/mdm/src/**/*.{ts,vue}'],
-    ignores: ['apps/mdm/src/main.ts', 'apps/mdm/src/bootstrap.ts', '**/*.spec.ts'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/(?:profile-json|account-query))?$|api/(?:mdm|mdm-limits|mdm-query|mdm-filter|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
-            message: 'Features consume injected clients and public UI.',
-          },
-        ],
-        [
-          NO_AXIOS_PATH,
-          {
-            name: '@rss/auth',
-            importNames: ['createSession', 'createApi', 'createFlows', 'identityRouter'],
-            message: 'Only bootstrap assembles authentication.',
-          },
-          {
-            name: '@rss/api/mdm',
-            importNames: ['createMdmTransport'],
-            message: 'Only bootstrap assembles the business transport.',
-          },
-        ],
-      ),
-    },
-  },
-  {
-    files: ['apps/mdm/demo/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|mdm-demo|mdm-limits|mdm-query|mdm-filter|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
-            message: 'Demo uses explicit public boundaries.',
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-  {
-    files: ['apps/mdm/**/*.spec.ts'],
-    rules: {
-      'no-restricted-imports': boundaryRule(
-        [
-          {
-            regex:
-              '^@rss/(?!core(?:/|$)|auth(?:/|$)|api/(?:identity|mdm|testing|mdm-operations|mdm-types|mdm-validators|mdm-schemas)$)',
-            message: 'Tests use public product exports and sanitized failures only.',
-          },
-        ],
-        [NO_AXIOS_PATH],
-      ),
-    },
-  },
-  {
-    files: ['apps/mdm/src/**/*.{ts,vue}', 'packages/device-access/src/clients/live.ts'],
-    ignores: ['apps/mdm/src/main.ts', 'apps/mdm/src/bootstrap.ts', '**/*.spec.ts'],
+    files: ['packages/device-access/src/clients/live.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -509,6 +421,186 @@ export default tseslint.config(
           },
         ],
         [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: [
+      'apps/mdm/**/*.{ts,tsx}',
+      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections,mdm-inventory,mdm-policies,mdm-scopes,mdm-groups,mdm-compliance,mdm-resources,mdm-content,mdm-software,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-execution,mdm-device-access,mdm-telemetry,mdm-tenant-setup,mdm-runtime-diagnostics}/**/*.ts',
+    ],
+    languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
+    plugins: {
+      'react-boundary': {
+        rules: {
+          contained: {
+            meta: {
+              type: 'problem',
+              schema: [],
+              messages: {
+                escape: 'Use declared public exports; relative imports must stay with their owner.',
+              },
+            },
+            create(context) {
+              function check(node) {
+                if (typeof node.value !== 'string' || !node.value.startsWith('.')) return
+                const relative = path.relative(__dirname, context.filename)
+                const owner = relative.split(sep).slice(0, 2).join(sep)
+                const root = resolve(__dirname, owner) + sep
+                if (!resolve(dirname(context.filename), node.value).startsWith(root))
+                  context.report({ node, messageId: 'escape' })
+              }
+              return {
+                ImportDeclaration: (node) => check(node.source),
+                ExportNamedDeclaration: (node) => {
+                  if (node.source) check(node.source)
+                },
+                ExportAllDeclaration: (node) => check(node.source),
+                ImportExpression: (node) => check(node.source),
+              }
+            },
+          },
+        },
+      },
+    },
+    rules: {
+      'react-boundary/contained': 'error',
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?:auth(?:/|$)|core(?:/|$)))',
+            message:
+              'React MDM uses its own composition and framework-independent domain packages.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+      'no-restricted-globals': ['error', ...NO_NETWORK],
+      'no-restricted-properties': ['error', ...NO_NETWORK_PROPERTIES],
+    },
+  },
+  {
+    files: [
+      'packages/{auth-core,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections,mdm-tenant-setup,mdm-runtime-diagnostics}/**/*.ts',
+    ],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex: '^(?:@rss/|react(?:/|$)|antd(?:/|$)|axios$)',
+          message: 'Domain cores depend only on their own models and ports.',
+        },
+      ]),
+    },
+  },
+  {
+    files: ['packages/mdm-inventory/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex: '^(?:@rss/(?!mdm-devices$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message: 'Inventory consumes only the existing pure device identity and value models.',
+        },
+      ]),
+    },
+  },
+  {
+    files: [
+      'packages/{mdm-policies,mdm-scopes,mdm-groups,mdm-compliance,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-execution,mdm-device-access,mdm-telemetry,mdm-tenant-setup,mdm-runtime-diagnostics}/**/*.ts',
+    ],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex: '^(?:@rss/(?!mdm-devices$|mdm-inventory$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message: 'These domain cores consume only pure device and inventory models.',
+        },
+      ]),
+    },
+  },
+  {
+    files: ['packages/{mdm-resources,mdm-software}/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex:
+            '^(?:@rss/(?!mdm-devices$|mdm-inventory$|mdm-resources$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message:
+            'Resource and software cores consume only existing pure resource, inventory and device models.',
+        },
+      ]),
+    },
+  },
+  {
+    files: ['packages/mdm-content/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex: '^(?:@rss/(?!mdm-resources$|mdm-inventory$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message:
+            'Content owns transfer protocols and consumes only pure material coordinates and validators.',
+        },
+      ]),
+    },
+  },
+  {
+    files: ['packages/{auth-http,mdm-http}/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$|api/))',
+            message: 'Adapters depend only on core ports and the API executor.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['packages/auth-http/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex: '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|api/(?:identity|testing)$))',
+            message: 'Identity adapters consume only their auth core and Identity executor.',
+          },
+        ],
+        [NO_AXIOS_PATH],
+      ),
+    },
+  },
+  {
+    files: ['apps/mdm/src/**/*.{ts,tsx}'],
+    ignores: ['apps/mdm/src/runtime.ts', '**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule(
+        [
+          {
+            regex:
+              '^(?:vue(?:/|-|$)|@vue/|vuetify(?:/|$)|pinia(?:/|$)|@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$))',
+            message: 'Feature pages consume domain use cases; only runtime assembles adapters.',
+          },
+        ],
+        [
+          NO_AXIOS_PATH,
+          {
+            name: '@rss/auth-core',
+            importNames: ['createSession', 'createFlows'],
+            message: 'Only runtime creates the session and flow owner.',
+          },
+          {
+            name: '@rss/auth-http',
+            importNames: [
+              'createAuthPort',
+              'createIdentityTransport',
+              'createPasskeyClient',
+              'createIdentityAdministrationAdapter',
+            ],
+            message: 'Only runtime assembles Identity adapters.',
+          },
+        ],
       ),
     },
   },

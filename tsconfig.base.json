@@ -39,7 +39,16 @@
       "@rss/api/mdm-types": ["packages/api/src/generated/mdm/owners.ts"],
       "@rss/api/mdm-validators": ["packages/api/src/generated/mdm/owner-validators.ts"],
       "@rss/api/mdm-schemas": ["packages/api/src/generated/mdm/schemas.ts"],
-      "@rss/api/mdm-demo": ["packages/api/src/mdm-demo.ts"]
+      "@rss/api/mdm-demo": ["packages/api/src/mdm-demo.ts"],
+      "@rss/auth-core": ["packages/auth-core/src/index.ts"],
+      "@rss/auth-http": ["packages/auth-http/src/index.ts"],
+      "@rss/mdm-http": ["packages/mdm-http/src/index.ts"],
+      "@rss/mdm-authorization": ["packages/mdm-authorization/src/index.ts"],
+      "@rss/mdm-tenant-administration": ["packages/mdm-tenant-administration/src/index.ts"],
+      "@rss/mdm-user-profiles": ["packages/mdm-user-profiles/src/index.ts"],
+      "@rss/mdm-devices": ["packages/mdm-devices/src/index.ts"],
+      "@rss/mdm-enrollment": ["packages/mdm-enrollment/src/index.ts"],
+      "@rss/mdm-connections": ["packages/mdm-connections/src/index.ts"]
     }
   }
 }

@@ -1,0 +1,25 @@
+{
+  "name": "@rss/mdm-certificates",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./device-pki": "./src/device-pki/index.ts",
+    "./archive": "./src/archive/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@rss/mdm-devices": "workspace:*",
+    "@rss/mdm-inventory": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@vitest/coverage-v8": "catalog:"
+  }
+}

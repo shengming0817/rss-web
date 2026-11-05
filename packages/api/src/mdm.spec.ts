@@ -19,7 +19,7 @@ it('accepts product and embedded authentication errors without exposing server d
   expect(decodeMdmError(409, { code: 'stale_plan', device: {}, stage: 'capability' }).cause).toBe(
     'protocol',
   )
-  expect(decodeMdmError(401, { code: 'permission_denied' }).cause).toBe('protocol')
+  expect(decodeMdmError(401, { code: 'permission_denied' }).cause).toBe('wire')
 })
 
 it('decodes the current Agent pause envelope without classifying a rejected create as unknown', () => {

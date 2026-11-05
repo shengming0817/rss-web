@@ -23,7 +23,7 @@ export interface EndpointDescription {
           >)[]
         } & Record<string, unknown>
       }
-    | { kind: 'window'; schema: unknown }
+    | { kind: 'window' | 'body_window'; schema: unknown }
     | { kind: 'catalog'; schema: unknown }
     | null
   publicRead: boolean

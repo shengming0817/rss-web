@@ -1,16 +1,31 @@
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import { vuetifyStyles } from '../../build/vuetify-styles.mjs'
-export default defineConfig(async ({ mode, command }) => {
-  if (mode === 'demo' && command !== 'serve')
-    throw new Error('Demo requires the local HTTP scenario server; use pnpm dev:mdm:demo')
-  return {
-    plugins: [
-      vuetifyStyles('.mdm-device-surface'),
-      vue(),
-      ...(mode === 'demo' ? [(await import('./demo/plugin')).demoPlugin()] : []),
-    ],
-    build: { sourcemap: false },
-    server: { host: '127.0.0.1' },
-  }
+import react from '@vitejs/plugin-react'
+import { createElement } from 'react'
+import { ConfigProvider } from 'antd'
+import { extractStyle } from '@ant-design/static-style-extract'
+import { mdmTheme } from './src/theme'
+
+export default defineConfig({
+  plugins: [
+    react(),
+    {
+      name: 'mdm-static-theme',
+      resolveId(id) {
+        if (id === 'virtual:mdm-theme.css') return '\0virtual:mdm-theme.css'
+      },
+      load(id) {
+        if (id === '\0virtual:mdm-theme.css')
+          return [false, true]
+            .map((dark) =>
+              extractStyle({
+                customTheme: (node) =>
+                  createElement(ConfigProvider, { theme: mdmTheme(dark, true) }, node),
+              }),
+            )
+            .join('\n')
+      },
+    },
+  ],
+  build: { sourcemap: false, target: 'esnext' },
+  server: { host: '127.0.0.1' },
 })

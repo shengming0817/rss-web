@@ -45,7 +45,7 @@ describe('fixed producer HTTP operations', () => {
   })
   it('sends declared range headers through the public and authenticated download executor', async () => {
     const instance = axios.create(),
-      mock = new MockAdapter(instance)
+      requestSpy = vi.spyOn(instance, 'request')
     const create = vi.spyOn(axios, 'create').mockReturnValue(instance)
     const bytes = new Uint8Array([1, 2]).buffer
     try {
@@ -66,24 +66,38 @@ describe('fixed producer HTTP operations', () => {
             }),
         ],
       ] as const) {
-        mock.onGet(path).reply((config) => {
-          expect(config.headers?.['Range']).toBe(headers.Range)
-          expect(config.headers?.['If-Range']).toBe(headers['If-Range'])
-          return [
-            206,
-            bytes,
-            {
-              'content-type': 'application/octet-stream',
-              'content-length': '2',
-              'content-range': 'bytes 0-1/3',
-              etag: '"fixture"',
-              'accept-ranges': 'bytes',
-              'cache-control': 'private, no-store',
-              'content-disposition': 'attachment; filename="fixture"',
+        requestSpy.mockResolvedValue({
+          status: 206,
+          data: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array(bytes.slice(0)))
+              controller.close()
             },
-          ]
+          }),
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-length': '2',
+            'content-range': 'bytes 0-1/3',
+            etag: '"fixture"',
+            'accept-ranges': 'bytes',
+            'cache-control': 'private, no-store',
+            'content-disposition': 'attachment; filename="fixture"',
+          },
         })
-        await expect(request()).resolves.toMatchObject({ bytes })
+        await expect(request()).resolves.toMatchObject({
+          bytes,
+          status: 206,
+          contentRange: 'bytes 0-1/3',
+          etag: '"fixture"',
+        })
+        expect(requestSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            url: path,
+            adapter: 'fetch',
+            responseType: 'stream',
+            headers: expect.objectContaining(headers),
+          }),
+        )
       }
       await expect(
         getApiV1AgentEnrollPackagesByIdContent(transport, {
@@ -93,7 +107,7 @@ describe('fixed producer HTTP operations', () => {
       ).rejects.toMatchObject({ cause: 'client' })
     } finally {
       create.mockRestore()
-      mock.restore()
+      requestSpy.mockRestore()
     }
   })
   it('keeps unpublished requests in the explicit loopback demo composition', async () => {
@@ -105,11 +119,11 @@ describe('fixed producer HTTP operations', () => {
       spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
     try {
       const transport = createMdmDemoTransport()
-      mock.onGet('/api/v1/mdm-candidate/security/risks').reply(200, { items: [] })
+      mock.onGet('/api/v1/mdm-candidate/runtime-diagnostics').reply(200, { items: [] })
       await expect(
         transport.request({
           method: 'GET',
-          path: '/api/v1/mdm-candidate/security/risks',
+          path: '/api/v1/mdm-candidate/runtime-diagnostics',
           successStatus: 200,
           decode: (v) => v,
         }),
@@ -301,17 +315,44 @@ describe('fixed producer HTTP operations', () => {
     expect(() => safeJson({ value: 1e20 })).not.toThrow()
     expect(() => safeJson({ value: Infinity })).toThrow()
   })
-  it('does not accept retired pagination fields through generated inputs', async () => {
-    const request = vi.fn(),
-      transport = { request } as HttpTransport
-    const query: unknown = { limit: 1, after: id }
-    // Deliberate untyped ingress: runtime validation must also reject old callers.
-    await expect(
-      getApiV1PoliciesByIdAssignments(transport, {
-        pathParams: { id },
-        query: query as { limit: number },
-      }),
-    ).rejects.toMatchObject({ cause: 'client' })
-    expect(request).not.toHaveBeenCalled()
-  })
+})
+
+it('validates a discriminator beside a referenced record without opening unknown fields', () => {
+  const value = {
+    owner: 'device',
+    operationId: id,
+    commandId: id,
+    revision: 1,
+    task: { platform: 'windows', kind: 'sync_ml', name: 'SyncML', objects: [] },
+    target: { kind: 'device' },
+    inputVersion: 'device-control-v1',
+    deadline: 100,
+    dispatchFailure: null,
+    authorization: { state: 'authorized' },
+    reauthorization: { state: 'not_applicable' },
+    commandStatus: 'queued',
+    observation: {
+      protocol: 'syncml',
+      observationScope: 'native_objects',
+      receipts: [],
+      progress: 'queued',
+      effect: 'waiting',
+    },
+  }
+  expect(schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(value)).toBe(true)
+  expect(
+    schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot({
+      ...value,
+      unexpected: true,
+    }),
+  ).toBe(false)
+  expect(
+    schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot({
+      ...value,
+      owner: 'unknown',
+    }),
+  ).toBe(false)
+  const missing: Record<string, unknown> = { ...value }
+  delete missing['commandId']
+  expect(schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(missing)).toBe(false)
 })
