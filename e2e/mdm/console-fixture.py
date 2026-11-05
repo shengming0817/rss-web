@@ -36,6 +36,8 @@ def configure(environment, config, providers, private, binary):
     def database(role, password):
         return dict(config['access_database'], user=role, password_file=str(private(root / (role + '-password'), password)))
     config['tenant_administration'] = dict(registry_database=database('mdm_tenant_registry', 'tenant-registry-fixture'), provisioning_database=database('mdm_identity_provisioning', 'identity-provisioning-fixture'), fingerprint_key_file=str(private(root / 'tenant-operation-key', 'x' * 32)))
+    # Registry, source and provisioning add 8 + 10 + 2 physical connections.
+    config['background']['database_connection_budget'] += 20
     return dict(managementTenant=management, **configure_webhooks(environment, config, providers))
 
 

@@ -275,9 +275,16 @@ try {
   await page.getByRole('button', { name: 'Add passkey', exact: true }).click()
   await page.getByText('Fixture key two', { exact: true }).waitFor()
   await cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: false })
+  phase = 'passkey-cancellation'
+  const authenticationBegan = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname.endsWith('/webauthn/authenticate/begin'),
+  )
   await page
     .getByRole('button', { name: 'Verify adding with an existing passkey', exact: true })
     .click()
+  assert.equal((await authenticationBegan).status(), 200)
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.getByText('Authentication was cancelled.', { exact: true }).waitFor()
   assert.equal(await page.locator('.passkey-list li').count(), 2)
@@ -303,7 +310,13 @@ try {
   await page.getByRole('button', { name: 'Read session again', exact: true }).click()
   await page.getByRole('heading', { name: 'Security', exact: true }).waitFor()
   phase = 'logout'
+  const loggedOut = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname.endsWith('/sessions/logout-all'),
+  )
   await page.getByRole('button', { name: 'Sign out all sessions', exact: true }).click()
+  assert.equal((await loggedOut).status(), 204)
   await page.getByRole('heading', { name: 'Welcome back', exact: true }).waitFor()
   const session = await context.request.get(
     `${origin.origin}/api/v1/identity/tenants/${fixture.tenant}/session`,

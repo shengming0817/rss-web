@@ -18,7 +18,8 @@ export function Passkeys({
   const t = messages(locale),
     state = useSyncExternalStore(runtime.owner.subscribe, runtime.owner.getSnapshot)
   const [keys, setKeys] = useState<Passkey[]>(),
-    [authorized, setAuthorized] = useState<number | null>(null)
+    [authorized, setAuthorized] = useState<number | null>(null),
+    [prompting, setPrompting] = useState(false)
   const [form] = Form.useForm<{ label: string }>()
   const active = useRef(true),
     prompt = useRef<AbortController | null>(null)
@@ -57,6 +58,7 @@ export function Passkeys({
         if (!bound) throw new Error('Session required')
         const controller = new AbortController()
         prompt.current = controller
+        setPrompting(true)
         let ceremony: string | undefined,
           dispatched = false,
           timer: ReturnType<typeof setTimeout> | undefined
@@ -120,7 +122,10 @@ export function Passkeys({
           throw error
         } finally {
           clearTimeout(timer)
-          if (prompt.current === controller) prompt.current = null
+          if (prompt.current === controller) {
+            prompt.current = null
+            if (active.current) setPrompting(false)
+          }
         }
       }),
     )
@@ -193,7 +198,7 @@ export function Passkeys({
               >
                 {t.cancelAuthorization}
               </Button>
-              {busy && prompt.current && (
+              {busy && prompting && (
                 <Button onClick={() => prompt.current?.abort()}>{t.cancel}</Button>
               )}
             </Space>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { webcrypto } from 'node:crypto'
-import { act, createElement as h } from 'react'
+import { act, createElement as h, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -10,6 +10,7 @@ import { createRuntimeDiagnostics } from '@rss/mdm-runtime-diagnostics'
 import type { Snapshot } from '@rss/mdm-runtime-diagnostics'
 import type { Runtime } from './runtime'
 import { TenantSetup } from './TenantSetup'
+import { Passkeys } from './Passkeys'
 import { Diagnostics } from './Diagnostics'
 import { SetupEntry } from './SetupEntry'
 import { Settings } from './Settings'
@@ -395,4 +396,64 @@ it('deduplicates management tenant locators and gates authorization independentl
   })
   await click('刷新')
   expect(paths().filter((p) => p === '/platform/authorization')).toHaveLength(1)
+})
+
+it('renders a cancellable passkey prompt after asynchronous ceremony handoff', async () => {
+  class Credential {
+    static parseCreationOptionsFromJSON() {}
+    static parseRequestOptionsFromJSON() {}
+    toJSON() {}
+  }
+  vi.stubGlobal('PublicKeyCredential', Credential)
+  let release!: () => void, challenge!: (value: unknown) => void
+  const gate = new Promise<void>((done) => {
+      release = done
+    }),
+    begun = new Promise((done) => {
+      challenge = done
+    }),
+    snapshot = {
+      status: 'authenticated',
+      tenant,
+      identity: { principalId: tenant },
+      session: { id: tenant },
+    },
+    cancel = vi.fn(async () => {}),
+    runtime = {
+      oidcEnabled: false,
+      owner: { subscribe: () => () => {}, getSnapshot: () => snapshot },
+      passkeys: {
+        list: async () => [{ id: 'key', label: 'Key' }],
+        beginRegistrationAuthorization: () => begun,
+        cancelCeremony: cancel,
+      },
+      runPasskeyCeremony: async (work: () => Promise<unknown>) => {
+        await gate
+        return work()
+      },
+    } as unknown as Runtime
+  function Prompt() {
+    const [busy, setBusy] = useState(false),
+      [error, setError] = useState('')
+    async function run(work: () => Promise<unknown>) {
+      setBusy(true)
+      try {
+        await work()
+      } catch (error) {
+        setError((error as { code: string }).code)
+      } finally {
+        setBusy(false)
+      }
+    }
+    return h('div', null, h(Passkeys, { runtime, locale: 'en', busy, run }), h('p', null, error))
+  }
+  await act(async () => root.render(h(Prompt)))
+  await click('Verify adding with an existing passkey')
+  await act(async () => release())
+  await click('Cancel')
+  await act(async () =>
+    challenge({ id: tenant, expiresAt: Math.floor(Date.now() / 1000) + 60, publicKey: {} }),
+  )
+  expect(cancel).toHaveBeenCalledWith(tenant)
+  expect(host.textContent).toContain('authentication_cancelled')
 })
