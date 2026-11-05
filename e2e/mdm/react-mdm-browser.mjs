@@ -84,7 +84,7 @@ export async function realBrowser(fixtureVariable, journey) {
       .fill(readFileSync(account.passwordFile, 'utf8').trim())
     await p.getByRole('button', { name: '登录', exact: true }).click()
     phase = 'login-result'
-    await p.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+    await p.getByRole('heading', { name: /^(工作台|租户初始化)$/, exact: true }).waitFor()
   }
   async function nav(p, path, title) {
     phase = 'navigate:' + path

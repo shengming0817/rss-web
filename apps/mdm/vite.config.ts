@@ -37,7 +37,7 @@ export default defineConfig({
             this.error(`Retired runtime in React MDM graph: ${id}`)
           if (/\/(?:demo|__mocks__)\//.test(id)) this.error(`Demo in product graph: ${id}`)
           const owner =
-            /\/packages\/(auth-core|auth-http|mdm-http|mdm-authorization|mdm-tenant-administration|mdm-user-profiles|mdm-devices|mdm-enrollment|mdm-connections|mdm-inventory|mdm-groups|mdm-compliance|mdm-resources|mdm-content|mdm-software|mdm-certificates|mdm-recovery-credentials|mdm-audit|mdm-webhooks|mdm-telemetry)\//.exec(
+            /\/packages\/(auth-core|auth-http|mdm-http|mdm-authorization|mdm-tenant-administration|mdm-user-profiles|mdm-devices|mdm-enrollment|mdm-connections|mdm-inventory|mdm-groups|mdm-compliance|mdm-resources|mdm-content|mdm-software|mdm-certificates|mdm-recovery-credentials|mdm-audit|mdm-webhooks|mdm-telemetry|mdm-tenant-setup|mdm-runtime-diagnostics)\//.exec(
               id,
             )?.[1]
           if (owner) {
@@ -47,7 +47,7 @@ export default defineConfig({
                 dependency.includes(`/packages/${owner}/`) ||
                 (owner === 'auth-http' && /\/packages\/(?:auth-core|api)\//.test(dependency)) ||
                 (owner === 'mdm-http' &&
-                  /\/packages\/(?:auth-core|api|mdm-authorization|mdm-tenant-administration|mdm-user-profiles|mdm-devices|mdm-enrollment|mdm-connections|mdm-inventory|mdm-groups|mdm-compliance|mdm-resources|mdm-content|mdm-software|mdm-certificates|mdm-recovery-credentials|mdm-audit|mdm-webhooks|mdm-telemetry)\//.test(
+                  /\/packages\/(?:auth-core|api|mdm-authorization|mdm-tenant-administration|mdm-user-profiles|mdm-devices|mdm-enrollment|mdm-connections|mdm-inventory|mdm-groups|mdm-compliance|mdm-resources|mdm-content|mdm-software|mdm-certificates|mdm-recovery-credentials|mdm-audit|mdm-webhooks|mdm-telemetry|mdm-tenant-setup|mdm-runtime-diagnostics)\//.test(
                     dependency,
                   )) ||
                 (['mdm-resources', 'mdm-software'].includes(owner) &&

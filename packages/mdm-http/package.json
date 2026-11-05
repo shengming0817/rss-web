@@ -31,7 +31,9 @@
     "./policy-events": "./src/policy-events.ts",
     "./execution": "./src/execution.ts",
     "./device-access": "./src/device-access.ts",
-    "./telemetry": "./src/telemetry.ts"
+    "./telemetry": "./src/telemetry.ts",
+    "./tenant-setup": "./src/tenant-setup.ts",
+    "./runtime-diagnostics": "./src/runtime-diagnostics.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -61,7 +63,9 @@
     "@rss/mdm-policies": "workspace:*",
     "@rss/mdm-execution": "workspace:*",
     "@rss/mdm-device-access": "workspace:*",
-    "@rss/mdm-telemetry": "workspace:*"
+    "@rss/mdm-telemetry": "workspace:*",
+    "@rss/mdm-tenant-setup": "workspace:*",
+    "@rss/mdm-runtime-diagnostics": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

@@ -1,5 +1,5 @@
 import { Button, Space } from 'antd'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { SecretTabs } from './SecretTabs'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
@@ -12,6 +12,9 @@ import { AppleEnrollment } from './AppleEnrollment'
 import { EntraConfiguration } from './EntraConfiguration'
 /** Permission projection controls presentation only. Every action is authorized by the backend. */
 export function Enrollment({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
+  const [params, setParams] = useSearchParams()
+  const requested = params.get('tab')
+  const tabs = ['native', 'configurations', 'admission', 'apple', 'entra']
   const l = labels(locale),
     { authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/enrollment-presentation`, authorization.effective),
@@ -45,6 +48,8 @@ export function Enrollment({ runtime, locale }: { runtime: Runtime; locale: Loca
       </Space>
       <ReadState busy={permissions.busy} error={permissions.error} locale={locale} />
       <SecretTabs
+        activeKey={requested && tabs.includes(requested) ? requested : tabs[0]!}
+        onChange={(key) => setParams({ tab: key })}
         uiLocale={locale}
         authorizedKeys={[
           'native',

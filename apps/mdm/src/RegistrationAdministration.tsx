@@ -2,6 +2,7 @@ import { validateInput, Failure, isUnknown, labels, ReadState, useAction, useRea
 import { validateAgentSettings } from '@rss/mdm-enrollment'
 import { SelectionGuard, useSelectionGuard, usePendingSelection } from './SelectionGuard'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Alert, Button, Card, Form, InputNumber, Select, Tabs } from 'antd'
 import type { Channel, ChannelSetting, Limits, User } from '@rss/mdm-enrollment'
 import type { Runtime } from './runtime'
@@ -446,11 +447,20 @@ export function RegistrationAdministration({
   canWrite: boolean
 }) {
   const guard = useSelectionGuard()
+  const [params, setParams] = useSearchParams()
+  const requested = params.get('section')
+  const sections = ['channels', 'defaults', 'user', 'agent']
   const l = labels(locale),
     [target, setTarget] = useState<User | null>(null),
     [selectionPending, setSelectionPending] = useState(false)
   return (
     <Tabs
+      activeKey={requested && sections.includes(requested) ? requested : 'channels'}
+      onChange={(key) => {
+        const next = new URLSearchParams(params)
+        next.set('section', key)
+        setParams(next)
+      }}
       items={[
         {
           key: 'channels',

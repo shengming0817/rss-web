@@ -44,6 +44,10 @@ Webhook 材料写入要求最近 300 秒认证，本地密码账户可在原材�
 
 真实 HTTPS Chromium 入口：`MDM_REACT_TELEMETRY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-telemetry-browser`。复用设备隔离环境、构建租约及独立清理，经 Agent mTLS 上报合成观察，验证查询、配置预览、权限拒绝和响应式布局，并输出公开截图。它证明 UI/HTTP 接缝，不替代 Windows/macOS 真机采集效果验收。
 
+新 React `/setup` 从首次配置意图、显式跳过理由进入实际配置与当前观察核对；`/settings` 提供业务与管理租户的授权过滤目录。首次配置完成意图由后端持有，后续降级仍显示当前状态，不重新强制进入引导。刷新/重登录可读取后台意图并按原操作 UUID 查询回执；近期认证后须显式继续，未知结果不自动重放。
+
+`/diagnostics` 使用独立运行诊断权限。当前后端仍输出旧中央聚合，正式入口明确显示新合同尚未就绪，缺口登记为 #3140。`pnpm dev:mdm:diagnostics:demo` 在 loopback 启动显式模拟页面，展示候选 owner 的健康、队列及恢复进度；该入口只演示诊断，不提供登录或产品服务，不进入生产构建。`pnpm test:mdm:react-diagnostics-demo-browser` 验证模拟页面；`MDM_REACT_SETUP_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-setup-browser` 验证真实初始化 HTTP/UI 接缝并确认隔离清理。模拟结果不证明实际后端健康或 Windows/macOS 设备效果。
+
 ## Web 组件开发
 
 `pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。直接展示当前 Vuetify 组件；主题与语言基础见 [@rss/core](packages/core/README.md)。

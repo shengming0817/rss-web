@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node ../../scripts/ensure-contracts.mjs && vite --host 127.0.0.1",
     "build": "node ../../scripts/ensure-contracts.mjs && tsc --noEmit && vite build && node ../../scripts/check-react-mdm-build.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.demo.json"
   },
   "dependencies": {
     "react": "catalog:",
@@ -37,7 +37,9 @@
     "@rss/mdm-policies": "workspace:*",
     "@rss/mdm-execution": "workspace:*",
     "@rss/mdm-device-access": "workspace:*",
-    "@rss/mdm-telemetry": "workspace:*"
+    "@rss/mdm-telemetry": "workspace:*",
+    "@rss/mdm-tenant-setup": "workspace:*",
+    "@rss/mdm-runtime-diagnostics": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",
@@ -46,6 +48,7 @@
     "@types/react-dom": "catalog:",
     "@types/node": "catalog:",
     "vite": "catalog:",
-    "@ant-design/static-style-extract": "catalog:"
+    "@ant-design/static-style-extract": "catalog:",
+    "@rss/api": "workspace:*"
   }
 }

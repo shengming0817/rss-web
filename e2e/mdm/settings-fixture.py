@@ -267,6 +267,8 @@ try:
         value['password_file']=str(private(environment.root/(role+'-password'),password))
         return value
     config['tenant_administration']=dict(registry_database=database('mdm_tenant_registry','tenant-registry-fixture'),provisioning_database=database('mdm_identity_provisioning','identity-provisioning-fixture'),fingerprint_key_file=str(private(environment.root/'tenant-operation-key','x'*32)))
+    # Registry, source and provisioning add 8 + 10 + 2 physical connections.
+    config['background']['database_connection_budget'] += 20
     private(config_path,config)
     # Legitimate fixture grants, not provider qualification or host-application facts.
     grants=[dict(operation=p,scope=dict(kind='tenant')) for p in ['registration_configuration_read','registration_configuration_write','storage_configuration_read','storage_configuration_write','webhook_read','webhook_write','runtime_diagnostics_read','agent_enrollment_read','release_publish','software_withdraw']]

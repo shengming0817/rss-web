@@ -93,6 +93,8 @@ try:
                 value['password_file']=str(private(environment.root/(role+'-password'),password))
                 return value
             config['tenant_administration']=dict(registry_database=database('mdm_tenant_registry','tenant-registry-fixture'),provisioning_database=database('mdm_identity_provisioning','identity-provisioning-fixture'),fingerprint_key_file=str(private(environment.root/'tenant-operation-key','x'*32)))
+            # Registry, source and provisioning add 8 + 10 + 2 physical connections.
+            config['background']['database_connection_budget'] += 20
             unused=str(uuid.uuid4())
             environment.sql(f"SELECT public.create_new_tenant('{unused}',1,'Disposable unused tenant',NULL)",'mdm_dev')
         private(config_path,config)
@@ -105,6 +107,7 @@ try:
         log_path=private(environment.root/'product.log','')
         request=environment.root/'idp-request.json';reply=environment.root/'idp-response.json'
         fixture=private(environment.root/'browser.json',dict(origin=origin,tenant=TENANTS[0],principal=ADMIN,passwordFile=str(environment.root/'account-password'),issuer=issuer,caFile=str(ca),idpRequest=str(request),idpResponse=str(reply),backendRevision=subprocess.check_output(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,text=True).strip(),identityRevision=subprocess.check_output(['/usr/bin/git','rev-parse','HEAD'],cwd=IDENTITY,text=True).strip(),managementTenant=management,unusedTenant=unused))
+        phase='host-startup'
         with log_path.open('w') as log:
             # Match the existing settings HTTPS fixture's debug-build stack budget.
             children.append(subprocess.Popen([str(binary),'serve','--config',str(config_path)],cwd=BACKEND,stdout=log,stderr=log,env={**os.environ,'RUST_MIN_STACK':str(8*1024*1024)}))
