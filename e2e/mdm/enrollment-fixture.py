@@ -34,7 +34,7 @@ browser_module = os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE', 'react-enrollme
 if browser_module not in {'react-enrollment-browser.mjs', 'react-certificates-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
 group = Path(browser_module).stem
-environment = Environment(BACKEND, group=Path(os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'react-devices-browser.mjs')).stem)
+environment = Environment(BACKEND, group=group)
 processes = []
 providers = ExitStack()
 phase = 'environment'
