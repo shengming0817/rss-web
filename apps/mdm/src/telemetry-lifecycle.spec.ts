@@ -103,6 +103,9 @@ function runtime(
   const admin = {
     binding: 'tenant/principal/session',
     telemetry: { history },
+    inventory: {
+      field: async () => ({ definition: { timeSeries: { aggregations: ['min', 'mean'] } } }),
+    },
     authorization: { effective },
   }
   return { administration: () => admin } as unknown as Runtime

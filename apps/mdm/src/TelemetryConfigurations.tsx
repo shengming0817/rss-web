@@ -1,6 +1,6 @@
 import { useTelemetryRead } from './telemetry-read'
 import { variantKey } from '@rss/mdm-resources'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Space, Tag } from 'antd'
 import { Link } from 'react-router-dom'
 import type { Configuration } from '@rss/mdm-telemetry'
@@ -181,6 +181,9 @@ export function TelemetryConfigurations({
     read = useTelemetryRead(`${binding}/telemetry-configurations/${device}/${visible}`, () =>
       visible ? telemetry.configurations(device) : Promise.resolve(null),
     )
+  useEffect(() => {
+    if (!visible) setSelected(null)
+  }, [visible])
   if (!visible) return null
   return (
     <div className="admin-stack">

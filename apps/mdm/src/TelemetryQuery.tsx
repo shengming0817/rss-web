@@ -205,6 +205,16 @@ export function TelemetryQuery({
                       )}
                     />
                   )}
+                  {catalogAfter && (
+                    <Button onClick={() => setCatalogAfter(null)}>
+                      {l('字段首页', 'First fields')}
+                    </Button>
+                  )}
+                  {resourceAfter && (
+                    <Button onClick={() => setResourceAfter(null)}>
+                      {l('资源首页', 'First resources')}
+                    </Button>
+                  )}
                   {resources.value?.nextAfter && (
                     <Button onClick={() => setResourceAfter(resources.value!.nextAfter)}>
                       {l('下一页资源', 'Next resources')}

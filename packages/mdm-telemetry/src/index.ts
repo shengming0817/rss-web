@@ -1,7 +1,14 @@
 export type * from './model'
 export { operations, sources } from './model'
 import { operations, sources } from './model'
-import type { AggregateQuery, HistoryQuery, Observation, TelemetryPort, GapCursor } from './model'
+import type {
+  AggregateQuery,
+  HistoryQuery,
+  Observation,
+  TelemetryPort,
+  GapCursor,
+  Unavailable,
+} from './model'
 import { freeze, identifier, uuid } from '@rss/mdm-inventory'
 export function seriesKey(row: Observation): string {
   return JSON.stringify([

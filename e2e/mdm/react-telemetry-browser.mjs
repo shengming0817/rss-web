@@ -328,18 +328,141 @@ try {
   await label('字段键').fill(query.field)
   await label('序列资源').fill('device')
   await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 19))
-  await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+  const firstHistoryResponse = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
     button('查询已上报数据').click(),
   )
+  const representativeHistory = await firstHistoryResponse.json()
   await page.locator('.telemetry-results').getByText('-12.5 degree', { exact: true }).waitFor()
   await label('精确序列与维度').click()
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option').first().click()
   await page.locator('.telemetry-chart svg').waitFor()
   assert.equal(await page.locator('.telemetry-point').count(), 10)
-  await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () => button('查询聚合').click())
+  const aggregateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
+    button('查询聚合').click(),
+  )
+  const aggregatePage = await aggregateResponse.json(),
+    gaugeBucket = aggregatePage.buckets.find(
+      (b) => b.value && typeof b.value === 'object' && 'Number' in b.value,
+    )
+  assert.ok(gaugeBucket, 'a numeric gauge bucket')
+  await page
+    .locator('.telemetry-aggregate')
+    .getByRole('cell', { name: String(gaugeBucket.value.Number.value) + ' degree', exact: true })
+    .waitFor()
+  await page
+    .locator('.telemetry-aggregate')
+    .getByRole('cell', {
+      name: `${gaugeBucket.covered_micros} / ${gaugeBucket.window.end - gaugeBucket.window.start}`,
+      exact: true,
+    })
+    .first()
+    .waitFor()
+  await page
+    .locator('.telemetry-health-grid')
+    .getByRole('cell', { name: '10 / 1 / 1', exact: true })
+    .waitFor()
+  await page
+    .locator('.telemetry-health-grid')
+    .getByText(/容量不足.*3/)
+    .waitFor()
+  await page
+    .locator('.telemetry-health-grid')
+    .getByText(
+      `${fixture.collector.runtime.registrationId} / ${fixture.collector.runtime.generation}`,
+      { exact: true },
+    )
+    .waitFor()
+  coverage.push('real-health-quality-counts-and-capacity-gap-registration')
   await page.locator('.telemetry-aggregate').waitFor()
   await page.getByText('仅统计已观察数据', { exact: true }).waitFor()
   coverage.push('negative-gauge-missing-failed-exact-series-server-aggregate-and-observed-coverage')
+  run.step('counter-rate-and-state-timeline')
+  async function selectSeries() {
+    await label('精确序列与维度').click()
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').first().click()
+  }
+  async function queryField(field) {
+    await label('字段键').fill(field)
+    await label('序列资源').fill('device')
+    await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+      button('查询已上报数据').click(),
+    )
+    await page.locator('.telemetry-results table tbody tr').first().waitFor()
+  }
+  await queryField('custom.browser.counter')
+  await selectSeries()
+  await run.choose(page, label('聚合含义'), '每秒速率')
+  const rateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
+      button('查询聚合').click(),
+    ),
+    ratePage = await rateResponse.json(),
+    rateBucket = ratePage.buckets.find(
+      (b) => b.value && typeof b.value === 'object' && 'Rate' in b.value,
+    )
+  assert.ok(rateBucket, 'counter rate bucket')
+  const rate = rateBucket.value.Rate,
+    increase = Object.values(rate.increase)[0],
+    expectedRate = increase / (rate.duration_micros / 1_000_000)
+  await page
+    .locator('.telemetry-aggregate')
+    .getByRole('cell', { name: String(expectedRate) + ' byte/s', exact: true })
+    .waitFor()
+  await queryField('custom.browser.state')
+  await selectSeries()
+  assert.equal(
+    await page.locator('.telemetry-chart').count(),
+    0,
+    'discrete values never drawn as a numeric curve',
+  )
+  const stateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
+      button('查询聚合').click(),
+    ),
+    statePage = await stateResponse.json(),
+    stateBucket = statePage.buckets.find(
+      (b) => b.value && typeof b.value === 'object' && b.value.StateSegments?.length,
+    )
+  assert.ok(stateBucket, 'state timeline bucket')
+  await page
+    .locator('.telemetry-aggregate')
+    .getByRole('cell')
+    .filter({ hasText: 'running' })
+    .first()
+    .waitFor()
+  coverage.push('counter-rate-from-formal-statistics-and-discrete-state-timeline')
+  run.step('no-data-and-unsafe-integer-fixture')
+  await label('字段键').fill(query.field)
+  await label('序列资源').fill('device')
+  await label('开始时间（UTC）').fill('1970-01-01T00:00:00')
+  await label('结束时间（UTC，不含）').fill('1970-01-01T00:00:01')
+  const emptyResponse = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+    button('查询已上报数据').click(),
+  )
+  assert.equal((await emptyResponse.json()).rows.length, 0)
+  await page.locator('.telemetry-results').getByText('没有数据', { exact: true }).first().waitFor()
+  await label('开始时间（UTC）').fill(new Date(query.startMicros / 1000).toISOString().slice(0, 19))
+  await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 19))
+  const unsafe = structuredClone(representativeHistory),
+    unsafeRow = unsafe.rows.find((r) => r.sample.reading.quality === 'valid')
+  unsafeRow.sample.series.definition.metric = { kind: 'gauge', number: 'i64' }
+  unsafeRow.sample.reading.value = {
+    type: 'number',
+    value: { type: 'i64', value: 9007199254740992 },
+  }
+  await page.route(
+    '**/api/v1/telemetry/history',
+    (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(unsafe) }),
+    { times: 1 },
+  )
+  await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+    button('查询已上报数据').click(),
+  )
+  await page
+    .locator('.telemetry-results')
+    .getByText('无法读取当前数据，请检查查询或连接后重新读取。', { exact: true })
+    .waitFor()
+  assert.equal(await page.locator('.telemetry-results table tbody tr').count(), 0)
+  coverage.push('real-empty-query-distinct-from-explicit-unsafe-integer-fixture-failure-gap-3139')
   await run.choose(page, label('查询模式'), '最新有效来源')
   await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
     button('查询已上报数据').click(),

@@ -50,6 +50,18 @@ export function TelemetryUnavailable({
             title: l('开始 / 结束（UTC）', 'Start / end (UTC)'),
             render: (_, r) => `${utcMicros(r.window.start)} – ${utcMicros(r.window.end)}`,
           },
+          {
+            title: l('适用序列或资源范围', 'Affected series or resource'),
+            render: (_, r) =>
+              r.selection.selection === 'exact' ? (
+                <code className="telemetry-coordinate">{`v${r.selection.series.definition.version} · ${r.selection.stream.source} · ${r.selection.stream.generation} · ${JSON.stringify(r.selection.series.dimensions)}`}</code>
+              ) : (
+                <span>
+                  {l('资源范围', 'Resource scope')} · {r.selection.subject} / {r.selection.resource}{' '}
+                  / {r.selection.keys.join(', ')}
+                </span>
+              ),
+          },
           { title: l('原因', 'Reason'), render: (_, r) => diagnosticName(r.reason, locale) },
         ]}
       />
@@ -169,12 +181,15 @@ export function TelemetryResults({
   query: HistoryQuery
 }) {
   const l = labels(locale),
-    { telemetry, binding } = useAdministration(runtime),
+    { telemetry, inventory, binding } = useAdministration(runtime),
     visible = useSecretVisibility(),
     [after, setAfter] = useState<string | null>(null),
     read = useTelemetryRead(
       `${binding}/telemetry-history/${visible}/${JSON.stringify(query)}/${after}`,
       () => (visible ? telemetry.history({ ...query, after }) : Promise.resolve(null)),
+    ),
+    field = useTelemetryRead(`${binding}/telemetry-field/${query.field}/${visible}`, () =>
+      visible ? inventory.field(query.field) : Promise.resolve(null),
     ),
     [selection, setSelection] = useState(''),
     [operation, setOperation] = useState<AggregateQuery['operation']>('mean'),
@@ -185,7 +200,12 @@ export function TelemetryResults({
     rows = read.value?.rows ?? [],
     series = [...new Map(rows.map((row) => [seriesKey(row), row])).values()],
     selected = series.find((row) => seriesKey(row) === selection),
-    choices = selected ? allowedAggregations(selected) : []
+    choices = selected
+      ? allowedAggregations(selected).filter((v) =>
+          field.value?.definition?.timeSeries?.aggregations.includes(v),
+        )
+      : [],
+    selectedOperation = choices.includes(operation) ? operation : choices[0]
   function reset() {
     setAggregate(null)
     setSelection('')
@@ -292,7 +312,9 @@ export function TelemetryResults({
                       <Tag color={r.liveSource ? 'success' : 'warning'}>
                         {r.liveSource
                           ? l('当前来源', 'Current source')
-                          : l('旧来源', 'Historical source')}
+                          : r.sourceConflict
+                            ? l('有效来源未确认', 'Effective source unconfirmed')
+                            : l('旧来源', 'Historical source')}
                       </Tag>
                       {r.sourceConflict && (
                         <Tag color="warning">{l('来源冲突', 'Source conflict')}</Tag>
@@ -346,7 +368,7 @@ export function TelemetryResults({
                       request = aggregateSelection(
                         query,
                         selected,
-                        operation,
+                        selectedOperation!,
                         resolution * 1_000_000,
                         gap === null ? null : gap * 1_000_000,
                       )
@@ -362,7 +384,7 @@ export function TelemetryResults({
                   <Form.Item label={l('聚合含义', 'Aggregation')}>
                     <Select
                       aria-label={l('聚合含义', 'Aggregation')}
-                      value={operation}
+                      value={selectedOperation ?? null}
                       options={choices.map((value) => ({
                         value,
                         label: aggregationName(value, locale),
@@ -399,7 +421,10 @@ export function TelemetryResults({
                     />
                   </Form.Item>
                 </div>
-                <Button htmlType="submit">{l('查询聚合', 'Query aggregation')}</Button>
+                <ReadState locale={locale} busy={field.busy} error={field.error} />
+                <Button htmlType="submit" disabled={!selectedOperation}>
+                  {l('查询聚合', 'Query aggregation')}
+                </Button>
               </Form>
             )}
           </>
