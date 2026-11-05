@@ -47,6 +47,22 @@ try {
       ...(headers ? { headers } : {}),
       ...(data === undefined ? {} : { data }),
     })
+    if (response.status() !== expected) {
+      const value = await response.json().catch(() => null)
+      console.error(
+        JSON.stringify({
+          journey: 'react-software',
+          method,
+          path: path.split('?')[0],
+          expected,
+          status: response.status(),
+          code:
+            typeof value?.code === 'string' && /^[a-z0-9_]{1,96}$/.test(value.code)
+              ? value.code
+              : 'unclassified',
+        }),
+      )
+    }
     assert.equal(response.status(), expected, `${method} ${path.split('?')[0]}`)
     return [201, 204].includes(expected) ? undefined : response.json()
   }
@@ -357,6 +373,12 @@ try {
     'disabled',
   )
   run.step('software-self-service-and-rollout')
+  if (directResource.activeVersion !== 'resource-v1')
+    await api('POST', resourcePath(direct), {
+      operationId: randomUUID(),
+      expectedRevision: directResource.revision,
+      input: { action: 'activate', version: 'resource-v1' },
+    })
   const scope = randomUUID(),
     laterScope = randomUUID(),
     policyId = randomUUID()
@@ -367,7 +389,7 @@ try {
       input: {
         action: 'put',
         definition: {
-          targets: [{ kind: 'endpoint', id: f.agent }],
+          targets: [{ kind: 'device', id: f.agent }],
           limitations: null,
           exclusions: [],
         },
@@ -417,7 +439,15 @@ try {
           published: false,
           allowAi: false,
           riskLevel: 1,
-          presentation: { future: { retained: false, count: 0 } },
+          presentation: {
+            displayName: 'Self-service software',
+            description: '',
+            prerequisites: '',
+            sideEffects: '',
+            category: 'Software',
+            keywords: [],
+            future: { retained: false, count: 0 },
+          },
         },
       },
     },
@@ -475,6 +505,8 @@ try {
     'real-software-rollout-exact-scopes-time-and-success-gate',
   )
 
+  await run.nav(p, '/software', '软件目录')
+  await tab('组织软件')
   await admission(direct, 'withdraw')
   assert.equal(
     (

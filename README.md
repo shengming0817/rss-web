@@ -14,6 +14,8 @@ MDM 的宿主、部署、回退和验收入口见 [MDM 与 Identity 独立前端
 
 管理员安装配置只交付一份 `rss-agent-enrollment.json`；隐藏、关闭或离开页面会清除秘密下载。签发结果未知时查询原操作元数据，不能恢复秘密文件；确认撤销后才能显式开始新的签发。刷新和重认证不会自动重放写入。配额和通道读取仅供展示，新注册是否准入由服务端决定；暂停不停止已有设备维护或公开下载。
 
+签名 Agent 安装 JSON 的真实交付需要受控宿主部署观察；当前源码隔离 fixture 在连接发布处被正式前提拒绝，由 #3144 跟踪。保留现有安装配置 HTTP mock/组件覆盖，不能用已删除的私有 integration seed 代替正式部署回执。
+
 新设备、注册与连接代表旅程：`MDM_REACT_DEVICES_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-devices-enrollment-browser`。入口构建新应用，复用既有设备与注册 HTTPS 夹具、构建租约和隔离清理。浏览器覆盖目录、关联原请求恢复、后台准入拒绝、单 JSON 交付及连接版本观察；输出无秘密的桌面、移动和暗色页面截图目录。合成注册与测试 PKI 只证明 HTTP 接缝；真实 Windows/macOS 安装、ADE/Entra 组织资格及设备效果分别验收。
 
 新 React `/inventory` 提供服务端资产查询、个人保存查询、不可变任务结果、字段与展示布局和采集映射；`/groups` 管理静态、动态与嵌套设备组；`/compliance` 管理规则、评估任务及设备当前/历史结论。设备详情的资产页区分关联视图、终端命名空间、来源和历史值，并提供集合续页、手工值和采集质量读取。设备组预览评估当前条件草稿，返回有界匹配样例（当前最多1000个）并标明扫描是否完成，不保存定义或发布正式成员；旧成员集和此前合规评估保留历史标识。
@@ -24,7 +26,7 @@ MDM 的宿主、部署、回退和验收入口见 [MDM 与 Identity 独立前端
 
 新 React `/certificates` 分开提供证书档案与设备 PKI：档案以目录为起点，显式打开生成、导入、编辑、精确版本导出或设置任务，支持主密码和独立权限；PKI 分别显示进程当前材料、轮换受理、撤销发布及设备观察。独立 `/recovery-credentials` 入口可在没有 InventoryRead 时按精确设备和材料坐标披露；设备详情 → 设备安全提供恢复凭据目录、FileVault 收集与托管关联、原生凭据操作及精确材料披露。RSS Login 披露使用绑定设备、材料版本和原操作的 WebAuthn 用途验证，验证完成后须显式披露。秘密和下载只在当前面板短暂保留；隐藏、关闭或离开会清除。结果未知时显式恢复原操作，不自动重放。
 
-证书与恢复凭据真实 HTTPS Chromium 验证：`MDM_REACT_CERTIFICATES_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-certificates-browser`，可追加 `certificates` 或 `recovery` 单独运行旅程。复用既有隔离 PG、HTTPS、PKI、构建租约和独立清理；覆盖档案生成/导入/导出原请求、PKI ACK 边界、配置 CAS、披露权限、WebAuthn 正确/错误用途、过期/取消及披露原操作恢复。输出仅含公开页面的桌面、平板、移动和暗色截图。合成设备与预置合法材料只证明真实 HTTP 和界面接缝，不证明 Agent 创建绑定、Windows/macOS 真机轮换或登录效果。
+证书与恢复凭据真实 HTTPS Chromium 验证：`MDM_REACT_CERTIFICATES_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-certificates-browser`，可追加 `certificates` 或 `recovery` 单独运行旅程。复用既有隔离 PG、HTTPS、PKI、构建租约和独立清理；覆盖档案生成/导入/导出原请求、PKI ACK 边界、配置 CAS、普通披露权限及 FileVault 接缝。RSS Login 的用途验证/原披露恢复保留当前 HTTP mock 与组件覆盖，当前 DA HTTP 授权顺序缺陷由 #3138 跟踪，RSS Login 真实正向路径尚未验收；不再使用已退出的 MDM DA 私有表作为前态。输出仅含公开页面的桌面、平板、移动和暗色截图。合成设备与预置合法材料只证明真实 HTTP 和界面接缝，不证明 Agent 创建绑定、Windows/macOS 真机轮换或登录效果。
 
 新 React `/audit` 提供安全审计、设备时间线和管理活动，支持独立读取权限与精确设备定位；当前 Policy 工具名、别名或共享事件定位与历史事实分别显示。设备详情 → 历史沿同一用例读取。`/webhooks` 从紧凑订阅目录进入编辑、测试事件、投递、签名材料和租户健康任务。事件排队、外部 HTTP 接收、Outbox 结算与下游完成分别显示；只有正式死信状态才提供重放或原投递恢复。
 
@@ -102,4 +104,4 @@ IDENTITY_BACKEND_FIXTURE=/absolute/path/to/rss-identity pnpm test:identity:joint
 
 `/device-access` 使用正式 DA 注册的设备标识，管理账户绑定、因子重置、解绑、原操作快照及用途绑定材料披露，并读取现有 Platform SSO 配置。DA 与 MDM/Agent 标识不自动互换。企业应用/账户映射保存后可显式刷新核对当前值；未知提交不会自动重放，当前值一致不证明原操作完成。新增 PSSO 注册/恢复状态与全局原操作排障分别留在 #3134/#3135，不展示为已交付。
 
-执行与接入的真实 HTTPS Chromium 入口为 `MDM_REACT_EXECUTION_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-execution-access-browser`，复用现有隔离 PG、Identity、HTTPS、构建租约与独立清理。既有合法 DA 注册/配置前态仅用于业务验证，不证明注册协议、账户/因子本地应用或 Windows/macOS 真机效果。
+执行与接入的真实 HTTPS Chromium 入口为 `MDM_REACT_EXECUTION_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-execution-access-browser`，复用现有隔离 PG、Identity、HTTPS、构建租约与独立清理。既有合法 DA 注册/配置前态仅用于业务验证，不证明注册协议、账户/因子本地应用或 Windows/macOS 真机效果。当前候选的嵌入 DA 授权成功路径被 403 阻断，由 #3138 跟踪；该 runner 保持失败以区分真实拒绝与未验收成功。正式终端目录/详情的 503 由 #3142 跟踪。

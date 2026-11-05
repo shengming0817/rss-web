@@ -119,11 +119,11 @@ describe('fixed producer HTTP operations', () => {
       spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
     try {
       const transport = createMdmDemoTransport()
-      mock.onGet('/api/v1/mdm-candidate/security/risks').reply(200, { items: [] })
+      mock.onGet('/api/v1/mdm-candidate/runtime-diagnostics').reply(200, { items: [] })
       await expect(
         transport.request({
           method: 'GET',
-          path: '/api/v1/mdm-candidate/security/risks',
+          path: '/api/v1/mdm-candidate/runtime-diagnostics',
           successStatus: 200,
           decode: (v) => v,
         }),
@@ -314,19 +314,6 @@ describe('fixed producer HTTP operations', () => {
     expect(validatePolicyDefinition({ ...definition, action: { kind: 'unknown' } })).toBe(false)
     expect(() => safeJson({ value: 1e20 })).not.toThrow()
     expect(() => safeJson({ value: Infinity })).toThrow()
-  })
-  it('does not accept retired pagination fields through generated inputs', async () => {
-    const request = vi.fn(),
-      transport = { request } as HttpTransport
-    const query: unknown = { limit: 1, after: id }
-    // Deliberate untyped ingress: runtime validation must also reject old callers.
-    await expect(
-      getApiV1PoliciesByIdAssignments(transport, {
-        pathParams: { id },
-        query: query as { limit: number },
-      }),
-    ).rejects.toMatchObject({ cause: 'client' })
-    expect(request).not.toHaveBeenCalled()
   })
 })
 

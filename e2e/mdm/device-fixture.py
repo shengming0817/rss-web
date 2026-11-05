@@ -68,6 +68,7 @@ def seed_authority():
     if browser_module == 'react-recovery-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','security_operate','configuration_write','account_write']]
     if browser_module == 'react-software-browser.mjs':
+        rule['grants'].append(dict(operation='software_deploy', scope=dict(kind='all_devices')))
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['release_read','release_recover','release_withdraw']]
     if browser_module in {'react-devices-browser.mjs', 'react-assets-browser.mjs'}:
         rule['grants'].append(dict(operation='user_profiles_read', scope=dict(kind='tenant')))
@@ -178,7 +179,6 @@ try:
     for name in ('ca.crt', 'server.crt', 'server.key'):
         private(native/name, (environment.root/name).read_text())
     private(native/'case.json', dict(tenant=TENANTS[0]))
-    ports = Environment(BACKEND, group='device-agent').host_ports()
     agent_origin = initialized['origin']
     providers.enter_context(pki(native, dict(os.environ), case=str(WEB)+':device-browser', agent=True, agent_origin=agent_origin))
     agent = json.loads((native/'agent-pki.json').read_text())
@@ -217,8 +217,10 @@ try:
                 except Exception:
                     connection.close()
                     raise
-        from source_fixtures import local_address
-        pinned = local_address()
+        # Select the actual routed local address; hostname resolution may yield loopback.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
+            route.connect(('192.0.2.1', 9))
+            pinned = route.getsockname()[0]
         server = SourceServer((pinned, 0), SourceHandler)
         upstream = f'https://localhost:{server.server_port}'
         threading.Thread(target=server.serve_forever, daemon=True).start()

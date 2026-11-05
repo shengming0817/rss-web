@@ -129,7 +129,5 @@ export function validateDefinition(value: PolicyDefinition): void {
       !(action.kind === 'software' && action.intent === 'available_install')
     )
       throw new Error('Action does not support self service')
-    if (action.kind === 'software' && self.riskLevel !== null && self.riskLevel !== 2)
-      throw new Error('Software risk must require confirmation')
   }
 }

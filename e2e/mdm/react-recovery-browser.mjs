@@ -1,18 +1,12 @@
-// Real HTTPS recovery and purpose-bound WebAuthn. No secret bodies, traces or screenshots.
+// Real HTTPS ordinary recovery and FileVault. RSS Login remains covered by the explicit HTTP mock until the MDM/DA authority seam is available.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import process from 'node:process'
+import { join } from 'node:path'
 import { realBrowser } from './react-mdm-browser.mjs'
-import { executeBounded } from '../identity/process.mjs'
 const run = await realBrowser('MDM_DEVICE_BROWSER_FIXTURE', 'react-recovery')
-let failure, activeControl
-const stop = () => activeControl?.()
-process.on('SIGINT', stop)
-process.on('SIGTERM', stop)
+let failure
 try {
   const { fixture: f, origin, checks } = run,
     p = await run.page(),
@@ -20,10 +14,8 @@ try {
     button = (name) => p.getByRole('button', { name, exact: true }).filter({ visible: true }),
     tab = (name) => p.getByRole('tab', { name, exact: true }).filter({ visible: true }).click(),
     base = `/api/v1/devices/${f.recovery.device}`,
-    loginPath = `${base}/device-access/materials/${f.recovery.material}/versions/1`,
     ordinaryPath = `${base}/recovery-credentials/${f.recovery.ordinary}/versions/1`
-  let nextApi = 0,
-    interceptionFailed = false
+  let nextApi = 0
   async function api(method, path, data, expected = 200) {
     const delay = Math.max(0, nextApi - Date.now())
     nextApi = Date.now() + delay + 220
@@ -68,23 +60,13 @@ try {
     await tab('恢复凭据')
     await button('读取材料目录').waitFor()
   }
-  async function exact(id, rssLogin = false) {
+  async function exact(id) {
     if (await label('精确设备 ID').count()) await label('精确设备 ID').fill(f.recovery.device)
     await label('材料 UUID').fill(id)
     await label('精确材料版本').fill('1')
-    await run.choose(p, label('正式披露类型'), rssLogin ? 'RSS Login（用途验证）' : '普通恢复凭据')
+    await run.choose(p, label('正式披露类型'), '普通恢复凭据')
     await button('选择精确披露坐标').click()
     await button('披露此精确材料').waitFor()
-  }
-  async function authorize() {
-    const finishPath = `/api/v1/identity/tenants/${f.tenant}/webauthn/authenticate/finish`
-    await run.response(p, 'POST', finishPath, () => button('验证此精确披露用途').click())
-    await button('披露此精确材料').waitFor({ state: 'visible' })
-    await p.waitForFunction(() =>
-      [...document.querySelectorAll('button')].some(
-        (b) => b.textContent === '披露此精确材料' && !b.disabled,
-      ),
-    )
   }
   async function secretVisible(yes) {
     await p
@@ -101,37 +83,6 @@ try {
     })
   }
   await run.login(p)
-  const cdp = await p.context().newCDPSession(p)
-  await cdp.send('WebAuthn.enable')
-  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
-    options: {
-      protocol: 'ctap2',
-      transport: 'internal',
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-      automaticPresenceSimulation: true,
-    },
-  })
-  run.step('real-passkey-and-wrong-purpose')
-  await run.nav(p, '/security', '安全设置')
-  await label('通行密钥名称').fill('Recovery fixture authenticator')
-  await button('添加通行密钥').click()
-  await p.getByText('Recovery fixture authenticator', { exact: true }).waitFor()
-  await button('使用已有通行密钥验证添加').click()
-  await p.getByText('添加通行密钥的验证已完成，请显式提交添加。', { exact: true }).waitFor()
-  await api('POST', `${loginPath}/secret`, { operationId: randomUUID() }, 401)
-  await api(
-    'GET',
-    `${base}/recovery-credentials/${f.recovery.material}/versions/1/secret`,
-    undefined,
-    403,
-  )
-  await button('取消添加授权').click()
-  checks.push(
-    'real-passkey-proof-for-register-cannot-disclose-rss-login-and-ordinary-route-rejects-rss-login',
-  )
-
   run.step('ordinary-disclosure-and-independent-current-permission')
   await open(f.recovery.device)
   await exact(f.recovery.ordinary)
@@ -159,114 +110,6 @@ try {
   checks.push(
     'ordinary-real-decryption-local-clear-credentials-independent-from-inventory-and-server-revocation',
   )
-
-  run.step('purpose-expiry-cancel-and-no-automatic-disclosure')
-  await open(f.recovery.device)
-  await exact(f.recovery.material, true)
-  const before = run.count(p, 'POST', loginPath + '/secret')
-  await authorize()
-  assert.equal(run.count(p, 'POST', loginPath + '/secret'), before)
-  await secretVisible(false)
-  // Expire only the actual server grant, preserving all SQL constraints and the real session.
-  const fds = JSON.parse(process.env._MDM_BUILD_LEASE).fds
-  assert.ok(fds.length === 2 && fds.every((fd) => Number.isInteger(fd) && fd >= 3 && fd < 1024))
-  const stdio = Array(Math.max(...fds) + 1).fill('ignore')
-  stdio[1] = 'pipe'
-  stdio[2] = 'pipe'
-  fds.forEach((fd) => {
-    stdio[fd] = fd
-  })
-  const expired = await executeBounded(
-    'python3',
-    [
-      join(dirname(fileURLToPath(import.meta.url)), 'recovery-control.py'),
-      process.env.MDM_DEVICE_BROWSER_FIXTURE,
-      'expire-disclosure-proof',
-    ],
-    {
-      cwd: process.env.MDM_REACT_CERTIFICATES_BACKEND,
-      env: process.env,
-      stdio,
-      timeoutMs: 30000,
-      onChild: (_child, terminate) => {
-        activeControl = terminate
-      },
-      onRelease: () => {
-        activeControl = undefined
-      },
-    },
-  )
-  assert.ok(expired.status === 0 && !expired.timedOut, 'private proof expiry fixture')
-  await run.response(p, 'POST', loginPath + '/secret', () => button('披露此精确材料').click(), 401)
-  await secretVisible(false)
-  // The explicit session read after 401 re-establishes current state without replaying the write.
-  await button('重新读取会话').click()
-  await p.getByRole('heading', { name: /^(工作台|租户初始化)$/, exact: true }).waitFor()
-  await open(f.recovery.device)
-  await exact(f.recovery.material, true)
-  await authorize()
-  await run.response(
-    p,
-    'POST',
-    `/api/v1/identity/tenants/${f.tenant}/webauthn/operation/cancel`,
-    () => button('取消用途认证').click(),
-    200,
-  )
-  await api('POST', loginPath + '/secret', { operationId: randomUUID() }, 401)
-  await secretVisible(false)
-  checks.push('real-server-expired-proof-and-cancelled-proof-refused-with-no-automatic-disclosure')
-
-  run.step('exact-rss-login-unknown-and-original-operation-recovery')
-  await open(f.recovery.device)
-  await exact(f.recovery.material, true)
-  await authorize()
-  let originalOperation,
-    commits = 0
-  const pattern = origin + loginPath + '/secret'
-  await p.route(pattern, async (route) => {
-    try {
-      originalOperation = route.request().postDataJSON().operationId
-      const actual = await route.fetch()
-      assert.equal(actual.status(), 200)
-      commits++
-      await route.abort('failed')
-    } catch {
-      interceptionFailed = true
-      await route.abort('failed').catch(() => {})
-    }
-  })
-  await button('披露此精确材料').click()
-  await p.getByText('原披露结果未知，取消本地等待不代表服务端未提交。', { exact: true }).waitFor()
-  assert.equal(interceptionFailed, false)
-  assert.equal(commits, 1)
-  await secretVisible(false)
-  assert.equal(await button('验证此精确披露用途').isDisabled(), true)
-  await p.unroute(pattern)
-  const recovered = await run.response(p, 'POST', loginPath + '/secret', () =>
-    button('显式恢复原披露').click(),
-  )
-  assert.equal(recovered.request().postDataJSON().operationId, originalOperation)
-  await secretVisible(true)
-  // An actual hidden retained pane clears the disclosed value and cancels outstanding proof.
-  await tab('设备 PKI 恢复与观察')
-  await secretVisible(false)
-  await tab('恢复凭据')
-  await secretVisible(false)
-  await button('结束本次披露').click()
-  checks.push(
-    'real-rss-login-committed-response-loss-explicit-same-uuid-recovery-and-hidden-pane-secret-clear',
-  )
-
-  run.step('webauthn-prompt-cancel')
-  await cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: false })
-  const stepUp = p.waitForResponse((r) => new URL(r.url()).pathname === loginPath + '/step-up')
-  await button('验证此精确披露用途').click()
-  assert.equal((await stepUp).status(), 200)
-  await button('取消用途认证').click()
-  await secretVisible(false)
-  assert.equal(run.count(p, 'POST', loginPath + '/secret'), before + 3)
-  await cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: true })
-  checks.push('real-browser-authenticator-prompt-cancel-does-not-send-disclosure')
 
   run.step('filevault-configuration-and-native-original-request')
   await open(f.recovery.mac)
@@ -447,7 +290,5 @@ try {
     }),
   )
 } finally {
-  process.removeListener('SIGINT', stop)
-  process.removeListener('SIGTERM', stop)
   await run.finish(failure)
 }

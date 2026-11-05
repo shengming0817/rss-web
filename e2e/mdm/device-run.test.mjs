@@ -350,7 +350,7 @@ class Environment:
         with (self.root/'actions').open('a') as f: f.write(self.group+':ports\\n')
 `,
   )
-  const groups = ['windows', 'agent', 'agent:next'].map(
+  const groups = ['windows', 'agent', 'next:agent'].map(
     (purpose) =>
       't2-pki-' +
       createHash('sha256')
@@ -380,9 +380,7 @@ class Environment:
       assert.equal(existsSync(resolve(backend, 'host-inputs')), failed)
       assert.deepEqual(
         actions.slice(3),
-        failed
-          ? []
-          : ['enrollment-native:ports', 'enrollment-agent:ports', 'react-enrollment-browser'],
+        failed ? [] : ['enrollment-native:ports', 'react-enrollment-browser'],
       )
     }
   } finally {

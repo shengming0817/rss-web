@@ -6,7 +6,7 @@ import process from 'node:process'
 import { Buffer } from 'node:buffer'
 const source = process.argv[2]
 assert.equal(statSync(source).mode & 0o077, 0)
-const { keyFile, coordinates, rssLogin } = JSON.parse(readFileSync(source, 'utf8'))
+const { keyFile, coordinates } = JSON.parse(readFileSync(source, 'utf8'))
 assert.equal(statSync(keyFile).mode & 0o077, 0)
 const key = readFileSync(keyFile),
   salt = Buffer.from('rss-mdm/native-protection/v1'),
@@ -14,9 +14,7 @@ const key = readFileSync(keyFile),
   encryption = derive('aes256-gcm'),
   identity = derive('key-identity'),
   nonce = randomBytes(12),
-  plain = rssLogin
-    ? Buffer.from(randomBytes(32).toString('base64url'))
-    : Buffer.from('Fixture-local-admin-secret-7!'),
+  plain = Buffer.from('Fixture-local-admin-secret-7!'),
   version = Buffer.alloc(4)
 version.writeUInt32BE(1)
 const dimensions = [

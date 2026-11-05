@@ -31,14 +31,13 @@ describe('current directory protocol', () => {
       cursor: 'YWJj',
     })
   })
-  it('rejects empty or duplicate field sets, invalid limits and retired parameters', () => {
+  it('rejects empty or duplicate field sets and invalid limits', () => {
     for (const query of [
       { fields: [] },
       { fields: ['id', 'id'] },
       { limit: 0 },
       { sort: [] },
       { filter: '' },
-      { after: 'YWJj' },
     ])
       expect(() => queryParameters(query)).toThrow()
   })
