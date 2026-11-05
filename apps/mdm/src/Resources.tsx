@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { Button, Card, Empty, Form, Input, Select, Space, Tag } from 'antd'
 import {
@@ -99,12 +100,20 @@ export function ResourceDirectory({
   locale,
   canWrite,
   fixedKind,
+  locator,
   canReadSoftware,
 }: {
   resources: ResourcesUseCases
   content: ContentUseCases
   locale: Locale
   canWrite: boolean
+  locator?:
+    | {
+        readonly resource: string
+        readonly version?: string | undefined
+        readonly variant?: string | undefined
+      }
+    | undefined
   fixedKind?: ResourceKind
   canReadSoftware: boolean
 }) {
@@ -113,7 +122,7 @@ export function ResourceDirectory({
     action = useAction(),
     [query, setQuery] = useState<Query>({ limit: 20 }),
     [kind, setKind] = useState<ResourceKind | undefined>(fixedKind),
-    [lookup, setLookup] = useState(''),
+    [lookup, setLookup] = useState(locator?.resource ?? ''),
     [localFilter, setLocalFilter] = useState(''),
     [selected, setSelected] = useState<Resource | null>(null),
     read = useRead(`resources/${kind ?? 'all'}/${JSON.stringify(query)}`, () =>
@@ -312,6 +321,8 @@ export function ResourceDirectory({
           </Space>
           <ResourceDetail
             key={`${selected.id}/${selected.revision}`}
+            initialVersion={selected.id === locator?.resource ? locator.version : undefined}
+            initialVariant={selected.id === locator?.resource ? locator.variant : undefined}
             resources={resources}
             content={content}
             canReadSoftware={canReadSoftware}
@@ -327,6 +338,7 @@ export function ResourceDirectory({
 }
 export function Resources({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
+    [params] = useSearchParams(),
     { resources, content, authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/resources-presentation`, authorization.effective),
     has = (operation: string) =>
@@ -360,6 +372,15 @@ export function Resources({ runtime, locale }: { runtime: Runtime; locale: Local
             label: l('资源目录', 'Resource catalog'),
             children: (
               <ResourceDirectory
+                locator={
+                  params.get('resource')
+                    ? {
+                        resource: params.get('resource')!,
+                        version: params.get('version') ?? undefined,
+                        variant: params.get('variant') ?? undefined,
+                      }
+                    : undefined
+                }
                 resources={resources}
                 content={content}
                 canReadSoftware={has('software_read')}

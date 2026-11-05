@@ -437,3 +437,29 @@ it('keeps certificate modules and recovery credentials independent of transport 
     ).not.toContain('no-restricted-imports')
   }
 })
+
+it('keeps telemetry pure and permits only public adapter and page dependencies', async () => {
+  const file = 'packages/mdm-telemetry/src/probe.ts'
+  for (const dep of [
+    'react',
+    'antd',
+    '@rss/api/mdm',
+    '@rss/mdm-http/telemetry',
+    '@rss/mdm-policies',
+  ])
+    expect(await ruleIds(`import {x} from '${dep}'; export const y=x`, file)).toContain(
+      'no-restricted-imports',
+    )
+  expect(
+    await ruleIds(
+      "import {x} from '@rss/mdm-telemetry'; export const y=x",
+      'packages/mdm-http/src/telemetry.ts',
+    ),
+  ).not.toContain('no-restricted-imports')
+  expect(
+    await ruleIds(
+      "import {x} from '@rss/mdm-telemetry'; export const y=x",
+      'apps/mdm/src/Telemetry.tsx',
+    ),
+  ).not.toContain('no-restricted-imports')
+})

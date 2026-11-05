@@ -1,3 +1,4 @@
+import { Telemetry } from './Telemetry'
 import { Executions } from './Executions'
 import { DeviceAccess } from './DeviceAccess'
 import { ReadEpoch } from './AdminUi'
@@ -264,6 +265,12 @@ const featureRoutes: readonly FeatureRoute[] = [
     label: 'deviceAccess',
     realm: 'tenant',
     render: (ui) => <DeviceAccess {...ui} />,
+  },
+  {
+    path: '/telemetry',
+    label: 'telemetry',
+    realm: 'tenant',
+    render: (ui) => <Telemetry {...ui} />,
   },
   { path: '/policies', label: 'policies', realm: 'tenant', render: (ui) => <Policies {...ui} /> },
   { path: '/scopes', label: 'scopes', realm: 'tenant', render: (ui) => <Scopes {...ui} /> },

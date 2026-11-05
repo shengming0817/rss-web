@@ -40,6 +40,10 @@ Webhook 材料写入要求最近 300 秒认证，本地密码账户可在原材�
 
 对应真实 HTTPS Chromium 入口为 `MDM_REACT_POLICY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-policy-browser`，复用设备隔离 fixture、构建租约和独立清理；覆盖范围定义、Policy 管理、原事件身份恢复与公开响应式页面。该入口只证明真实 HTTP/界面接缝，不能代替 Windows/macOS 设备效果验收。
 
+新 React `/telemetry` 可直接定位终端，设备详情的“遥测与采集”复用同一工作区。历史与 latest 查询保留注册、来源、epoch、字段版本和维度；选择实际观察序列后查询服务端聚合。接收健康和设备自报缺口分别读取，空缺口不代表完整覆盖。配置预览读取绑定的精确 Resource 版本与当前 Policy，采样定义在资源库维护，分配在策略维护；刷新只读数据。浏览器拒绝无法精确表示的整数，避免展示舍入结果。
+
+真实 HTTPS Chromium 入口：`MDM_REACT_TELEMETRY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-telemetry-browser`。复用设备隔离环境、构建租约及独立清理，经 Agent mTLS 上报合成观察，验证查询、配置预览、权限拒绝和响应式布局，并输出公开截图。它证明 UI/HTTP 接缝，不替代 Windows/macOS 真机采集效果验收。
+
 ## Web 组件开发
 
 `pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。直接展示当前 Vuetify 组件；主题与语言基础见 [@rss/core](packages/core/README.md)。
