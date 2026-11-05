@@ -65,7 +65,7 @@ if ('${feature}' === 'react-certificates' || ('${feature}' === 'react-audit-webh
     process.exit(0)
   }, 700)
 } else if (args.includes('reset') || device) {
-  if (device ? args.at(-2) !== new URL('./device-cleanup.py', 'file://' + process.env.WEB_ROOT + '/e2e/mdm/').pathname || args.at(-1) !== process.env.WEB_ROOT : !args.includes('hack/t2_environment.py') || args.at(-1) !== '${group}') process.exit(9)
+  if (device ? args.at(-2) !== new URL('./device-cleanup.py', 'file://' + process.env.WEB_ROOT + '/e2e/mdm/').pathname || args.at(-1) !== process.env.WEB_ROOT : !args.includes('hack/dev_environment.py') || args.at(-1) !== '${group}') process.exit(9)
   fs.appendFileSync(path.join(base,'cleanup-groups'), '${group}'+'\\n')
   fs.writeFileSync(path.join(base, 'cleanup-start'), '')
   setTimeout(() => {
