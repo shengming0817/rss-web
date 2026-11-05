@@ -1446,3 +1446,35 @@ html:has(.mdm-overlay-open) {
 .sidebar-bottom {
   flex-shrink: 0;
 }
+
+/* Status text stays readable in both compiled themes; meaning is also written out. */
+.setup-status.setup-status-success {
+  color: #16634b;
+  background: #edf7f2;
+  border-color: #cfe8dc;
+}
+.setup-status.setup-status-warning {
+  color: #835100;
+  background: #fff7e6;
+  border-color: #efd19c;
+}
+.setup-status.setup-status-error {
+  color: #b52b2b;
+  background: #fff1f0;
+  border-color: #ffc5c2;
+}
+:root[data-theme='dark'] .setup-status.setup-status-success {
+  color: #7cd5b0;
+  background: #183a2e;
+  border-color: #305b49;
+}
+:root[data-theme='dark'] .setup-status.setup-status-warning {
+  color: #f3c069;
+  background: #3d2c13;
+  border-color: #6b4e22;
+}
+:root[data-theme='dark'] .setup-status.setup-status-error {
+  color: #ff9b99;
+  background: #402020;
+  border-color: #723434;
+}
