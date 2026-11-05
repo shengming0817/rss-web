@@ -42,3 +42,17 @@ export function listLocation(query: DirectoryQuery, trail: (string | undefined)[
     ...(trail.length ? { trail: JSON.stringify(trail.map((v) => v ?? null)) } : {}),
   }
 }
+
+export function readSearchLocation(search: string): DirectoryLocation {
+  const values: Record<string, unknown> = {}
+  for (const [key, value] of new URLSearchParams(search)) {
+    const previous = values[key]
+    values[key] =
+      previous === undefined
+        ? value
+        : Array.isArray(previous)
+          ? [...previous, value]
+          : [previous, value]
+  }
+  return readListLocation(values)
+}

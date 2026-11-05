@@ -1,6 +1,0 @@
-export { default as DeviceAccessSummary } from './components/DeviceAccessSummary.vue'
-export { default as AssetAssignmentSummary } from './components/AssetAssignmentSummary.vue'
-export { default as AccountBindingSummary } from './components/AccountBindingSummary.vue'
-export { default as EnterprisePasskeySummary } from './components/EnterprisePasskeySummary.vue'
-export { default as RecoveryMetadataSummary } from './components/RecoveryMetadataSummary.vue'
-export { default as AccessAutomationStatus } from './components/AccessAutomationStatus.vue'

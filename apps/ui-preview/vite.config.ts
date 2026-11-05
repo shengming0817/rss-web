@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import { vuetifyStyles } from '../../build/vuetify-styles.mjs'
+import react from '@vitejs/plugin-react'
+import { antdStyles } from '../../build/antd-styles'
 export default defineConfig({
-  plugins: [vuetifyStyles('.preview'), vue()],
-  server: { host: '127.0.0.1' },
+  plugins: [react(), antdStyles()],
   build: { sourcemap: false },
+  server: { host: '127.0.0.1' },
 })

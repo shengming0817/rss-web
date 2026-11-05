@@ -1,4 +1,5 @@
-import { createSession, createApi, loadConfig } from '@rss/auth/session'
+import { createSession, createIdentityAdministration } from '@rss/auth-core'
+import { createAuthPort, loadHostConfig, createIdentityAdministrationAdapter } from '@rss/auth-http'
 import { expect, it } from 'vitest'
 import { createIdentityTransport, isRssApiError } from '../../packages/api/src/identity'
 const tenant = '11111111-1111-4111-8111-111111111111'
@@ -9,52 +10,55 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
   const transport = createIdentityTransport()
   let session: ReturnType<typeof createSession> | undefined
   try {
-    const config = await loadConfig(transport, window.location.origin)
-    session = createSession(transport, config)
-    const api = createApi(session)
+    const config = await loadHostConfig(transport, window.location.origin)
+    session = createSession(createAuthPort(transport), config)
+    const api = () =>
+      createIdentityAdministration(
+        createIdentityAdministrationAdapter(transport, session!, config.oidcEnabled),
+      )
     task.meta['step'] = 'session'
     await session.check(tenant)
-    expect(session.state.value.status).toBe('anonymous')
+    expect(session.getSnapshot().status).toBe('anonymous')
     task.meta['step'] = 'login'
     await session.login(tenant, 'admin', 'correct horse battery staple')
-    expect(session.managementHint.value).toBe(true)
+    expect(session.getSnapshot().host?.navigation.manageAccounts).toBe(true)
     expect(document.cookie).not.toContain('identity-session')
     task.meta['step'] = 'refresh'
     await session.refresh()
     task.meta['step'] = 'reauthenticate'
     for (let attempt = 0; attempt < 7; attempt++)
       await session.reauthenticate('correct horse battery staple')
-    expect(session.state.value.status).toBe('authenticated')
+    expect(session.getSnapshot().status).toBe('authenticated')
     task.meta['step'] = 'accounts'
-    const account = await api.createAccount('joint-member', 'private joint member password')
-    expect((await api.accounts()).accounts.some((a) => a.principalId === account.principalId)).toBe(
+    const account = await api().createAccount('joint-member', 'private joint member password')
+    expect((await api().accounts()).items.some((a) => a.principalId === account.principalId)).toBe(
       true,
     )
-    const first = await api.accounts({ fields: ['principalId'], sort: ['principalId'], limit: 1 })
-    expect(first.accounts).toHaveLength(1)
-    expect(Object.keys(first.accounts[0]!)).toEqual(['principalId'])
-    expect(first.next).toBeTruthy()
-    const second = await api.accounts({
+    const first = await api().accounts({ fields: ['principalId'], sort: ['principalId'], limit: 1 })
+    expect(first.items).toHaveLength(1)
+    expect(Object.keys(first.items[0]!)).toEqual(['principalId'])
+    expect(first.nextCursor).toBeTruthy()
+    const second = await api().accounts({
       fields: ['principalId'],
       sort: ['principalId'],
       limit: 1,
-      cursor: first.next!,
+      cursor: first.nextCursor!,
     })
-    expect(second.accounts[0]?.principalId).not.toBe(first.accounts[0]?.principalId)
-    const selected = await api.accounts({
+    expect(second.items[0]?.principalId).not.toBe(first.items[0]?.principalId)
+    const selected = await api().accounts({
       filter: "login=='joint-member'",
       fields: ['principalId', 'login', 'email', 'profileStatus'],
       source: 'local',
       limit: 1,
     })
-    expect(selected.accounts[0]?.principalId).toBe(account.principalId)
-    expect((await api.account(account.principalId)).login).toBe('joint-member')
-    await api.setAccount(account, 'enabled', false)
-    await api.resetPassword(account.principalId, 'private joint reset password')
+    expect(selected.items[0]?.principalId).toBe(account.principalId)
+    expect((await api().account(account.principalId)).login).toBe('joint-member')
+    await api().setAccount(account.principalId, 'enabled', false)
+    await api().resetPassword(account.principalId, 'private joint reset password')
     expect(
-      (await api.accounts()).accounts.find((a) => a.principalId === account.principalId)?.enabled,
+      (await api().accounts()).items.find((a) => a.principalId === account.principalId)?.enabled,
     ).toBe(false)
-    await api.setAccount(account, 'enabled', true)
+    await api().setAccount(account.principalId, 'enabled', true)
     task.meta['step'] = 'providers-create'
     const settings = {
       issuer: 'https://idp.example.test',
@@ -69,31 +73,37 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
       },
       jit: false,
     }
-    let provider = await api.createProvider(settings, 'private provider secret', null)
+    let provider = await api().createProvider(settings, 'private provider secret', null)
     task.meta['step'] = 'providers-create-readback'
     expect(provider.settings.claims.subject).toEqual(settings.claims.subject)
     expect(provider.settings.claims.departmentSnapshot).toEqual(settings.claims.departmentSnapshot)
     task.meta['step'] = 'providers-update'
-    provider = await api.updateProvider(provider, settings, 'private rotated secret', null)
+    provider = await api().updateProvider(
+      provider.id,
+      provider.version,
+      settings,
+      'private rotated secret',
+      null,
+    )
     task.meta['step'] = 'providers-update-readback'
     expect(provider.settings.claims.subject).toEqual(settings.claims.subject)
     expect(provider.settings.claims.departmentSnapshot).toEqual(settings.claims.departmentSnapshot)
     task.meta['step'] = 'providers-test'
-    expect((await api.testProvider(provider)).passed).toBe(true)
+    expect((await api().testProvider(provider.id)).passed).toBe(true)
     task.meta['step'] = 'providers-enable'
-    provider = await api.enableProvider(provider, true)
+    provider = await api().enableProvider(provider.id, provider.version, true)
     task.meta['step'] = 'step-up'
     await session.loadSecurity()
-    expect(session.state.value.security?.eligibleStepUpProviders).toEqual([])
+    expect(session.getSnapshot().security?.eligibleStepUpProviders).toEqual([])
     // The session page has no generic upgrade operation. Probe the producer contract
     // through the existing owner: reject missing/unknown purposes before provider eligibility.
     const beginStepUp = (body: unknown) =>
-      session!.business((headers) =>
+      session!.business(({ csrf }) =>
         transport.request({
           method: 'POST',
           path: `/api/v1/identity/tenants/{tenant}/oidc/${provider.id}/step-up`,
           pathParams: { tenant },
-          headers,
+          headers: { 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
           body,
           successStatus: 200,
           decode: (value) => value,
@@ -109,7 +119,7 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
         code: 'malformed_request',
         cause: 'wire',
       })
-      expect(session.state.value.status).toBe('authenticated')
+      expect(session.getSnapshot().status).toBe('authenticated')
     }
     await expect(
       beginStepUp({ returnTarget: 'resume', operation: { kind: 'register' } }),
@@ -120,8 +130,8 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
     })
     // Re-read after the authoritative rejection before any further command.
     await session.check(tenant)
-    expect((await api.loginOptions(tenant)).some((p) => p.id === provider.id)).toBe(true)
-    await api.enableProvider(provider, false)
+    expect((await session.providers(tenant)).some((p) => p.id === provider.id)).toBe(true)
+    await api().enableProvider(provider.id, provider.version, false)
     task.meta['step'] = 'logout'
     await session.logout(true)
     await expect(
@@ -135,14 +145,14 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
     ).rejects.toMatchObject({ status: 401 })
     task.meta['step'] = 'forbidden'
     await session.login(tenant, 'joint-member', 'private joint reset password')
-    expect(session.managementHint.value).toBe(false)
-    await expect(api.accounts()).rejects.toMatchObject({
+    expect(session.getSnapshot().host?.navigation.manageAccounts).toBe(false)
+    await expect(api().accounts()).rejects.toMatchObject({
       status: 403,
       code: 'insufficient_privilege',
     })
-    await expect(api.createAccount('forbidden', 'private rejected password')).rejects.toMatchObject(
-      { status: 403 },
-    )
+    await expect(
+      api().createAccount('forbidden', 'private rejected password'),
+    ).rejects.toMatchObject({ status: 403 })
     await session.logout()
     for (let attempt = 0; attempt < 5; attempt++)
       await expect(
@@ -155,7 +165,7 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
       code: 'rate_limited',
       retryAfterSeconds: expect.any(Number),
     })
-    expect(session.state.value.status).toBe('anonymous')
+    expect(session.getSnapshot().status).toBe('anonymous')
   } catch (error) {
     task.meta['failure'] = isRssApiError(error)
       ? error.cause === 'timeout'
@@ -168,6 +178,6 @@ it('consumes V1 cookie/CSRF, host policy, account and provider operations throug
         : 'environment'
     throw error
   } finally {
-    session?.clear()
+    session?.dispose()
   }
 })

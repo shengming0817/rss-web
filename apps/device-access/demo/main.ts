@@ -1,10 +1,10 @@
 /** MOCK_SOURCE: explicitly selected demo entry; never a production recovery path. */
-import { bindSession } from '@rss/auth'
+import { bindSession } from '@rss/auth-http'
 import { createIdentityTransport } from '@rss/api/identity'
 import { createDeviceAccessDemoTransport } from '@rss/api/device-access-demo'
 import { createDeviceAccess } from '../src/bootstrap'
 import { createDemoClients } from './client'
-import DemoControls from './DemoControls.vue'
+import DemoControls from './DemoControls'
 import { TENANT, INSTANCE } from './constants'
 createDeviceAccess(
   createIdentityTransport(),

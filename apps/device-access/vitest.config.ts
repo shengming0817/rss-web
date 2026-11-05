@@ -1,27 +1,17 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
-import vue from '@vitejs/plugin-vue'
-import { vuetifyStyles } from '../../build/vuetify-styles.mjs'
-import { accessThemes } from './themes'
+import react from '@vitejs/plugin-react'
 export default defineConfig({
-  plugins: [vuetifyStyles('.access-surface', accessThemes), vue()],
+  plugins: [react()],
   test: {
     name: 'device-access-app',
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'jsdom',
-    server: { deps: { inline: ['vuetify'] } },
-    include: ['src/**/*.spec.ts', 'demo/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'src/**/*.spec.tsx', 'demo/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts'],
-      exclude: [
-        'src/**/*.spec.ts',
-        'src/main.ts',
-        'src/bootstrap.ts',
-        'src/router.ts',
-        'src/i18n/**',
-        'src/ui/**',
-      ],
+      include: ['src/services/*.ts', 'src/config.ts'],
+      exclude: ['src/**/*.spec.ts'],
       thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },
     },
   },

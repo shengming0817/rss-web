@@ -5,25 +5,29 @@
   "type": "module",
   "scripts": {
     "dev": "node ../../scripts/ensure-contracts.mjs && vite build --watch",
-    "build": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vite build",
-    "typecheck": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.node.json"
+    "build": "node ../../scripts/ensure-contracts.mjs && tsc --noEmit && vite build",
+    "typecheck": "node ../../scripts/ensure-contracts.mjs && tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
+    "test": "node ../../scripts/ensure-contracts.mjs && vitest run",
+    "test:coverage": "node ../../scripts/ensure-contracts.mjs && vitest run --coverage"
   },
   "dependencies": {
-    "vue": "catalog:",
-    "vue-router": "catalog:",
-    "vue-i18n": "catalog:",
-    "pinia": "catalog:",
     "@rss/core": "workspace:*",
     "@rss/api": "workspace:*",
-    "@rss/auth": "workspace:*",
-    "vuetify": "catalog:"
+    "@rss/auth-core": "workspace:*",
+    "@rss/auth-http": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router-dom": "catalog:",
+    "antd": "catalog:"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@types/node": "catalog:",
+    "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@vue/test-utils": "catalog:",
     "jsdom": "catalog:",
     "@vitest/coverage-v8": "catalog:"
   }

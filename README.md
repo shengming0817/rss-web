@@ -1,6 +1,6 @@
 # RSS Web
 
-本仓拥有三个独立应用：React + Ant Design MDM（`apps/mdm`）、Vue Identity（`apps/identity`）和独立 Device Access（`apps/device-access`）。各应用独立装配会话；`@rss/api` 是唯一 HTTP executor。
+本仓拥有三个独立应用：React + Ant Design MDM（`apps/mdm`）、React + Ant Design Identity（`apps/identity`）和独立 Device Access（`apps/device-access`）。各应用独立装配会话；`@rss/api` 是唯一 HTTP executor。
 
 MDM 的宿主、部署、回退和验收入口见 [MDM 与 Identity 独立前端](docs/architecture/20260926-2544-mdm-web.md)。Identity 接入见[宿主认证 UI](docs/architecture/20260917-2368-embedded-identity.md)；独立 DA 见 [DA 接入与开发](apps/device-access/README.md)。
 
@@ -48,7 +48,7 @@ Webhook 材料写入要求最近 300 秒认证，本地密码账户可在原材�
 
 ## Web 组件开发
 
-`pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。直接展示当前 Vuetify 组件；主题与语言基础见 [@rss/core](packages/core/README.md)。
+`pnpm dev:ui` 启动独立组件展示页（仅 loopback）；可切换亮暗主题、中英文及禁用/只读/错误/加载/空态。展示入口不加载认证或业务 API，不进入产品镜像。直接展示当前 Ant Design 组件；主题与语言基础见 [@rss/core](packages/core/README.md)。
 
 `make ci` 集中运行下列类型、lint、格式、测试、三个产品构建扫描及组件展示构建，收集所有失败后返回非零；日志目录在命令结束时输出。修复后可按失败项定向复验。
 
@@ -105,3 +105,5 @@ IDENTITY_BACKEND_FIXTURE=/absolute/path/to/rss-identity pnpm test:identity:joint
 `/device-access` 使用正式 DA 注册的设备标识，管理账户绑定、因子重置、解绑、原操作快照及用途绑定材料披露，并读取现有 Platform SSO 配置。DA 与 MDM/Agent 标识不自动互换。企业应用/账户映射保存后可显式刷新核对当前值；未知提交不会自动重放，当前值一致不证明原操作完成。新增 PSSO 注册/恢复状态与全局原操作排障分别留在 #3134/#3135，不展示为已交付。
 
 执行与接入的真实 HTTPS Chromium 入口为 `MDM_REACT_EXECUTION_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-execution-access-browser`，复用现有隔离 PG、Identity、HTTPS、构建租约与独立清理。既有合法 DA 注册/配置前态仅用于业务验证，不证明注册协议、账户/因子本地应用或 Windows/macOS 真机效果。当前候选的嵌入 DA 授权成功路径被 403 阻断，由 #3138 跟踪；该 runner 保持失败以区分真实拒绝与未验收成功。正式终端目录/详情的 503 由 #3142 跟踪。
+
+Identity 的独立真实浏览器入口为 `IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:identity:browser`，复用 joint 的隔离 HTTPS 宿主并消费当前 React 产物。独立 DA 为 `DEVICE_ACCESS_BACKEND=/absolute/rss-mdm pnpm test:device-access:browser`，复用现有设备 fixture、构建租约及独立清理。浏览器结果与已有 HTTP joint、显式 demo、Windows/macOS 真机效果分别记录；正式后端拒绝不会回退到 mock。

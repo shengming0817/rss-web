@@ -16,24 +16,20 @@
 !apps/identity/src/
 !apps/identity/src/**/
 !apps/identity/src/**/*.ts
-!apps/identity/src/**/*.vue
+!apps/identity/src/**/*.tsx
 !apps/identity/src/**/*.css
 !apps/identity/tests/
 !apps/identity/tests/**/*.ts
 !packages/
 !packages/api/
 !packages/core/
-!packages/auth/
-!packages/auth/env.d.ts
-!packages/auth/tests/
-!packages/auth/tests/**/*.ts
 !packages/*/package.json
 !packages/*/tsconfig.json
 !packages/*/vitest.config.ts
 !packages/*/src/
 !packages/*/src/**/
 !packages/*/src/**/*.ts
-!packages/*/src/**/*.vue
+!packages/*/src/**/*.tsx
 !packages/*/src/**/*.css
 !scripts/
 !scripts/check-identity-app-build.mjs
@@ -56,6 +52,7 @@
 !build/
 !build/*.mjs
 !build/*.mts
+!build/*.ts
 
 # Local contract generation during install and product builds
 !contracts/

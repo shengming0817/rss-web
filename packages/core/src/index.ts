@@ -1,3 +1,3 @@
-export { createRssI18n } from './i18n/index'
-export { default as QueryControls } from './components/QueryControls.vue'
-export { default as QueryRows } from './components/QueryRows.vue'
+export { Presentation, usePresentation, rssTheme, type Theme, type Locale } from './presentation'
+export { QueryControls, type QueryControlsProps } from './components/QueryControls'
+export { QueryRows } from './components/QueryRows'

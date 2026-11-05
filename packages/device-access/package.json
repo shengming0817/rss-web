@@ -4,29 +4,29 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit",
+    "typecheck": "node ../../scripts/ensure-contracts.mjs && tsc --noEmit",
     "test": "node ../../scripts/ensure-contracts.mjs && vitest run",
     "test:coverage": "node ../../scripts/ensure-contracts.mjs && vitest run --coverage"
   },
   "dependencies": {
-    "vue": "catalog:",
-    "vuetify": "catalog:",
-    "@rss/api": "workspace:*"
+    "@rss/api": "workspace:*",
+    "react": "catalog:",
+    "antd": "catalog:"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "catalog:",
     "@types/node": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "vue-tsc": "catalog:",
     "typescript": "catalog:",
-    "@vue/test-utils": "catalog:",
     "jsdom": "catalog:",
-    "@vitest/coverage-v8": "catalog:"
+    "@vitest/coverage-v8": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:"
   },
   "exports": {
     "./client": "./src/client.ts",
     "./model": "./src/model.ts",
-    "./components": "./src/components.ts"
+    "./components": "./src/components.tsx"
   }
 }

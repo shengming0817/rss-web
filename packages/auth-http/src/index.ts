@@ -7,6 +7,7 @@ import {
   object,
   redirect,
   sessionResponse,
+  session,
   sessionSecurity,
   text,
   uuid,
@@ -119,13 +120,48 @@ export function createAuthPort(transport: HttpTransport): AuthPort {
         { returnTarget: 'resume', operation: operation(target) },
         (value) => redirect(value, 'authorizationUrl'),
       ),
+    link: (tenant, csrf, provider, password) =>
+      write(
+        tenant,
+        `oidc/${uuid(provider)}/link`,
+        csrf,
+        { returnTarget: 'resume', password },
+        (value) => redirect(value, 'authorizationUrl'),
+      ),
+    sessions: (tenant, cursor, limit = 50) => {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+        throw new Error('Invalid session page size')
+      return transport.request({
+        method: 'GET',
+        path: '/api/v1/identity/tenants/{tenant}/sessions',
+        pathParams: { tenant: uuid(tenant) },
+        query: { limit: String(limit), ...(cursor === undefined ? {} : { cursor: uuid(cursor) }) },
+        successStatus: 200,
+        decode(value) {
+          const v = object(value, ['sessions', 'nextCursor'])
+          return {
+            sessions: list(v['sessions'], session),
+            next: v['nextCursor'] === null ? null : uuid(v['nextCursor']),
+          }
+        },
+      })
+    },
     classify(error) {
-      if (isRssApiError(error) && error.status === 401) return 'unauthenticated'
-      return !isRssApiError(error) || error.cause !== 'wire' || error.status === 503
-        ? 'unavailable'
-        : 'rejected'
+      if (!isRssApiError(error)) return 'protocol'
+      if (
+        error.cause === 'network' ||
+        error.cause === 'timeout' ||
+        (error.cause === 'wire' && error.status === 503)
+      )
+        return 'unavailable'
+      if (error.cause !== 'wire') return 'protocol'
+      if (error.status === 401) return 'unauthenticated'
+      if (error.status === 429) return 'rate_limited'
+      return 'rejected'
     },
   }
 }
 
 export { createIdentityAdministrationAdapter } from './administration'
+
+export { bindSession } from './session-transport'

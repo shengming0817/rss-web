@@ -1,12 +1,12 @@
 import { createIdentityTransport } from '@rss/api/identity'
 import { createDeviceAccessTransport } from '@rss/api/device-access'
-import { loadConfig } from '@rss/auth'
+import { loadHostConfig } from '@rss/auth-http'
 import { loadHost } from './config'
 import { createDeviceAccess } from './bootstrap'
 async function start() {
   const identity = createIdentityTransport()
   const [config, host] = await Promise.all([
-    loadConfig(identity, window.location.origin),
+    loadHostConfig(identity, window.location.origin),
     loadHost(createDeviceAccessTransport(), window.location.origin),
   ])
   createDeviceAccess(identity, config, host).mount()

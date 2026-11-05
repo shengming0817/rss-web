@@ -71,7 +71,10 @@ function fixtureState() {
   return value
 }
 const dist = resolve(root, 'apps/identity/dist')
-const runner = resolve(root, 'e2e/identity/real.mjs')
+const runner = resolve(
+  root,
+  process.argv.includes('--browser') ? 'e2e/identity/browser.mjs' : 'e2e/identity/real.mjs',
+)
 try {
   if (!backend || process.platform === 'win32') throw new Error('environment')
   phase = 'build'

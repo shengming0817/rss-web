@@ -68,7 +68,7 @@ describe('ESLint package boundaries', () => {
     expect(
       await ruleIds(
         "import { networkErrorForTest } from '@rss/api/testing'\nexport const x = networkErrorForTest",
-        'packages/auth/src/services/config.spec.ts',
+        'apps/identity/src/runtime.spec.ts',
       ),
     ).not.toContain('no-restricted-imports')
   })
@@ -80,7 +80,7 @@ it('isolates the component preview from product and authentication clients', asy
     'no-restricted-imports',
   )
   for (const dependency of [
-    '@rss/auth',
+    '@rss/auth-core',
     '@rss/api/mdm',
     '@rss/api/identity',
     '@rss/core/src/index',
@@ -106,7 +106,10 @@ it('keeps the standalone DA and its HTTP demo separate', async () => {
     )
   }
   expect(
-    await ruleIds("import {createSession} from '@rss/auth'\nexport const x=createSession", file),
+    await ruleIds(
+      "import {createSession} from '@rss/auth-core'\nexport const x=createSession",
+      file,
+    ),
   ).toContain('no-restricted-imports')
   expect(await ruleIds("export const x=fetch('/api/v1/devices')", file)).toContain(
     'no-restricted-globals',
@@ -119,29 +122,7 @@ it('keeps the standalone DA and its HTTP demo separate', async () => {
   ).not.toContain('da-boundary/contained')
 })
 
-it('allows only the shared stylesheet generator from application build configs', async () => {
-  for (const app of ['identity']) {
-    expect(
-      await ruleIds(
-        "import { vuetifyStyles } from '../../build/vuetify-styles.mjs'; export const x = vuetifyStyles",
-        `apps/${app}/vite.config.ts`,
-      ),
-    ).not.toContain('identity-boundary/contained')
-    expect(
-      await ruleIds(
-        "import { vuetifyStyles } from '../../../build/vuetify-styles.mjs'; export const x = vuetifyStyles",
-        `apps/${app}/src/main.ts`,
-      ),
-    ).toContain('identity-boundary/contained')
-  }
-})
-
 it('keeps React core, adapter and UI dependencies directed, including relative escapes', async () => {
-  for (const value of ['@rss/auth/session', 'vuetify', 'vue']) {
-    expect(
-      await ruleIds(`import {x} from '${value}'; export const y=x`, 'apps/mdm/src/main.tsx'),
-    ).toContain('no-restricted-imports')
-  }
   expect(
     await ruleIds("export * from '../../auth-http/src/index'", 'packages/auth-core/src/index.ts'),
   ).toContain('react-boundary/contained')
@@ -151,21 +132,6 @@ it('keeps React core, adapter and UI dependencies directed, including relative e
   expect(
     await ruleIds("export * from '@rss/auth-core'", 'packages/auth-http/src/index.ts'),
   ).not.toContain('no-restricted-imports')
-})
-
-it('keeps the DA stylesheet build helper out of product source imports', async () => {
-  expect(
-    await ruleIds(
-      "import { vuetifyStyles } from '../../build/vuetify-styles.mjs'; export const x = vuetifyStyles",
-      'apps/device-access/vite.config.ts',
-    ),
-  ).not.toContain('da-boundary/contained')
-  expect(
-    await ruleIds(
-      "import { vuetifyStyles } from '../../../build/vuetify-styles.mjs'; export const x = vuetifyStyles",
-      'apps/device-access/src/main.ts',
-    ),
-  ).toContain('da-boundary/contained')
 })
 
 it('keeps the MDM domain cores independent and their adapters out of feature composition', async () => {

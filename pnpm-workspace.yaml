@@ -1,4 +1,4 @@
-# pnpm workspace — 平铺 monorepo（对标 vbenjs/vue-vben-admin）
+# pnpm workspace — 平铺 monorepo
 # catalog: 单点钉死全部第三方版本；业务包一律以 "catalog:" 引用，禁止硬编版本号。
 packages:
   - apps/*
@@ -12,17 +12,10 @@ allowBuilds:
 catalog:
   # —— 运行时核心 ——
   '@noble/hashes': 2.4.0
-  vuetify: 4.3.0
-  vue: ^3.5.13
-  vue-router: ^4.5.0
-  pinia: ^3.0.1
   axios: ^1.7.9
-  vue-i18n: ^11.1.1
   # —— 构建 / 类型工具 ——
   vite: ^6.0.7
-  '@vitejs/plugin-vue': ^5.2.1
   typescript: ^5.7.3
-  vue-tsc: ^2.2.0
   '@types/node': ^22.10.5
   # —— 样式 ——
   # Synthetic HTTP demo validates the backend's finite JSON Schema subset.
@@ -32,7 +25,6 @@ catalog:
   # —— 测试 ——
   playwright: 1.63.0
   vitest: ^3.0.4
-  '@vue/test-utils': ^2.4.6
   jsdom: ^25.0.1
   '@vitest/coverage-v8': ^3.0.4
   axios-mock-adapter: ^2.1.0
@@ -40,17 +32,14 @@ catalog:
   eslint: ^9.18.0
   '@eslint/js': ^9.18.0
   typescript-eslint: ^8.20.0
-  eslint-plugin-vue: ^9.32.0
-  vue-eslint-parser: ^9.4.3
   eslint-plugin-import-x: ^4.6.1
   eslint-import-resolver-typescript: ^3.7.0
-  eslint-plugin-vuejs-accessibility: ^2.4.1
   eslint-config-prettier: ^9.1.0
   prettier: ^3.4.2
   husky: ^9.1.7
   lint-staged: ^15.3.0
 
-  # React MDM composition
+  # React applications
   react: 19.3.1
   react-dom: 19.3.1
   antd: 6.6.8
