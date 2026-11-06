@@ -9,6 +9,8 @@ import type { ViewEndpoint } from '@rss/mdm-devices'
 import type { Runtime } from './runtime'
 import { createCeremonyHandoff } from './ceremony-handoff'
 import { MaterialDisclosure } from './MaterialDisclosure'
+import { decodeMdmError } from '@rss/api/mdm'
+import { RecoveryCredentials as RecoveryPage } from './RecoveryCredentials'
 import { RecoveryDisclosure } from './RecoveryDisclosure'
 import { FileVaultCredentials } from './FileVaultCredentials'
 import { NativeCredentialOperation } from './NativeCredentialOperation'
@@ -456,4 +458,60 @@ it('makes exact disclosure reachable with only a device Credentials grant and no
   await click('读取当前披露权限')
   expect(host.textContent).not.toContain('exact-only-sensitive-value')
   expect(button('披露此精确材料').disabled).toBe(true)
+})
+
+it('hides denied recovery metadata during retry while retaining an unknown original revocation', async () => {
+  const f = fixture(),
+    value = material()
+  let finishList!: (value: { items: Material[]; nextCursor: null }) => void
+  const list = vi
+    .fn<RecoveryCredentials['list']>()
+    .mockResolvedValueOnce({ items: [value], nextCursor: null })
+    .mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishList = resolve
+        }),
+    )
+  const revoke = vi
+    .fn<RecoveryCredentials['revoke']>()
+    .mockRejectedValueOnce(decodeMdmError(503, { code: 'operation_unknown' }))
+    .mockResolvedValue({ ...value, validity: 'revoked' })
+  const credentials = inject<RecoveryCredentials>({ list, material: async () => value, revoke })
+  const runtime = {
+    ...f.runtime,
+    administration: () => ({ binding: 'recovery-metadata', recoveryCredentials: credentials }),
+  } as unknown as Runtime
+  const endpoint: ViewEndpoint = {
+    id: target.device,
+    status: 'active',
+    assetState: 'active',
+    primaryMdmRegistration: null,
+    channels: [],
+    enrollments: [],
+    platform: { state: 'unknown', values: [] },
+  }
+  await render(
+    h(RecoveryPage, {
+      runtime,
+      endpoint,
+      locale: 'zh',
+      has: (operation) =>
+        ['inventory_read', 'account_write', 'security_operate'].includes(operation),
+    }),
+  )
+  await click(`${value.id} · ${value.version}`)
+  await click('撤销此版本的材料访问')
+  const original = revoke.mock.calls[0]
+  await click('读取材料目录')
+  const retry = [...host.querySelectorAll('button')].find(
+    (node) => node.textContent === '显式重提原版本撤销',
+  )!
+  expect(retry.closest('[hidden]')).not.toBeNull()
+  await click('读取材料目录')
+  expect(retry.closest('[hidden]')).not.toBeNull()
+  await act(async () => finishList({ items: [value], nextCursor: null }))
+  await click('显式重提原版本撤销')
+  expect(revoke.mock.calls[1]).toEqual(original)
 })

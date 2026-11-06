@@ -108,6 +108,7 @@ it('shares thirty seconds across attempts and aborts a late second response', as
 })
 it.each([
   decodeMdmError(401, { code: 'permission_denied' }),
+  decodeMdmError(401, { code: 'invalid_credential' }),
   decodeMdmError(403, { code: 'permission_denied' }),
   decodeMdmError(503, { code: 'query_read_conflict' }),
   decodeMdmError(503, { code: 'unavailable' }),

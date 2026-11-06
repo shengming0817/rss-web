@@ -69,15 +69,12 @@ export function RecoveryCredentials({
     )
   usePendingSelection(guard.locked)
   useEffect(() => {
-    if (readFailure(list.error) === 'denied' || readFailure(detail.error) === 'denied' || !canRead)
-      setHeld(null)
-    else if (!guard.locked) setHeld(detail.value ?? null)
+    if (!guard.locked)
+      setHeld(readFailure(list.error) === 'denied' || !canRead ? null : (detail.value ?? null))
   }, [detail.value, guard.locked, list.error, detail.error, canRead])
-  const denied = readFailure(list.error) === 'denied' || readFailure(detail.error) === 'denied'
+  const visible = canRead && !!list.value && !!detail.value
   const current =
-    !denied && selected && held && held.id === selected.id && held.version === selected.version
-      ? held
-      : null
+    selected && held && held.id === selected.id && held.version === selected.version ? held : null
   return (
     <SelectionGuard.Provider value={guard.register}>
       <Alert
@@ -211,21 +208,17 @@ export function RecoveryCredentials({
         />
       )}
       {current && (
-        <SecretPanel active={canRead && !detail.error && !detail.busy}>
-          <fieldset
-            className="permission-panel"
-            hidden={!canRead || !!detail.error || detail.busy}
-            disabled={!canRead || !!detail.error || detail.busy}
-          >
+        <SecretPanel active={visible}>
+          <fieldset className="permission-panel" hidden={!visible} disabled={!visible}>
             <MaterialDetail
               key={`${current.binding.device}/${current.id}/${current.version}`}
               runtime={runtime}
               credentials={credentials}
               value={current}
               locale={locale}
-              canDisclose={canDisclose}
-              canRead={canRead}
-              canRevoke={has(revokePermission(current.binding.subject))}
+              canDisclose={visible && canDisclose}
+              canRead={visible}
+              canRevoke={visible && has(revokePermission(current.binding.subject))}
               onRefresh={() => {
                 detail.reload()
                 list.reload()
@@ -260,7 +253,7 @@ export function RecoveryCredentials({
           <NativeCredentialOperation
             credentials={credentials}
             endpoint={endpoint}
-            selected={current}
+            selected={visible ? current : null}
             locale={locale}
             canOperate={canOperate}
             canConfigure={has('configuration_write')}

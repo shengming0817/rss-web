@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
 import {
@@ -67,6 +67,7 @@ export function BindingEditor({
   isNew: boolean
   onChanged(): void
 }) {
+  const formName = useId()
   const l = labels(locale),
     { deviceAccess, authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/binding-write/${device}`, authorization.effective),
@@ -241,6 +242,7 @@ export function BindingEditor({
         </dl>
       )}
       <Form
+        name={formName}
         form={form}
         layout="vertical"
         disabled={!permitted || !!pending || action.busy || read.busy || permissions.busy}

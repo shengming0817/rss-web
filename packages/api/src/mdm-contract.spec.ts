@@ -11,6 +11,7 @@ import {
   postApiV1PoliciesByIdReruns,
   postApiV1ResourcesByIdUploadsByUploadComplete,
   getReadyz,
+  getApiV1DeviceViewsByKindById,
 } from './generated/mdm'
 import { validateTaskAdmission, validatePolicyDefinition } from './generated/mdm/owner-validators'
 import { safeJson } from './mdm-contract-response'
@@ -19,6 +20,38 @@ import type { HttpTransport, RequestOptions, NoContentRequest } from './types'
 
 const id = '11111111-1111-4111-8111-111111111111'
 describe('fixed producer HTTP operations', () => {
+  it('passes authenticated middleware rejections through the generated endpoint contract without accepting invalid status, shape or media', async () => {
+    const instance = axios.create(),
+      mock = new MockAdapter(instance)
+    const create = vi.spyOn(axios, 'create').mockReturnValue(instance)
+    try {
+      const transport = createMdmTransport()
+      const request = () =>
+        getApiV1DeviceViewsByKindById(transport, { pathParams: { kind: 'endpoint', id } })
+      for (const [status, body, media, cause] of [
+        [401, { code: 'invalid_credential' }, 'application/json', 'wire'],
+        [403, { code: 'csrf_rejected' }, 'application/json', 'wire'],
+        [403, { code: 'invalid_credential' }, 'application/json', 'protocol'],
+        [401, { code: 'invalid_credential', extra: true }, 'application/json', 'protocol'],
+        [401, { code: 'invalid_credential' }, 'text/plain', 'protocol'],
+      ] as const) {
+        mock
+          .onGet(`/api/v1/device-views/endpoint/${id}`)
+          .reply(status, body, { 'content-type': media })
+        await expect(request()).rejects.toMatchObject({
+          cause,
+          status,
+          ...(cause === 'wire' ? { code: body.code } : {}),
+        })
+        mock.resetHandlers()
+      }
+      expect(mock.history.get).toHaveLength(5)
+    } finally {
+      mock.restore()
+      create.mockRestore()
+    }
+  })
+
   it('validates composed records with shared and branch fields while rejecting unknown core keys', () => {
     const record = {
       id: 'rp:app',
