@@ -123,6 +123,19 @@ it('keeps query application explicit and prevents invalid or disabled submission
     onNext: vi.fn(),
   }
   mount(h(QueryControls, props))
+  const change = (suffix: string, value: string) => {
+    const input = host.querySelector<HTMLInputElement>(`input[id$="-${suffix}"]`)!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+  change('filter', 'name==example')
+  change('sort', '-id')
+  change('limit', '42')
+  expect(props.onFilter).toHaveBeenCalledWith('name==example')
+  expect(props.onSort).toHaveBeenCalledWith('-id')
+  expect(props.onLimit).toHaveBeenCalledWith(42)
   click('Apply')
   click('First')
   expect(props.onApply).toHaveBeenCalledTimes(1)

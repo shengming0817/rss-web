@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState, useRef } from 'react'
 import { Alert, Button } from 'antd'
 import {
   Link,
@@ -109,9 +109,18 @@ export function IdentityApp() {
           <Routes>
             <Route path="/tenants/:tenant/login" element={<LoginPage key={location.pathname} />} />
             <Route path="/auth/resume" element={<LoginPage key={location.pathname} resume />} />
-            <Route path="/tenants/:tenant/sessions" element={<ProtectedPage kind="sessions" />} />
-            <Route path="/tenants/:tenant/accounts" element={<ProtectedPage kind="accounts" />} />
-            <Route path="/tenants/:tenant/providers" element={<ProtectedPage kind="providers" />} />
+            <Route
+              path="/tenants/:tenant/sessions"
+              element={<ProtectedPage key={location.pathname} kind="sessions" />}
+            />
+            <Route
+              path="/tenants/:tenant/accounts"
+              element={<ProtectedPage key={location.pathname} kind="accounts" />}
+            />
+            <Route
+              path="/tenants/:tenant/providers"
+              element={<ProtectedPage key={location.pathname} kind="providers" />}
+            />
             <Route path="/auth/error" element={<ErrorPage key={location.pathname} />} />
             <Route path="/" element={<ErrorPage key={location.pathname} />} />
             <Route path="*" element={<ErrorPage key={location.pathname} />} />
@@ -127,6 +136,8 @@ function ProtectedPage({ kind }: { kind: 'sessions' | 'accounts' | 'providers' }
   const tenant = tenantLocator(raw)
   const { owner, snapshot, config } = useIdentity()
   const [checked, setChecked] = useState(false)
+  const manualLoad = useRef(false)
+  if (snapshot.navigation === 'unavailable') manualLoad.current = true
   const t = useT()
   useEffect(() => {
     let active = true
@@ -162,7 +173,11 @@ function ProtectedPage({ kind }: { kind: 'sessions' | 'accounts' | 'providers' }
       : snapshot.host?.navigation.manageProviders
   if (snapshot.navigation !== 'ready') return <p role="status">{t('navigationUnavailable')}</p>
   if (!allowed) return <p role="alert">{t('errors.insufficient_privilege')}</p>
-  return kind === 'accounts' ? <AccountsPage key={scope} /> : <ProvidersPage key={scope} />
+  return kind === 'accounts' ? (
+    <AccountsPage key={scope} manualLoad={manualLoad.current} />
+  ) : (
+    <ProvidersPage key={scope} manualLoad={manualLoad.current} />
+  )
 }
 export function ErrorPage() {
   const { owner, flows } = useIdentity()

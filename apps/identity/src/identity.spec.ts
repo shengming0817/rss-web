@@ -307,6 +307,25 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
     expect(tenantLocator('00000000-0000-0000-0000-000000000000')).toBeNull()
     expect(tenantLocator(tenant.toUpperCase())).toBe(tenant)
   })
+  it.each(['accounts', 'providers'])(
+    'waits for an explicit %s read after navigation recovers',
+    async (kind) => {
+      const f = fixture()
+      let unavailable = true
+      f.override((request) => {
+        if (unavailable && request.path.endsWith('/context')) throw networkErrorForTest()
+        return undefined
+      })
+      await mount(f.runtime, `/tenants/${tenant}/${kind}`)
+      expect(requests(f.calls, `/${kind}`, 'GET')).toHaveLength(0)
+      unavailable = false
+      await click('重试导航')
+      expect(container.textContent).toContain('列表尚未加载')
+      expect(requests(f.calls, `/${kind}`, 'GET')).toHaveLength(0)
+      await click('加载列表')
+      expect(requests(f.calls, `/${kind}`, 'GET')).toHaveLength(1)
+    },
+  )
   it('keeps provider and account navigation independent', async () => {
     const f = fixture({ accounts: false, providers: true })
     await mount(f.runtime, `/tenants/${tenant}/sessions`)

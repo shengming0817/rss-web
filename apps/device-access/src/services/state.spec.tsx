@@ -10,6 +10,9 @@ import { useRead } from './read'
 import { useMutation } from './mutation'
 import { useDirectory } from './directory'
 import { useRevisionReview } from './revision-review'
+import { Presentation } from '@rss/core'
+import { AccountsPanel } from '../features/computers/Panels'
+import { Applications } from '../features/applications/Applications'
 import { errorMessage, uncertain, needsProof } from './status'
 import { decodeHost } from '../config'
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -376,9 +379,6 @@ it('validates field projection and page bounds before dispatch and restores acce
 it.each(['binding', 'application'] as const)(
   'cancels the %s purpose ceremony when hidden and discards a late challenge',
   async (kind) => {
-    const { AccountsPanel } = await import('../features/computers/Panels')
-    const { Applications } = await import('../features/applications/Applications')
-    const { Presentation } = await import('@rss/core')
     const r = await runtime()
     const media = window.matchMedia
     Object.defineProperty(window, 'matchMedia', {
@@ -421,7 +421,10 @@ it.each(['binding', 'application'] as const)(
       },
       security: { cancel, prove },
     })
-    const root = createRoot(document.createElement('div'))
+    const container = document.createElement('div')
+    document.body.append(container)
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false })
+    const root = createRoot(container)
     roots.add(root)
     const button = async (text: string) => {
       const target = [...document.querySelectorAll('button')].find(
@@ -497,6 +500,7 @@ it.each(['binding', 'application'] as const)(
     } finally {
       await act(async () => root.unmount())
       roots.delete(root)
+      container.remove()
       Reflect.deleteProperty(document, 'hidden')
       Object.defineProperty(window, 'matchMedia', { configurable: true, value: media })
     }

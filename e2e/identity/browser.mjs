@@ -8,8 +8,7 @@ import process from 'node:process'
 
 const origin = process.env.IDENTITY_TEST_UI_ORIGIN
 const tenant = '11111111-1111-4111-8111-111111111111'
-const checks = [],
-  csp = [],
+const csp = [],
   errors = [],
   traffic = []
 let browser,
@@ -57,7 +56,6 @@ try {
   await login('admin', 'correct horse battery staple')
   await page.getByRole('heading', { name: '我的会话', exact: true }).waitFor()
   assert.equal(await page.evaluate(() => document.cookie.includes('identity-session')), false)
-  checks.push('real-cookie-login-and-session-deep-link')
   step = 'account-directory'
   await page.goto(`${origin}/tenants/${tenant}/accounts`)
   await button('创建本地账户').click()
@@ -76,7 +74,6 @@ try {
   assert.equal((await created).status(), 201)
   await page.getByText('browser-member', { exact: true }).first().waitFor()
   await page.locator('#account-password').waitFor({ state: 'detached' })
-  checks.push('real-account-creation-and-secret-task-disposal')
   step = 'provider-management'
   await page.goto(`${origin}/tenants/${tenant}/providers`)
   await button('新增身份提供方').click()
@@ -94,9 +91,8 @@ try {
     .locator('button[type=submit]')
     .click()
   assert.equal((await providerResponse).status(), 201)
-  await page.getByText('https://idp.example.test', { exact: true }).first().waitFor()
+  await page.getByRole('cell').filter({ hasText: 'https://idp.example.test' }).first().waitFor()
   await page.locator('#client-secret').waitFor({ state: 'detached' })
-  checks.push('real-provider-write-and-secret-disposal')
   step = 'resume'
   await page.evaluate(
     (tenantId) =>
@@ -113,7 +109,6 @@ try {
     traffic.filter((request) => request.path === '/api/v1/identity/oidc/callback').length,
     0,
   )
-  checks.push('resume-consumes-locator-and-only-rereads-session')
   step = 'theme-and-responsive'
   const screenshots = mkdtempSync(join(tmpdir(), 'rss-identity-react-'))
   await button('切换主题').click()
@@ -128,7 +123,6 @@ try {
     await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
     true,
   )
-  checks.push('strict-csp-theme-keyboard-and-responsive-layout')
   step = 'logout'
   await button('退出当前会话').click()
   await page.waitForURL(`**/tenants/${tenant}/login`)
@@ -136,7 +130,6 @@ try {
   assert.equal(await page.getByRole('link', { name: '账户管理', exact: true }).count(), 0)
   await page.goto(`${origin}/tenants/${tenant}/accounts`)
   await page.getByRole('alert').first().waitFor()
-  checks.push('ordinary-member-navigation-and-management-rejection')
   assert.deepEqual(csp, [])
   assert.deepEqual(errors, [])
   failure = null
@@ -154,18 +147,12 @@ try {
   if (process.env.IDENTITY_UI_BROWSER_RECORD)
     writeFileSync(
       process.env.IDENTITY_UI_BROWSER_RECORD,
-      JSON.stringify({ stage: 'browser', failure }),
+      JSON.stringify({
+        stage: 'browser',
+        failure,
+        diagnostic: { test: 'identity-browser', file: 'e2e/identity/browser.mjs', step },
+      }),
       { mode: 0o600 },
     )
-  console.log(
-    JSON.stringify({
-      journey: 'identity-react',
-      step,
-      result: failure ? 'failed' : 'passed',
-      checks,
-      csp,
-      pageErrors: errors,
-    }),
-  )
   if (failure) process.exitCode = 1
 }

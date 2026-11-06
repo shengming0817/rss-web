@@ -87,6 +87,8 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@ant-design/cssinjs": "catalog:",
-    "@ant-design/static-style-extract": "catalog:"
+    "@ant-design/static-style-extract": "catalog:",
+    "@rss/auth-core": "workspace:*",
+    "@rss/auth-http": "workspace:*"
   }
 }

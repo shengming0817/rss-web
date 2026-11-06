@@ -116,6 +116,12 @@ importers:
       '@rss/api':
         specifier: workspace:*
         version: link:packages/api
+      '@rss/auth-core':
+        specifier: workspace:*
+        version: link:packages/auth-core
+      '@rss/auth-http':
+        specifier: workspace:*
+        version: link:packages/auth-http
       '@types/react':
         specifier: 'catalog:'
         version: 19.3.0

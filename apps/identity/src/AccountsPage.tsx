@@ -39,7 +39,7 @@ const initialFields: (keyof AccountRow)[] = [
   'hasLocalPassword',
 ]
 type DirectoryRow = Partial<AccountRow> & Pick<Account, 'principalId'>
-export function AccountsPage() {
+export function AccountsPage({ manualLoad = false }: { manualLoad?: boolean }) {
   const api = useAdministration()
   const { snapshot } = useIdentity()
   const { locale } = usePresentation()
@@ -126,7 +126,7 @@ export function AccountsPage() {
     }
   }
   useEffect(() => {
-    void op.run((checkpoint) => load(undefined, false, checkpoint))
+    if (!manualLoad) void op.run((checkpoint) => load(undefined, false, checkpoint))
   }, [])
   function readDetail(principal: string) {
     void op.run(async (checkpoint) => {

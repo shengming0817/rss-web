@@ -40,7 +40,7 @@ export function editedProviderSettings(
     },
   }
 }
-export function ProvidersPage() {
+export function ProvidersPage({ manualLoad = false }: { manualLoad?: boolean }) {
   const api = useAdministration()
   const { config } = useIdentity()
   const t = useT()
@@ -90,7 +90,7 @@ export function ProvidersPage() {
     setLoaded(true)
   }
   useEffect(() => {
-    void op.run((checkpoint) => load(checkpoint))
+    if (!manualLoad) void op.run((checkpoint) => load(checkpoint))
   }, [])
   function edit(provider: IdentityProvider) {
     clearSecrets()

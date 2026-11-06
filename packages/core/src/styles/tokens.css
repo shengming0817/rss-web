@@ -121,3 +121,11 @@ a {
   border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
+
+/* Portals use the application container; locking is static under the host CSP. */
+html {
+  scrollbar-gutter: stable;
+}
+html:has(.ant-modal-wrap, .ant-drawer-open) {
+  overflow: hidden;
+}

@@ -4,6 +4,7 @@ import {
   useEffect,
   useLayoutEffect,
   useState,
+  useRef,
   type ReactNode,
 } from 'react'
 import { ConfigProvider, theme, type ThemeConfig } from 'antd'
@@ -50,6 +51,7 @@ export function Presentation({ children }: { children: ReactNode }) {
         : 'light'
   })
   const [styleContainer] = useState(() => document.createElement('div'))
+  const popupRoot = useRef<HTMLDivElement>(null)
   useEffect(() => {
     document.documentElement.lang = locale
     localStorage.setItem('rss-locale', locale)
@@ -79,11 +81,14 @@ export function Presentation({ children }: { children: ReactNode }) {
     >
       <StyleProvider container={styleContainer}>
         <ConfigProvider
+          getPopupContainer={() => popupRoot.current!}
           locale={locale === 'zh-CN' ? zhCN : enUS}
           theme={rssTheme(selectedTheme === 'dark')}
           button={{ autoInsertSpace: false }}
         >
-          {children}
+          <div ref={popupRoot} className="rss-presentation">
+            {children}
+          </div>
         </ConfigProvider>
       </StyleProvider>
     </Context.Provider>

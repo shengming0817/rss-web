@@ -44,6 +44,31 @@ export default tseslint.config(
 
   // ── Base JS recommended ─────────────────────────────────────────────────────
   js.configs.recommended,
+  {
+    files: ['**/*.{js,mjs}'],
+    languageOptions: {
+      globals: Object.fromEntries(
+        [
+          'Event',
+          'PageTransitionEvent',
+          'URL',
+          'URLSearchParams',
+          'clearTimeout',
+          'console',
+          'document',
+          'getComputedStyle',
+          'innerWidth',
+          'localStorage',
+          'location',
+          'sessionStorage',
+          'setInterval',
+          'setTimeout',
+          'structuredClone',
+          'window',
+        ].map((name) => [name, 'readonly']),
+      ),
+    },
+  },
 
   // ── TypeScript recommended ──────────────────────────────────────────────────
   ...tseslint.configs.recommended,
