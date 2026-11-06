@@ -12,6 +12,7 @@ import { ControlRecoveryPanel } from './ControlRecovery'
 import { isUnknown } from './AdminUi'
 import { decodeMdmError } from '@rss/api/mdm'
 import { EnterpriseEditor } from './EnterpriseEditor'
+import { BindingEditor } from './BindingEditor'
 import { Policies } from './Policies'
 import { Executions, policyReturnPath } from './Executions'
 import type { EnterpriseConfiguration } from '@rss/mdm-device-access'
@@ -464,3 +465,38 @@ it('never applies a policy return locator to another policy or an external host'
   ])
     expect(policyReturnPath('a', value)).toBe('/policies?policy=a')
 })
+
+it.each(['binding', 'enterprise'])(
+  'retries the failed %s permission read without issuing a write',
+  async (kind) => {
+    const effective = vi
+      .fn()
+      .mockRejectedValueOnce(decodeMdmError(503, { code: 'unavailable' }))
+      .mockResolvedValue({ grants: [] })
+    const runtime = {
+      administration: () => ({
+        binding: 'permission-retry',
+        authorization: { effective },
+        deviceAccess: {},
+      }),
+    } as unknown as Runtime
+    await act(async () =>
+      root.render(
+        kind === 'binding'
+          ? h(BindingEditor, {
+              runtime,
+              locale: 'zh',
+              device: 'device',
+              id: '11111111-1111-4111-8111-111111111111',
+              isNew: true,
+              onChanged() {},
+            })
+          : h(EnterpriseEditor, { runtime, locale: 'zh', id: null, onChanged() {} }),
+      ),
+    )
+    expect(effective).toHaveBeenCalledTimes(1)
+    await act(async () => button('重新读取').click())
+    expect(effective).toHaveBeenCalledTimes(2)
+    expect(host.querySelector('[role=alert]')).toBeNull()
+  },
+)

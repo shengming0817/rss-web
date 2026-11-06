@@ -330,6 +330,7 @@ it('edits a root pointer without losing typed enum values or recursive column ma
   })
 })
 it('hides denied device facts while retaining the original unknown manual write through a later valid read', async () => {
+  let completeRead!: (value: unknown) => void
   const endpoint = {
       id: 'endpoint',
       status: 'active' as const,
@@ -344,7 +345,13 @@ it('hides denied device facts while retaining the original unknown manual write 
     deviceView = vi
       .fn()
       .mockResolvedValueOnce(view)
-      .mockRejectedValueOnce({ status: 403, code: 'forbidden' })
+      .mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            completeRead = resolve
+          }),
+      )
       .mockResolvedValue(view),
     assign = vi
       .fn()
@@ -437,6 +444,12 @@ it('hides denied device facts while retaining the original unknown manual write 
   ).toBeTruthy()
   await click('读取最新设备事实')
   expect(assign).toHaveBeenCalledTimes(1)
+  expect(
+    [...host.querySelectorAll('button')]
+      .find((n) => n.textContent === '显式重提原手工值变更')
+      ?.closest('[hidden]'),
+  ).toBeTruthy()
+  await act(async () => completeRead(view))
   await click('显式重提原手工值变更')
   expect(assign.mock.calls[1]).toEqual(original)
 })
