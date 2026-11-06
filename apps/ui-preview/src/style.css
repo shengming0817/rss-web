@@ -44,9 +44,6 @@
   }
 }
 
-.preview > .v-application__wrap {
-  gap: 24px;
-}
 .preview-actions {
   display: flex;
   align-items: center;
@@ -62,7 +59,10 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 24px;
 }
-.preview .v-btn {
-  text-transform: none;
-  letter-spacing: 0;
+
+.preview .ant-space-vertical {
+  width: 100%;
+}
+.preview .ant-select {
+  min-width: 12rem;
 }

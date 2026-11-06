@@ -28,9 +28,24 @@ export interface BindingInput {
         instance: string
         principal: string
         policy: string
-        account: { kind: 'create'; platform: 'windows' | 'macos'; name: string }
+        account:
+          | { kind: 'create'; platform: 'windows' | 'macos'; name: string }
+          | {
+              kind: 'existing'
+              account:
+                | { platform: 'macos'; generatedUid: string }
+                | {
+                    platform: 'windows'
+                    sid: string
+                    authority:
+                      | { kind: 'local' }
+                      | { kind: 'active_directory'; domainSid: string }
+                      | { kind: 'entra'; tenantId: string; objectId: string }
+                  }
+            }
       }
     | { kind: 'reset_factors' }
+    | { kind: 'unbind'; disposition: 'keep' | 'disable' | 'standard' }
 }
 export interface DeviceAccessClient {
   capabilities: Capabilities

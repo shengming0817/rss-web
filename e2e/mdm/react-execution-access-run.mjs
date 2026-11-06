@@ -6,9 +6,16 @@ import assert from 'node:assert/strict'
 import process from 'node:process'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-assert.ok(process.env.MDM_REACT_EXECUTION_BACKEND, 'Set MDM_REACT_EXECUTION_BACKEND to rss-mdm')
-const backend = resolve(process.env.MDM_REACT_EXECUTION_BACKEND),
-  env = { ...process.env, MDM_DEVICE_BROWSER_MODULE: 'react-execution-access-browser.mjs' }
+const standaloneDa = process.argv.includes('--standalone-da')
+const selectedBackend = standaloneDa
+  ? process.env.DEVICE_ACCESS_BACKEND
+  : process.env.MDM_REACT_EXECUTION_BACKEND
+assert.ok(selectedBackend, 'Select an rss-mdm backend checkout for this browser journey')
+const backend = resolve(selectedBackend),
+  browserModule = standaloneDa
+    ? 'react-device-access-browser.mjs'
+    : 'react-execution-access-browser.mjs',
+  env = { ...process.env, MDM_DEVICE_BROWSER_MODULE: browserModule }
 let active,
   interrupted = false,
   phase = 'build'
@@ -44,7 +51,7 @@ const leased = (script, timeoutMs) =>
     timeoutMs,
   )
 try {
-  await run('pnpm', ['build:mdm'], root, 600000)
+  await run('pnpm', [standaloneDa ? 'build:device-access' : 'build:mdm'], root, 600000)
   phase = 'execution-access'
   let failure
   try {
@@ -55,7 +62,13 @@ try {
     phase = 'cleanup'
     try {
       await leased('e2e/mdm/device-cleanup.py', 180000)
-      console.log(JSON.stringify({ phase, result: 'passed', journey: 'react-execution-access' }))
+      console.log(
+        JSON.stringify({
+          phase,
+          result: 'passed',
+          journey: browserModule.replace('-browser.mjs', ''),
+        }),
+      )
     } catch {
       console.error(
         JSON.stringify({
@@ -63,7 +76,7 @@ try {
           result: 'failed',
           recoveryDirectory: resolve(
             backend,
-            'artifacts/dev-environment/react-execution-access-browser',
+            'artifacts/dev-environment/' + browserModule.replace('.mjs', ''),
           ),
         }),
       )

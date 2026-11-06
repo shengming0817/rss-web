@@ -23,7 +23,7 @@
     "src"
   ],
   "scripts": {
-    "typecheck": "node ../../scripts/ensure-contracts.mjs && vue-tsc --noEmit",
+    "typecheck": "node ../../scripts/ensure-contracts.mjs && tsc --noEmit",
     "test": "node ../../scripts/ensure-contracts.mjs && vitest run",
     "test:coverage": "node ../../scripts/ensure-contracts.mjs && vitest run --coverage"
   },

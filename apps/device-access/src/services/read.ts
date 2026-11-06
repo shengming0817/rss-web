@@ -1,51 +1,71 @@
-import { ref, shallowRef, watch, onBeforeUnmount, type WatchSource } from 'vue'
-import { useDa, identityKey } from '../context'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { identityKey, useDa, useIdentity } from '../context'
 import { errorMessage } from './status'
-/** A page request cannot settle into another device or identity context. */
+/** Requests and exposed data are bound to the current session and object, including before effect cleanup. */
 export function useRead<T>(
   load: (signal: AbortSignal) => Promise<T>,
-  dependencies: WatchSource = () => null,
-  options: { accepted?: (value: T) => void; enabled?: () => boolean } = {},
+  dependency = '',
+  enabled = true,
 ) {
-  const runtime = useDa(),
-    data = shallowRef<T>(),
-    busy = ref(false),
-    error = ref('')
-  let controller: AbortController | undefined,
-    epoch = 0
-  function reset() {
-    controller?.abort()
-    epoch++
-    data.value = undefined
-    error.value = ''
-    busy.value = false
-  }
-  async function reload() {
+  const r = useDa()
+  useIdentity()
+  const scope = `${identityKey(r.session)}/${dependency}`
+  const current = useRef({ scope, load, enabled })
+  current.current = { scope, load, enabled }
+  const request = useRef<{ controller: AbortController; epoch: number } | null>(null)
+  const epoch = useRef(0)
+  const [state, setState] = useState<{
+    scope: string
+    data: T | undefined
+    busy: boolean
+    error: string
+  }>({ scope, data: undefined, busy: false, error: '' })
+  const reset = useCallback(() => {
+    epoch.current++
+    request.current?.controller.abort()
+    request.current = null
+    setState({ scope: current.current.scope, data: undefined, busy: false, error: '' })
+  }, [])
+  const reload = useCallback(async () => {
     reset()
-    if (!identityKey(runtime.session) || options.enabled?.() === false) return
-    const current = epoch
-    controller = new AbortController()
-    busy.value = true
+    const start = current.current,
+      version = epoch.current,
+      identity = identityKey(r.session)
+    if (!identityKey(r.session)) return
+    const controller = new AbortController()
+    request.current = { controller, epoch: version }
+    setState({ scope: start.scope, data: undefined, busy: true, error: '' })
+    const valid = () =>
+      version === epoch.current &&
+      current.current.scope === start.scope &&
+      identity !== null &&
+      identityKey(r.session) === identity &&
+      !controller.signal.aborted
     try {
-      const value = await load(controller.signal)
-      if (current === epoch) {
-        options.accepted?.(value)
-        data.value = value
-        return value
+      const data = await start.load(controller.signal)
+      if (valid()) {
+        setState({ scope: start.scope, data, busy: false, error: '' })
+        return data
       }
-    } catch (e) {
-      if (current === epoch) error.value = errorMessage(e)
-    } finally {
-      if (current === epoch) busy.value = false
+    } catch (error) {
+      if (valid())
+        setState({ scope: start.scope, data: undefined, busy: false, error: errorMessage(error) })
     }
+    return undefined
+  }, [r, reset])
+  useEffect(() => {
+    if (enabled) void reload()
+    else reset()
+    return () => {
+      epoch.current++
+      request.current?.controller.abort()
+    }
+  }, [scope, enabled, reload])
+  return {
+    data: state.scope === scope ? state.data : undefined,
+    busy: state.scope === scope && state.busy,
+    error: state.scope === scope ? state.error : '',
+    reload,
+    reset,
   }
-  watch(
-    [() => identityKey(runtime.session), dependencies],
-    () => {
-      void reload()
-    },
-    { immediate: true, flush: 'sync' },
-  )
-  onBeforeUnmount(reset)
-  return { data, busy, error, reload, reset }
 }

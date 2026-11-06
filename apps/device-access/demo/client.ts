@@ -189,7 +189,7 @@ export function createDemoClients(transport: HttpTransport): {
       materialChallenge: (device, material, operationId, signal) =>
         write(
           devicePath(device) + '/challenge',
-          { operationId, material: material.id },
+          { operationId, material: material.id, version: material.version },
           challenge,
           signal,
         ),

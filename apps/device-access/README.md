@@ -1,6 +1,6 @@
 # RSS Device Access
 
-独立 Vue / Vuetify 中文管理应用，服务于 #2874 / #2925。计算机拥有完整页面与快速查看；资产归属、账号绑定、企业 Passkey 记录、恢复材料和轮换均在当前计算机详情内。没有独立 Passkey、轮换或人工离职/换机工作台。
+独立 React + TypeScript + Ant Design 中文管理应用，服务于 #2874 / #2925。计算机拥有完整页面与快速查看；资产归属、账号绑定、企业 Passkey 记录、恢复材料和轮换均在当前计算机详情内。没有独立 Passkey、轮换或人工离职/换机工作台。
 
 ## 开发与演示
 
@@ -23,7 +23,7 @@ pnpm build:device-access
 
 产物为 `apps/device-access/dist`。静态文件与 `/api/v1/identity`、`/api/v1/identity-host`、MDM 当前公开管理 HTTP V1 位于同一个 HTTPS origin。复用已有 `/api/v1/identity-host/config.json` 和 `/api/v1/mdm-host/config.json`，严格核对 canonicalOrigin、tenant 和 serviceId；网关需将 `/computers/...` 等前端路径回落到 index.html。配置失败不启动模拟会话或切到 mock。浅深主题保持 DA 配色，通过构建期外部 CSS 提供；弹层附着于 DA 应用容器。
 
-独立 DA creates one `@rss/auth` session；MDM 是另一个独立应用实例，继续持有自己的唯一 owner。共享 `bindSession` 只将业务请求交给既有 owner，不复制 Cookie/CSRF，不另造刷新或重试控制器。新增可注入登录视图后，Identity/MDM 默认视图保持原行为。
+独立 DA 使用一个 `@rss/auth-core` session owner 和 `@rss/auth-http` adapter；MDM 是另一个独立应用实例，继续持有自己的唯一 owner。共享 `bindSession` 只将业务请求交给既有 owner，不复制 Cookie/CSRF，不另造刷新或重试控制器。三个应用独立部署，不共享浏览器端 session owner。
 
 ## 实际接口范围
 
@@ -45,7 +45,7 @@ pnpm build:device-access
 
 ## MDM 消费
 
-`@rss/device-access/client` 提供注入 transport 的客户端，`/model` 提供类型，`/components` 提供可选 Vuetify 摘要。DA 直接编辑资产，MDM 按需消费同一后端事实；这不是嵌入整套 DA 控制台。摘要不创建会话、不写业务、不接收私钥或恢复明文。个人 Vault 目录不向资产管理员开放。
+`@rss/device-access/client` 提供注入 transport 的客户端，`/model` 提供类型，`/components` 提供可选 React 摘要。DA 直接编辑资产，MDM 按需消费同一后端事实；这不是嵌入整套 DA 控制台。摘要不创建会话、不写业务、不接收私钥或恢复明文。个人 Vault 目录不向资产管理员开放。
 
 已确认设计来源为本会话 2026-10-26 的独立 DA 原型。实现保留名称选择、核对、原操作恢复、完整详情和浅色主题，不将 prototype 内存赋值当作生产业务。
 
@@ -53,6 +53,6 @@ pnpm build:device-access
 
 `make ci` 汇总所有检查并包含 DA 类型、测试、生产构建与 demo 泄漏扫描。新测试覆盖公开 DTO、跨对象拒绝、唯一会话、请求代次、未知写锁定、浏览器认证取消和实际 loopback HTTP Cookie/CSRF 接缝。真实设备验收独立记录。
 
-上游参考：Vuetify v4.3.0 `packages/vuetify/src/components/VDialog/VDialog.tsx`；W3C WebAuthn Level 3（2026-08-25）§5.1.8–§5.1.10。不复制认证器密码学。
+上游参考：React v19.2.0 `packages/use-sync-external-store/src/useSyncExternalStoreShimClient.js`、Ant Design 6.0.0 `components/modal/Modal.tsx`；W3C WebAuthn Level 3（2026-08-25）§5.1.8–§5.1.10。不复制认证器密码学。
 
 计算机、账户绑定、恢复材料和企业应用目录消费真实 filter/sort/fields/limit/cursor，默认每页 50、最多 100；查询草稿不影响续页，成功读取后提交首页／上一页／下一页位置。部分投影只展示返回字段，操作前读取完整详情；恢复材料通过精确 id/version 目录读取完整元数据。计算机筛选由服务端执行，返回目录行数不等于端点或组织总量。版本历史、审计和候选配置仍遵守各自的固定窗口。刷新目录不会解锁 Unknown 写入。演示入口在专属 HTTP scenario server 中执行查询，正式请求失败不切换演示数据。

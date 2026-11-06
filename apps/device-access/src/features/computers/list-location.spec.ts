@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest'
-import { readListLocation, listLocation } from './list-location'
+import { readListLocation, readSearchLocation, listLocation } from './list-location'
 it('round trips an accepted query and page history through detail navigation', () => {
   const query = {
     filter: "platform=='windows'",
@@ -13,4 +13,8 @@ it('round trips an accepted query and page history through detail navigation', (
   expect(readListLocation({ q: 'Office', platform: 'windows' }).error).toBeTruthy()
   expect(readListLocation({ cursor: 'x'.repeat(4097) }).error).toBeTruthy()
   expect(readListLocation({ fields: ['key'] }).error).toBeTruthy()
+})
+
+it('rejects repeated URL parameters rather than silently replacing their earlier value', () => {
+  expect(readSearchLocation('?limit=1&limit=100').error).toBeTruthy()
 })

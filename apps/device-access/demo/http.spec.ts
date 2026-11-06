@@ -4,10 +4,18 @@ import { createServer } from 'vite'
 import { request } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { demoPlugin } from './plugin'
+import {
+  computerDirectory,
+  bindingDirectory,
+  materialDirectory,
+  applicationDirectory,
+} from '@rss/device-access/client'
 import { TENANT } from './state'
 it('uses an actual bounded loopback HTTP session and refuses cross-origin requests', async () => {
   const server = await createServer({
     configFile: false,
+    appType: 'custom',
+    optimizeDeps: { noDiscovery: true },
     plugins: [demoPlugin()],
     server: { host: '127.0.0.1', port: 0, strictPort: true },
   })
@@ -59,9 +67,29 @@ it('uses an actual bounded loopback HTTP session and refuses cross-origin reques
     expect(login.status).toBe(200)
     const cookie = (login.headers['set-cookie'] as string[])[0]!.split(';')[0]!,
       csrf = (login.body as { csrfToken: string }).csrfToken
-    expect(
-      (await call('/api/da-demo/computers', 'GET', undefined, { Cookie: cookie })).body,
-    ).toHaveProperty('items')
+    const computers = await call('/api/da-demo/computers', 'GET', undefined, { Cookie: cookie })
+    const rows = computerDirectory(computers.body, {}).summaries!
+    expect(rows).toHaveLength(6)
+    for (const computer of rows) {
+      const bindings = await call(
+        `/api/da-demo/computers/${computer.id}/bindings`,
+        'GET',
+        undefined,
+        { Cookie: cookie },
+      )
+      expect.soft(() => bindingDirectory(bindings.body, computer.id, {})).not.toThrow()
+      const materials = await call(
+        `/api/da-demo/computers/${computer.id}/materials`,
+        'GET',
+        undefined,
+        { Cookie: cookie },
+      )
+      expect.soft(() => materialDirectory(materials.body, computer.id, {})).not.toThrow()
+    }
+    const applications = await call('/api/da-demo/applications', 'GET', undefined, {
+      Cookie: cookie,
+    })
+    expect(() => applicationDirectory(applications.body, {})).not.toThrow()
     expect(
       (
         await call(

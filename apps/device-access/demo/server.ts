@@ -274,11 +274,84 @@ export function createDemoServer() {
             }
             return directory(bindings.map((v) => bindingRecord(v, computer)))
           }
-          const v = d.closed(body, ['operationId', 'expectedRevision', 'action']),
-            entry = bindings.find((b) => b.id === route[3])
+          const v = d.closed(body, ['operationId', 'expectedRevision', 'action'])
+          const bindingId = d.uuid(route[3]),
+            entry = bindings.find((b) => b.id === bindingId)
+          if ((entry?.revision ?? 0) !== v['expectedRevision'])
+            return fail(409, 'operation_conflict')
+          const raw = v['action']
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+            return fail(400, 'malformed_request')
+          const kind = (raw as Record<string, unknown>)['kind']
+          if (kind === 'put') {
+            const action = d.closed(raw, ['kind', 'instance', 'principal', 'policy', 'account'])
+            d.uuid(action['policy'])
+            const rawAccount = action['account']
+            if (!rawAccount || typeof rawAccount !== 'object' || Array.isArray(rawAccount))
+              return fail(400, 'malformed_request')
+            let name: string
+            if ((rawAccount as Record<string, unknown>)['kind'] === 'create') {
+              const account = d.closed(rawAccount, ['kind', 'platform', 'name'])
+              d.same(account['platform'], computer.platform)
+              name = d.text(account['name'])
+            } else {
+              const intent = d.closed(rawAccount, ['kind', 'account'])
+              d.same(intent['kind'], 'existing')
+              if (computer.platform === 'macos') {
+                const account = d.closed(intent['account'], ['platform', 'generatedUid'])
+                d.same(account['platform'], 'macos')
+                name = d.uuid(account['generatedUid'])
+              } else {
+                const account = d.closed(intent['account'], ['platform', 'sid', 'authority'])
+                d.same(account['platform'], 'windows')
+                name = d.text(account['sid'])
+                const authority = account['authority']
+                if (!authority || typeof authority !== 'object' || Array.isArray(authority))
+                  return fail(400, 'malformed_request')
+                const kind = (authority as Record<string, unknown>)['kind']
+                if (kind === 'active_directory')
+                  d.text(d.closed(authority, ['kind', 'domainSid'])['domainSid'])
+                else if (kind === 'entra') {
+                  const a = d.closed(authority, ['kind', 'tenantId', 'objectId'])
+                  d.uuid(a['tenantId'])
+                  d.uuid(a['objectId'])
+                } else d.same(d.closed(authority, ['kind'])['kind'], 'local')
+              }
+            }
+            return mutate(id, 'binding', v, () => {
+              const next = {
+                id: bindingId,
+                device: id,
+                revision: (entry?.revision ?? 0) + 1,
+                instance: d.uuid(action['instance']),
+                principal: d.uuid(action['principal']),
+                bindingGeneration: (entry?.bindingGeneration ?? 0) + 1,
+                factorGeneration: (entry?.factorGeneration ?? 0) + 1,
+                account: name,
+                targetRevision: (entry?.revision ?? 0) + 1,
+                receivedRevision: entry?.receivedRevision ?? null,
+                appliedRevision: entry?.appliedRevision ?? null,
+                serverState: 'pending' as const,
+                observations: entry?.observations ?? [],
+              }
+              if (entry) Object.assign(entry, next)
+              else bindings.push(next)
+              return next
+            })
+          }
           if (!entry) return fail(404, 'inventory_not_found')
-          if (entry.revision !== v['expectedRevision']) return fail(409, 'operation_conflict')
-          const action = d.closed(v['action'], ['kind'])
+          if (kind === 'unbind') {
+            const action = d.closed(raw, ['kind', 'disposition'])
+            d.choice(action['disposition'], ['keep', 'disable', 'standard'])
+            return mutate(id, 'binding', v, () => {
+              entry.revision++
+              entry.factorGeneration++
+              entry.targetRevision = entry.revision
+              entry.serverState = 'revoked'
+              return { ...entry }
+            })
+          }
+          const action = d.closed(raw, ['kind'])
           d.same(action['kind'], 'reset_factors')
           return mutate(id, 'binding', v, () => {
             entry.revision++

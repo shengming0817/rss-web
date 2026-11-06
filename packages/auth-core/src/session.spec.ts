@@ -57,8 +57,18 @@ function fixture() {
     providers: vi.fn(async () => []),
     beginSso: vi.fn(async () => 'https://idp.example/authorize'),
     stepUp: vi.fn(async () => 'https://idp.example/authorize'),
+    link: vi.fn(async () => 'https://idp.example/link'),
+    sessions: vi.fn(async () => ({ sessions: [], next: null })),
     classify: (error) =>
-      error === '401' ? 'unauthenticated' : error === '403' ? 'rejected' : 'unavailable',
+      error === '401'
+        ? 'unauthenticated'
+        : error === '403'
+          ? 'rejected'
+          : error === '429'
+            ? 'rate_limited'
+            : error === 'protocol'
+              ? 'protocol'
+              : 'unavailable',
   }
   const owner = createSession(port, { oidcEnabled: true })
   owners.push(owner)
@@ -209,4 +219,71 @@ it('passes the concrete step-up purpose and rejects a redirect after leaving the
   owner.leavePage()
   redirect.resolve('https://idp.example/authorize')
   expect(await request).toBeInstanceOf(Error)
+})
+
+it('preserves same-tenant authority and expiry after a rate limited login', async () => {
+  const { owner, port } = fixture()
+  await owner.check(tenant)
+  const before = owner.getSnapshot()
+  vi.mocked(port.login).mockRejectedValue('429')
+  await expect(owner.login(tenant, 'member', 'password')).rejects.toBe('429')
+  expect(owner.getSnapshot()).toEqual(before)
+  await owner.business(async ({ csrf }) => expect(csrf).toBe('a'.repeat(64)))
+  await expect(owner.login(other, 'member', 'password')).rejects.toBe('429')
+  expect(owner.getSnapshot()).toMatchObject({ status: 'anonymous', identity: null })
+})
+it('degrades transient navigation failures but rejects malformed context', async () => {
+  const { owner, port } = fixture()
+  vi.mocked(port.context).mockRejectedValueOnce('network')
+  await owner.check(tenant)
+  expect(owner.getSnapshot()).toMatchObject({
+    status: 'authenticated',
+    host: null,
+    navigation: 'unavailable',
+  })
+  await owner.business(async ({ csrf }) => expect(csrf).toBe('a'.repeat(64)))
+  vi.mocked(port.context).mockRejectedValueOnce('protocol')
+  await expect(owner.loadContext()).rejects.toBe('protocol')
+  expect(owner.getSnapshot()).toMatchObject({ status: 'unavailable', identity: null })
+})
+it('retains unknown logout across failed session reads and visibility restoration', async () => {
+  const { owner, port } = fixture()
+  await owner.check(tenant)
+  vi.mocked(port.logout).mockRejectedValue('network')
+  await expect(owner.logout(true)).rejects.toBe('network')
+  vi.mocked(port.check).mockRejectedValueOnce('401')
+  await owner.check(tenant)
+  expect(owner.getSnapshot().logoutOutcome).toBe('unconfirmed')
+  await owner.check(tenant)
+  expect(owner.getSnapshot().logoutOutcome).toBe('unconfirmed')
+})
+it('queues identity linking after rotation and uses its new CSRF without replay', async () => {
+  const { owner, port } = fixture()
+  await owner.check(tenant)
+  const result = deferred<SessionEnvelope>()
+  vi.mocked(port.refresh).mockReturnValue(result.promise)
+  const refresh = owner.refresh()
+  await vi.waitFor(() => expect(port.refresh).toHaveBeenCalled())
+  const link = owner.link(other, null)
+  result.resolve(envelope('b'))
+  await refresh
+  expect(await link).toBe('https://idp.example/link')
+  expect(port.link).toHaveBeenCalledExactlyOnceWith(tenant, 'b'.repeat(64), other, null)
+})
+
+it('preserves an unconfirmed exit when page caching abandons a dispatched logout', async () => {
+  const { owner, port } = fixture()
+  await owner.check(tenant)
+  const exit = deferred<void>()
+  vi.mocked(port.logout).mockReturnValue(exit.promise)
+  const logout = owner.logout().catch((error: unknown) => error)
+  await vi.waitFor(() => expect(port.logout).toHaveBeenCalled())
+  owner.suspend()
+  expect(owner.getSnapshot().logoutOutcome).toBe('unconfirmed')
+  exit.resolve()
+  expect(await logout).toBeInstanceOf(Error)
+  await owner.check(tenant)
+  expect(owner.getSnapshot().logoutOutcome).toBe('unconfirmed')
+  await owner.switchTenant(other)
+  expect(owner.getSnapshot().logoutOutcome).toBe('idle')
 })

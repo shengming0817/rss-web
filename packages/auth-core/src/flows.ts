@@ -1,5 +1,5 @@
-const KEY = 'rss.mdm.authentication-flow'
-type Locator = { kind: 'sso' | 'step-up'; tenant: string; created: number }
+const KEY = 'rss.authentication-flow'
+type Locator = { kind: 'sso' | 'step-up' | 'link'; tenant: string; created: number }
 /** The sole persistent flow value is a short-lived per-tab locator. */
 export function createFlows(
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
@@ -15,7 +15,7 @@ export function createFlows(
       const r = v as Record<string, unknown>
       if (
         Object.keys(r).sort().join() !== 'created,kind,tenant' ||
-        (r['kind'] !== 'sso' && r['kind'] !== 'step-up') ||
+        (r['kind'] !== 'sso' && r['kind'] !== 'step-up' && r['kind'] !== 'link') ||
         typeof r['tenant'] !== 'string' ||
         !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(r['tenant']) ||
         r['tenant'] === '00000000-0000-0000-0000-000000000000' ||
@@ -45,3 +45,5 @@ export function createFlows(
     },
   }
 }
+
+export type AuthenticationFlows = ReturnType<typeof createFlows>

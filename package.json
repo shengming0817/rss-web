@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "node scripts/ensure-contracts.mjs && vitest run",
-    "test:coverage": "node scripts/ensure-contracts.mjs && pnpm -r --no-bail --filter @rss/api --filter @rss/auth --filter @rss/auth-core --filter @rss/auth-http --filter @rss/mdm-authorization --filter @rss/mdm-tenant-administration --filter @rss/mdm-user-profiles --filter @rss/mdm-devices --filter @rss/mdm-enrollment --filter @rss/mdm-connections --filter @rss/mdm-inventory --filter @rss/mdm-policies --filter @rss/mdm-tenant-setup --filter @rss/mdm-runtime-diagnostics --filter @rss/mdm-telemetry --filter @rss/mdm-scopes --filter @rss/mdm-groups --filter @rss/mdm-compliance --filter @rss/mdm-resources --filter @rss/mdm-content --filter @rss/mdm-software --filter @rss/mdm-certificates --filter @rss/mdm-recovery-credentials --filter @rss/mdm-audit --filter @rss/mdm-webhooks --filter @rss/mdm-execution --filter @rss/mdm-device-access --filter @rss/mdm-http --filter @rss/core --filter @rss/device-access --filter @rss/device-access-app run test:coverage",
+    "test:coverage": "node scripts/ensure-contracts.mjs && pnpm -r --no-bail --filter @rss/api --filter @rss/identity-app --filter @rss/auth-core --filter @rss/auth-http --filter @rss/mdm-authorization --filter @rss/mdm-tenant-administration --filter @rss/mdm-user-profiles --filter @rss/mdm-devices --filter @rss/mdm-enrollment --filter @rss/mdm-connections --filter @rss/mdm-inventory --filter @rss/mdm-policies --filter @rss/mdm-tenant-setup --filter @rss/mdm-runtime-diagnostics --filter @rss/mdm-telemetry --filter @rss/mdm-scopes --filter @rss/mdm-groups --filter @rss/mdm-compliance --filter @rss/mdm-resources --filter @rss/mdm-content --filter @rss/mdm-software --filter @rss/mdm-certificates --filter @rss/mdm-recovery-credentials --filter @rss/mdm-audit --filter @rss/mdm-webhooks --filter @rss/mdm-execution --filter @rss/mdm-device-access --filter @rss/mdm-http --filter @rss/core --filter @rss/device-access --filter @rss/device-access-app run test:coverage",
     "test:boundary": "node scripts/ensure-contracts.mjs && vitest run --project root && node --test e2e/mdm/enrollment-callback.test.mjs e2e/mdm/device-run.test.mjs",
     "prepare": "husky && node scripts/ensure-contracts.mjs",
     "test:identity:joint": "node e2e/identity/run.mjs",
@@ -48,43 +48,47 @@
     "test:mdm:react-telemetry-browser": "node e2e/mdm/react-telemetry-run.mjs",
     "dev:mdm:diagnostics:demo": "pnpm -F @rss/mdm-app exec vite --config demo/vite.config.ts --host 127.0.0.1",
     "test:mdm:react-setup-browser": "node e2e/mdm/react-setup-run.mjs",
-    "test:mdm:react-diagnostics-demo-browser": "node e2e/mdm/react-diagnostics-demo-run.mjs"
+    "test:mdm:react-diagnostics-demo-browser": "node e2e/mdm/react-diagnostics-demo-run.mjs",
+    "test:identity:browser": "node e2e/identity/run.mjs --browser",
+    "test:device-access:browser": "node e2e/mdm/react-execution-access-run.mjs --standalone-da"
   },
   "lint-staged": {
-    "*.{ts,vue}": [
-      "eslint --fix",
+    "*.{json,md,css,scss,yaml,yml}": [
       "prettier --write"
     ],
-    "*.{json,md,css,scss,yaml,yml}": [
+    "*.{ts,tsx}": [
+      "eslint --fix",
       "prettier --write"
     ]
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vue-tsc": "catalog:",
     "vitest": "catalog:",
     "@vitest/coverage-v8": "catalog:",
-    "@vue/test-utils": "catalog:",
     "jsdom": "catalog:",
     "eslint": "catalog:",
     "@eslint/js": "catalog:",
     "typescript-eslint": "catalog:",
-    "eslint-plugin-vue": "catalog:",
-    "vue-eslint-parser": "catalog:",
     "eslint-plugin-import-x": "catalog:",
     "eslint-import-resolver-typescript": "catalog:",
-    "eslint-plugin-vuejs-accessibility": "catalog:",
     "eslint-config-prettier": "catalog:",
     "prettier": "catalog:",
     "husky": "catalog:",
     "lint-staged": "catalog:",
-    "@rss/auth": "workspace:*",
     "@rss/api": "workspace:*",
     "playwright": "catalog:",
     "ajv": "catalog:",
     "json-schema-to-typescript": "catalog:",
     "esbuild": "catalog:",
-    "vuetify": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "antd": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@ant-design/cssinjs": "catalog:",
+    "@ant-design/static-style-extract": "catalog:",
+    "@rss/auth-core": "workspace:*",
+    "@rss/auth-http": "workspace:*"
   }
 }

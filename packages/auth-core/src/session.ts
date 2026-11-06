@@ -20,6 +20,7 @@ export function createSession(
   })
   let csrf: string | undefined
   let generation = 0
+  let lifetime = 0
   let page = 0
   let selection = 0
   let disposed = false
@@ -34,6 +35,7 @@ export function createSession(
   }
   function clear(status: 'anonymous' | 'unavailable' = 'anonymous', invalidated = false) {
     generation++
+    lifetime++
     csrf = undefined
     clearTimeout(timer)
     publish({
@@ -99,7 +101,6 @@ export function createSession(
       security: null,
       navigation: 'idle',
       invalidated: false,
-      logoutOutcome: 'idle',
     })
     expire()
   }
@@ -107,7 +108,7 @@ export function createSession(
     if (expected !== generation || disposed) return
     const kind = port.classify(error)
     if (kind === 'unauthenticated') clear('anonymous', true)
-    else if (kind === 'unavailable') clear('unavailable')
+    else if (kind === 'unavailable' || kind === 'protocol') clear('unavailable')
   }
   async function loadContext() {
     const { tenant } = credentials()
@@ -130,8 +131,11 @@ export function createSession(
       })
     } catch (error) {
       if (expected === generation) {
-        if (port.classify(error) === 'unauthenticated') failure(error, expected)
-        else publish({ host: null, navigation: 'unavailable' })
+        if (port.classify(error) === 'unavailable') {
+          publish({ host: null, navigation: 'unavailable' })
+          return
+        }
+        failure(error, expected)
       }
       throw error
     }
@@ -140,7 +144,11 @@ export function createSession(
     if (disposed || selected !== selection) throw new Error('Operation abandoned')
     const known = state.status === 'authenticated' && state.tenant === tenant
     clear()
-    publish({ tenant, status: 'checking', logoutOutcome: 'idle' })
+    publish({
+      tenant,
+      status: 'checking',
+      ...(state.tenant === tenant ? {} : { logoutOutcome: 'idle' as const }),
+    })
     const expected = generation
     try {
       accept(tenant, await port.check(tenant), expected)
@@ -162,10 +170,11 @@ export function createSession(
   ): Promise<T> {
     const bound = scope(),
       boundPage = page,
-      expected = generation
+      owner = lifetime
     if (!bound) throw new Error('Session required')
     while (pending) await pending
-    assertLive(expected)
+    if (disposed || lifetime !== owner) throw new Error('Operation abandoned')
+    const expected = generation
     if (scope() !== bound || page !== boundPage) throw new Error('Operation abandoned')
     let release!: () => void
     const lease = new Promise<void>((resolve) => {
@@ -253,7 +262,7 @@ export function createSession(
       const selected = ++selection
       page++
       clear()
-      publish({ tenant })
+      publish({ tenant, logoutOutcome: 'idle' })
       return serial(() => restore(tenant, selected))
     },
     login(tenant: string, login: string, password: string) {
@@ -262,6 +271,7 @@ export function createSession(
       return serial(async () => {
         if (page !== boundPage || selected !== selection || disposed)
           throw new Error('Operation abandoned')
+        const previousState = state
         const previous = state.tenant === tenant ? csrf : undefined
         clear()
         publish({ tenant, status: 'checking', logoutOutcome: 'idle' })
@@ -271,7 +281,20 @@ export function createSession(
           if (state.status === 'authenticated') await loadContext()
         } catch (error) {
           if (generation === expected) {
-            clear(port.classify(error) === 'unavailable' ? 'unavailable' : 'anonymous')
+            if (
+              port.classify(error) === 'rate_limited' &&
+              previousState.status === 'authenticated' &&
+              previousState.tenant === tenant
+            ) {
+              csrf = previous
+              publish(previousState)
+              expire()
+            } else
+              clear(
+                ['unavailable', 'protocol'].includes(port.classify(error))
+                  ? 'unavailable'
+                  : 'anonymous',
+              )
           }
           throw error
         }
@@ -323,6 +346,13 @@ export function createSession(
         return value
       })
     },
+    sessions(cursor?: string, limit = 50) {
+      return business(({ tenant }) => port.sessions(tenant, cursor, limit))
+    },
+    link(provider: string, password: string | null) {
+      if (!options.oidcEnabled) return Promise.reject(new Error('OIDC disabled'))
+      return business(({ tenant, csrf: token }) => port.link(tenant, token, provider, password))
+    },
     stepUp(provider: string, operation: StepUpOperation) {
       if (!options.oidcEnabled) return Promise.reject(new Error('OIDC disabled'))
       return business(({ tenant, csrf: token }) => port.stepUp(tenant, token, provider, operation))
@@ -344,7 +374,10 @@ export function createSession(
     suspend() {
       page++
       clear()
-      publish({ status: 'checking' })
+      publish({
+        status: 'checking',
+        logoutOutcome: state.logoutOutcome === 'pending' ? 'unconfirmed' : state.logoutOutcome,
+      })
     },
     dispose() {
       disposed = true

@@ -1,115 +1,157 @@
-import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue'
-import { useDa, identityKey } from '../context'
-import { uncertain, needsProof, errorMessage } from './status'
-export interface WriteState {
-  id: string
-  state: 'idle' | 'busy' | 'unknown' | 'accepted'
-  message: string
-  proof: boolean
-}
-/** Registry stores only non-secret operation locators, scoped to the app session. */
-export function useMutation(key: () => string) {
-  const r = useDa(),
-    local = ref(0),
-    querying = ref(false)
-  let controller: AbortController | undefined,
-    epoch = 0
-  function entry() {
-    const k = [identityKey(r.session), key()].join('/')
-    let value = r.writes.get(k)
-    if (!value) {
-      value = reactive<WriteState>({ id: '', state: 'idle', message: '', proof: false })
-      r.writes.set(k, value)
-    }
-    return value
+import { isRssApiError } from '@rss/api/identity'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { identityKey, useDa, useIdentity } from '../context'
+import { errorMessage, needsProof, uncertain } from './status'
+export type { WriteState } from '../context'
+const notifications = new WeakMap<object, { version: number; listeners: Set<() => void> }>()
+/** This registry contains operation locators only. Reloads and remounts cannot unlock unknown writes. */
+export function useMutation(key: string) {
+  const r = useDa()
+  useIdentity()
+  const identity = identityKey(r.session),
+    scope = `${identity}/${key}`
+  const active = useRef(scope)
+  active.current = scope
+  const lifetime = useRef(0),
+    controller = useRef<AbortController | null>(null),
+    querying = useRef(false)
+  let changes = notifications.get(r.writes)
+  if (!changes) {
+    changes = { version: 0, listeners: new Set() }
+    notifications.set(r.writes, changes)
   }
-  const state = computed(() => {
-    void local.value
-    return entry()
-  })
-  watch(
-    [() => identityKey(r.session), key],
-    () => {
-      epoch++
-      controller?.abort()
-      querying.value = false
-      local.value++
+  const events = changes
+  useSyncExternalStore(
+    (listener) => {
+      events.listeners.add(listener)
+      return () => {
+        events.listeners.delete(listener)
+      }
     },
-    { flush: 'sync' },
+    () => events.version,
   )
-  onBeforeUnmount(() => {
-    epoch++
-    controller?.abort()
-  })
+  const update = () => {
+    events.version++
+    events.listeners.forEach((listener) => listener())
+  }
+  let state = r.writes.get(scope)
+  if (!state) {
+    state = { id: '', state: 'idle', message: '', proof: false, review: false }
+    r.writes.set(scope, state)
+  }
+  const entry = state
+  useEffect(() => {
+    if (entry.state === 'idle' && entry.proof) {
+      entry.proof = false
+      entry.id = ''
+      update()
+    }
+  }, [entry])
+  const live = (bound: string, version: number) =>
+    active.current === bound && lifetime.current === version && identityKey(r.session) === identity
+  useEffect(
+    () => () => {
+      lifetime.current++
+      controller.current?.abort()
+      querying.current = false
+    },
+    [scope],
+  )
   async function run<T>(
     work: (id: string, signal: AbortSignal) => Promise<T>,
     retain = false,
   ): Promise<T | undefined> {
     if (
-      querying.value ||
-      !identityKey(r.session) ||
-      ['busy', 'unknown', 'accepted'].includes(state.value.state)
+      !identity ||
+      identityKey(r.session) !== identity ||
+      active.current !== scope ||
+      querying.current ||
+      entry.state !== 'idle' ||
+      entry.review
     )
       return
-    const e = state.value,
-      version = epoch
-    e.id = e.proof && e.id ? e.id : crypto.randomUUID()
-    e.state = 'busy'
-    e.message = ''
-    e.proof = false
-    controller = new AbortController()
+    const version = lifetime.current
+    entry.id = entry.proof && entry.id ? entry.id : crypto.randomUUID()
+    entry.state = 'busy'
+    entry.message = ''
+    entry.proof = false
+    const control = new AbortController()
+    controller.current = control
+    update()
     try {
-      const result = await work(e.id, controller.signal)
-      if (epoch !== version) {
-        e.state = 'unknown'
+      const value = await work(entry.id, control.signal)
+      if (!live(scope, version) || control.signal.aborted) {
+        entry.state = 'unknown'
         return
       }
-      e.state = retain ? 'accepted' : 'idle'
-      e.message = '请求已确认；设备效果仍由实际观察决定。'
-      return result
+      entry.state = retain ? 'accepted' : 'idle'
+      entry.message = '请求已确认；设备效果仍由实际观察决定。'
+      return value
     } catch (error) {
-      if (epoch === version) {
-        e.state = uncertain(error) ? 'unknown' : 'idle'
-        e.message = errorMessage(error)
-        e.proof = needsProof(error)
-      } else if (e.state === 'busy') e.state = uncertain(error) ? 'unknown' : 'idle'
+      entry.state = uncertain(error) ? 'unknown' : 'idle'
+      if (live(scope, version)) {
+        entry.message = errorMessage(error)
+        entry.proof = needsProof(error)
+        entry.review = isRssApiError(error) && error.status === 409
+      }
       return undefined
+    } finally {
+      update()
     }
   }
   async function query<T>(
     work: (id: string, signal: AbortSignal) => Promise<T | null>,
     settled: (value: T) => boolean = () => false,
   ): Promise<T | undefined> {
-    const e = state.value
-    if (querying.value || !e.id || e.state === 'busy') return
-    const version = epoch,
-      originalId = e.id
-    querying.value = true
-    controller = new AbortController()
+    if (
+      !identity ||
+      identityKey(r.session) !== identity ||
+      active.current !== scope ||
+      querying.current ||
+      !entry.id ||
+      entry.state === 'busy'
+    )
+      return
+    const version = lifetime.current,
+      original = entry.id,
+      control = new AbortController()
+    controller.current = control
+    querying.current = true
+    update()
     try {
-      const result = await work(originalId, controller.signal)
-      if (epoch !== version || e.id !== originalId) return
-      if (result === null) {
-        e.message = '未查到原操作，结果仍未知。'
+      const value = await work(original, control.signal)
+      if (!live(scope, version) || control.signal.aborted || entry.id !== original) return
+      if (value === null) {
+        entry.message = '未查到原操作，结果仍未知。'
         return
       }
-      e.state = settled(result) ? 'idle' : 'accepted'
-      e.message = settled(result)
-        ? '原操作已确认完成，可以开始新的明确编辑。'
+      entry.state = settled(value) ? 'idle' : 'accepted'
+      entry.message = settled(value)
+        ? '原操作已确认完成，可以明确开始新编辑。'
         : '原操作已查到；请核对各阶段结果。'
-      return result
+      return value
     } catch (error) {
-      if (epoch === version && e.id === originalId) e.message = errorMessage(error)
+      if (live(scope, version)) entry.message = errorMessage(error)
       return undefined
     } finally {
-      if (epoch === version) querying.value = false
+      if (live(scope, version)) {
+        querying.current = false
+        update()
+      }
     }
   }
   return {
-    state,
+    state: entry,
     run,
     query,
-    cancel: () => controller?.abort(),
-    locked: computed(() => querying.value || state.value.state !== 'idle'),
+    acceptRevision: () => {
+      if (entry.state === 'idle') {
+        entry.review = false
+        entry.message = '已核对当前版本；草稿保留，请明确提交。'
+        update()
+      }
+    },
+    cancel: () => controller.current?.abort(),
+    locked: querying.current || entry.state !== 'idle',
   }
 }

@@ -1,5 +1,20 @@
 // Closed projection shared by the transport runner and integration failure reporting.
 export function transportDiagnostic(value) {
+  if (
+    value?.test === 'identity-browser' &&
+    value.file === 'e2e/identity/browser.mjs' &&
+    [
+      'startup',
+      'login',
+      'account-directory',
+      'provider-management',
+      'resume',
+      'theme-and-responsive',
+      'logout',
+    ].includes(value.step)
+  )
+    return { test: value.test, file: value.file, step: value.step }
+
   const steps = [
     'config',
     'session',

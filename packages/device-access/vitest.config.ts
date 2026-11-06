@@ -1,24 +1,17 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
-import vue from '@vitejs/plugin-vue'
+import react from '@vitejs/plugin-react'
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [react()],
   test: {
     name: 'device-access',
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'jsdom',
-    include: ['src/**/*.spec.ts', 'demo/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'src/**/*.spec.tsx'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: [
-        'src/**/*.spec.ts',
-        'src/main.ts',
-        'src/bootstrap.ts',
-        'src/router.ts',
-        'src/i18n/**',
-        'src/ui/**',
-      ],
+      exclude: ['src/**/*.spec.ts'],
       thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },
     },
   },

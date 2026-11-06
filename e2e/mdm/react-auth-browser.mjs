@@ -367,17 +367,14 @@ try {
   await page.evaluate(
     (tenant) =>
       sessionStorage.setItem(
-        'rss.mdm.authentication-flow',
+        'rss.authentication-flow',
         JSON.stringify({ kind: 'sso', tenant, created: Date.now() }),
       ),
     fixture.tenant,
   )
   await page.goto(`${origin.origin}/auth/error?reason=cancelled`)
   await page.getByText('组织认证已取消。', { exact: true }).waitFor()
-  assert.equal(
-    await page.evaluate(() => sessionStorage.getItem('rss.mdm.authentication-flow')),
-    null,
-  )
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('rss.authentication-flow')), null)
   await page.getByRole('link', { name: '登录', exact: true }).click()
   await page.getByRole('heading', { name: '租户初始化', exact: true }).waitFor()
   phase = 'management-entry'

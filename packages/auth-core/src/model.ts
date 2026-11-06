@@ -39,7 +39,12 @@ export type StepUpOperation =
   | { kind: 'register' }
   | { kind: 'remove'; credential: string }
   | { kind: 'recover' }
-export type FailureKind = 'unauthenticated' | 'unavailable' | 'rejected'
+export type FailureKind =
+  | 'unauthenticated'
+  | 'unavailable'
+  | 'protocol'
+  | 'rate_limited'
+  | 'rejected'
 export interface AuthPort {
   check(tenant: string): Promise<SessionEnvelope>
   login(tenant: string, login: string, password: string, csrf?: string): Promise<SessionEnvelope>
@@ -56,6 +61,15 @@ export interface AuthPort {
     provider: string,
     operation: StepUpOperation,
   ): Promise<string>
+  link(tenant: string, csrf: string, provider: string, password: string | null): Promise<string>
+  sessions(
+    tenant: string,
+    cursor?: string,
+    limit?: number,
+  ): Promise<{
+    readonly sessions: readonly Session[]
+    readonly next: string | null
+  }>
   classify(error: unknown): FailureKind
 }
 export interface SessionState {

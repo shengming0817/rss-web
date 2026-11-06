@@ -5,26 +5,27 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./composables": "./src/composables/index.ts",
     "./styles/tokens.css": "./src/styles/tokens.css"
   },
   "files": [
     "src"
   ],
   "scripts": {
-    "typecheck": "vue-tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "vue": "catalog:",
-    "pinia": "catalog:",
-    "vue-i18n": "catalog:"
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "antd": "catalog:",
+    "@ant-design/cssinjs": "catalog:"
   },
   "devDependencies": {
+    "typescript": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "vitest": "catalog:",
-    "@vue/test-utils": "catalog:",
-    "@vitejs/plugin-vue": "catalog:",
     "jsdom": "catalog:",
     "@vitest/coverage-v8": "catalog:"
   }

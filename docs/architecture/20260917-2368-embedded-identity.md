@@ -1,6 +1,6 @@
 # 产品宿主内认证 UI
 
-Identity 应用独立装配 `@rss/auth` 的唯一会话实例；MDM 复用该共享包但独立部署，见 [MDM 前端](20260926-2544-mdm-web.md)。UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/api/v1/identity`，唯一协议 callback `/api/v1/identity/oidc/callback`；宿主 return target `resume` 必须指向同源 `/auth/resume`。API DTO 均为 camelCase。Provider claims 只接受 subject/profile/groups/departmentSnapshot；profile 显式包含 extensionsClaim（null 或批准的普通扩展根）与 maxAgeSeconds（60–86400，默认 14400），固定资料来自验证后的标准声明，不提供自定义邮箱映射。；departmentSnapshot 为 null 或完整 claim/maxAgeSeconds（1–300 秒），拒绝旧 department 字段。编辑其它设置保留后端配置的部门快照映射，新 provider 明确提交 null；部门配置通过后端管理 API 维护，本 UI 不新增部门目录或授权页面。此契约对应 Identity #2451。
+Identity 应用独立装配 `@rss/auth-core` 与 `@rss/auth-http` 的唯一会话实例；MDM 复用框架无关认证能力并独立部署，见 [MDM 前端](20260926-2544-mdm-web.md)。UI 挂载 `/`，租户登录入口 `/tenants/{tenant UUID}/login`。API 仅 `/api/v1/identity`，唯一协议 callback `/api/v1/identity/oidc/callback`；宿主 return target `resume` 必须指向同源 `/auth/resume`。API DTO 均为 camelCase。Provider claims 只接受 subject/profile/groups/departmentSnapshot；profile 显式包含 extensionsClaim（null 或批准的普通扩展根）与 maxAgeSeconds（60–86400，默认 14400），固定资料来自验证后的标准声明，不提供自定义邮箱映射。；departmentSnapshot 为 null 或完整 claim/maxAgeSeconds（1–300 秒），拒绝旧 department 字段。编辑其它设置保留后端配置的部门快照映射，新 provider 明确提交 null；部门配置通过后端管理 API 维护，本 UI 不新增部门目录或授权页面。此契约对应 Identity #2451。
 
 上游 issuer/clientId 是外部企业 IdP 配置，默认本地认证不需要 IdP。
 
@@ -84,7 +84,7 @@ rm /tmp/rss-identity-web-dev.yaml
 
 账户目录通过“创建账户”打开独立抽屉；密码重置使用独立目标弹窗，创建与重置的密码草稿互不共享。Provider 新建与编辑在抽屉中完成，关闭和提交清除本地秘密；配置冲突与未知结果仍要求显式重新读取后处理。
 
-会话页面分为会话列表和账户安全。修改密码、重新认证与企业身份关联按需展开，关闭任务或切换视图清除本地密码；退出全部会话先确认影响范围。MDM 和独立 Identity 宿主使用同一组认证页面，协议恢复与 HTTP 合同不随布局改变。
+会话页面分为会话列表和账户安全。修改密码、重新认证与企业身份关联按需展开，关闭任务或切换视图清除本地密码；退出全部会话先确认影响范围。MDM 和独立 Identity 各自组合 React 认证页面，复用唯一认证核心与 HTTP adapter，协议恢复与 HTTP 合同保持一致。
 
 宿主组合可配置固定登录路径、绑定 tenant、范围展示和类型化登录目标；Identity 默认保持租户登录路径和会话页。MDM 配置独立业务／平台入口，共享包不判断设置进度。匿名 401 显示普通登录；唯一 controller 仅对本次已接受会话的计时到期或 401 记录内存失效提示，成功认证或明确退出清除提示。依赖故障不当作匿名，403 不清除合法认证。
 
@@ -96,6 +96,6 @@ rm /tmp/rss-identity-web-dev.yaml
 
 ## 展示与主题
 
-Identity 与共享认证视图直接使用 Vuetify 4.3.0，沿用 MDM 的表单、表格、按钮与弹窗视觉规范。各应用独立安装 Vuetify；`@rss/core` 只提供主题、语言及设计 token。浅深主题继续由既有 theme store 驱动，菜单和对话框附着于认证主题容器。构建通过 Vuetify 的公开主题 API 生成外部 CSS，运行时关闭主题样式注入，宿主继续使用现有 CSP，无需开放内联 style 元素。
+Identity 使用 React + TypeScript + Ant Design。`@rss/core` 提供主题、语言、设计 token 与查询展示；各应用持有自己的展示和会话生命周期。构建提取亮暗两套外部 CSS，运行时使用 zeroRuntime 与独立样式缓存，弹层继承主题和语言；宿主保持 `script-src 'self'; style-src 'self'`。
 
 账户管理与主体选择器共用 Identity accounts 查询入口，支持 filter、sort、fields、limit、cursor（默认 50、最多 100）。账户资料查询显式选择 local 或指定 IdP，读取权限由宿主按列表、详情及被筛选／排序引用的资料字段分别裁定；仅持有列表权限不能推断无权读取的资料。姓名、邮箱使用同一来源的最新接受观察，最新观察失效时不回退旧值。旧 UUID 账户游标不再接受，游标失效需显式重查；会话目录保留自身合同。
