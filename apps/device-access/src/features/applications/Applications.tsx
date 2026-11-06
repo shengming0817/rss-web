@@ -127,17 +127,37 @@ function ApplicationEditor({
   const scope = `${identity}/${id}/${callback}/${enabled}/${capabilities.join(',')}/${baseline.revision}`,
     live = useRef(scope)
   live.current = scope
-  const controller = useRef<AbortController | null>(null)
-  useEffect(
-    () => () => {
+  const controller = useRef<AbortController | null>(null),
+    epoch = useRef(0)
+  useEffect(() => {
+    let active = true
+    const cancel = () => {
+      const version = ++epoch.current
+      controller.current?.abort()
+      setProofBusy(false)
+      void r.security.cancel().catch(() => {
+        if (active && version === epoch.current && live.current === scope)
+          setMessage('用途认证取消尚未确认，请重新核对。')
+      })
+    }
+    const hidden = () => {
+      if (document.hidden) cancel()
+    }
+    document.addEventListener('visibilitychange', hidden)
+    window.addEventListener('pagehide', cancel)
+    return () => {
+      active = false
+      epoch.current++
       controller.current?.abort()
       void r.security.cancel().catch(() => undefined)
-    },
-    [scope, r],
-  )
+      document.removeEventListener('visibilitychange', hidden)
+      window.removeEventListener('pagehide', cancel)
+    }
+  }, [scope, r])
   const writable = r.client.capabilities.applicationWrite.available
   const valid = () =>
     writable &&
+    !document.hidden &&
     !!identity &&
     identityKey(r.session) === identity &&
     live.current === scope &&
@@ -172,18 +192,20 @@ function ApplicationEditor({
   }
   async function prove() {
     if (!valid() || !op.state.proof || proofBusy) return
-    const control = new AbortController()
+    const control = new AbortController(),
+      version = epoch.current
+    const current = () => valid() && version === epoch.current && !control.signal.aborted
     controller.current = control
     setProofBusy(true)
     try {
       const challenge = await r.client.applicationChallenge(input(op.state.id), control.signal)
-      if (!valid() || control.signal.aborted) return
+      if (!current()) control.abort()
       await r.security.prove(challenge, control.signal)
-      if (valid()) setMessage('认证完成，请再次明确提交。')
+      if (current()) setMessage('认证完成，请再次明确提交。')
     } catch (e) {
-      if (valid()) setMessage(errorMessage(e))
+      if (current()) setMessage(errorMessage(e))
     } finally {
-      if (valid()) setProofBusy(false)
+      if (current()) setProofBusy(false)
     }
   }
   return (

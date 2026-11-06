@@ -26,17 +26,24 @@ export function useIdentity() {
   const runtime = useContext(Context)
   if (!runtime) throw new Error('Identity composition required')
   const snapshot = useSyncExternalStore(runtime.owner.subscribe, runtime.owner.getSnapshot)
-  return { ...runtime, snapshot }
+  return {
+    ...runtime,
+    snapshot,
+    ownPassword: (current: string, password: string) =>
+      administration(runtime).ownPassword(current, password),
+  }
+}
+function administration({ transport, owner, config }: IdentityRuntime) {
+  return createIdentityAdministration(
+    createIdentityAdministrationAdapter(transport, owner, config.oidcEnabled),
+  )
 }
 export function useAdministration() {
-  const { transport, owner, config } = useIdentity()
-  const [administration] = useState(() =>
-    createIdentityAdministration(
-      createIdentityAdministrationAdapter(transport, owner, config.oidcEnabled),
-    ),
-  )
-  return administration
+  const runtime = useIdentity()
+  const [client] = useState(() => administration(runtime))
+  return client
 }
+
 export function tenantLocator(value: unknown): string | null {
   return typeof value === 'string' &&
     /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value) &&

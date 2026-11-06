@@ -372,3 +372,133 @@ it('validates field projection and page bounds before dispatch and restores acce
   })
   expect(h.output.cursor).toBeUndefined()
 })
+
+it.each(['binding', 'application'] as const)(
+  'cancels the %s purpose ceremony when hidden and discards a late challenge',
+  async (kind) => {
+    const { AccountsPanel } = await import('../features/computers/Panels')
+    const { Applications } = await import('../features/applications/Applications')
+    const { Presentation } = await import('@rss/core')
+    const r = await runtime()
+    const media = window.matchMedia
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    })
+    const computedStyle = window.getComputedStyle
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => computedStyle(element))
+    let challenge!: (value: {
+      id: string
+      options: Record<string, unknown>
+      expiresAt: null
+    }) => void
+    const begin = vi.fn(
+      () =>
+        new Promise<{ id: string; options: Record<string, unknown>; expiresAt: null }>(
+          (resolve) => {
+            challenge = resolve
+          },
+        ),
+    )
+    const finish = vi.fn()
+    const cancel = vi.fn(async () => undefined)
+    const prove = vi.fn(async (_challenge: unknown, signal: AbortSignal) => {
+      if (!signal.aborted) finish()
+    })
+    const page = async () => ({ items: [], summaries: [], nextCursor: null })
+    const denied = async () => {
+      throw decodeIdentityError(403, { code: 'reauthentication_required' })
+    }
+    Object.assign(r, {
+      client: {
+        capabilities: { bindings: { available: true }, applicationWrite: { available: true } },
+        bindings: page,
+        applications: page,
+        changeBinding: denied,
+        application: denied,
+        bindingChallenge: begin,
+        applicationChallenge: begin,
+      },
+      security: { cancel, prove },
+    })
+    const root = createRoot(document.createElement('div'))
+    roots.add(root)
+    const button = async (text: string) => {
+      const target = [...document.querySelectorAll('button')].find(
+        (node) => node.textContent?.trim() === text,
+      )
+      expect(target, text).toBeTruthy()
+      await act(async () => {
+        target!.click()
+      })
+    }
+    const input = async (label: string, value: string) => {
+      const target = [...document.querySelectorAll('label')]
+        .find((node) => node.textContent?.trim() === label)
+        ?.querySelector('input')
+      expect(target, label).toBeTruthy()
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          target,
+          value,
+        )
+        target!.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    try {
+      await act(async () => {
+        root.render(
+          <DaContext.Provider value={r}>
+            <Presentation>
+              {kind === 'binding' ? (
+                <AccountsPanel
+                  device={{
+                    id: 'device',
+                    name: 'Computer',
+                    platform: 'windows',
+                    registration: id,
+                    generation: 1,
+                    status: 'active',
+                    lastObservedAt: null,
+                  }}
+                />
+              ) : (
+                <Applications />
+              )}
+            </Presentation>
+          </DaContext.Provider>,
+        )
+      })
+      await button(kind === 'binding' ? '创建绑定' : '添加企业 RP')
+      if (kind === 'binding') {
+        await input('Principal UUID', id)
+        await input('Instance UUID', id)
+        await input('Policy UUID', id)
+        await input('创建本地账号名称', 'local')
+      } else {
+        await input('RP ID', 'rp.example')
+        await input('Callback URL', 'https://rp.example/callback')
+      }
+      await button(kind === 'binding' ? '确认提交' : '确认保存')
+      await button(kind === 'binding' ? '验证本次操作用途' : '验证本次修改用途')
+      expect(begin).toHaveBeenCalledOnce()
+      const before = cancel.mock.calls.length
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+        challenge({ id, options: {}, expiresAt: null })
+      })
+      expect(cancel.mock.calls.length).toBeGreaterThan(before)
+      expect(prove).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ aborted: true }),
+      )
+      expect(finish).not.toHaveBeenCalled()
+    } finally {
+      await act(async () => root.unmount())
+      roots.delete(root)
+      Reflect.deleteProperty(document, 'hidden')
+      Object.defineProperty(window, 'matchMedia', { configurable: true, value: media })
+    }
+  },
+)

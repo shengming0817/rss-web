@@ -1,19 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button, InputNumber, Modal, Select, Tabs } from 'antd'
 import { Link, useNavigate } from 'react-router-dom'
-import {
-  createIdentityAdministration,
-  validateNewPassword,
-  type Provider,
-  type Session,
-} from '@rss/auth-core'
-import { createIdentityAdministrationAdapter } from '@rss/auth-http'
+import { validateNewPassword, type Provider, type Session } from '@rss/auth-core'
 import { useT } from './i18n'
 import { identityScope, loginPath, useIdentity, useOperation, useSecretCleanup } from './runtime'
 import { Notice, Secret, Task } from './fields'
 
 export function SessionsPage() {
-  const { owner, config, flows, snapshot, transport } = useIdentity()
+  const { owner, config, flows, snapshot, ownPassword } = useIdentity()
   const t = useT()
   const navigate = useNavigate()
   const op = useOperation()
@@ -106,10 +100,7 @@ export function SessionsPage() {
       return
     }
     void op.run(async () => {
-      const api = createIdentityAdministration(
-        createIdentityAdministrationAdapter(transport, owner, config.oidcEnabled),
-      )
-      await api.ownPassword(old, secret)
+      await ownPassword(old, secret)
       flows.clear()
       if (tenant) navigate(loginPath(tenant), { replace: true })
     })

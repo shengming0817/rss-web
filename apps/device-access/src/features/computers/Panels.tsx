@@ -154,12 +154,18 @@ function AssetEditor({ device }: { device: Computer }) {
 export function PasskeysPanel({ device }: { device: Computer }) {
   const r = useDa(),
     [cursor, setCursor] = useState<string | null>(null),
-    [selected, setSelected] = useState<PasskeyRecord | null>(null)
+    [selected, setSelected] = useState<PasskeyRecord | null>(null),
+    [search, setSearch] = useState('')
   const reader = useRead(
     (signal) => r.client.passkeys(device.id, cursor, signal),
     `${device.id}/${cursor}`,
     r.client.capabilities.passkeys.available,
   )
+  useEffect(() => setSelected(null), [reader.data])
+  const records =
+    reader.data?.items.filter((record) =>
+      `${record.rp} ${record.account} ${record.label}`.toLowerCase().includes(search.toLowerCase()),
+    ) ?? []
   if (!r.client.capabilities.passkeys.available)
     return <Unavailable reason={r.client.capabilities.passkeys.reason} />
   return (
@@ -167,11 +173,16 @@ export function PasskeysPanel({ device }: { device: Computer }) {
       <h2>企业 Passkey</h2>
       <ReadState {...reader} />
       {reader.data && (
-        <EnterprisePasskeySummary
-          deviceId={device.id}
-          records={reader.data.items}
-          onDetail={setSelected}
-        />
+        <>
+          <label htmlFor="passkey-search">搜索当前页的网站、账号或名称</label>
+          <Input
+            id="passkey-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <EnterprisePasskeySummary deviceId={device.id} records={records} onDetail={setSelected} />
+          {!records.length && <p>当前页没有匹配记录。</p>}
+        </>
       )}
       <Space>
         <Button onClick={() => setCursor(null)}>首页</Button>
@@ -300,14 +311,33 @@ function BindingEditor({
   const scope = `${identity}/${device.id}/${id}/${action}/${principal}/${instance}/${policy}/${account}/${accountKind}/${accountId}/${authority}/${domainSid}/${tenantId}/${objectId}/${disposition}/${baseline.revision}`
   const live = useRef(scope)
   live.current = scope
-  const proof = useRef<AbortController | null>(null)
-  useEffect(
-    () => () => {
+  const proof = useRef<AbortController | null>(null),
+    epoch = useRef(0)
+  useEffect(() => {
+    let active = true
+    const cancel = () => {
+      const version = ++epoch.current
+      proof.current?.abort()
+      setProofBusy(false)
+      void r.security.cancel().catch(() => {
+        if (active && version === epoch.current && live.current === scope)
+          setMessage('用途认证取消尚未确认，请重新核对。')
+      })
+    }
+    const hidden = () => {
+      if (document.hidden) cancel()
+    }
+    document.addEventListener('visibilitychange', hidden)
+    window.addEventListener('pagehide', cancel)
+    return () => {
+      active = false
+      epoch.current++
       proof.current?.abort()
       void r.security.cancel().catch(() => undefined)
-    },
-    [scope, r],
-  )
+      document.removeEventListener('visibilitychange', hidden)
+      window.removeEventListener('pagehide', cancel)
+    }
+  }, [scope, r])
   function input(operationId: string): BindingInput {
     return {
       operationId,
@@ -388,6 +418,7 @@ function BindingEditor({
   async function prove() {
     if (
       !valid ||
+      document.hidden ||
       !op.state.proof ||
       live.current !== scope ||
       proofBusy ||
@@ -395,7 +426,14 @@ function BindingEditor({
     )
       return
     const bound = scope,
+      version = epoch.current,
       control = new AbortController()
+    const current = () =>
+      live.current === bound &&
+      version === epoch.current &&
+      identityKey(r.session) === identity &&
+      !document.hidden &&
+      !control.signal.aborted
     proof.current = control
     setProofBusy(true)
     setMessage('')
@@ -406,14 +444,13 @@ function BindingEditor({
         input(op.state.id),
         control.signal,
       )
-      if (live.current !== bound || control.signal.aborted) return
+      if (!current()) control.abort()
       await r.security.prove(challenge, control.signal)
-      if (live.current === bound && identityKey(r.session) === identity)
-        setMessage('认证完成，请再次明确提交相同操作。')
+      if (current()) setMessage('认证完成，请再次明确提交相同操作。')
     } catch (e) {
-      if (live.current === bound) setMessage(errorMessage(e))
+      if (current()) setMessage(errorMessage(e))
     } finally {
-      if (live.current === bound) setProofBusy(false)
+      if (current()) setProofBusy(false)
     }
   }
   return (
