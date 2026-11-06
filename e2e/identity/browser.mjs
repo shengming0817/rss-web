@@ -113,12 +113,23 @@ try {
   const screenshots = mkdtempSync(join(tmpdir(), 'rss-identity-react-'))
   await button('切换主题').click()
   assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark')
-  await page.screenshot({ path: join(screenshots, 'desktop-dark.png') })
+  await page.waitForFunction(() => {
+    const button = document.querySelector('header .ant-btn')
+    const color = button && getComputedStyle(button).color
+    return (
+      color &&
+      color
+        .match(/[\d.]+/g)
+        .slice(0, 3)
+        .every((value) => Number(value) > 192)
+    )
+  })
+  await page.screenshot({ path: join(screenshots, 'desktop-dark.png'), animations: 'disabled' })
   await page.setViewportSize({ width: 768, height: 1024 })
   await page.keyboard.press('Tab')
   assert.equal(await page.evaluate(() => document.activeElement !== document.body), true)
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({ path: join(screenshots, 'mobile-dark.png') })
+  await page.screenshot({ path: join(screenshots, 'mobile-dark.png'), animations: 'disabled' })
   assert.equal(
     await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
     true,

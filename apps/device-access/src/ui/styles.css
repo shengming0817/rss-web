@@ -1,7 +1,7 @@
 .da-surface {
   min-height: 100vh;
-  color: var(--rss-text, #222);
-  background: var(--rss-background, #f5f6fa);
+  color: var(--fg);
+  background: var(--bg-sunken);
 }
 .da-surface .ant-layout-header {
   height: auto;

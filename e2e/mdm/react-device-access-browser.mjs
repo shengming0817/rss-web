@@ -97,13 +97,25 @@ try {
     .waitFor()
   await p.getByRole('switch', { name: '深色主题', exact: true }).click()
   assert.equal(await p.evaluate(() => document.documentElement.dataset.theme), 'dark')
+  await p.waitForFunction(() => {
+    const surface = document.querySelector('.da-surface')
+    const color = surface && getComputedStyle(surface).backgroundColor
+    return (
+      color &&
+      color !== 'rgba(0, 0, 0, 0)' &&
+      color
+        .match(/[\d.]+/g)
+        .slice(0, 3)
+        .every((value) => Number(value) < 128)
+    )
+  })
   const screenshots = mkdtempSync(join(tmpdir(), 'rss-da-react-'))
-  await p.screenshot({ path: join(screenshots, 'desktop-dark.png') })
+  await p.screenshot({ path: join(screenshots, 'desktop-dark.png'), animations: 'disabled' })
   await p.setViewportSize({ width: 768, height: 1024 })
   await p.keyboard.press('Tab')
   assert.equal(await p.evaluate(() => document.activeElement !== document.body), true)
   await p.setViewportSize({ width: 390, height: 844 })
-  await p.screenshot({ path: join(screenshots, 'mobile-dark.png') })
+  await p.screenshot({ path: join(screenshots, 'mobile-dark.png'), animations: 'disabled' })
   assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true)
   checks.push('strict-csp-theme-responsive-and-formal-unavailable')
   run.step('logout')
