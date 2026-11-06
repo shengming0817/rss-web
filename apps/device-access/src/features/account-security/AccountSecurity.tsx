@@ -127,6 +127,55 @@ export function AccountSecurity({ oidc }: { oidc: boolean }) {
       if (valid()) setBusy(false)
     }
   }
+  const authentication = (
+    <>
+      {snapshot.identity?.hasLocalPassword && (
+        <section>
+          <h2>近期认证</h2>
+          <Form layout="inline" onFinish={() => void reauthenticate()}>
+            <Form.Item label="当前密码" htmlFor="da-reauth-password">
+              <Input.Password
+                id="da-reauth-password"
+                autoComplete="current-password"
+                value={password}
+                disabled={busy}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </Form.Item>
+            <Button htmlType="submit" disabled={busy || !password}>
+              重新认证
+            </Button>
+          </Form>
+        </section>
+      )}
+      {oidc && (
+        <section>
+          <h2>联合身份用途认证</h2>
+          <Button
+            onClick={() => void r.session.loadSecurity().catch((e) => setMessage(errorMessage(e)))}
+          >
+            读取可用认证 Provider
+          </Button>
+          <Select
+            aria-label="用途认证 Provider"
+            value={provider}
+            options={
+              snapshot.security?.eligibleStepUpProviders.map((p) => ({
+                value: p.id,
+                label: p.label,
+              })) ?? []
+            }
+            onChange={setProvider}
+          />
+          <Button disabled={!provider || busy} onClick={() => void stepUp()}>
+            认证{selected ? '所选凭据移除' : '注册'}用途
+          </Button>
+          <p>返回后只读取会话；原任务需要再次明确提交。</p>
+        </section>
+      )}
+      <p role="status">{message}</p>
+    </>
+  )
   return (
     <>
       <div className="da-toolbar">
@@ -195,6 +244,7 @@ export function AccountSecurity({ oidc }: { oidc: boolean }) {
             />
           </Form.Item>
         </Form>
+        {authentication}
         <WriteStatus state={register.state} />
         {register.state.proof && (
           <Button loading={busy} onClick={() => void prove()}>
@@ -218,52 +268,8 @@ export function AccountSecurity({ oidc }: { oidc: boolean }) {
       >
         <p>先验证绑定此凭据的移除用途，再提交；取消不会自动重发。</p>
         <WriteStatus state={removal.state} />
+        {authentication}
       </Modal>
-      {snapshot.identity?.hasLocalPassword && (
-        <section>
-          <h2>近期认证</h2>
-          <Form layout="inline" onFinish={() => void reauthenticate()}>
-            <Form.Item label="当前密码" htmlFor="da-reauth-password">
-              <Input.Password
-                id="da-reauth-password"
-                autoComplete="current-password"
-                value={password}
-                disabled={busy}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </Form.Item>
-            <Button htmlType="submit" disabled={busy || !password}>
-              重新认证
-            </Button>
-          </Form>
-        </section>
-      )}
-      {oidc && (
-        <section>
-          <h2>联合身份用途认证</h2>
-          <Button
-            onClick={() => void r.session.loadSecurity().catch((e) => setMessage(errorMessage(e)))}
-          >
-            读取可用认证 Provider
-          </Button>
-          <Select
-            aria-label="用途认证 Provider"
-            value={provider}
-            options={
-              snapshot.security?.eligibleStepUpProviders.map((p) => ({
-                value: p.id,
-                label: p.label,
-              })) ?? []
-            }
-            onChange={setProvider}
-          />
-          <Button disabled={!provider || busy} onClick={() => void stepUp()}>
-            认证{selected ? '所选凭据移除' : '注册'}用途
-          </Button>
-          <p>返回后只读取会话；原任务需要再次明确提交。</p>
-        </section>
-      )}
-      <p role="status">{message}</p>
     </>
   )
 }

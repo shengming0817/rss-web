@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useRef } from 'react'
-import { Alert, Button } from 'antd'
+import { Alert, Button, ConfigProvider } from 'antd'
 import {
   Link,
   NavLink,
@@ -137,6 +137,8 @@ function ProtectedPage({ kind }: { kind: 'sessions' | 'accounts' | 'providers' }
   const { owner, snapshot, config } = useIdentity()
   const [checked, setChecked] = useState(false)
   const manualLoad = useRef(false)
+  const authorizedScope = useRef('')
+  const popupRoot = useRef<HTMLDivElement>(null)
   if (snapshot.navigation === 'unavailable') manualLoad.current = true
   const t = useT()
   useEffect(() => {
@@ -158,25 +160,44 @@ function ProtectedPage({ kind }: { kind: 'sessions' | 'accounts' | 'providers' }
     }
   }, [owner, tenant, kind, config.oidcEnabled])
   if (!tenant || (kind === 'providers' && !config.oidcEnabled)) return <ErrorPage />
-  if (!checked || snapshot.status === 'checking') return <p role="status">{t('continue')}…</p>
+  if (!checked) return <p role="status">{t('continue')}…</p>
   if (kind === 'sessions' && snapshot.logoutOutcome !== 'idle')
     return <SessionsPage key="departure" />
   if (snapshot.status === 'unavailable')
     return <Navigate replace to={`/auth/error?reason=unavailable&tenant=${tenant}`} />
-  if (snapshot.status !== 'authenticated' || snapshot.tenant !== tenant)
+  if (
+    (snapshot.status !== 'authenticated' && snapshot.status !== 'checking') ||
+    snapshot.tenant !== tenant
+  )
     return <Navigate replace to={loginPath(tenant)} />
   const scope = identityScope(owner)
-  if (kind === 'sessions') return <SessionsPage key={scope} />
   const allowed =
-    kind === 'accounts'
+    kind === 'sessions' ||
+    (kind === 'accounts'
       ? snapshot.host?.navigation.manageAccounts
-      : snapshot.host?.navigation.manageProviders
-  if (snapshot.navigation !== 'ready') return <p role="status">{t('navigationUnavailable')}</p>
-  if (!allowed) return <p role="alert">{t('errors.insufficient_privilege')}</p>
-  return kind === 'accounts' ? (
-    <AccountsPage key={scope} manualLoad={manualLoad.current} />
-  ) : (
-    <ProvidersPage key={scope} manualLoad={manualLoad.current} />
+      : snapshot.host?.navigation.manageProviders)
+  if (scope && allowed) authorizedScope.current = scope
+  const paused =
+    snapshot.status === 'checking' || (kind !== 'sessions' && snapshot.navigation !== 'ready')
+  const retained = authorizedScope.current && (!scope || scope === authorizedScope.current)
+  if (paused && !retained) return <p role="status">{t('navigationUnavailable')}</p>
+  if (!paused && !allowed) return <p role="alert">{t('errors.insufficient_privilege')}</p>
+  const taskScope = paused ? authorizedScope.current : scope
+  return (
+    <>
+      {paused && <p role="status">{t('navigationUnavailable')}</p>}
+      <div ref={popupRoot} hidden={paused} inert={paused}>
+        <ConfigProvider getPopupContainer={() => popupRoot.current!}>
+          {kind === 'sessions' ? (
+            <SessionsPage key={taskScope} />
+          ) : kind === 'accounts' ? (
+            <AccountsPage key={taskScope} manualLoad={manualLoad.current} />
+          ) : (
+            <ProvidersPage key={taskScope} manualLoad={manualLoad.current} />
+          )}
+        </ConfigProvider>
+      </div>
+    </>
   )
 }
 export function ErrorPage() {

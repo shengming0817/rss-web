@@ -1,8 +1,9 @@
 import { isRssApiError } from '@rss/api/identity'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { identityKey, useDa, useIdentity } from '../context'
 import { errorMessage, needsProof, uncertain } from './status'
 export type { WriteState } from '../context'
+const notifications = new WeakMap<object, { version: number; listeners: Set<() => void> }>()
 /** This registry contains operation locators only. Reloads and remounts cannot unlock unknown writes. */
 export function useMutation(key: string) {
   const r = useDa()
@@ -14,7 +15,25 @@ export function useMutation(key: string) {
   const lifetime = useRef(0),
     controller = useRef<AbortController | null>(null),
     querying = useRef(false)
-  const [, render] = useState(0)
+  let changes = notifications.get(r.writes)
+  if (!changes) {
+    changes = { version: 0, listeners: new Set() }
+    notifications.set(r.writes, changes)
+  }
+  const events = changes
+  useSyncExternalStore(
+    (listener) => {
+      events.listeners.add(listener)
+      return () => {
+        events.listeners.delete(listener)
+      }
+    },
+    () => events.version,
+  )
+  const update = () => {
+    events.version++
+    events.listeners.forEach((listener) => listener())
+  }
   let state = r.writes.get(scope)
   if (!state) {
     state = { id: '', state: 'idle', message: '', proof: false, review: false }
@@ -25,10 +44,9 @@ export function useMutation(key: string) {
     if (entry.state === 'idle' && entry.proof) {
       entry.proof = false
       entry.id = ''
-      render((v) => v + 1)
+      update()
     }
   }, [entry])
-  const update = () => render((v) => v + 1)
   const live = (bound: string, version: number) =>
     active.current === bound && lifetime.current === version && identityKey(r.session) === identity
   useEffect(
@@ -78,7 +96,7 @@ export function useMutation(key: string) {
       }
       return undefined
     } finally {
-      if (live(scope, version)) update()
+      update()
     }
   }
   async function query<T>(

@@ -197,8 +197,8 @@ async function input(id: string, value: string) {
     await flush()
   })
 }
-async function click(label: string) {
-  const button = [...document.querySelectorAll('button')].find(
+async function click(label: string, within: ParentNode = document) {
+  const button = [...within.querySelectorAll('button')].find(
     (element) => element.textContent?.trim() === label && !element.disabled,
   )
   if (!button) throw new Error(`Missing button ${label}`)
@@ -212,6 +212,42 @@ async function submit(id: string) {
   if (!form) throw new Error(`Missing form for ${id}`)
   await act(async () => {
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+  })
+}
+async function closeTask() {
+  const close = [
+    ...document.querySelectorAll<HTMLButtonElement>('.ant-drawer-close,.ant-modal-close'),
+  ].at(-1)
+  if (!close) throw new Error('Missing close control')
+  await act(async () => {
+    close.click()
+    await flush()
+  })
+}
+async function tab(label: string) {
+  const target = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+    (node) => node.textContent === label,
+  )
+  if (!target) throw new Error(`Missing tab ${label}`)
+  await act(async () => {
+    target.click()
+    await flush()
+  })
+}
+async function choose(id: string, label: string) {
+  const target = document.getElementById(id)
+  if (!target) throw new Error(`Missing select ${id}`)
+  await act(async () => {
+    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await flush()
+  })
+  const option = [...document.querySelectorAll<HTMLElement>('.ant-select-item-option')].find(
+    (node) => node.textContent === label,
+  )
+  if (!option) throw new Error(`Missing option ${label}`)
+  await act(async () => {
+    option.click()
     await flush()
   })
 }
@@ -534,7 +570,13 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
   it('restores an unknown local profile operation by its original UUID without replaying PUT', async () => {
     const f = fixture({ oidc: false })
     let operationId = ''
+    let rechecking = false
+    let completeCheck: ((value: unknown) => void) | undefined
     f.override((request) => {
+      if (rechecking && request.path.endsWith('/session'))
+        return new Promise((resolve) => {
+          completeCheck = resolve
+        })
       if (request.method === 'PUT' && request.path.endsWith('/profile')) {
         operationId = (request.body as { operationId: string }).operationId
         throw networkErrorForTest()
@@ -551,12 +593,75 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
     expect(field('local-display')?.value).toBe('')
     expect(field('local-display')?.disabled).toBe(true)
     expect(document.body.textContent).toContain(operationId)
+    const visibility = vi.spyOn(document, 'visibilityState', 'get')
+    visibility.mockReturnValue('hidden')
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    rechecking = true
+    visibility.mockReturnValue('visible')
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await flush()
+    })
+    expect(f.runtime.owner.getSnapshot().status).toBe('checking')
+    expect(document.querySelector('.ant-drawer')?.closest('[hidden]')).toBeTruthy()
+    await act(async () => {
+      completeCheck?.({
+        session: f.sessionRow,
+        identity: { principalId: principal, hasLocalPassword: true },
+        csrfToken: 'b'.repeat(64),
+      })
+      await flush()
+    })
+    expect(document.body.textContent).toContain(operationId)
+    expect(field('local-display')?.value ?? '').toBe('')
+    expect(requests(f.calls, '/profile', 'PUT')).toHaveLength(1)
     await click('查询原操作')
     expect(
       f.calls.some((request) => request.path.endsWith(`/profile/operations/${operationId}`)),
     ).toBe(true)
     expect(requests(f.calls, '/profile', 'PUT')).toHaveLength(1)
     expect(field('local-display')?.value).toBe('Original')
+  })
+  it('keeps accepted session pagination during revalidation and clears it when identity changes', async () => {
+    const f = fixture({ oidc: false })
+    let changed = false
+    f.override((request) => {
+      if (request.path.endsWith('/sessions'))
+        return {
+          sessions: [{ ...f.sessionRow, id: request.query?.['cursor'] ? nextSession : session }],
+          nextCursor: request.query?.['cursor'] ? null : nextSession,
+        }
+      if (changed && request.path.endsWith('/session'))
+        return {
+          session: { ...f.sessionRow, id: nextSession },
+          identity: { principalId: targetId, hasLocalPassword: true },
+          csrfToken: 'b'.repeat(64),
+        }
+      if (changed && request.path.endsWith('/context'))
+        return {
+          tenantId: tenant,
+          principalId: targetId,
+          sessionId: nextSession,
+          navigation: { manageAccounts: false, manageProviders: false },
+        }
+      return undefined
+    })
+    await mount(f.runtime, `/tenants/${tenant}/sessions`)
+    await click('下一页')
+    const reads = requests(f.calls, '/sessions').length
+    await act(async () => {
+      await f.runtime.owner.check(tenant)
+      await flush()
+    })
+    expect(requests(f.calls, '/sessions')).toHaveLength(reads)
+    expect(container.textContent).toContain(nextSession)
+    changed = true
+    await act(async () => {
+      await f.runtime.owner.check(tenant)
+      await flush()
+    })
+    expect(requests(f.calls, '/sessions')).toHaveLength(reads + 1)
+    expect(requests(f.calls, '/sessions').at(-1)?.query).toEqual({ limit: '50' })
   })
   it('discards a late directory response after leaving the account page', async () => {
     const f = fixture({ oidc: false })
@@ -595,5 +700,214 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
     })
     expect(field('client-secret')?.value).toBe('')
     expect((document.getElementById('ca-pem') as HTMLTextAreaElement | null)?.value).toBe('')
+  })
+  it('applies account query drafts, follows accepted pages and confirms account state changes', async () => {
+    const f = fixture({ oidc: false })
+    f.override((request) => {
+      if (request.path.endsWith('/accounts') && request.method === 'GET')
+        return {
+          accounts: [account],
+          nextCursor: request.query?.['cursor'] ? null : 'YQ',
+        }
+      if (request.path.endsWith(`/accounts/${targetId}/enabled`))
+        return { ...account, enabled: false }
+      return undefined
+    })
+    await mount(f.runtime, `/tenants/${tenant}/accounts`)
+    await input('account-source', 'local')
+    const queryInputs = [...container.querySelectorAll('input')].filter(
+      (node) => node.id !== 'account-source',
+    )
+    await input(queryInputs[0]!.id, "login=='colleague'")
+    await input(queryInputs[1]!.id, '-login')
+    await click('应用')
+    expect(requests(f.calls, '/accounts').at(-1)?.query).toMatchObject({
+      filter: "login=='colleague'",
+      sort: '-login',
+    })
+    await click('下一页')
+    await click('上一页')
+    await click('首页')
+    await click('读取详情')
+    await click('停用账户')
+    await click('取消')
+    expect(requests(f.calls, `/accounts/${targetId}/enabled`)).toHaveLength(0)
+    await click('停用账户')
+    await click('确认')
+    expect(requests(f.calls, `/accounts/${targetId}/enabled`)[0]?.body).toEqual({ enabled: false })
+    await closeTask()
+    await click('创建本地账户')
+    await input('account-login', 'invalid')
+    await input('account-password', 'short')
+    await submit('account-password')
+    expect(requests(f.calls, '/accounts', 'POST')).toHaveLength(0)
+    await closeTask()
+    expect(field('account-password')?.value ?? '').toBe('')
+  })
+  it('validates profile fields and explicitly adopts a reread version after a CAS conflict', async () => {
+    const f = fixture({ oidc: false })
+    f.override((request) => {
+      if (request.path.endsWith('/profile') && request.method === 'PUT')
+        throw decodeIdentityError(409, { code: 'configuration_changed' })
+      if (request.path.includes('/profile/operations/')) return null
+      return undefined
+    })
+    await mount(f.runtime, `/tenants/${tenant}/accounts`)
+    await click('读取详情')
+    await click('本地资料')
+    await input('local-username', 'person')
+    await input('local-email', 'person@example.com')
+    await input('local-profile-age', '900')
+    for (const id of ['local-display-missing', 'local-username-missing', 'local-email-missing']) {
+      await act(async () => {
+        field(id)!.click()
+        await flush()
+      })
+    }
+    await input('local-extensions', '{broken')
+    await submit('local-display')
+    expect(requests(f.calls, '/profile', 'PUT')).toHaveLength(0)
+    await input('local-extensions', '{"team":"ops"}')
+    await submit('local-display')
+    expect(requests(f.calls, '/profile', 'PUT')).toHaveLength(1)
+    const id = (requests(f.calls, '/profile', 'PUT')[0]?.body as { operationId: string })
+      .operationId
+    expect(document.body.textContent).toContain(id)
+    await click('查询原操作')
+    expect(document.body.textContent).toContain('尚未找到原操作回执')
+    await click('重新读取', field('local-display')!.closest('section')!)
+    await click('已比较，重新编辑')
+    await click('删除本地资料')
+    expect(requests(f.calls, '/profile', 'PUT').at(-1)?.body).toMatchObject({
+      expectedRevision: 4,
+      value: null,
+    })
+  })
+  it('creates provider settings, clears cancelled drafts and confirms disabling a provider', async () => {
+    const f = fixture()
+    f.override((request) => {
+      if (request.path.endsWith('/providers') && request.method === 'GET')
+        return { providers: [{ ...provider, enabled: true }] }
+      if (request.path.endsWith('/providers') && request.method === 'POST')
+        return { ...provider, version: 1 }
+      if (request.path.endsWith(`/providers/${providerId}/enabled`))
+        return { ...provider, enabled: false, version: 8 }
+      if (request.path.endsWith(`/providers/${providerId}/test`))
+        return { passed: false, diagnostic: { stage: 'discovery', reason: 'unavailable' } }
+      return undefined
+    })
+    await mount(f.runtime, `/tenants/${tenant}/providers`)
+    await click('新增身份提供方')
+    await input('issuer', 'https://new.example.com')
+    await input('client-id', 'new-client')
+    await input('client-secret', 'temporary')
+    await input('scopes', 'openid email')
+    await input('profile-claim', 'profile')
+    await input('profile-age', '300')
+    await input('groups-claim', 'teams')
+    await act(async () => {
+      field('jit')!.click()
+      await flush()
+    })
+    await submit('client-secret')
+    expect(requests(f.calls, '/providers', 'POST')[0]?.body).toMatchObject({
+      settings: {
+        issuer: 'https://new.example.com',
+        clientId: 'new-client',
+        jit: true,
+        claims: { profile: { extensionsClaim: 'profile', maxAgeSeconds: 300 }, groups: 'teams' },
+      },
+    })
+    await click('新增身份提供方')
+    await input('client-secret', 'discard')
+    await closeTask()
+    expect(field('client-secret')?.value ?? '').toBe('')
+    await click('停用身份提供方')
+    await click('取消')
+    await click('停用身份提供方')
+    await click('确认')
+    expect(requests(f.calls, `/providers/${providerId}/enabled`)[0]?.body).toEqual({
+      expectedVersion: 7,
+      enabled: false,
+    })
+    await click('测试连接')
+    expect(container.textContent).toContain('discovery: unavailable')
+    await click('重新读取')
+  })
+  it('keeps failed SSO and linking tasks local without replaying credentials', async () => {
+    const f = fixture({ authenticated: false })
+    f.override((request) => {
+      if (request.path.includes('/oidc/')) throw networkErrorForTest()
+      return undefined
+    })
+    await mount(f.runtime, `/tenants/${tenant}/login`)
+    await click('组织 SSO · Organization')
+    expect(f.runtime.flows.read()).toBeNull()
+    expect(requests(f.calls, `/oidc/${providerId}/login`)).toHaveLength(1)
+    await input('login-name', 'operator')
+    await input('login-password', 'temporary')
+    await submit('login-password')
+    await tab('可信认证事实')
+    await choose('link-provider', 'Organization')
+    await input('link-password', 'temporary')
+    await submit('link-password')
+    expect(requests(f.calls, `/oidc/${providerId}/link`)[0]?.body).toMatchObject({
+      returnTarget: 'resume',
+      password: 'temporary',
+    })
+    expect(f.runtime.flows.read()).toBeNull()
+    expect(field('link-password')?.value).toBe('')
+  })
+  it('changes an own password explicitly and clears closed security tasks', async () => {
+    const f = fixture()
+    f.override((request) => {
+      if (request.path.endsWith('/password')) return null
+      return undefined
+    })
+    await mount(f.runtime, `/tenants/${tenant}/sessions`)
+    await input('session-limit', '25')
+    await click('应用')
+    await click('首页')
+    expect(requests(f.calls, '/sessions').at(-1)?.query).toEqual({ limit: '25' })
+    await click('退出全部会话')
+    await click('取消')
+    await tab('可信认证事实')
+    await click('重新读取认证事实')
+    await input('current-password', 'discard on close')
+    const task = field('current-password')!.closest('details')!
+    await act(async () => {
+      task.open = false
+      task.dispatchEvent(new Event('toggle'))
+      await flush()
+    })
+    expect(field('current-password')?.value).toBe('')
+    await input('current-password', 'old secret')
+    await input('new-password', 'short')
+    await submit('new-password')
+    expect(requests(f.calls, '/password')).toHaveLength(0)
+    await input('current-password', 'old secret')
+    await input('new-password', 'a sufficiently long new password')
+    await submit('new-password')
+    expect(requests(f.calls, '/password')[0]?.body).toEqual({
+      currentPassword: 'old secret',
+      password: 'a sufficiently long new password',
+    })
+    expect(field('new-password')?.value ?? '').toBe('')
+  })
+  it('restarts a known-tenant error through its explicit login entry', async () => {
+    const f = fixture({ authenticated: false, oidc: false })
+    await mount(f.runtime, `/auth/error?reason=cancelled&tenant=${tenant}`)
+    await click('登录')
+    expect(field('login-name')).not.toBeNull()
+  })
+  it('continues an existing login in the selected language and theme', async () => {
+    const f = fixture({ oidc: false })
+    await mount(f.runtime, `/tenants/${tenant}/login`)
+    await click('English')
+    await click('Toggle theme')
+    await click('Continue')
+    expect(container.textContent).toContain('My sessions')
+    await click('中文')
+    expect(container.textContent).toContain('我的会话')
   })
 })

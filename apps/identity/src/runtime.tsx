@@ -123,8 +123,12 @@ export function useOperation() {
 }
 /** Secrets remain local; hidden documents and page departure discard them synchronously. */
 export function useSecretCleanup(clear: () => void) {
+  const { snapshot } = useIdentity()
   const latest = useRef(clear)
   latest.current = clear
+  useEffect(() => {
+    if (snapshot.status !== 'authenticated') latest.current()
+  }, [snapshot.status])
   useEffect(() => {
     const hidden = () => {
       if (document.visibilityState !== 'visible') latest.current()

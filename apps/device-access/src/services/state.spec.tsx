@@ -13,6 +13,7 @@ import { useRevisionReview } from './revision-review'
 import { Presentation } from '@rss/core'
 import { AccountsPanel } from '../features/computers/Panels'
 import { Applications } from '../features/applications/Applications'
+import { AccountSecurity } from '../features/account-security/AccountSecurity'
 import { errorMessage, uncertain, needsProof } from './status'
 import { decodeHost } from '../config'
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -27,6 +28,7 @@ afterEach(async () => {
   roots.clear()
   owners.splice(0).forEach((s) => s.dispose())
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 async function runtime() {
   const envelope = {
@@ -195,6 +197,43 @@ it('keeps a dispatched write unknown when its component departs', async () => {
   expect(await pending).toBeUndefined()
   expect([...r.writes.values()][0]?.state).toBe('unknown')
 })
+it.each(['resolve', 'reject'] as const)(
+  'notifies a reopened panel when its departed write settles by %s',
+  async (outcome) => {
+    const r = await runtime()
+    const a = await harness(r, () => useMutation('departed'))
+    let resolve!: (value: number) => void
+    let reject!: (error: Error) => void
+    let pending!: Promise<unknown>
+    await act(async () => {
+      pending = a.output.run(
+        () =>
+          new Promise<number>((yes, no) => {
+            resolve = yes
+            reject = no
+          }),
+      )
+    })
+    const original = a.output.state.id
+    await a.unmount()
+    const b = await harness(r, () => useMutation('departed'))
+    expect(b.output.locked).toBe(true)
+    expect(b.output.state.state).toBe('busy')
+    await act(async () => {
+      if (outcome === 'resolve') resolve(1)
+      else reject(new Error('lost'))
+      await pending
+    })
+    expect(b.output.state.state).toBe('unknown')
+    expect(b.output.state.id).toBe(original)
+    const query = vi.fn(async () => null)
+    await act(async () => {
+      await b.output.query(query)
+    })
+    expect(query).toHaveBeenCalledWith(original, expect.any(AbortSignal))
+    expect(b.output.state.message).toContain('结果仍未知')
+  },
+)
 it('keeps accepted cursor coordinates separate from edited query drafts and failed navigation', async () => {
   const r = await runtime(),
     load = vi
@@ -506,3 +545,92 @@ it.each(['binding', 'application'] as const)(
     }
   },
 )
+
+it('keeps purpose authentication inside the removal dialog and binds it to the selected credential', async () => {
+  const r = await runtime()
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+  const snapshot = {
+    ...r.session.getSnapshot(),
+    security: {
+      sessionId: id,
+      authentication: {
+        source: 'local_password' as const,
+        authTime: 1,
+        acr: 'unspecified' as const,
+        amr: ['pwd'] as const,
+      },
+      eligibleStepUpProviders: [{ id, label: 'Organization' }],
+    },
+  }
+  vi.spyOn(r.session, 'getSnapshot').mockReturnValue(snapshot)
+  const stepUp = vi.spyOn(r.session, 'stepUp').mockRejectedValue(new Error('unavailable'))
+  const remove = vi.fn()
+  Object.assign(r, {
+    host: { tenant },
+    security: {
+      list: async () => [{ id: 'selected-credential', label: 'Security key' }],
+      remove,
+      cancel: async () => undefined,
+    },
+  })
+  const media = window.matchMedia
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+  })
+  const computedStyle = window.getComputedStyle
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => computedStyle(element))
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  roots.add(root)
+  try {
+    await act(async () => {
+      root.render(
+        <DaContext.Provider value={r}>
+          <Presentation>
+            <AccountSecurity oidc />
+          </Presentation>
+        </DaContext.Provider>,
+      )
+    })
+    const button = async (label: string, within: ParentNode = container) => {
+      const target = [...within.querySelectorAll<HTMLButtonElement>('button')].find(
+        (node) => node.textContent?.trim() === label,
+      )
+      expect(target, label).toBeTruthy()
+      await act(async () => {
+        target!.click()
+      })
+    }
+    await button('移除')
+    const dialog = container.querySelector('[role="dialog"]')!
+    expect(dialog).toBeTruthy()
+    expect(dialog.querySelector('#da-reauth-password')).toBeTruthy()
+    await button('读取可用认证 Provider', dialog)
+    const select = dialog.querySelector('[role="combobox"]')!
+    await act(async () => {
+      select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    const option = container.querySelector<HTMLElement>('.ant-select-item-option')!
+    expect(option.textContent).toBe('Organization')
+    await act(async () => {
+      option.click()
+    })
+    await button('认证所选凭据移除用途', dialog)
+    expect(stepUp).toHaveBeenCalledWith(id, { kind: 'remove', credential: 'selected-credential' })
+    expect(remove).not.toHaveBeenCalled()
+  } finally {
+    await act(async () => root.unmount())
+    roots.delete(root)
+    container.remove()
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: media })
+  }
+})
