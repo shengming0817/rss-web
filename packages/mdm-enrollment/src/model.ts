@@ -389,7 +389,11 @@ export interface EnrollmentPort {
   resume(id: string, operationId: string, password: string): Promise<EnrollmentReceipt>
   cancel(id: string, operationId: string): Promise<EnrollmentReceipt>
   profile(id: string, password: string): Promise<Download>
-  registrations(device: string, query: Query<keyof Registration>): Promise<Page<Registration>>
+  registrations(
+    device: string,
+    query: Query<keyof Registration>,
+    signal?: AbortSignal,
+  ): Promise<Page<Registration>>
   revokeRegistration(
     device: string,
     registration: string,

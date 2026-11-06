@@ -37,15 +37,15 @@ export interface DeviceAccessPort {
     signal: AbortSignal,
   ): Promise<AuthorizationChallenge>
   changeBinding(device: string, id: string, input: BindingChange): Promise<Binding>
-  enterpriseDetail(id: string): Promise<EnterpriseDetail>
+  enterpriseDetail(id: string, signal?: AbortSignal): Promise<EnterpriseDetail>
   beginEnterprise(input: EnterpriseChange, signal: AbortSignal): Promise<AuthorizationChallenge>
   changeEnterprise(input: EnterpriseChange): Promise<EnterpriseDetail>
   platformSso(device: string): Promise<PlatformSsoConfiguration>
 
-  bindings(device: string, query: DirectoryQuery): Promise<Page<Binding>>
-  binding(device: string, id: string): Promise<Binding>
+  bindings(device: string, query: DirectoryQuery, signal?: AbortSignal): Promise<Page<Binding>>
+  binding(device: string, id: string, signal?: AbortSignal): Promise<Binding>
   operation(device: string, id: string): Promise<Binding>
-  enterprise(query: DirectoryQuery): Promise<Page<EnterpriseRecord>>
+  enterprise(query: DirectoryQuery, signal?: AbortSignal): Promise<Page<EnterpriseRecord>>
 }
 function device(value: string) {
   if (!value || new TextEncoder().encode(value).length > 256 || /\p{Cc}/u.test(value))
@@ -77,7 +77,7 @@ export function createDeviceAccess(port: DeviceAccessPort) {
         throw new Error('Wrong binding subject receipt')
       return value
     },
-    enterpriseDetail: (id: string) => port.enterpriseDetail(id),
+    enterpriseDetail: (id: string, signal?: AbortSignal) => port.enterpriseDetail(id, signal),
     beginEnterprise: (input: EnterpriseChange, signal: AbortSignal) => {
       validateEnterpriseChange(input)
       return port.beginEnterprise(freeze(input), signal)
@@ -93,9 +93,10 @@ export function createDeviceAccess(port: DeviceAccessPort) {
       return value
     },
     platformSso: (target: string) => port.platformSso(device(target)),
-    bindings: (id: string, query: DirectoryQuery = {}) => port.bindings(device(id), query),
-    async binding(target: string, id: string) {
-      const value = await port.binding(device(target), uuid(id))
+    bindings: (id: string, query: DirectoryQuery = {}, signal?: AbortSignal) =>
+      port.bindings(device(id), query, signal),
+    async binding(target: string, id: string, signal?: AbortSignal) {
+      const value = await port.binding(device(target), uuid(id), signal)
       if (value.device !== target || value.id !== id) throw new Error('Wrong binding')
       return value
     },
@@ -105,7 +106,8 @@ export function createDeviceAccess(port: DeviceAccessPort) {
         throw new Error('Wrong binding operation')
       return value
     },
-    enterprise: (query: DirectoryQuery = {}) => port.enterprise(query),
+    enterprise: (query: DirectoryQuery = {}, signal?: AbortSignal) =>
+      port.enterprise(query, signal),
   })
 }
 

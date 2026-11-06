@@ -72,8 +72,11 @@ export function BindingEditor({
     permissions = useRead(`${binding}/binding-write/${device}`, authorization.effective),
     permitted = devicePermission(permissions.value?.grants ?? [], device, 'account_write'),
     [known, setKnown] = useState(!isNew),
-    read = useRead(`${binding}/binding-detail/${device}/${id}/${known}/${permitted}`, () =>
-      known && permitted ? deviceAccess.binding(device, id) : Promise.resolve(null),
+    read = useRead(
+      `${binding}/binding-detail/${device}/${id}/${known}/${permitted}`,
+      (signal) =>
+        known && permitted ? deviceAccess.binding(device, id, signal) : Promise.resolve(null),
+      { retryReadConflict: true },
     ),
     [form] = Form.useForm<Values>(),
     kind = Form.useWatch('kind', form) ?? 'put',
@@ -211,6 +214,7 @@ export function BindingEditor({
         locale={locale}
         busy={read.busy || permissions.busy}
         error={read.error ?? permissions.error}
+        onRetry={read.reload}
       />
       {read.value && (
         <dl className="device-facts">

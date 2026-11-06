@@ -46,8 +46,10 @@ export function EnterpriseEditor({
       permissions.value?.grants.some(
         (g) => g.operation === 'enterprise_applications_write' && g.scope.kind === 'tenant',
       ) ?? false,
-    read = useRead(`${binding}/enterprise-detail/${id}`, () =>
-      id ? deviceAccess.enterpriseDetail(id) : Promise.resolve(null),
+    read = useRead(
+      `${binding}/enterprise-detail/${id}`,
+      (signal) => (id ? deviceAccess.enterpriseDetail(id, signal) : Promise.resolve(null)),
+      { retryReadConflict: true },
     ),
     [form] = Form.useForm<Values>(),
     kind = Form.useWatch('kind', form) ?? 'relying_party',
@@ -156,6 +158,7 @@ export function EnterpriseEditor({
         locale={locale}
         busy={read.busy || permissions.busy}
         error={read.error ?? permissions.error}
+        onRetry={read.reload}
       />
       {id && (
         <p>

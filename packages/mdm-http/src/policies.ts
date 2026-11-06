@@ -231,10 +231,10 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
           }
         },
       ),
-    runs: (id, query) =>
+    runs: (id, query, signal) =>
       api.getApiV1PoliciesByIdRuns(
         transport,
-        { pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        { signal, pathParams: { id: uuid(id) }, query: windowQuery(query) },
         (value) => {
           safeNumbers(value)
           return {

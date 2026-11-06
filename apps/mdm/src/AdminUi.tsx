@@ -11,6 +11,28 @@ export function codeOf(error: unknown): string {
     return error.code
   return ''
 }
+/** Present sanitized error facts; protocol decoding remains with the HTTP owner. */
+export function readFailure(error: unknown): 'conflict' | 'cursor' | 'result' | 'denied' | 'other' {
+  if (
+    !(error instanceof Error) ||
+    error.cause !== 'wire' ||
+    !('status' in error) ||
+    !('code' in error)
+  )
+    return 'other'
+  if (error.status === 401 || error.status === 403) return 'denied'
+  if (error.status !== 409) return 'other'
+  switch (error.code) {
+    case 'query_read_conflict':
+      return 'conflict'
+    case 'query_cursor_invalidated':
+      return 'cursor'
+    case 'query_result_unavailable':
+      return 'result'
+    default:
+      return 'other'
+  }
+}
 export function isUnknown(error: unknown): boolean {
   const e = error && typeof error === 'object' ? error : {}
   const status = 'status' in e && typeof e.status === 'number' ? e.status : 0
@@ -51,42 +73,60 @@ export function Failure({
   if (!error) return null
   const l = labels(locale),
     code = codeOf(error)
-  const title = [
-    'revision_conflict',
-    'operation_conflict',
-    'conflict',
-    'configuration_changed',
-  ].includes(code)
-    ? l(
-        '内容已变化，请重新读取详情后编辑。',
-        'Content changed. Read the detail again before editing.',
-      )
-    : ['forbidden', 'permission_denied', 'insufficient_privilege'].includes(code)
-      ? l('当前账户没有此操作权限。', 'Your account cannot perform this operation.')
-      : ['reauthentication_required', 'interaction_required'].includes(code)
+  const recovery = readFailure(error)
+  const readTitle =
+    recovery === 'conflict'
+      ? l(
+          '读取期间依据发生变化，请重新读取当前数据。',
+          'The read basis changed. Read the current data again.',
+        )
+      : recovery === 'cursor'
         ? l(
-            '请先到安全设置完成重新认证，再显式提交原操作。',
-            'Reauthenticate in Security, then explicitly submit the original operation.',
+            '分页上下文已失效，请保留条件重新开始。',
+            'The page context expired. Restart with the same query.',
           )
-        : code === 'connection_deployment_unobserved'
+        : recovery === 'result'
           ? l(
-              '尚无所需网关部署观察。请核对连接配置中的部署状态后，再显式提交原操作。',
-              'Required gateway deployment has not been observed. Verify deployment state in Connections, then explicitly submit the original action.',
+              '原查询结果已不可用，请重新查询。',
+              'The original result is unavailable. Run the query again.',
             )
-          : kind === 'read'
+          : null
+  const title =
+    kind === 'read' && readTitle
+      ? readTitle
+      : ['revision_conflict', 'operation_conflict', 'conflict', 'configuration_changed'].includes(
+            code,
+          )
+        ? l(
+            '内容已变化，请重新读取详情后编辑。',
+            'Content changed. Read the detail again before editing.',
+          )
+        : ['forbidden', 'permission_denied', 'insufficient_privilege'].includes(code)
+          ? l('当前账户没有此操作权限。', 'Your account cannot perform this operation.')
+          : ['reauthentication_required', 'interaction_required'].includes(code)
             ? l(
-                '无法读取当前数据，请检查查询或连接后重新读取。',
-                'Cannot read current data. Check the query or connection and read again.',
+                '请先到安全设置完成重新认证，再显式提交原操作。',
+                'Reauthenticate in Security, then explicitly submit the original operation.',
               )
-            : isUnknown(error)
+            : code === 'connection_deployment_unobserved'
               ? l(
-                  '结果未确认。请查询原操作；没有查询端点时，仅显式重提原请求。',
-                  'Outcome unconfirmed. Read the original operation, or explicitly resubmit the original request where no query exists.',
+                  '尚无所需网关部署观察。请核对连接配置中的部署状态后，再显式提交原操作。',
+                  'Required gateway deployment has not been observed. Verify deployment state in Connections, then explicitly submit the original action.',
                 )
-              : l(
-                  '请求未完成，请检查输入、权限或当前状态。',
-                  'Request was not completed. Check the input, permissions or current state.',
-                )
+              : kind === 'read'
+                ? l(
+                    '无法读取当前数据，请检查查询或连接后重新读取。',
+                    'Cannot read current data. Check the query or connection and read again.',
+                  )
+                : isUnknown(error)
+                  ? l(
+                      '结果未确认。请查询原操作；没有查询端点时，仅显式重提原请求。',
+                      'Outcome unconfirmed. Read the original operation, or explicitly resubmit the original request where no query exists.',
+                    )
+                  : l(
+                      '请求未完成，请检查输入、权限或当前状态。',
+                      'Request was not completed. Check the input, permissions or current state.',
+                    )
   return <Alert type="error" showIcon title={title} role="alert" />
 }
 /** Presentation lifecycle only. Session admission and response fencing stay with the sole owner. */
@@ -124,7 +164,15 @@ export function useAction() {
 }
 // Reads follow the same navigation boundary as the session owner; authoring state stays mounted.
 export const ReadEpoch = createContext('initial')
-export function useRead<T>(key: string, read: () => Promise<T>) {
+export interface ReadOptions {
+  /** Explicitly enabled only for the current ordinary first page, detail or statistics. */
+  retryReadConflict: boolean
+}
+export function useRead<T>(
+  key: string,
+  read: (signal: AbortSignal) => Promise<T>,
+  options?: ReadOptions,
+) {
   const [version, setVersion] = useState(0)
   const requestKey = `${key}/${version}`
   const [state, setState] = useState<{ key: string; value?: T; error?: unknown; busy: boolean }>({
@@ -133,30 +181,79 @@ export function useRead<T>(key: string, read: () => Promise<T>) {
   })
   const loader = useRef(read)
   loader.current = read
+  const bounded = options !== undefined
+  const retryReadConflict = options?.retryReadConflict ?? false
   useEffect(() => {
     let live = true
+    const controller = new AbortController()
+    const load = loader.current
+    let rejectAbort: (reason: unknown) => void = () => undefined
+    const cancelled = new Promise<never>((_, reject) => {
+      rejectAbort = reject
+    })
+    const aborted = () => rejectAbort(controller.signal.reason)
+    controller.signal.addEventListener('abort', aborted, { once: true })
+    const deadline = bounded
+      ? setTimeout(
+          () => controller.abort(new DOMException('Read budget exceeded', 'TimeoutError')),
+          30_000,
+        )
+      : undefined
+    let delay: ReturnType<typeof setTimeout> | undefined
     setState({ key: requestKey, busy: true })
     void (async () => {
       try {
-        const value = await loader.current()
-        if (live) setState({ key: requestKey, value, busy: false })
+        for (let attempt = 0; ; attempt++) {
+          controller.signal.throwIfAborted()
+          try {
+            const value = await Promise.race([load(controller.signal), cancelled])
+            controller.signal.throwIfAborted()
+            if (live) setState({ key: requestKey, value, busy: false })
+            return
+          } catch (error) {
+            if (
+              controller.signal.aborted ||
+              !retryReadConflict ||
+              attempt >= 2 ||
+              readFailure(error) !== 'conflict'
+            )
+              throw error
+            await Promise.race([
+              new Promise<void>((resolve) => {
+                delay = setTimeout(resolve, attempt === 0 ? 150 : 300)
+              }),
+              cancelled,
+            ])
+          }
+        }
       } catch (error) {
         if (live) setState({ key: requestKey, error, busy: false })
+      } finally {
+        clearTimeout(deadline)
+        clearTimeout(delay)
+        controller.signal.removeEventListener('abort', aborted)
       }
     })()
     return () => {
       live = false
+      controller.abort(new DOMException('Read abandoned', 'AbortError'))
+      clearTimeout(deadline)
+      clearTimeout(delay)
     }
-  }, [requestKey])
+  }, [requestKey, bounded, retryReadConflict])
   return {
     ...(state.key === requestKey ? state : { key: requestKey, busy: true }),
     reload: () => setVersion((v) => v + 1),
   }
 }
-/** Page projections refresh after navigation; authority and pending authoring stay mounted. */
-export function usePageRead<T>(key: string, read: () => Promise<T>) {
+/** Page projections refresh after navigation; authoring remains with its existing owner. */
+export function usePageRead<T>(
+  key: string,
+  read: (signal: AbortSignal) => Promise<T>,
+  options?: ReadOptions,
+) {
   const epoch = useContext(ReadEpoch)
-  return useRead(`${epoch}/${key}`, read)
+  return useRead(`${epoch}/${key}`, read, options)
 }
 export function Heading({
   title,
@@ -182,7 +279,15 @@ export function ReadState({
   error,
   empty,
   locale,
-}: AdminProps & { busy: boolean; error?: unknown; empty?: boolean }) {
+  onRetry,
+  onRestart,
+}: AdminProps & {
+  busy: boolean
+  error?: unknown
+  empty?: boolean
+  onRetry?: (() => void) | undefined
+  onRestart?: (() => void) | undefined
+}) {
   const l = labels(locale)
   if (busy)
     return (
@@ -190,7 +295,24 @@ export function ReadState({
         <Spin aria-label={l('正在读取', 'Loading')} />
       </div>
     )
-  if (error) return <Failure error={error} locale={locale} kind="read" />
+  if (error) {
+    const failure = readFailure(error)
+    const restart = failure === 'cursor' || failure === 'result'
+    return (
+      <Space orientation="vertical" className="read-failure">
+        <Failure error={error} locale={locale} kind="read" />
+        {restart && onRestart ? (
+          <Button onClick={onRestart}>
+            {failure === 'result'
+              ? l('重新查询', 'Run query again')
+              : l('保留条件重新开始', 'Restart with query')}
+          </Button>
+        ) : !restart && failure !== 'denied' && onRetry ? (
+          <Button onClick={onRetry}>{l('重新读取', 'Read again')}</Button>
+        ) : null}
+      </Space>
+    )
+  }
   if (empty)
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={l('没有数据', 'No data')} />
   return null

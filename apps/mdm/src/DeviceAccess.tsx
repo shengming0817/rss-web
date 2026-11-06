@@ -9,7 +9,15 @@ import { Alert, Button, Card, Form, Input, Space } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import { CursorControls, Heading, labels, ReadState, usePageRead, type Query } from './AdminUi'
+import {
+  firstPage,
+  CursorControls,
+  Heading,
+  labels,
+  ReadState,
+  usePageRead,
+  type Query,
+} from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { DataTable } from './DataTable'
 function Bindings({
@@ -32,8 +40,10 @@ function Bindings({
     [query, setQuery] = useState<Query>({ limit: 20 }),
     [original, setOriginal] = useState(''),
     [operation, setOperation] = useState(''),
-    read = usePageRead(`${binding}/access/${device}/${JSON.stringify(query)}`, () =>
-      deviceAccess.bindings(device, query),
+    read = usePageRead(
+      `${binding}/access/${device}/${JSON.stringify(query)}`,
+      (signal) => deviceAccess.bindings(device, query, signal),
+      { retryReadConflict: !query.cursor },
     ),
     receipt = usePageRead(`${binding}/access-receipt/${device}/${operation}`, () =>
       operation ? deviceAccess.operation(device, operation) : Promise.resolve(null),
@@ -57,6 +67,8 @@ function Bindings({
           busy={read.busy}
           error={read.error}
           empty={read.value?.items.length === 0}
+          onRetry={read.reload}
+          onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
         />
         {read.value && (
           <>
@@ -184,8 +196,10 @@ export function DeviceAccess({ runtime, locale }: { runtime: Runtime; locale: Lo
     [query, setQuery] = useState<Query>({ limit: 20 }),
     [enterprise, setEnterprise] = useState<{ id: string | null; key: number } | null>(null),
     enterpriseGuard = useSelectionGuard(),
-    read = usePageRead(`${binding}/enterprise/${JSON.stringify(query)}`, () =>
-      deviceAccess.enterprise(query),
+    read = usePageRead(
+      `${binding}/enterprise/${JSON.stringify(query)}`,
+      (signal) => deviceAccess.enterprise(query, signal),
+      { retryReadConflict: !query.cursor },
     )
   useEffect(() => setDraft(device), [device])
   return (
@@ -229,6 +243,8 @@ export function DeviceAccess({ runtime, locale }: { runtime: Runtime; locale: Lo
             busy={read.busy}
             error={read.error}
             empty={read.value?.items.length === 0}
+            onRetry={read.reload}
+            onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
           />
           {read.value && (
             <>

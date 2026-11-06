@@ -14,12 +14,14 @@ import {
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import {
+  firstPage,
   type Query,
   DirectoryControls,
   Failure,
   isUnknown,
   labels,
   ReadState,
+  readFailure,
   useAction,
   useRead,
 } from './AdminUi'
@@ -56,18 +58,26 @@ export function RecoveryCredentials({
     canOperate = has('security_operate'),
     list = useRead(
       `${binding}/recovery-materials/${endpoint.id}/${canRead}/${JSON.stringify(query)}`,
-      () => (canRead ? credentials.list(endpoint.id, query) : Promise.resolve(null)),
+      (signal) => (canRead ? credentials.list(endpoint.id, query, signal) : Promise.resolve(null)),
+      { retryReadConflict: !query.cursor },
     ),
     detail = useRead(
       `${binding}/recovery-material/${selected?.id ?? ''}/${selected?.version ?? ''}/${canRead}`,
-      () => (canRead && selected ? credentials.material(selected) : Promise.resolve(null)),
+      (signal) =>
+        canRead && selected ? credentials.material(selected, signal) : Promise.resolve(null),
+      { retryReadConflict: true },
     )
   usePendingSelection(guard.locked)
   useEffect(() => {
-    if (!guard.locked) setHeld(detail.value ?? null)
-  }, [detail.value, guard.locked])
+    if (readFailure(list.error) === 'denied' || readFailure(detail.error) === 'denied' || !canRead)
+      setHeld(null)
+    else if (!guard.locked) setHeld(detail.value ?? null)
+  }, [detail.value, guard.locked, list.error, detail.error, canRead])
+  const denied = readFailure(list.error) === 'denied' || readFailure(detail.error) === 'denied'
   const current =
-    selected && held && held.id === selected.id && held.version === selected.version ? held : null
+    !denied && selected && held && held.id === selected.id && held.version === selected.version
+      ? held
+      : null
   return (
     <SelectionGuard.Provider value={guard.register}>
       <Alert
@@ -123,6 +133,8 @@ export function RecoveryCredentials({
               error={list.error}
               empty={list.value?.items.length === 0}
               locale={locale}
+              onRetry={list.reload}
+              onRestart={() => (query.cursor ? setQuery(firstPage(query)) : list.reload())}
             />
             {list.value && (
               <>
@@ -190,7 +202,14 @@ export function RecoveryCredentials({
           </Card>
         </fieldset>
       </SecretPanel>
-      {selected && <ReadState busy={detail.busy} error={detail.error} locale={locale} />}
+      {selected && (
+        <ReadState
+          busy={detail.busy}
+          error={detail.error}
+          locale={locale}
+          onRetry={detail.reload}
+        />
+      )}
       {current && (
         <SecretPanel active={canRead && !detail.error && !detail.busy}>
           <fieldset

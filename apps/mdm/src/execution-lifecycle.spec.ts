@@ -440,7 +440,11 @@ it.each(['runs', 'assignments'])(
       }),
     )
     if (tab === 'runs')
-      expect(runs.mock.lastCall).toEqual([policy, { limit: 20, cursor: 'run-page-2' }])
+      expect(runs.mock.lastCall).toEqual([
+        policy,
+        { limit: 20, cursor: 'run-page-2' },
+        expect.any(AbortSignal),
+      ])
     else
       expect(assignments.mock.lastCall).toEqual([
         policy,

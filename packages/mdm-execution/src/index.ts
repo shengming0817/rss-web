@@ -51,30 +51,33 @@ export interface ExecutionStatistics {
   readonly asOf: number
 }
 export interface ExecutionPort extends ControlPort, TrustPort {
-  statistics(filter?: string): Promise<ExecutionStatistics>
-  list(query: DirectoryQuery): Promise<Page<Execution>>
-  command(device: string, id: string): Promise<ExecutionDetail>
-  run(policy: string, id: string): Promise<ExecutionDetail>
+  statistics(filter?: string, signal?: AbortSignal): Promise<ExecutionStatistics>
+  list(query: DirectoryQuery, signal?: AbortSignal): Promise<Page<Execution>>
+  command(device: string, id: string, signal?: AbortSignal): Promise<ExecutionDetail>
+  run(policy: string, id: string, signal?: AbortSignal): Promise<ExecutionDetail>
 }
 export function createExecution(port: ExecutionPort) {
   return Object.freeze({
     ...createControl(port),
     ...createTrust(port),
-    statistics: (filter?: string) => port.statistics(filter),
-    list: (query: DirectoryQuery = {}) => port.list(query),
-    async detail(reference: ExecutionRef & { readonly policy?: string }) {
+    statistics: (filter?: string, signal?: AbortSignal) => port.statistics(filter, signal),
+    list: (query: DirectoryQuery = {}, signal?: AbortSignal) => port.list(query, signal),
+    async detail(reference: ExecutionRef & { readonly policy?: string }, signal?: AbortSignal) {
       uuid(reference.id)
       if (!['command', 'action_run'].includes(reference.kind))
         throw new Error('Invalid execution kind')
       if (reference.kind === 'action_run' && reference.policy) {
-        const detail = await port.run(uuid(reference.policy), reference.id)
+        const detail = await port.run(uuid(reference.policy), reference.id, signal)
         if (detail.id !== reference.id) throw new Error('Wrong run identity')
         return { item: null, detail, policy: reference.policy }
       }
-      const page = await port.list({
-        filter: `id=='${reference.id}';kind=='${reference.kind}'`,
-        limit: 2,
-      })
+      const page = await port.list(
+        {
+          filter: `id=='${reference.id}';kind=='${reference.kind}'`,
+          limit: 2,
+        },
+        signal,
+      )
       if (!page.items.length && !page.nextCursor) return null
       if (page.items.length !== 1 || page.nextCursor)
         throw new Error('Ambiguous execution identity')
@@ -83,9 +86,9 @@ export function createExecution(port: ExecutionPort) {
         throw new Error('Wrong execution identity')
       const detail =
         item.kind === 'command'
-          ? await port.command(item.device, item.id)
+          ? await port.command(item.device, item.id, signal)
           : item.policy
-            ? await port.run(item.policy, item.id)
+            ? await port.run(item.policy, item.id, signal)
             : null
       if (
         !detail ||

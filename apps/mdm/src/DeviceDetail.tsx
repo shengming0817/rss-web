@@ -199,7 +199,11 @@ function EndpointFacts({
 }) {
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
-    read = useRead(`${binding}/endpoint-detail/${endpoint.id}`, () => devices.endpoint(endpoint.id))
+    read = useRead(
+      `${binding}/endpoint-detail/${endpoint.id}`,
+      (signal) => devices.endpoint(endpoint.id, signal),
+      { retryReadConflict: true },
+    )
   return (
     <>
       <Card title={l('终端摘要', 'Endpoint summary')}>
@@ -283,7 +287,7 @@ function EndpointFacts({
         ))}
       </Card>
       <Card title={l('当前能力事实', 'Current capability facts')}>
-        <ReadState busy={read.busy} error={read.error} locale={locale} />
+        <ReadState busy={read.busy} error={read.error} locale={locale} onRetry={read.reload} />
         {read.value && (
           <DataTable
             locale={locale}
@@ -330,8 +334,10 @@ function Detail({
     [selected, setSelected] = useState(''),
     [snapshot, setSnapshot] = useState<DeviceView>(),
     [heldEndpoint, setHeldEndpoint] = useState<ViewEndpoint>(),
-    read = useRead(`${binding}/device-view/${reference.kind}/${reference.id}`, () =>
-      devices.view(reference),
+    read = useRead(
+      `${binding}/device-view/${reference.kind}/${reference.id}`,
+      (signal) => devices.view(reference, signal),
+      { retryReadConflict: true },
     )
   useEffect(() => {
     if (read.value) setSnapshot(read.value)
@@ -360,7 +366,7 @@ function Detail({
           </Button>
         }
       />
-      <ReadState busy={read.busy} error={read.error} locale={locale} />
+      <ReadState busy={read.busy} error={read.error} locale={locale} onRetry={read.reload} />
       <Button onClick={permissions.reload}>
         {l('读取设备资产与合规权限', 'Read device inventory and compliance permissions')}
       </Button>

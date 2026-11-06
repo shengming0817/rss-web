@@ -148,26 +148,33 @@ it('retains concrete namespaces and opaque cursors without evaluating a list loc
       items: [],
       nextCursor: 'next/opaque',
     })),
-    inventory = createInventory(port({ list }))
+    inventory = createInventory(port({ list })),
+    signal = new AbortController().signal
   expect(
     (
-      await inventory.list({
-        reference: { kind: 'association', id },
-        endpoint: 'endpoint',
-        scope,
-        cursor,
-        field: 'custom.rows',
-      })
+      await inventory.list(
+        {
+          reference: { kind: 'association', id },
+          endpoint: 'endpoint',
+          scope,
+          cursor,
+          field: 'custom.rows',
+        },
+        signal,
+      )
     ).nextCursor,
   ).toBe('next/opaque')
-  expect(list).toHaveBeenCalledWith({
-    reference: { kind: 'association', id },
-    endpoint: 'endpoint',
-    scope,
-    cursor,
-    field: 'custom.rows',
-    limit: 50,
-  })
+  expect(list).toHaveBeenCalledWith(
+    {
+      reference: { kind: 'association', id },
+      endpoint: 'endpoint',
+      scope,
+      cursor,
+      field: 'custom.rows',
+      limit: 50,
+    },
+    signal,
+  )
   expect(() =>
     inventory.list({
       reference: { kind: 'endpoint', id: 'wrong' },

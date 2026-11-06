@@ -168,8 +168,12 @@ export interface MaterialChallenge {
   readonly publicKey: Readonly<Record<string, unknown>>
 }
 export interface RecoveryCredentialsPort {
-  list(device: string, query: DirectoryQuery<keyof Material>): Promise<Page<MaterialRow>>
-  material(target: MaterialRef): Promise<Material>
+  list(
+    device: string,
+    query: DirectoryQuery<keyof Material>,
+    signal?: AbortSignal,
+  ): Promise<Page<MaterialRow>>
+  material(target: MaterialRef, signal?: AbortSignal): Promise<Material>
   configuration(device: string, registration: Registration | null): Promise<FileVaultConfiguration>
   configure(device: string, input: ConfigureFileVault): Promise<FileVaultConfiguration>
   link(device: string, operationId: string, otherDevice: string): Promise<FileVaultConfiguration>

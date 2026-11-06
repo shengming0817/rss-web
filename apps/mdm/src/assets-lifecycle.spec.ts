@@ -23,6 +23,8 @@ import { QueryExecution } from './InventoryQuery'
 import { SavedQueries } from './SavedQueries'
 import { SecretTabs } from './SecretTabs'
 import { ValueMappingEditor } from './ValueMappingEditor'
+import { decodeMdmError } from '@rss/api/mdm'
+import { Devices } from './Devices'
 import { DeviceDetail } from './DeviceDetail'
 import { MappingUpload, type MappingUseCases } from './MappingUpload'
 import { CollectionMappings } from './CollectionMappings'
@@ -71,7 +73,8 @@ async function render(node: ReactNode) {
 }
 function button(text: string): HTMLButtonElement {
   const button = [...host.querySelectorAll('button')].find(
-    (node) => node.textContent === text && !node.closest('[hidden]'),
+    (node) =>
+      node.textContent?.replace(/\s/g, '') === text.replace(/\s/g, '') && !node.closest('[hidden]'),
   )
   if (!button) throw new Error(`Missing button: ${text}`)
   return button
@@ -735,4 +738,99 @@ it('recovers an unknown recompute by exact replay and reads only the returned se
   expect(host.querySelector<HTMLInputElement>('[aria-label="原设备组任务标识"]')?.value).toBe(
     nested,
   )
+})
+
+it('keeps a failed device continuation until explicit retry, then restarts with the same query controls', async () => {
+  const endpoints = vi
+    .fn<DevicesUseCases['endpoints']>()
+    .mockResolvedValue({ items: [], nextCursor: 'page-2' })
+  const runtime = {
+    administration: () => ({
+      binding: 'read-session',
+      devices: {
+        endpoints,
+        endpointStatistics: async () => ({
+          statistics: { total: 0, active: 0, pending: 0, revoked: 0 },
+          asOf: 100,
+        }),
+      },
+    }),
+  } as unknown as Runtime
+  await render(
+    createElement(
+      MemoryRouter,
+      { initialEntries: ['/devices?tab=endpoints'] },
+      createElement(Devices, { runtime, locale: 'zh' }),
+    ),
+  )
+  await fill('服务端筛选', "status=='active'")
+  await click('应用')
+  await fill('每页', '3')
+  for (const label of ['排序', '列']) {
+    const input = host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!
+    await act(async () => input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+    const option = document.querySelector<HTMLElement>(
+      '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option:not(.ant-select-item-option-disabled)',
+    )
+    expect(option).not.toBeNull()
+    await act(async () => option!.click())
+  }
+  const before = endpoints.mock.calls.at(-1)![0]
+  expect(before).toMatchObject({
+    filter: "status=='active'",
+    limit: 3,
+    sort: ['id'],
+    fields: expect.arrayContaining(['id']),
+  })
+  endpoints.mockRejectedValueOnce(decodeMdmError(409, { code: 'query_read_conflict' }))
+  await click('下一页')
+  const failed = endpoints.mock.calls.at(-1)![0],
+    count = endpoints.mock.calls.length
+  expect(failed).toEqual({ ...before, cursor: 'page-2' })
+  expect(host.textContent).toContain('读取期间依据发生变化')
+  expect(endpoints).toHaveBeenCalledTimes(count)
+  endpoints.mockRejectedValueOnce(decodeMdmError(409, { code: 'query_cursor_invalidated' }))
+  await click('重新读取')
+  expect(endpoints.mock.calls.at(-1)![0]).toEqual(failed)
+  expect(host.textContent).toContain('分页上下文已失效')
+  await click('保留条件重新开始')
+  expect(endpoints.mock.calls.at(-1)![0]).toEqual(before)
+  expect(endpoints.mock.calls.at(-1)![1]).toBeInstanceOf(AbortSignal)
+})
+
+it('reruns unavailable fixed results only on explicit action with a new task and the original definition', async () => {
+  const query = vi
+      .fn<InventoryUseCases['query']>()
+      .mockImplementation(async (task) => ({ task, statusUrl: `/api/v1/device-queries/${task}` })),
+    items = vi
+      .fn<InventoryUseCases['queryItems']>()
+      .mockRejectedValue(decodeMdmError(409, { code: 'query_result_unavailable' })),
+    inventory = inject<InventoryUseCases>({
+      query,
+      queryItems: items,
+      queryStatus: async (task) => ({
+        task,
+        status: 'completed',
+        summary: { total: 1, matched: 1, unknown: 0 },
+        resultUrl: `/api/v1/device-queries/${task}/items`,
+        failure: null,
+      }),
+    })
+  await render(createElement(QueryExecution, { inventory, locale: 'zh', definition: definition() }))
+  await click('运行资产查询')
+  const original = query.mock.calls[0]!
+  expect(items).toHaveBeenCalledTimes(1)
+  await render(
+    createElement(QueryExecution, {
+      inventory,
+      locale: 'zh',
+      definition: { ...definition(), filter: 'custom.ready==true' },
+    }),
+  )
+  expect(query).toHaveBeenCalledTimes(1)
+  await click('重新查询')
+  expect(query).toHaveBeenCalledTimes(2)
+  expect(query.mock.calls[1]![0]).not.toBe(original[0])
+  expect(query.mock.calls[1]![1]).toEqual(original[1])
+  expect(items.mock.calls[1]![0]).toBe(query.mock.calls[1]![0])
 })

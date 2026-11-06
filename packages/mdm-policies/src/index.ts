@@ -38,7 +38,8 @@ export function createPolicies(port: PoliciesPort) {
       return value
     },
     assignments: (id: string, query: WindowQuery = {}) => port.assignments(uuid(id), query),
-    runs: (id: string, query: WindowQuery = {}) => port.runs(uuid(id), query),
+    runs: (id: string, query: WindowQuery = {}, signal?: AbortSignal) =>
+      port.runs(uuid(id), query, signal),
     async rollout(id: string) {
       const value = await port.rollout(uuid(id))
       if (value.policyId !== id) throw new Error('Wrong rollout policy')

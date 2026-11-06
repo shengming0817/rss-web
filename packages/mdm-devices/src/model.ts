@@ -220,9 +220,12 @@ export interface Retirement {
   }[]
 }
 export interface DevicesPort {
-  endpoints(query: DirectoryQuery<keyof Endpoint>): Promise<Page<EndpointRow>>
-  endpoint(id: string): Promise<EndpointDetail>
-  endpointStatistics(filter?: string): Promise<{
+  endpoints(query: DirectoryQuery<keyof Endpoint>, signal?: AbortSignal): Promise<Page<EndpointRow>>
+  endpoint(id: string, signal?: AbortSignal): Promise<EndpointDetail>
+  endpointStatistics(
+    filter?: string,
+    signal?: AbortSignal,
+  ): Promise<{
     readonly statistics: {
       readonly total: number
       readonly pending: number
@@ -231,19 +234,26 @@ export interface DevicesPort {
     }
     readonly asOf: number
   }>
-  views(query: DirectoryQuery<keyof ViewRow>): Promise<Page<ViewRow>>
-  view(reference: DeviceRef): Promise<DeviceView>
-  viewStatistics(filter?: string): Promise<{
+  views(query: DirectoryQuery<keyof ViewRow>, signal?: AbortSignal): Promise<Page<ViewRow>>
+  view(reference: DeviceRef, signal?: AbortSignal): Promise<DeviceView>
+  viewStatistics(
+    filter?: string,
+    signal?: AbortSignal,
+  ): Promise<{
     readonly statistics: { readonly endpointCount: number; readonly deviceViewCount: number }
     readonly asOf: number
   }>
-  associations(query: DirectoryQuery<keyof AssociationRow>): Promise<Page<AssociationRow>>
-  association(id: string): Promise<Association>
-  changes(query: WindowQuery): Promise<Page<AssociationChange>>
+  associations(
+    query: DirectoryQuery<keyof AssociationRow>,
+    signal?: AbortSignal,
+  ): Promise<Page<AssociationRow>>
+  association(id: string, signal?: AbortSignal): Promise<Association>
+  changes(query: WindowQuery, signal?: AbortSignal): Promise<Page<AssociationChange>>
   candidates(
     device: string,
     channel: Channel,
     query: WindowQuery,
+    signal?: AbortSignal,
   ): Promise<Page<PrimaryRegistration>>
   confirm(change: ConfirmAssociation): Promise<Association>
   revoke(id: string, change: RevokeAssociation): Promise<Association>

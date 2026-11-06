@@ -172,20 +172,21 @@ export function createRecoveryCredentialsAdapter(
   transport: HttpTransport,
 ): RecoveryCredentialsPort {
   return {
-    list: (device, query) =>
+    list: (device, query, signal) =>
       api.getApiV1DevicesByDeviceRecoveryCredentials(
         transport,
-        { pathParams: { device }, query: queryParameters({ limit: 64, ...query }) },
+        { signal, pathParams: { device }, query: queryParameters({ limit: 64, ...query }) },
         (value) => {
           const page = projectedPage(value, fields(device), query.fields, ['id', 'version'])
           if (page.items.length > 100) throw new Error('Recovery material page exceeds budget')
           return page
         },
       ),
-    material: (target) =>
+    material: (target, signal) =>
       api.getApiV1DevicesByDeviceRecoveryCredentials(
         transport,
         {
+          signal,
           pathParams: { device: target.device },
           query: queryParameters({
             filter: allOf(

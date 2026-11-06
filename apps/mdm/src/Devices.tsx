@@ -39,14 +39,22 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
     [query, setQuery] = useState<Query>({ filter: "assetState=='active'", limit: 20 })
-  const read = useRead(`${binding}/views/${JSON.stringify(query)}`, () =>
-      devices.views({
-        ...directoryQuery(query, viewFields),
-        filter: query.filter ?? "assetState=='active'",
-      }),
+  const read = useRead(
+      `${binding}/views/${JSON.stringify(query)}`,
+      (signal) =>
+        devices.views(
+          {
+            ...directoryQuery(query, viewFields),
+            filter: query.filter ?? "assetState=='active'",
+          },
+          signal,
+        ),
+      { retryReadConflict: !query.cursor },
     ),
-    stats = useRead(`${binding}/view-statistics/${query.filter ?? ''}`, () =>
-      devices.viewStatistics(query.filter),
+    stats = useRead(
+      `${binding}/view-statistics/${query.filter ?? ''}`,
+      (signal) => devices.viewStatistics(query.filter, signal),
+      { retryReadConflict: true },
     )
   const [search, setSearch] = useState(''),
     [platform, setPlatform] = useState<string>(),
@@ -69,7 +77,7 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
           {l('服务端统计时间', 'Server statistics as of')} · {timestamp(locale, stats.value?.asOf)}
         </p>
       </div>
-      <ReadState busy={stats.busy} error={stats.error} locale={locale} />
+      <ReadState busy={stats.busy} error={stats.error} locale={locale} onRetry={stats.reload} />
       <Form
         className="device-filter-bar"
         layout="inline"
@@ -184,7 +192,13 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
           },
         ]}
       />
-      <ReadState busy={read.busy} error={read.error} locale={locale} />
+      <ReadState
+        busy={read.busy}
+        error={read.error}
+        locale={locale}
+        onRetry={read.reload}
+        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
+      />
       {read.value && (
         <>
           <DataTable<ViewRow>
@@ -262,11 +276,15 @@ function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Loca
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
     [query, setQuery] = useState<Query>({ limit: 20 }),
-    read = useRead(`${binding}/endpoints/${JSON.stringify(query)}`, () =>
-      devices.endpoints(directoryQuery(query, endpointFields)),
+    read = useRead(
+      `${binding}/endpoints/${JSON.stringify(query)}`,
+      (signal) => devices.endpoints(directoryQuery(query, endpointFields), signal),
+      { retryReadConflict: !query.cursor },
     ),
-    stats = useRead(`${binding}/endpoint-statistics/${query.filter ?? ''}`, () =>
-      devices.endpointStatistics(query.filter),
+    stats = useRead(
+      `${binding}/endpoint-statistics/${query.filter ?? ''}`,
+      (signal) => devices.endpointStatistics(query.filter, signal),
+      { retryReadConflict: true },
     )
   const selected = query.fields ?? endpointFields
   return (
@@ -285,7 +303,7 @@ function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Loca
           {stats.value.statistics.revoked}
         </p>
       )}
-      <ReadState busy={stats.busy} error={stats.error} locale={locale} />
+      <ReadState busy={stats.busy} error={stats.error} locale={locale} onRetry={stats.reload} />
       <DirectoryControls
         locale={locale}
         query={query}
@@ -302,7 +320,13 @@ function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Loca
       >
         {l('重新读取终端', 'Read endpoints again')}
       </Button>
-      <ReadState busy={read.busy} error={read.error} locale={locale} />
+      <ReadState
+        busy={read.busy}
+        error={read.error}
+        locale={locale}
+        onRetry={read.reload}
+        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
+      />
       {read.value && (
         <>
           <DataTable<EndpointRow>
@@ -392,14 +416,20 @@ function Relationships({ runtime, locale }: { runtime: Runtime; locale: Locale }
     [query, setQuery] = useState<Query>({ limit: 20 }),
     [historyQuery, setHistoryQuery] = useState<Query>({ limit: 20 }),
     [selected, setSelected] = useState<string>(),
-    read = useRead(`${binding}/associations/${JSON.stringify(query)}`, () =>
-      devices.associations(directoryQuery(query, associationFields)),
+    read = useRead(
+      `${binding}/associations/${JSON.stringify(query)}`,
+      (signal) => devices.associations(directoryQuery(query, associationFields), signal),
+      { retryReadConflict: !query.cursor },
     ),
-    history = useRead(`${binding}/association-changes/${JSON.stringify(historyQuery)}`, () =>
-      devices.changes(historyQuery),
+    history = useRead(
+      `${binding}/association-changes/${JSON.stringify(historyQuery)}`,
+      (signal) => devices.changes(historyQuery, signal),
+      { retryReadConflict: false },
     ),
-    detail = useRead(`${binding}/association-detail/${selected ?? ''}`, () =>
-      selected ? devices.association(selected) : Promise.resolve(null),
+    detail = useRead(
+      `${binding}/association-detail/${selected ?? ''}`,
+      (signal) => (selected ? devices.association(selected, signal) : Promise.resolve(null)),
+      { retryReadConflict: true },
     )
   return (
     <>
@@ -420,7 +450,13 @@ function Relationships({ runtime, locale }: { runtime: Runtime; locale: Locale }
       >
         {l('读取最新关系', 'Read current associations')}
       </Button>
-      <ReadState busy={read.busy} error={read.error} locale={locale} />
+      <ReadState
+        busy={read.busy}
+        error={read.error}
+        locale={locale}
+        onRetry={read.reload}
+        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
+      />
       {read.value && (
         <>
           <DataTable
@@ -473,7 +509,17 @@ function Relationships({ runtime, locale }: { runtime: Runtime; locale: Locale }
                     'Paged history. Read from the first page to observe current changes; this is not an incremental subscription.',
                   )}
                 </p>
-                <ReadState busy={history.busy} error={history.error} locale={locale} />
+                <ReadState
+                  busy={history.busy}
+                  error={history.error}
+                  locale={locale}
+                  onRetry={history.reload}
+                  onRestart={() =>
+                    historyQuery.cursor
+                      ? setHistoryQuery(firstPage(historyQuery))
+                      : history.reload()
+                  }
+                />
                 {history.value && (
                   <>
                     <DataTable
@@ -519,7 +565,12 @@ function Relationships({ runtime, locale }: { runtime: Runtime; locale: Locale }
         footer={null}
         onCancel={() => setSelected(undefined)}
       >
-        <ReadState busy={detail.busy} error={detail.error} locale={locale} />
+        <ReadState
+          busy={detail.busy}
+          error={detail.error}
+          locale={locale}
+          onRetry={detail.reload}
+        />
         {detail.value && <AssociationFacts value={detail.value} locale={locale} />}
       </Modal>
     </>

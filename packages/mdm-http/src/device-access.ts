@@ -110,10 +110,10 @@ export function createDeviceAccessAdapter(transport: HttpTransport): DeviceAcces
         },
         (value) => binding(value, device),
       ),
-    enterpriseDetail: (id) =>
+    enterpriseDetail: (id, signal) =>
       api.getApiV1DeviceAccessEnterpriseConfigurationById(
         transport,
-        { pathParams: { id } },
+        { signal, pathParams: { id } },
         (value) => enterprise(value, id),
       ),
     beginEnterprise: (input, signal) =>
@@ -166,22 +166,19 @@ export function createDeviceAccessAdapter(transport: HttpTransport): DeviceAcces
           hardwareAttested: value.hardwareAttested,
         }),
       ),
-    bindings: (device, query) =>
+    bindings: (device, query, signal) =>
       api.getApiV1DevicesByDeviceDeviceAccess(
         transport,
-        {
-          pathParams: { device },
-          query: queryParameters({ limit: 20, ...query }),
-        },
+        { signal, pathParams: { device }, query: queryParameters({ limit: 20, ...query }) },
         (value) => ({
           items: value.items.map((item) => binding(item, device)),
           nextCursor: nextCursor(value.nextCursor),
         }),
       ),
-    binding: (device, id) =>
+    binding: (device, id, signal) =>
       api.getApiV1DevicesByDeviceDeviceAccessBindingsById(
         transport,
-        { pathParams: { device, id: uuid(id) } },
+        { signal, pathParams: { device, id: uuid(id) } },
         (value) => binding(value, device),
       ),
     operation: (device, id) =>
@@ -190,10 +187,13 @@ export function createDeviceAccessAdapter(transport: HttpTransport): DeviceAcces
         { pathParams: { device, id: uuid(id) } },
         (value) => binding(value, device),
       ),
-    enterprise: (query) =>
+    enterprise: (query, signal) =>
       api.getApiV1DeviceAccessEnterpriseConfiguration(
         transport,
-        { query: queryParameters({ limit: 20, ...query, fields: ['id', 'kind', 'value'] }) },
+        {
+          signal,
+          query: queryParameters({ limit: 20, ...query, fields: ['id', 'kind', 'value'] }),
+        },
         (value) => ({
           items: value.items.map((item): EnterpriseRecord => {
             if (!schema.getApiV1DeviceAccessEnterpriseConfigurationByIdResponse.validateRoot(item))
