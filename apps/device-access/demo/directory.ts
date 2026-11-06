@@ -11,17 +11,28 @@ export const computerRecord = (v: Computer) => ({
     {
       id: v.id,
       status: v.status,
+      primaryMdmRegistration: null,
+      enrollments: [],
+      assetState: 'active',
       platform: {
         state: v.platform === 'unknown' ? 'unknown' : 'known',
         values: v.platform === 'unknown' ? [] : [v.platform],
       },
-      displayName: { state: { kind: 'known', value: { kind: 'string', value: v.name } } },
+      displayName: {
+        field: 'device.name',
+        sources: [],
+        state: { kind: 'known', value: { kind: 'string', value: v.name } },
+      },
       channels: v.registration
         ? [
             {
               registrationId: v.registration,
               generation: v.generation,
               channel: 'agent',
+              source: 'agent.builtin',
+              platform: v.platform === 'unknown' ? null : v.platform,
+              children: [],
+              userContext: null,
               status: v.status === 'revoked' ? 'revoked' : 'active',
               lastCommunicationReceivedAt: v.lastObservedAt,
             },
@@ -38,7 +49,7 @@ export const applicationRecord = (v: Application) => ({
 export function bindingRecord(v: Binding, c: Computer) {
   const account =
     c.platform === 'windows'
-      ? { platform: 'windows', sid: v.account }
+      ? { platform: 'windows', sid: v.account, authority: { kind: 'local' } }
       : { platform: 'macos', generatedUid: v.account }
   return {
     id: v.id,
@@ -58,7 +69,25 @@ export function bindingRecord(v: Binding, c: Computer) {
     accountIntent: { kind: 'existing', account },
     createdByRss: false,
     policyVersion: fixtureId,
-    desired: {},
+    desired: {
+      enabled: true,
+      selfEnrollment: true,
+      role: null,
+      windows: { kind: 'rss_factor', accounts: ['local'] },
+      mac:
+        c.platform === 'macos'
+          ? {
+              authentication: 'secure_enclave',
+              passwordProvider: null,
+              login: 'local',
+              unlock: 'local',
+              filevault: 'local',
+              offlineGraceSeconds: null,
+              registrationGraceSeconds: null,
+              maintenanceAccounts: [],
+            }
+          : null,
+    },
     receivedRevision: v.receivedRevision,
     appliedRevision: v.appliedRevision,
     effect: null,
