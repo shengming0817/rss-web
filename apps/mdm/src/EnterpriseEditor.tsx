@@ -158,7 +158,7 @@ export function EnterpriseEditor({
         locale={locale}
         busy={read.busy || permissions.busy}
         error={read.error ?? permissions.error}
-        onRetry={read.reload}
+        onRetry={read.error ? read.reload : permissions.reload}
       />
       {id && (
         <p>

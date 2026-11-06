@@ -342,10 +342,10 @@ function Detail({
   useEffect(() => {
     if (read.value) setSnapshot(read.value)
   }, [read.value])
-  // Old facts are hidden on a failed read. Retain operation owners until the same bound
-  // endpoint is observed again; a changed tenant/principal/session remounts this subtree.
+  // Retain operation owners while loading or denied, but display facts only from a
+  // successful current read; a changed tenant/principal/session remounts this subtree.
   const retained = read.value ?? snapshot,
-    view = read.error ? undefined : retained,
+    view = read.value,
     endpoint = selected ? view?.endpoints.find((e) => e.id === selected) : view?.endpoints[0],
     mountedEndpoint = endpoint ?? heldEndpoint
   useEffect(() => {
