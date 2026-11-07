@@ -100,10 +100,9 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     canOperations = has('operation_read', true),
     returnSource = resultReturnPath(params.get('returnTo'))
   useEffect(() => {
-    if (!linkedPolicy && !guard.locked) {
-      setSelected(null)
-      return
-    }
+    if (!linkedPolicy && !guard.locked) setSelected(null)
+  }, [linkedPolicy, guard.locked])
+  useEffect(() => {
     if (
       !linkedPolicy ||
       !params.has('tab') ||

@@ -778,7 +778,13 @@ try {
       JSON.stringify({ journey: 'react-audit-webhooks', publicFailureScreenshot: directory }),
     )
   }
-  console.error(JSON.stringify({ journey: 'react-audit-webhooks', classification: error?.name }))
+  console.error(
+    JSON.stringify({
+      journey: 'react-audit-webhooks',
+      classification: error?.name,
+      location: error?.stack?.match(/react-audit-webhooks-browser\.mjs:\d+:\d+/)?.[0],
+    }),
+  )
 } finally {
   await run.finish(failure)
 }

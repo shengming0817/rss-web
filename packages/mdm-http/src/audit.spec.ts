@@ -5,6 +5,7 @@ import { createAuditAdapter, createAuditPolicyLookupAdapter } from './audit'
 const id = '11111111-1111-4111-8111-111111111111',
   other = '22222222-2222-4222-8222-222222222222'
 const fact = {
+  origin: 'request',
   source: 'request',
   eventId: 'safe-event',
   position: 2,
@@ -26,6 +27,7 @@ const fact = {
   executionState: null,
   effect: 'unknown',
   requestWriteOutcome: null,
+  requestReplayed: true,
   supported: true,
 }
 const activity = {
@@ -70,6 +72,10 @@ it('uses distinct audit and path-bound timeline window operations with safe fact
   const f = fixture({ items: [fact], nextCursor: null, coverage: { complete: false } })
   const query = { operationId: id, actor: 'principal', from: 1, until: 30, limit: 1 }
   expect((await f.audit.search(query)).items[0]!.observedAt).toBe(-1)
+  expect((await f.audit.search(query)).items[0]).toMatchObject({
+    origin: 'request',
+    requestReplayed: true,
+  })
   expect(f.request.mock.lastCall![0]).toMatchObject({
     method: 'GET',
     path: '/api/v1/audit-events',

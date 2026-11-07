@@ -65,6 +65,15 @@ export function AuditFactView({
         <Descriptions.Item label={l('行为与来源', 'Action and source')}>
           {fact.action} · {fact.source}
         </Descriptions.Item>
+        <Descriptions.Item label={l('原始入口', 'Original ingress')}>
+          {fact.origin === 'request'
+            ? l('HTTP 请求', 'HTTP request')
+            : fact.origin === 'background'
+              ? l('后台处理', 'Background')
+              : l('没有事实', 'Unavailable')}
+          {fact.requestReplayed &&
+            ` · ${l('服务端重用原请求', 'Server replay of original request')}`}
+        </Descriptions.Item>
         <Descriptions.Item label={l('主体', 'Actor')}>
           {fact.actorKind} · {fact.actor}
         </Descriptions.Item>

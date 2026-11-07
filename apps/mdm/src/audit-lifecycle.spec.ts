@@ -46,6 +46,7 @@ afterEach(async () => {
 })
 function page(action: string, cursor: string | null = null): AuditPage {
   const fact: AuditFact = {
+    origin: 'request',
     source: 'request',
     eventId: action,
     position: 1,
@@ -67,6 +68,7 @@ function page(action: string, cursor: string | null = null): AuditPage {
     executionState: null,
     effect: 'unknown',
     requestWriteOutcome: null,
+    requestReplayed: false,
     supported: true,
   }
   return { items: [fact], nextCursor: cursor, coverage: { complete: false } }

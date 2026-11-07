@@ -47,6 +47,7 @@ export const tenantPermissions = [
   'runtime_diagnostics_read',
   'inventory_sensitive_read',
   'inventory_fields_write',
+  'inventory_software_write',
   'certificate_archive_read',
   'certificate_archive_write',
   'certificate_archive_unlock',
