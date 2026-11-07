@@ -338,19 +338,19 @@ export async function execute<T>(
     }
   } catch (error: unknown) {
     if (binaryOwned) new Uint8Array(binaryOwned).fill(0)
-    if (options.signal?.aborted) throw abortedError()
-    if (timedOut) throw timeoutError()
+    if (options.signal?.aborted) throw withRequestId(abortedError(), responseRequestId)
+    if (timedOut) throw withRequestId(timeoutError(), responseRequestId)
     if (isRssApiError(error)) throw withRequestId(error, responseRequestId)
     if (axios.isCancel(error) || (axios.isAxiosError(error) && error.code === 'ERR_CANCELED')) {
-      throw abortedError()
+      throw withRequestId(abortedError(), responseRequestId)
     }
     if (
       axios.isAxiosError(error) &&
       (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')
     ) {
-      throw timeoutError()
+      throw withRequestId(timeoutError(), responseRequestId)
     }
-    throw networkError()
+    throw withRequestId(networkError(), responseRequestId)
   } finally {
     if (deadline !== undefined) clearTimeout(deadline)
     options.signal?.removeEventListener('abort', cancelBounded)

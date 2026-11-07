@@ -678,6 +678,7 @@ try {
   })
   await nav(manager, '/platform/operation-diagnostics?' + diagnosticQuery, '操作排障')
   await manager.getByText('原操作结果', { exact: true }).waitFor()
+  await manager.getByText(provisionOperation, { exact: true }).waitFor()
   const diagnostics = await manager.request.get(origin + diagnosticPath)
   assert.equal(diagnostics.status(), 200)
   assert.equal((await diagnostics.json()).originalResult.availability, 'available')
@@ -696,6 +697,19 @@ try {
     200,
   )
   assert.ok([401, 403].includes((await admin.request.get(origin + diagnosticPath)).status()))
+  await nav(
+    manager,
+    '/platform/operation-diagnostics?' +
+      new URLSearchParams({ mode: 'request', requestId: attempt.fact.requestId }),
+    '操作排障',
+  )
+  await manager.getByText('请求尝试与关联证据', { exact: true }).waitFor()
+  await manager
+    .locator('details > summary')
+    .filter({ hasText: attempt.fact.action })
+    .first()
+    .click()
+  await manager.getByText(attempt.fact.requestId, { exact: true }).first().waitFor()
   checks.push('real-platform-diagnostics-directory-request-and-exact-read')
   await nav(manager, '/platform/tenants', '租户管理')
 

@@ -1,6 +1,6 @@
 import { Typography } from 'antd'
 import { Link, useLocation } from 'react-router-dom'
-import type { DiagnosticsContext } from '@rss/mdm-audit'
+import { requiredOperationCoordinates, type DiagnosticsContext } from '@rss/mdm-audit'
 import type { Locale } from './i18n'
 import { diagnosticsPath, type DiagnosticSelection } from './diagnostic-context'
 
@@ -17,6 +17,14 @@ export function DiagnosticReference({
 }) {
   const { pathname } = useLocation()
   const destination = context ?? (pathname.startsWith('/platform/') ? 'management' : 'mdm')
+  const lookup: DiagnosticSelection =
+    selection.mode === 'operation' &&
+    requiredOperationCoordinates(selection.address.owner).some(
+      (key) => selection.address[key] === undefined,
+    )
+      ? { mode: 'discover', query: { operationId: selection.address.operationId } }
+      : selection
+
   const id =
     selection.mode === 'request'
       ? selection.id
@@ -49,7 +57,7 @@ export function DiagnosticReference({
         </>
       )}
       {canNavigate && (
-        <Link to={diagnosticsPath(destination, selection)}>
+        <Link to={diagnosticsPath(destination, lookup)}>
           {locale === 'zh' ? '查看操作排障' : 'Open operation diagnostics'}
         </Link>
       )}

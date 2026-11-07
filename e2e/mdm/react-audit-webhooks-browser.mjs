@@ -434,6 +434,18 @@ try {
     await button('保存订阅配置').click()
     await button('显式重提原 Webhook 请求').waitFor()
     assert.equal(run.count(p, 'PUT', path), 1)
+    const diagnosticHref = await p.locator('a[href*="owner=webhook"]').getAttribute('href')
+    assert.ok(diagnosticHref)
+    const receiptPage = await p.context().newPage()
+    try {
+      await run.nav(receiptPage, diagnosticHref, '操作排障')
+      await receiptPage.getByText(original.operationId, { exact: true }).waitFor()
+    } finally {
+      await receiptPage.close()
+      await p.bringToFront()
+    }
+    assert.equal(run.count(p, 'PUT', path), 1)
+
     const saved = await api('GET', path)
     assert.equal(saved.enabled, false)
     assert.deepEqual(saved.settings.presentation.vendor, { retained: false, zero: 0 })
@@ -525,6 +537,23 @@ try {
       row.locator(requestLink).first().click(),
     )
     await p.getByText('请求尝试与关联证据', { exact: true }).waitFor()
+
+    const replay = await until(
+      () => api('GET', diagnosticBase + '?operationId=' + f.console.signerOperation),
+      (page) => page.items.some(({ fact }) => fact.requestReplayed),
+    )
+    const replayFact = replay.items.find(({ fact }) => fact.requestReplayed).fact
+    assert.equal(replayFact.origin, 'request')
+    assert.ok(replayFact.requestId)
+    await run.nav(
+      p,
+      '/operation-diagnostics?' +
+        new URLSearchParams({ mode: 'request', requestId: replayFact.requestId }),
+      '操作排障',
+    )
+    await p.locator('details > summary').filter({ hasText: replayFact.action }).first().click()
+    await p.getByText('服务端重用原请求', { exact: false }).first().waitFor()
+    await p.getByText('HTTP 请求', { exact: false }).first().waitFor()
 
     await run.nav(p, '/operation-diagnostics?' + operationQuery, '操作排障')
     await p.getByText('原操作结果', { exact: true }).waitFor()

@@ -57,6 +57,7 @@ export function DeviceControl({
   const [pending, setPending] = useState<ControlIntent | null>(null)
   const [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none')
   const [stale, setStale] = useState(false)
+  const [errorKind, setErrorKind] = useState<'read' | 'write'>('read')
   const { fact, ready } = controlApplicability(snapshot, kind)
   const validReview =
     review && ready && sameRegistration(review.registration, snapshot?.primaryMdmRegistration)
@@ -104,6 +105,7 @@ export function DeviceControl({
     if (intent.action.kind === 'lock' && !/^[0-9]{6}$/.test(secret)) return
     clearReview()
     let issued = false
+    setErrorKind('read')
     const result = await action.run(async () => {
       let current: EndpointDetail
       try {
@@ -125,6 +127,7 @@ export function DeviceControl({
         throw { cause: 'client', code: 'registration_changed' }
       }
       issued = true
+      setErrorKind('write')
       setPending(intent)
       setOutcome('unknown')
       return execution.create(intent, intent.action.kind === 'lock' ? secret : undefined)
@@ -185,8 +188,8 @@ export function DeviceControl({
           type="warning"
           showIcon
           title={l(
-            '注册、权限或能力已变化，或无法重新核对。请刷新设备事实。',
-            'Registration, permission or capability changed or could not be verified. Refresh device facts.',
+            '设备动作尚未提交。请刷新设备事实并重新核对。',
+            'The device action was not submitted. Refresh device facts and review again.',
           )}
         />
       )}
@@ -201,7 +204,7 @@ export function DeviceControl({
           {l('刷新设备能力', 'Refresh device capabilities')}
         </Button>
       )}
-      <Failure locale={locale} error={action.error} />
+      <Failure locale={locale} error={action.error} kind={errorKind} />
       {pending && (
         <p>
           <DiagnosticReference

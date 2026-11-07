@@ -1,6 +1,3 @@
-import { useState, type ReactNode } from 'react'
-import { Alert, Button, Card, Descriptions, Form, Input, Select, Space } from 'antd'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type {
   DiagnosticPage,
   DiagnosticsContext,
@@ -9,7 +6,12 @@ import type {
   OperationDiagnostics as Diagnostics,
   ReceiptSummary,
   ExecutionEvidence,
+  requiredOperationCoordinates,
+  type OperationCoordinates,
 } from '@rss/mdm-audit'
+import { useState, type ReactNode } from 'react'
+import { Alert, Button, Card, Descriptions, Form, Input, Select, Space } from 'antd'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { codeOf, CursorControls, Failure, Heading, labels, ReadState, usePageRead } from './AdminUi'
@@ -48,10 +50,7 @@ function Facts({
       {rows.length === 0 && (
         <p>
           {page.items.length === 0
-            ? l(
-                '没有可见证据。提交结果仍需核实。',
-                'No visible evidence. The submission outcome may still be unknown.',
-              )
+            ? l('本页没有可见证据。', 'No visible evidence on this page.')
             : l('本页没有符合筛选的事实。', 'No facts match these filters on this page.')}
         </p>
       )}
@@ -208,6 +207,34 @@ function Execution({ value, locale }: { value: ExecutionEvidence; locale: Locale
         )}
         {value.reason && ` · ${value.reason}`}
       </Descriptions.Item>
+      {value.cancellation && (
+        <Descriptions.Item label={l('取消状态', 'Cancellation state')}>
+          {value.cancellation}
+        </Descriptions.Item>
+      )}
+      {value.complete !== undefined && (
+        <Descriptions.Item label={l('退管进度', 'Offboarding completion')}>
+          {value.complete ? l('已完成', 'Complete') : l('尚未完成', 'Incomplete')}
+        </Descriptions.Item>
+      )}
+      {value.collectionReport && (
+        <>
+          <Descriptions.Item label={l('采集报告结果', 'Collection report result')}>
+            {value.collectionReport.result}
+            {value.collectionReport.reason && ` · ${value.collectionReport.reason}`}
+          </Descriptions.Item>
+          <Descriptions.Item label={l('采集报告封存', 'Collection report sealing')}>
+            {value.collectionReport.sealedAt === null
+              ? l('尚未封存', 'Unsealed')
+              : timestamp(locale, value.collectionReport.sealedAt)}
+          </Descriptions.Item>
+          <Descriptions.Item label={l('Inventory 投影', 'Inventory projection')}>
+            {value.collectionReport.projectionPending
+              ? l('待处理', 'Pending')
+              : l('无待处理标记', 'No pending marker')}
+          </Descriptions.Item>
+        </>
+      )}
       {value.stages?.map((stage, i) => (
         <Descriptions.Item key={i} label={stage.name}>
           {stage.state}
@@ -378,6 +405,10 @@ function LocatorForm({
   const navigate = useNavigate()
   const [mode, setMode] = useState<DiagnosticSelection['mode']>(selection?.mode ?? 'discover')
   const [invalid, setInvalid] = useState(false)
+  const [form] = Form.useForm<Record<string, string>>()
+  const owner = Form.useWatch('owner', form)
+  const required = requiredOperationCoordinates(owner ?? '')
+
   const initial =
     selection?.mode === 'operation'
       ? selection.address
@@ -391,6 +422,7 @@ function LocatorForm({
   return (
     <Card title={l('定位操作', 'Locate an operation')}>
       <Form<Record<string, string>>
+        form={form}
         layout="vertical"
         initialValues={initial}
         onFinish={(values) => {
@@ -449,15 +481,40 @@ function LocatorForm({
                   ['from', l('记录时间从', 'Recorded from')],
                   ['until', l('记录时间至（不含）', 'Recorded until (exclusive)')],
                 ]
-          ).map(([name, label]) => (
-            <Form.Item key={name} name={name!} label={label} preserve={false}>
-              <Input
-                maxLength={256}
-                autoComplete="off"
-                type={name === 'from' || name === 'until' ? 'datetime-local' : 'text'}
-              />
-            </Form.Item>
-          ))}
+          )
+            .filter(
+              ([name]) =>
+                context !== 'management' ||
+                mode !== 'operation' ||
+                ['owner', 'operationId', 'actor', 'instance'].includes(name ?? ''),
+            )
+            .map(([name, label]) => (
+              <Form.Item
+                key={name}
+                name={name!}
+                label={label}
+                preserve={false}
+                rules={
+                  mode === 'operation' && required.includes(name as keyof OperationCoordinates)
+                    ? [
+                        {
+                          required: true,
+                          message: l(
+                            '此 owner 需要该定位字段。',
+                            'This owner requires this locator field.',
+                          ),
+                        },
+                      ]
+                    : []
+                }
+              >
+                <Input
+                  maxLength={256}
+                  autoComplete="off"
+                  type={name === 'from' || name === 'until' ? 'datetime-local' : 'text'}
+                />
+              </Form.Item>
+            ))}
         </div>
         {invalid && (
           <Alert

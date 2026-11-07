@@ -50,6 +50,7 @@ export function isUnknown(error: unknown): boolean {
   return (
     !status ||
     status >= 500 ||
+    (status >= 200 && status < 300 && 'cause' in e && e.cause === 'protocol') ||
     [
       'outcome_unknown',
       'operation_unknown',

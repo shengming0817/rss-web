@@ -66,7 +66,7 @@ function validate(change: WebhookChange): void {
     }
   }
 }
-/** These four owners have no original-operation GET. Only the frozen request may be resubmitted. */
+/** Explicit resubmission, when chosen, uses only the frozen request. */
 export function useWebhookCommand(webhooks: Webhooks, permitted: boolean) {
   const action = useAction(),
     running = useRef(false),
@@ -198,8 +198,8 @@ export function WebhookCommandState({
         <Alert
           type="warning"
           title={l(
-            '原写入结果未知。当前状态仅供比较；没有本操作的回执查询端点，请显式重提原 UUID 和冻结输入。',
-            'The original write outcome is unknown. Current state is for comparison only. This operation has no receipt-query endpoint; explicitly resubmit its original UUID and frozen input.',
+            '原写入结果未知。请先通过操作排障查询原回执。当前配置只供比较。',
+            'The original write outcome is unknown. Read the original receipt in Operation diagnostics first. Current configuration is for comparison.',
           )}
         />
       )}

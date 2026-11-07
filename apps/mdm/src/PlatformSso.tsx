@@ -20,7 +20,7 @@ export function PlatformSso({
       <Button onClick={read.reload}>
         {l('读取当前 Platform SSO 配置', 'Read current Platform SSO configuration')}
       </Button>
-      <ReadState locale={locale} busy={read.busy} error={read.error} />
+      <ReadState diagnosticContext="da" locale={locale} busy={read.busy} error={read.error} />
       {read.value && (
         <>
           <dl className="device-facts">

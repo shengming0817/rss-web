@@ -872,6 +872,7 @@ try {
     })
     await run.nav(p, '/operation-diagnostics?' + daQuery, '操作排障')
     await p.getByText('原操作结果', { exact: true }).waitFor()
+    await p.getByText(bindingInput.operationId, { exact: true }).waitFor()
     assert.equal(
       (await api('GET', daOperation + '?device=' + encodeURIComponent(f.executionAccess.device)))
         .originalResult.availability,

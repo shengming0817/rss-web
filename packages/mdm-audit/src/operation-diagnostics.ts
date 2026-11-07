@@ -71,6 +71,14 @@ export interface ExecutionEvidence {
   readonly reason?: string
   readonly dispatchFailure?: string
   readonly nativeReceipts?: number
+  readonly cancellation?: string
+  readonly complete?: boolean
+  readonly collectionReport?: {
+    readonly result: string
+    readonly reason: string | null
+    readonly sealedAt: number | null
+    readonly projectionPending: boolean
+  }
   readonly stages?: readonly { name: string; state: string; effect?: string }[]
 }
 
@@ -106,9 +114,47 @@ export function validateDiagnosticQuery(query: DiagnosticQuery): void {
     throw new Error('Invalid registration generation')
 }
 
+const deviceOwners = new Set([
+  'device_control',
+  'device_control_request',
+  'device_action',
+  'software_deployment',
+  'software_action',
+  'installation',
+  'recovery_command',
+  'configuration',
+  'script',
+  'collection_execution',
+  'enrollment_task',
+  'device_access_task',
+  'credential_task',
+  'device_access',
+  'policy_event',
+  'policy_event_member',
+  'collection',
+])
+const invocationOwners = new Set([
+  'script_invocation',
+  'software_invocation',
+  'enrollment_invocation',
+])
+
+export function requiredOperationCoordinates(
+  owner: string,
+): readonly (keyof OperationCoordinates)[] {
+  if (owner === 'filevault' || invocationOwners.has(owner))
+    return ['device', 'registration', 'generation']
+  if (deviceOwners.has(owner)) return ['device']
+  if (owner === 'registration_recovery') return ['registration']
+  if (owner === 'content' || owner === 'software_source_snapshot') return ['target']
+  return []
+}
+
 export function validateOperationAddress(address: OperationAddress): void {
   identifier(address.owner, 64)
   uuid(address.operationId)
+  if (requiredOperationCoordinates(address.owner).some((field) => address[field] === undefined))
+    throw new Error('Missing required operation coordinate')
   for (const value of [address.actor, address.device, address.target])
     if (value !== undefined) identifier(value, 256)
   for (const value of [address.instance, address.registration]) if (value !== undefined) uuid(value)
@@ -140,7 +186,21 @@ export function createOperationDiagnostics(port: DiagnosticsPort) {
       )
         throw new Error('Invalid evidence continuation')
       const detail = await port.operation(freeze(address), freeze(evidence), signal)
+      const coordinates = [
+        'actor',
+        'instance',
+        'device',
+        'target',
+        'registration',
+        'generation',
+      ] as const
       if (
+        coordinates.some(
+          (key) =>
+            address[key] !== undefined &&
+            detail.operation[key] !== undefined &&
+            address[key] !== detail.operation[key],
+        ) ||
         detail.operation.owner !== address.owner ||
         detail.operation.operationId !== address.operationId ||
         (detail.originalResult.availability === 'available' &&

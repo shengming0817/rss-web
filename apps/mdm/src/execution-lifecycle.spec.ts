@@ -99,6 +99,7 @@ function detailSnapshot(target = endpoint, allowed = ['restart']): EndpointDetai
 it('separates a formal unsupported action rejection from an unknown server response', () => {
   expect(isUnknown(decodeMdmError(501, { code: 'action_not_supported' }))).toBe(false)
   expect(isUnknown(decodeMdmError(501, {}))).toBe(true)
+  expect(isUnknown(decodeMdmError(202, {}))).toBe(true)
   expect(isUnknown(decodeMdmError(503, { code: 'service_unavailable' }))).toBe(true)
 })
 it('retains the original write as unknown across hiding and a late public receipt instead of enabling another UUID', async () => {
@@ -1132,6 +1133,7 @@ it('keeps the default endpoint location during a delayed control preflight', asy
     }),
   )
   expect(create).not.toHaveBeenCalled()
+  expect(host.textContent).toContain('设备动作尚未提交')
   expect(button('核对设备与动作').disabled).toBe(true)
   expect(location()).toBe(before)
 })
@@ -1414,4 +1416,42 @@ it('clears a confirmed lock PIN on permission loss and again when issuing the wr
   ).toBe('')
   expect(host.textContent).toContain(create.mock.calls[0]![0].operationId)
   expect(host.querySelector('a[href*="owner=device_control"]')).toBeNull()
+})
+
+it('keeps the original device command locked when an accepted response cannot be decoded', async () => {
+  const snapshot = detailSnapshot()
+  const create = vi.fn(async (_intent: ControlIntent) => {
+    throw decodeMdmError(202, {})
+  })
+  const runtime = {
+    administration: () => ({
+      devices: { endpoint: async () => snapshot },
+      execution: { create },
+    }),
+  } as unknown as Runtime
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(DeviceControl, {
+          runtime,
+          locale: 'zh',
+          endpoint,
+          snapshot,
+          canReadOriginal: true,
+          onReload() {},
+          onStale() {},
+        }),
+      ),
+    ),
+  )
+  await act(async () => button('核对设备与动作').click())
+  await act(async () => document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  await act(async () => button('确认提交此动作').click())
+  expect(create).toHaveBeenCalledOnce()
+  expect(button('核对设备与动作').disabled).toBe(true)
+  const original = create.mock.calls[0]![0].operationId
+  expect(host.querySelector(`a[href*="operationId=${original}"]`)).not.toBeNull()
+  expect(host.textContent).toContain('提交结果未知')
 })

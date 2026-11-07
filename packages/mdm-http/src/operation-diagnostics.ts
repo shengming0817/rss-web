@@ -115,6 +115,7 @@ function execution(value: WireExecution): ExecutionEvidence {
     return {
       owner,
       state: value.identity,
+      complete: value.complete,
       stages: value.devices.map((device) => ({ name: device.device, state: device.phase })),
     }
   const state = 'state' in value ? value.state : undefined
@@ -139,6 +140,17 @@ function execution(value: WireExecution): ExecutionEvidence {
     ...(delivery ? { delivery } : {}),
     ...(progress ? { state: progress } : {}),
     ...(effect ? { effect } : {}),
+    ...(run ? { cancellation: run.cancellation } : {}),
+    ...(owner === 'collection' && value.report
+      ? {
+          collectionReport: {
+            result: value.report.result,
+            reason: value.report.reason,
+            sealedAt: value.report.sealedAt,
+            projectionPending: value.report.projectionPending,
+          },
+        }
+      : {}),
   }
 }
 
@@ -169,12 +181,19 @@ export function createOperationDiagnosticsAdapter(
         { pathParams: { requestId }, query: requestInput(query, discovery), signal },
         page,
       ),
-    operation: ({ owner, operationId, ...coordinates }, options, signal) =>
+    operation: (
+      { owner, operationId, actor, instance, device, target, registration, generation },
+      options,
+      signal,
+    ) =>
       operations.operation(
         transport,
         {
           pathParams: { owner, operationId },
-          query: requestInput({ ...coordinates, ...options }, lookup),
+          query: requestInput(
+            { actor, instance, device, target, registration, generation, ...options },
+            lookup,
+          ),
           signal,
         },
         detail,

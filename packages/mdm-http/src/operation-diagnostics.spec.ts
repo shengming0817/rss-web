@@ -11,7 +11,7 @@ it.each([
   ['da', '/api/v1/device-access'],
   ['management', '/api/v1/tenant-administration'],
 ] as const)('binds the %s reads to its generated operations', async (context, prefix) => {
-  const owner = context === 'management' ? 'tenant_administration' : 'device_control'
+  const owner = context === 'management' ? 'tenant_administration' : 'webhook'
   const request = vi.fn(async (input: RequestOptions<unknown>) =>
     input.decode(
       input.path.includes('/operations/')
@@ -58,9 +58,11 @@ it.each([
     ['GET', base + '/operations/{owner}/{operationId}'],
   ])
   expect(request.mock.calls[0]?.[0].signal).toBe(signal)
-  expect(request.mock.lastCall?.[0].query).toEqual({ includeAudit: true, cursor: 'cursor' })
+  expect(request.mock.lastCall?.[0].query).toMatchObject({ includeAudit: true, cursor: 'cursor' })
+  await client.operation(result.operation)
+  expect(request.mock.lastCall?.[0].query).not.toHaveProperty('product')
   await expect(client.operation({ owner, operationId: id }, { cursor: 'cursor' })).rejects.toThrow()
-  expect(request).toHaveBeenCalledTimes(3)
+  expect(request).toHaveBeenCalledTimes(4)
 })
 
 it('retains delivery, asynchronous progress and effect from the generated RunState', async () => {
@@ -107,6 +109,82 @@ it('retains delivery, asynchronous progress and effect from the generated RunSta
       .executionEvidence,
   ).toEqual({
     availability: 'available',
-    value: { owner: 'device', delivery: 'received', state: 'waiting_reboot', effect: 'waiting' },
+    value: {
+      owner: 'device',
+      delivery: 'received',
+      state: 'waiting_reboot',
+      effect: 'waiting',
+      cancellation: 'none',
+    },
+  })
+})
+
+it('preserves a sealed partial native collection report separately from delivery and effects', async () => {
+  const request = vi.fn(async (input: RequestOptions<unknown>) =>
+    input.decode({
+      operation: {
+        product: 'mdm',
+        owner: 'collection_execution',
+        operationId: id,
+        actor: null,
+        instance: null,
+        device: 'endpoint',
+        target: null,
+        registration: null,
+        generation: null,
+      },
+      originalResult: { availability: 'not_found' },
+      requestEvidence: { availability: 'not_requested' },
+      auditEvidence: { availability: 'not_requested' },
+      executionEvidence: {
+        availability: 'available',
+        value: {
+          owner: 'collection',
+          channel: 'mdm',
+          taskId: id,
+          policyId: id,
+          versionId: id,
+          device: 'endpoint',
+          registrationId: id,
+          generation: 1,
+          occurrence: 'one',
+          availableAt: 2,
+          deadline: 10,
+          delivery: 'sent',
+          report: {
+            id,
+            result: 'partial',
+            reason: 'incomplete',
+            sealedAt: 5,
+            projectionPending: true,
+          },
+        },
+      },
+      originalResultUrl: null,
+      currentResourceUrl: null,
+    }),
+  )
+  const client = createOperationDiagnostics(
+    createOperationDiagnosticsAdapter({ request } as unknown as HttpTransport, 'mdm'),
+  )
+  await expect(
+    client.operation({ owner: 'collection_execution', operationId: id }),
+  ).rejects.toThrow('Missing required operation coordinate')
+  expect(request).not.toHaveBeenCalled()
+  expect(
+    (await client.operation({ owner: 'collection_execution', operationId: id, device: 'endpoint' }))
+      .executionEvidence,
+  ).toEqual({
+    availability: 'available',
+    value: {
+      owner: 'collection',
+      delivery: 'sent',
+      collectionReport: {
+        result: 'partial',
+        reason: 'incomplete',
+        sealedAt: 5,
+        projectionPending: true,
+      },
+    },
   })
 })

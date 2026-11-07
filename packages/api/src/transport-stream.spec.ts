@@ -204,3 +204,28 @@ it('retains an MDM request UUID on enforced same-origin browser ranges only', as
     vi.unstubAllGlobals()
   }
 })
+
+it('retains received request metadata after a same-origin stream fails', async () => {
+  const origin = 'https://rss-web.test'
+  const id = '11111111-1111-4111-8111-111111111111'
+  vi.stubGlobal('location', { origin })
+  try {
+    const instance = axios.create()
+    vi.spyOn(instance, 'request').mockResolvedValue({
+      data: new ReadableStream({
+        start(controller) {
+          controller.error(new Error('connection interrupted'))
+        },
+      }),
+      headers: { 'X-Request-Id': id },
+      status: 206,
+      request: new Request(origin + '/api/v1/resources/r', { mode: 'same-origin' }),
+    })
+    await expect(execute(instance, 30000, request(), decodeMdmError, true)).rejects.toMatchObject({
+      cause: 'network',
+      requestId: id,
+    })
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})

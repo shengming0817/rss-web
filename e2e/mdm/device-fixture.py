@@ -259,9 +259,17 @@ try:
     phase = 'task-signing'
     operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
     operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
-    status, trust = operator.call('POST', '/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0), str(uuid.uuid4()))
+    trust_operation = str(uuid.uuid4())
+    trust_request = dict(action='prepare',expectedRevision=0)
+    status, trust = operator.call('POST', '/api/v1/task-signing/trust', trust_request, trust_operation)
     if status != 200 or trust['revision'] != 1:
         raise RuntimeError('task-signing')
+    if browser_module == 'react-audit-webhooks-browser.mjs':
+        # This owner requires a final request fact and explicitly marks the replay.
+        status, replayed = operator.call('POST', '/api/v1/task-signing/trust', trust_request, trust_operation)
+        if status != 200 or replayed != trust:
+            raise RuntimeError('task-signing-replay')
+        console['signerOperation'] = trust_operation
     stop()
     for child in reversed(processes):
         child.wait(timeout=10)
