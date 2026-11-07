@@ -941,7 +941,8 @@ html:has(.mdm-overlay-open) {
   max-inline-size: 100%;
 }
 .resource-version-author,
-.software-snapshot-draft {
+.software-snapshot-draft,
+.content-material-reference {
   overflow-wrap: anywhere;
 }
 .software-grid {
