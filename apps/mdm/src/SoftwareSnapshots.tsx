@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentRef } from 'react'
+import { useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Space } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
 import { formatFilter } from '@rss/api/mdm-filter'
@@ -43,57 +43,6 @@ const entryFields = ['entryId', 'source', 'revision', 'packageId', 'name', 'vers
 const first = { limit: 20 }
 const digest = (bytes: readonly number[]) =>
   bytes.map((b) => b.toString(16).padStart(2, '0')).join('')
-
-function originalOffset(text: string, offset: number): number {
-  if (!text.includes('\r')) return offset
-  let raw = 0
-  for (let visible = 0; visible < offset; visible++, raw++)
-    if (text[raw] === '\r' && text[raw + 1] === '\n') raw++
-  return raw
-}
-
-type SnapshotSelection = { start: number; end: number; inputType: string }
-
-function editSnapshotText(raw: string, next: string, selection: SnapshotSelection | null): string {
-  if (!raw.includes('\r')) return next
-  const visible = raw.replace(/\r\n?/g, '\n')
-  if (visible === next) return raw
-  if (selection) {
-    let { start, end } = selection
-    const deleted = visible.length - next.length
-    if (start === end && deleted > 0 && selection.inputType.startsWith('delete')) {
-      if (selection.inputType.endsWith('Backward')) start -= deleted
-      if (selection.inputType.endsWith('Forward')) end += deleted
-    }
-    const newEnd = next.length - (visible.length - end)
-    if (
-      start >= 0 &&
-      end <= visible.length &&
-      newEnd >= start &&
-      next.startsWith(visible.slice(0, start)) &&
-      next.endsWith(visible.slice(end))
-    ) {
-      return (
-        raw.slice(0, originalOffset(raw, start)) +
-        next.slice(start, newEnd) +
-        raw.slice(originalOffset(raw, end))
-      )
-    }
-  }
-  let start = 0
-  while (start < visible.length && start < next.length && visible[start] === next[start]) start++
-  let oldEnd = visible.length
-  let newEnd = next.length
-  while (oldEnd > start && newEnd > start && visible[oldEnd - 1] === next[newEnd - 1]) {
-    oldEnd--
-    newEnd--
-  }
-  return (
-    raw.slice(0, originalOffset(raw, start)) +
-    next.slice(start, newEnd) +
-    raw.slice(originalOffset(raw, oldEnd))
-  )
-}
 
 function sourceIdentity(id: string) {
   return {
@@ -148,8 +97,6 @@ export function SoftwareSnapshots({
 }) {
   const l = labels(locale),
     action = useAction(),
-    textArea = useRef<ComponentRef<typeof Input.TextArea>>(null),
-    selectionBeforeInput = useRef<SnapshotSelection | null>(null),
     [source, setSource] = useState<{ id: string; revision: number } | null>(null),
     [sourcePage, setSourcePage] = useState<Query>(first),
     [entryPage, setEntryPage] = useState<Query>(first),
@@ -213,24 +160,6 @@ export function SoftwareSnapshots({
           : Promise.resolve(null),
     )
   usePendingSelection(action.busy || pending !== null)
-  useEffect(() => {
-    const element = textArea.current?.nativeElement
-    if (!element) return
-    // The native event captures textarea selection before deletion and IME edits.
-    function capture(event: Event) {
-      if (!(event instanceof InputEvent) || !(event.target instanceof HTMLTextAreaElement)) return
-      selectionBeforeInput.current = {
-        start: event.target.selectionStart,
-        end: event.target.selectionEnd,
-        inputType: event.inputType,
-      }
-    }
-    element.addEventListener('beforeinput', capture)
-    return () => {
-      selectionBeforeInput.current = null
-      element.removeEventListener('beforeinput', capture)
-    }
-  }, [canWrite])
   function select(next: typeof source) {
     setSource(next)
     setEntryPage(first)
@@ -548,32 +477,31 @@ export function SoftwareSnapshots({
                 }
               />
             )}
-            <Form.Item label={l('导入 JSON 原文', 'JSON to import')}>
+            <Form.Item
+              label={l('待导入的 JSON 原文', 'Original JSON to import')}
+              extra={l(
+                '在框内按 Ctrl+V 或 ⌘V 粘贴 JSON。选择文件或再次粘贴会替换整份待导入原文。',
+                'Press Ctrl+V or ⌘V in the field to paste JSON. Selecting a file or pasting again replaces the entire pending document.',
+              )}
+            >
               <Input.TextArea
-                ref={textArea}
-                aria-label={l('导入 JSON 原文', 'JSON to import')}
+                aria-label={l('待导入的 JSON 原文', 'Original JSON to import')}
+                placeholder={l('在此粘贴 JSON', 'Paste JSON here')}
                 value={document}
-                spellCheck={false}
+                readOnly
                 onPaste={(event) => {
-                  const text = event.clipboardData.getData('text/plain')
-                  if (!text) return
                   event.preventDefault()
-                  selectionBeforeInput.current = null
-                  const { selectionStart, selectionEnd } = event.currentTarget
-                  const from = originalOffset(document, selectionStart)
-                  const to = originalOffset(document, selectionEnd)
+                  const text = event.clipboardData.getData('text/plain')
+                  if (pending || action.busy || !text) return
                   setFileIssue(null)
-                  setDocument(document.slice(0, from) + text + document.slice(to))
-                }}
-                onChange={(e) => {
-                  setFileIssue(null)
-                  const selection = selectionBeforeInput.current
-                  selectionBeforeInput.current = null
-                  setDocument(editSnapshotText(document, e.target.value, selection))
+                  setDocument(text)
                 }}
                 rows={6}
               />
             </Form.Item>
+            <Button disabled={!document} onClick={() => setDocument('')}>
+              {l('清除待导入内容', 'Clear pending document')}
+            </Button>
             <details>
               <summary>{l('可选 JSON Pointer', 'Optional JSON Pointers')}</summary>
               {(['records', 'packageId', 'name', 'version'] as const).map((key) => (

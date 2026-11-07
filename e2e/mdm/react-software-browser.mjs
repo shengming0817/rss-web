@@ -744,23 +744,26 @@ try {
   const snapshot = 'browser-snapshot-' + randomUUID(),
     snapshotPath = '/api/v1/software/source-snapshots/' + snapshot,
     entryJson = String.raw`{"id":"fixture.package","name":"Editor \u4e2d","version":"7.1","number":9007199254740993,"ratio":0.123456789123456789}`,
-    pasted = '[\n\r\n' + Array(22).fill(entryJson).join(',\r\n') + '\r\n]',
-    json = '[' + pasted.slice(2, -1) + ' ]'
+    json = '[\n\r\n' + Array(22).fill(entryJson).join(',\r\n') + '\r\r\n]',
+    preview = label('待导入的 JSON 原文')
+  async function pasteSnapshot(text) {
+    await preview.evaluate((element, text) => {
+      const clipboardData = new window.DataTransfer()
+      clipboardData.setData('text/plain', text)
+      element.dispatchEvent(
+        new window.ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }),
+      )
+    }, text)
+  }
+  await pasteSnapshot('[0]')
+  assert.equal(await preview.inputValue(), '[0]')
+  await preview.evaluate((element) => element.setSelectionRange(1, 2))
+  await pasteSnapshot(json)
+  assert.equal(await preview.evaluate((element) => element.readOnly), true)
+  await preview.press('Backspace')
+  await preview.press('Enter')
+  assert.equal(await preview.inputValue(), json.replace(/\r\n?/g, '\n'))
   await label('新来源标识').fill(snapshot)
-  await label('导入 JSON 原文').evaluate((element, text) => {
-    const clipboardData = new window.DataTransfer()
-    clipboardData.setData('text/plain', text)
-    element.dispatchEvent(
-      new window.ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }),
-    )
-  }, pasted)
-  await label('导入 JSON 原文').focus()
-  await label('导入 JSON 原文').evaluate((element) => element.setSelectionRange(1, 2))
-  await label('导入 JSON 原文').press('Backspace')
-  await label('导入 JSON 原文').evaluate((element) =>
-    element.setSelectionRange(element.value.length - 1, element.value.length - 1),
-  )
-  await label('导入 JSON 原文').press('Space')
   await p.getByText('可选 JSON Pointer', { exact: true }).click()
   await label('packageId JSON Pointer').fill('invalid-pointer')
   await label('name JSON Pointer').fill('/name')
@@ -781,7 +784,7 @@ try {
   await button('读取文档原文').click()
   await p.waitForFunction(
     (expected) => document.querySelector('textarea[aria-label="文档原文"]')?.value === expected,
-    json.replaceAll('\r\n', '\n'),
+    json.replace(/\r\n?/g, '\n'),
   )
   const digest = createHash('sha256').update(json).digest('hex')
   await p.getByText(digest, { exact: true }).waitFor()
@@ -802,8 +805,21 @@ try {
   await button('复制所选记录字段').click()
   const version = await label('实际软件版本').inputValue()
   assert.ok(['7.1', '7.2'].includes(version))
-  await label('导入 JSON 原文').fill('{"id":"replaced"}')
+  const replacement = '{\r\n"id":"replaced"\r\n}'
+  await label('选择 JSON 文件').setInputFiles({
+    name: 'replacement.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(replacement),
+  })
+  await p.waitForFunction(
+    (expected) =>
+      document.querySelector('textarea[aria-label="待导入的 JSON 原文"]')?.value === expected,
+    replacement.replace(/\r\n?/g, '\n'),
+  )
   await run.response(p, 'POST', snapshotPath, () => button('完整替换快照').click())
+  assert.deepEqual((await api('GET', snapshotPath)).documentSha256, [
+    ...createHash('sha256').update(replacement).digest(),
+  ])
   await label('记录原文').waitFor({ state: 'hidden' })
   const currentEntries = await run.response(p, 'GET', entriesPath, () => button(snapshot).click())
   assert.equal(new URL(currentEntries.url()).searchParams.has('cursor'), false)
@@ -949,7 +965,7 @@ try {
   await tab('JSON 来源快照')
   await label('来源标识').fill(snapshot)
   await label('已知来源修订').fill('2')
-  await label('导入 JSON 原文').fill('[]')
+  await pasteSnapshot('[]')
   await label('来源标识').fill(snapshot + '-other')
   assert.equal(await label('已知来源修订').inputValue(), '')
   assert.equal(await button('导入新快照').isDisabled(), true)
