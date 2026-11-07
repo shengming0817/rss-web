@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Button, Collapse, Modal, Segmented, Space, Tag } from 'antd'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { formatFilter } from '@rss/api/mdm-filter'
+import { allOf } from '@rss/api/mdm-query'
 import { variantKey } from '@rss/mdm-resources'
 import type { Policy, PolicyDefinition, PolicyRow } from '@rss/mdm-policies'
 import type { Runtime } from './runtime'
@@ -92,25 +93,35 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           }
         })()
       : null,
-    listFilter = [softwareFilter, state === 'all' ? '' : `state=='${state}'`, query.filter]
-      .filter(Boolean)
-      .map((part) => `(${part})`)
-      .join(';'),
+    listFilter = (() => {
+      if ((softwareResource || softwareVersion) && !softwareFilter) return null
+      try {
+        return (
+          allOf(
+            softwareFilter ?? undefined,
+            state === 'all' ? undefined : "state=='" + state + "'",
+            query.filter,
+          ) ?? ''
+        )
+      } catch {
+        return null
+      }
+    })(),
     guard = useSelectionGuard(),
     read = usePageRead(
       `${binding}/policy-directory/${listFilter}/${JSON.stringify(query)}/${has('policy_read')}`,
-      () =>
-        has('policy_read') && (!fixedSoftware || softwareFilter)
-          ? policies.list(
-              directoryQuery(
-                {
-                  ...query,
-                  ...(listFilter ? { filter: listFilter } : {}),
-                },
-                fields,
-              ),
-            )
-          : Promise.resolve(null),
+      (signal) => {
+        if (!has('policy_read')) return Promise.resolve(null)
+        if (listFilter === null) throw { cause: 'client', code: 'invalid_input' }
+        const scoped =
+          fixedSoftware && query.fields && !query.fields.includes('definition')
+            ? { ...query, fields: [...query.fields, 'definition'] }
+            : query
+        return policies.list(
+          directoryQuery({ ...scoped, ...(listFilter ? { filter: listFilter } : {}) }, fields),
+          signal,
+        )
+      },
     ),
     [selected, setSelected] = useState<{
       id: string
@@ -156,7 +167,19 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
         : null,
     detail = usePageRead(
       `${binding}/policy-detail/${policyTarget ?? ''}`,
-      (signal) => (policyTarget ? policies.read(policyTarget, signal) : Promise.resolve(null)),
+      async (signal) => {
+        if (!policyTarget) return null
+        const value = await policies.read(policyTarget, signal)
+        const action = value.definition.action
+        if (
+          fixedSoftware &&
+          (action.kind !== 'software' ||
+            action.resource.id !== softwareResource ||
+            action.resource.version !== softwareVersion)
+        )
+          throw { cause: 'client', status: 409, code: 'configuration_changed' }
+        return value
+      },
       { retryReadConflict: true },
     ),
     dialogOpen = selected !== null || policyTarget !== null
@@ -185,6 +208,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     const next = new URLSearchParams(params)
     next.set('policy', id)
     next.set('tab', 'definition')
+    next.delete('softwareVariant')
     setParams(next, { replace: true })
   }, [draft.value, linkedPolicy, selected?.id, guard.locked, params, setParams])
   useEffect(() => {
@@ -453,7 +477,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           }}
         >
           {returnSource && (
-            <Button disabled={guard.locked} onClick={close}>
+            <Button disabled={guard.locked} onClick={() => navigate(returnSource)}>
               {l('返回来源', 'Return to source')}
             </Button>
           )}

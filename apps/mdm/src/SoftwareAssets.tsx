@@ -380,21 +380,24 @@ function SoftwareAssetQuery({
             </p>
           </>
         )}
-        {task && (status.value?.resultState === 'retained' || Boolean(statusFailed)) && (
-          <Popconfirm
-            title={l('释放所选查询结果？', 'Release the selected query result?')}
-            onConfirm={() => {
-              if (!task || blocked) return
-              void command.submit({
-                kind: 'release',
-                id: task,
-                operation: { operationId: crypto.randomUUID(), expectedRevision: 0, input: {} },
-              })
-            }}
-          >
-            <Button disabled={blocked}>{l('释放结果', 'Release result')}</Button>
-          </Popconfirm>
-        )}
+        {task &&
+          (status.value?.resultState === 'retained' ||
+            Boolean(statusFailed) ||
+            (canRead && readFailure(status.error) === 'denied')) && (
+            <Popconfirm
+              title={l('释放所选查询结果？', 'Release the selected query result?')}
+              onConfirm={() => {
+                if (!task || blocked) return
+                void command.submit({
+                  kind: 'release',
+                  id: task,
+                  operation: { operationId: crypto.randomUUID(), expectedRevision: 0, input: {} },
+                })
+              }}
+            >
+              <Button disabled={blocked}>{l('释放结果', 'Release result')}</Button>
+            </Popconfirm>
+          )}
         <SoftwareAssetCommandState
           command={command}
           locale={locale}

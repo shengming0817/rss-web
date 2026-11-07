@@ -89,6 +89,16 @@ export function Software({ runtime, locale }: { runtime: Runtime; locale: Locale
                   params,
                   setParams,
                   canReadPolicy: has('policy_read'),
+                  canReadRuns:
+                    has('policy_read') &&
+                    (has('operation_read') ||
+                      Boolean(
+                        permissions.value?.grants.some(
+                          (grant) =>
+                            grant.operation === 'operation_read' &&
+                            grant.scope.kind === 'all_devices',
+                        ),
+                      )),
                   canWritePolicy: has('policy_write'),
                 }}
               />

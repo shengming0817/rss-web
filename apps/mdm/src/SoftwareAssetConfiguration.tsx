@@ -61,7 +61,7 @@ export function SoftwareAssetConfiguration({
     detail = usePageRead<SoftwareRecord<StandardSoftware | SoftwareMapping> | null>(
       `software-config-detail/${canRead}/${kind}/${epoch}/${requested ?? ''}`,
       (signal) => {
-        if (!canRead || !requested || creating) return Promise.resolve(null)
+        if (!canRead || !requested) return Promise.resolve(null)
         return kind === 'standard'
           ? assets.standard(requested, signal)
           : assets.mapping(requested, signal)
@@ -172,7 +172,7 @@ export function SoftwareAssetConfiguration({
           onRetry={detail.reload}
         />
       )}
-      {canRead && (creating || target) && (
+      {canRead && ((!requested && creating) || target) && (
         <Card size="small" title={requested ?? l('新建配置', 'New configuration')}>
           {kind === 'standard' ? (
             <StandardEditor

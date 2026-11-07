@@ -17,6 +17,7 @@ import {
   labels,
   ReadState,
   useAction,
+  usePageRead,
   useRead,
   validateInput,
   type Query,
@@ -139,18 +140,19 @@ export function ResourceDirectory({
       else setLocalQuery(next)
     },
     linkedId = catalog?.params.get('resource'),
-    detail = useRead(`resource-detail/${linkedId ?? ''}`, async (signal) => {
+    detail = usePageRead(`resource-detail/${linkedId ?? ''}`, async (signal) => {
       if (!linkedId) return null
       const resource = await resources.read(linkedId, signal)
       if (resource.kind !== fixedKind) throw { cause: 'client', code: 'invalid_input' }
       return resource
     }),
     selected = catalog ? detail.value : localSelection,
-    read = useRead(`resources/${kind ?? 'all'}/${JSON.stringify(query)}`, (signal) =>
+    read = usePageRead(`resources/${kind ?? 'all'}/${JSON.stringify(query)}`, (signal) =>
       resources.list(directoryQuery(query, fields), fixedKind ?? kind, signal),
     ),
     controls = (
       <DirectoryControls
+        key={query.filter ?? ''}
         disabled={guard.locked || action.busy}
         locale={locale}
         query={query}

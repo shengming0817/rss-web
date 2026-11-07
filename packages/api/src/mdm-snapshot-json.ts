@@ -1,67 +1,124 @@
-import { visit, type JSONPath } from 'jsonc-parser'
+import * as scannerApi from 'jsonc-parser'
+import type { ScanError as ScannerError, SyntaxKind } from 'jsonc-parser'
 import { clientError, protocolError } from './wire-error'
 
-const strict = { disallowComments: true, allowTrailingComma: false, allowEmptyContent: false }
+// jsonc-parser ships these enum tables in JS but declares them as ambient const enums.
+const Token = Reflect.get(scannerApi as object, 'SyntaxKind') as Record<
+  keyof typeof SyntaxKind,
+  number
+>
+const ScanError = Reflect.get(scannerApi as object, 'ScanError') as Record<
+  keyof typeof ScannerError,
+  number
+>
 
-/** Extract exactly one contract-declared value without materializing its nested JSON. */
-function span(text: string, path: readonly string[]): [number, number] {
-  let depth = 0,
-    start = -1,
-    end = -1,
-    container = -1
-  const matches = (value: JSONPath) =>
-    value.length === path.length && path.every((key, index) => value[index] === key)
-  function begin(offset: number, at: () => JSONPath, nested: boolean, length: number) {
-    if (depth !== path.length || !matches(at())) return
-    if (start !== -1) throw clientError()
-    start = offset
-    if (nested) container = depth
-    else end = offset + length
-  }
-  function open(
-    offset: number,
-    length: number,
-    _line: number,
-    _column: number,
-    at: () => JSONPath,
-  ) {
-    begin(offset, at, true, length)
-    depth++
-  }
-  function close(offset: number, length: number) {
-    if (--depth === container) end = offset + length
-  }
-  visit(
-    text,
-    {
-      onObjectBegin: open,
-      onArrayBegin: open,
-      onObjectEnd: close,
-      onArrayEnd: close,
-      onLiteralValue: (_value, offset, length, _line, _column, at) =>
-        begin(offset, at, false, length),
-      onError: () => {
-        throw clientError()
-      },
-    },
-    strict,
-  )
-  if (start < 0 || end <= start) throw clientError()
-  return [start, end]
+const enum Frame {
+  ObjectFirst = 1,
+  ObjectKey,
+  ObjectColon,
+  ObjectValue,
+  ObjectEnd,
+  ArrayFirst,
+  ArrayValue,
+  ArrayEnd,
 }
 
-export function encodeSnapshotRequest(body: unknown): string {
+/** Reuse the lexer and validate containers without materializing nested JSON or recursing. */
+function span(text: string, path: readonly string[]): [number, number] {
+  const scanner = scannerApi.createScanner(text),
+    keys: (string | undefined)[] = []
+  let stack = new Uint8Array(64),
+    depth = 0,
+    root = false,
+    start = -1,
+    end = -1,
+    selectedDepth = -1
+  function value(token: SyntaxKind) {
+    const selected = depth === path.length && path.every((key, index) => key === keys[index])
+    if (selected) {
+      if (start >= 0) throw clientError()
+      start = scanner.getTokenOffset()
+    }
+    if (token === Token.OpenBraceToken || token === Token.OpenBracketToken) {
+      if (selected) selectedDepth = depth
+      if (depth < path.length) keys[depth] = undefined
+      if (depth === stack.length) {
+        const larger = new Uint8Array(stack.length * 2)
+        larger.set(stack)
+        stack = larger
+      }
+      stack[depth++] = token === Token.OpenBraceToken ? Frame.ObjectFirst : Frame.ArrayFirst
+    } else {
+      if (
+        token !== Token.StringLiteral &&
+        token !== Token.NumericLiteral &&
+        token !== Token.TrueKeyword &&
+        token !== Token.FalseKeyword &&
+        token !== Token.NullKeyword
+      )
+        throw clientError()
+      if (selected) end = scanner.getPosition()
+    }
+  }
+  for (;;) {
+    const token = scanner.scan()
+    if (scanner.getTokenError() !== ScanError.None) throw clientError()
+    if (token === Token.Trivia || token === Token.LineBreakTrivia) continue
+    if (token === Token.EOF) {
+      if (!root || depth || start < 0 || end <= start) throw clientError()
+      return [start, end]
+    }
+    if (!depth) {
+      if (root) throw clientError()
+      root = true
+      value(token)
+      continue
+    }
+    const frame = stack[depth - 1]!
+    if (
+      (token === Token.CloseBraceToken &&
+        (frame === Frame.ObjectFirst || frame === Frame.ObjectEnd)) ||
+      (token === Token.CloseBracketToken &&
+        (frame === Frame.ArrayFirst || frame === Frame.ArrayEnd))
+    ) {
+      if (--depth === selectedDepth) {
+        end = scanner.getPosition()
+        selectedDepth = -1
+      }
+    } else if (
+      token === Token.CommaToken &&
+      (frame === Frame.ObjectEnd || frame === Frame.ArrayEnd)
+    ) {
+      stack[depth - 1] = frame === Frame.ObjectEnd ? Frame.ObjectKey : Frame.ArrayValue
+    } else if (frame === Frame.ObjectColon && token === Token.ColonToken) {
+      stack[depth - 1] = Frame.ObjectValue
+    } else if (
+      (frame === Frame.ObjectFirst || frame === Frame.ObjectKey) &&
+      token === Token.StringLiteral
+    ) {
+      if (depth <= path.length) keys[depth - 1] = scanner.getTokenValue()
+      stack[depth - 1] = Frame.ObjectColon
+    } else if (
+      frame === Frame.ObjectValue ||
+      frame === Frame.ArrayFirst ||
+      frame === Frame.ArrayValue
+    ) {
+      stack[depth - 1] = frame === Frame.ObjectValue ? Frame.ObjectEnd : Frame.ArrayEnd
+      value(token)
+    } else throw clientError()
+  }
+}
+
+export function encodeSnapshotRequest(body: unknown, checkBudget?: (text: string) => void): string {
   const envelope = body as { input?: { document?: unknown } } | null
   const document = envelope?.input?.document
   if (!envelope || typeof document !== 'string') throw clientError()
-  try {
-    const [start, end] = span(document, [])
-    const skeleton = JSON.stringify({ ...envelope, input: { ...envelope.input, document: null } })
-    const [at, after] = span(skeleton, ['input', 'document'])
-    return skeleton.slice(0, at) + document.slice(start, end) + skeleton.slice(after)
-  } catch {
-    throw clientError()
-  }
+  const skeleton = JSON.stringify({ ...envelope, input: { ...envelope.input, document: null } })
+  const [at, after] = span(skeleton, ['input', 'document'])
+  const request = skeleton.slice(0, at) + document + skeleton.slice(after)
+  checkBudget?.(request)
+  span(document, [])
+  return request
 }
 
 export function decodeSnapshotResponse(

@@ -65,13 +65,15 @@ export function createMdmHttpTransport(
       )
         throw clientError()
       const raw = contract?.rawSnapshot === 'request'
-      const encoded = raw ? encodeSnapshotRequest(options.body) : JSON.stringify(options.body)
-      if (
-        encoded !== undefined &&
-        new TextEncoder().encode(encoded).byteLength >
-          mdmJsonBodyLimit(options.method, options.path)
-      )
-        throw decodeMdmError(413, undefined)
+      function checkBudget(encoded: string) {
+        const limit = mdmJsonBodyLimit(options.method, options.path)
+        if (encoded.length > limit || new TextEncoder().encode(encoded).byteLength > limit)
+          throw decodeMdmError(413, undefined)
+      }
+      const encoded = raw
+        ? encodeSnapshotRequest(options.body, checkBudget)
+        : JSON.stringify(options.body)
+      if (!raw && encoded !== undefined) checkBudget(encoded)
       return execute(
         instance,
         30_000,

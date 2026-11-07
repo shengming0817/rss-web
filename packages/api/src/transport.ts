@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { SNAPSHOT_JSON_BODY_LIMIT } from './mdm-limits'
 import { decodeSnapshotResponse } from './mdm-snapshot-json'
 import { validateEndpointResponse } from './mdm-contract-response'
 import type { AxiosInstance, AxiosRequestConfig } from 'axios'
@@ -122,7 +123,7 @@ async function boundedBinary(
       void reader.cancel().catch(() => undefined)
     }
   controller.signal.addEventListener('abort', abortRead, { once: true })
-  let bytes: Uint8Array<ArrayBuffer> | undefined,
+  let bytes: Uint8Array<ArrayBuffer> = new Uint8Array(0),
     offset = 0,
     complete = false
   try {
@@ -137,7 +138,7 @@ async function boundedBinary(
         Number(declared) > maximumBytes)
     )
       throw protocolError(status)
-    bytes = new Uint8Array(maximumBytes)
+    bytes = new Uint8Array(declared === undefined ? Math.min(8192, maximumBytes) : Number(declared))
     for (;;) {
       if (controller.signal.aborted) throw abortedError()
       const { done, value }: ReadableStreamReadResult<unknown> = await reader.read()
@@ -150,6 +151,14 @@ async function boundedBinary(
       try {
         if (controller.signal.aborted) throw abortedError()
         if (value.byteLength > maximumBytes - offset) throw protocolError(status)
+        if (offset + value.byteLength > bytes.byteLength) {
+          const larger: Uint8Array<ArrayBuffer> = new Uint8Array(
+            Math.min(maximumBytes, Math.max(bytes.byteLength * 2, offset + value.byteLength)),
+          )
+          larger.set(bytes.subarray(0, offset))
+          bytes.fill(0)
+          bytes = larger
+        }
         bytes.set(value, offset)
         offset += value.byteLength
       } finally {
@@ -159,12 +168,12 @@ async function boundedBinary(
     if (declared !== undefined && offset !== Number(declared)) throw protocolError(status)
     if (offset === bytes.byteLength) {
       const result = bytes.buffer
-      bytes = undefined
+      bytes = new Uint8Array(0)
       return result
     }
     return bytes.buffer.slice(0, offset)
   } finally {
-    bytes?.fill(0)
+    bytes.fill(0)
     controller.signal.removeEventListener('abort', abortRead)
     if (!complete) {
       controller.abort()
@@ -187,7 +196,11 @@ export async function execute<T>(
       ? Object.entries(options.headers ?? {}).find(([name]) => name.toLowerCase() === 'range')?.[1]
       : undefined
   const closedRange = range?.match(/^bytes=(\d+)-(\d+)$/)
-  let maximumBytes: number | undefined
+  const rawSnapshot = options.contract?.rawSnapshot
+  const snapshotLeaf =
+    rawSnapshot === 'document' || rawSnapshot === 'data' ? rawSnapshot : undefined
+  // The stored value is bounded by the import request. The response adds only bounded metadata.
+  let maximumBytes: number | undefined = snapshotLeaf ? SNAPSHOT_JSON_BODY_LIMIT + 65536 : undefined
   if (closedRange) {
     const start = Number(closedRange[1]),
       end = Number(closedRange[2])
@@ -210,12 +223,7 @@ export async function execute<T>(
   options.signal?.addEventListener('abort', cancelBounded, { once: true })
   try {
     const config = requestConfig(options, defaultTimeoutMs)
-    const rawSnapshot = options.contract?.rawSnapshot
     if (rawSnapshot === 'request') config.transformRequest = [(value: unknown) => value]
-    if (rawSnapshot === 'document' || rawSnapshot === 'data') {
-      config.responseType = 'text'
-      config.transformResponse = [(value: unknown) => value]
-    }
     if (bounded && maximumBytes !== undefined) {
       if (typeof ReadableStream === 'undefined') throw clientError()
       // Use Axios' stream adapter inside the same executor and instance. XHR progress cannot bound buffering.
@@ -232,16 +240,37 @@ export async function execute<T>(
       if (options.signal?.aborted) bounded.abort()
     }
     const response = await instance.request(config)
-    if (rawSnapshot === 'document' || rawSnapshot === 'data')
-      response.data = decodeSnapshotResponse(response.data, rawSnapshot, response.status)
     if (bounded && maximumBytes !== undefined) {
       response.data = await boundedBinary(
         response.data,
-        response.headers,
+        snapshotLeaf &&
+          response.headers['content-encoding'] &&
+          response.headers['content-encoding'] !== 'identity'
+          ? Object.fromEntries(
+              Object.entries(response.headers).filter(
+                ([name]) => name.toLowerCase() !== 'content-length',
+              ),
+            )
+          : response.headers,
         response.status >= 400 ? 16384 : maximumBytes,
         response.status,
         bounded,
       )
+    }
+    if (snapshotLeaf) {
+      const bytes: unknown = response.data
+      if (!(bytes instanceof ArrayBuffer)) throw protocolError(response.status)
+      try {
+        response.data = decodeSnapshotResponse(
+          new TextDecoder('utf-8', { fatal: true }).decode(bytes),
+          snapshotLeaf,
+          response.status,
+        )
+      } catch {
+        throw protocolError(response.status)
+      } finally {
+        new Uint8Array(bytes).fill(0)
+      }
     }
     if (options.responseType === 'arraybuffer' && response.data instanceof ArrayBuffer) {
       binaryOwned = response.data

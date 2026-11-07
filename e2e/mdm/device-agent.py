@@ -93,7 +93,7 @@ def query_digest(query):
 
 
 def collect(fixture, action, resource, cycle):
-    check(action in {'memory', 'memory_partial', 'applications', 'partial', 'software_assets'}, 'collector-action')
+    check(action in {'memory', 'memory_partial', 'applications', 'partial', 'software_assets', 'software_assets_os'}, 'collector-action')
     uuid.UUID(resource)
     agent = fixture['collector']
     def request(path, body=None, method='POST'):
@@ -124,6 +124,9 @@ def collect(fixture, action, resource, cycle):
         if action in {'memory', 'memory_partial'}:
             check(d == dict(kind='macos_hardware', section='memory'), 'collector-memory-query')
             rows = [dict(total_bytes=str(8192+cycle))]
+        elif action == 'software_assets_os':
+            check(d == dict(kind='macos_hardware', section='os'), 'collector-os-query')
+            rows = [dict(name='macOS', version='15.0', build='24A335')]
         else:
             check(d['kind'] == 'macos_applications', 'collector-application-query')
             user = d['root'] == 'user_applications'

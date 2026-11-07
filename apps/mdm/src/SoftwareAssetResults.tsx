@@ -3,7 +3,6 @@ import { Alert, Button, Card, Select, Space, Tag } from 'antd'
 import { Link } from 'react-router-dom'
 import type { DeviceRef, Page, WindowQuery } from '@rss/mdm-devices'
 import {
-  dimensions,
   type Compliance,
   type Dimension,
   type SoftwareBucket,
@@ -282,19 +281,28 @@ function SoftwareBucketDetail({
     [object, setObject] = useState<DeviceRef | null>(null)
   return (
     <Card title={bucket.identity.name}>
-      <label>
-        {l('分桶维度', 'Breakdown dimension')}
-        <Select
-          aria-label={l('分桶维度', 'Breakdown dimension')}
-          value={dimension}
-          onChange={setDimension}
-          allowClear
-          options={(requestedDimensions ?? dimensions).map((value) => ({
-            value,
-            label: dimensionName(value, locale),
-          }))}
-        />
-      </label>
+      {requestedDimensions?.length ? (
+        <label>
+          {l('分桶维度', 'Breakdown dimension')}
+          <Select
+            aria-label={l('分桶维度', 'Breakdown dimension')}
+            value={dimension}
+            onChange={setDimension}
+            allowClear
+            options={requestedDimensions.map((value) => ({
+              value,
+              label: dimensionName(value, locale),
+            }))}
+          />
+        </label>
+      ) : !requestedDimensions ? (
+        <p>
+          {l(
+            '当前页面没有原任务的分桶维度。',
+            'The original breakdown dimensions are unavailable in this view.',
+          )}
+        </p>
+      ) : null}
       {dimension && (
         <ResultPage
           key={dimension}
@@ -415,6 +423,15 @@ function SoftwareBucketDetail({
                     render: (_, row) => (
                       <details>
                         <summary>{l('展开原始记录', 'Inspect original record')}</summary>
+                        {row.precisionLimited && (
+                          <Alert
+                            type="warning"
+                            title={l(
+                              '原始值超出浏览器精度，保留来源和证据坐标。',
+                              'The original value exceeds browser precision. Source and evidence coordinates are retained.',
+                            )}
+                          />
+                        )}
                         <pre>{JSON.stringify(row, null, 2)}</pre>
                       </details>
                     ),

@@ -50,18 +50,18 @@ export function createSoftwareAssetsAdapter(
       value.asset.response.kind !== kind
     )
       throw new Error('Wrong software asset binding')
-    checkedNumbers(value.asset.response)
+    if (kind !== 'evidence') checkedNumbers(value.asset.response)
     return value.asset.response as ResponseOf<K>
   }
-  const mutation = (value: Envelope) => {
-    const receipt = response(value, 'mutation').receipt
-    if (
-      receipt.kind === 'accepted' &&
-      receipt.statusUrl !== api.getApiV1SoftwareAssetQueriesById.url({ id: uuid(receipt.task) })
-    )
+  const accepted = (value: Envelope) => {
+    if (value.tenantId !== tenant || value.asset.kind !== 'accepted')
+      throw new Error('Wrong software query acceptance')
+    const receipt = value.asset
+    if (receipt.statusUrl !== api.getApiV1SoftwareAssetQueriesById.url({ id: uuid(receipt.task) }))
       throw new Error('Wrong software asset status location')
     return receipt
   }
+  const mutation = (value: Envelope) => response(value, 'mutation').receipt
   const records = <T>(value: { items: SoftwareRecord<T>[]; nextCursor: string | null }) => ({
     ...page(value),
     items: distinct(
@@ -94,7 +94,7 @@ export function createSoftwareAssetsAdapter(
             {
               body: requestInput(intent.operation, postApiV1SoftwareAssetQueriesBody.validateRoot),
             },
-            mutation,
+            accepted,
           )
         case 'release':
           return api.postApiV1SoftwareAssetQueriesByIdRelease(
@@ -159,8 +159,23 @@ export function createSoftwareAssetsAdapter(
           signal,
         },
         (value) => {
-          const row = response(value, 'evidence')
-          return { ...fixedPage(row), quality: row.quality }
+          const { items, ...page } = response(value, 'evidence')
+          checkedNumbers(page)
+          return {
+            ...fixedPage({
+              ...page,
+              items: items.map(({ value, ...fact }) => {
+                checkedNumbers(fact)
+                try {
+                  checkedNumbers(value)
+                  return { ...fact, value, precisionLimited: false }
+                } catch {
+                  return { ...fact, value: null, precisionLimited: true }
+                }
+              }),
+            }),
+            quality: page.quality,
+          }
         },
       ),
     coverage: (id, page, signal) =>

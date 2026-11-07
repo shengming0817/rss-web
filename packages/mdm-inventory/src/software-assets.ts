@@ -114,6 +114,7 @@ export interface SoftwareEvidence {
   arrayVersion: string
   ordinal: number
   value: unknown
+  precisionLimited: boolean
   rules: readonly string[]
   confirmed: boolean
 }

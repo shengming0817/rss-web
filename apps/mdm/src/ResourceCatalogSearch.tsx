@@ -9,6 +9,7 @@ export interface CatalogLocation {
   setParams: (params: URLSearchParams) => void
   canWritePolicy: boolean
   canReadPolicy: boolean
+  canReadRuns: boolean
 }
 
 export function catalogQuery(params: URLSearchParams): Query {

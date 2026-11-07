@@ -65,15 +65,18 @@ export function ResourceDetail({
     else params.delete('variant')
     catalog.setParams(params)
   }
-  function policyLink(draft: boolean) {
+  function returnSource() {
     const source = new URLSearchParams(catalog?.params)
     source.set('resource', resource.id)
     source.set('version', versionId)
     if (selected) source.set('variant', variantKey(selected))
+    return '/software?' + source
+  }
+  function policyLink(draft: boolean) {
     return `/policies?${new URLSearchParams({
       softwareResource: resource.id,
       softwareVersion: versionId,
-      returnTo: `/software?${source}`,
+      returnTo: returnSource(),
       ...(draft && selected ? { softwareVariant: variantKey(selected) } : {}),
     })}`
   }
@@ -225,6 +228,7 @@ export function ResourceDetail({
               id={resource.id}
               version={version.id}
               locale={locale}
+              historySource={catalog?.canReadRuns ? returnSource() : undefined}
             />
             <Space wrap>
               {(['activate', 'deprecate', 'archive'] as const).map((action) => (
@@ -282,11 +286,13 @@ function ResourceBlockers({
   id,
   version,
   locale,
+  historySource,
 }: {
   resources: ResourcesUseCases
   id: string
   version: string
   locale: Locale
+  historySource?: string | undefined
 }) {
   const l = labels(locale),
     [query, setQuery] = useState<Query>({ limit: 20 }),
@@ -312,6 +318,32 @@ function ResourceBlockers({
               { title: l('来源类型', 'Source kind'), dataIndex: 'kind' },
               { title: l('引用身份', 'Reference identity'), dataIndex: 'id' },
               { title: l('版本', 'Version'), dataIndex: 'version' },
+              ...(historySource
+                ? [
+                    {
+                      title: l('运行历史', 'Run history'),
+                      render: (
+                        _: unknown,
+                        row: Awaited<ReturnType<ResourcesUseCases['references']>>['items'][number],
+                      ) =>
+                        row.kind === 'policy_version' && row.version ? (
+                          <Link
+                            to={
+                              '/policies?' +
+                              new URLSearchParams({
+                                policy: row.id,
+                                tab: 'runs',
+                                originalPolicyVersion: row.version,
+                                returnTo: historySource,
+                              })
+                            }
+                          >
+                            {l('查看策略运行历史', 'View policy run history')}
+                          </Link>
+                        ) : null,
+                    },
+                  ]
+                : []),
               { title: l('用途', 'Role'), dataIndex: 'role' },
               { title: l('保留状态', 'Retention'), dataIndex: 'retention' },
               {

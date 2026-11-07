@@ -543,6 +543,11 @@ const headerName = (name) =>
 const names = new Set()
 let index = ''
 let schemaIndex = ''
+const snapshotJson = new Map([
+  ['POST /api/v1/software/source-snapshots/{source}', 'request'],
+  ['GET /api/v1/software/source-snapshots/{source}', 'document'],
+  ['GET /api/v1/software/source-snapshots/{source}/entries/{entry}', 'data'],
+])
 for (const e of endpoints) {
   const name = operationName(e)
   if (names.has(name)) throw new Error(`Duplicate generated operation ${name}`)
@@ -577,10 +582,17 @@ for (const e of endpoints) {
       `query${optional ? '?' : ''}: WireInput<${typeOf(e.request.query)}>${optional ? ' | undefined' : ''}`,
     )
   }
-  if (e.request.body)
-    args.push(
-      `body: ${e.request.body.content_type === 'application/octet-stream' ? 'ArrayBuffer' : `WireInput<${typeOf(e.request.body.schema)}>`}`,
-    )
+  const rawSnapshot = snapshotJson.get(e.method + ' ' + e.path)
+  if (e.request.body?.content_type === 'application/octet-stream') {
+    args.push('body: ArrayBuffer')
+  } else if (e.request.body) {
+    const wire = typeOf(e.request.body.schema)
+    const input =
+      rawSnapshot === 'request'
+        ? `Omit<${wire}, 'input'> & { input: Omit<${wire}['input'], 'document'> & { document: string } }`
+        : wire
+    args.push(`body: WireInput<${input}>`)
+  }
   const requestHeaders = Object.entries(e.request.headers).filter(
     ([key]) => !browserOwnedHeaders.has(key.toLowerCase()),
   )
@@ -600,10 +612,32 @@ for (const e of endpoints) {
       r.body &&
       (!r.body.content_type.startsWith('application/json') || 'content-disposition' in r.headers),
   )
+  if (rawSnapshot) {
+    const contract = rawSnapshot === 'request' ? e.request.body : success[0]?.body
+    const schema = schemas[contract?.schema.schemaId]
+    const inputRef = schema?.properties?.input?.$ref
+    const leaf =
+      rawSnapshot === 'request'
+        ? schema?.$defs?.[inputRef?.replace('#/$defs/', '')]?.properties?.document
+        : schema?.properties?.[rawSnapshot]
+    if (
+      contract?.content_type !== 'application/json' ||
+      typeof leaf?.['x-rss-extension'] !== 'string' ||
+      Object.keys(leaf).some((key) => !annotationKeys.has(key))
+    )
+      throw new Error('Snapshot JSON declaration changed: ' + e.operationId)
+  }
   const returns =
     [
       ...new Set(
-        success.map((r) => (!r.body ? 'void' : binary ? 'BinaryResponse' : typeOf(r.body.schema))),
+        success.map((r) => {
+          if (!r.body) return 'void'
+          if (binary) return 'BinaryResponse'
+          const wire = typeOf(r.body.schema)
+          return rawSnapshot && rawSnapshot !== 'request'
+            ? `Omit<${wire}, '${rawSnapshot}'> & { ${rawSnapshot}: string }`
+            : wire
+        }),
       ),
     ].join(' | ') || 'never'
   const descriptor = {
@@ -621,12 +655,7 @@ for (const e of endpoints) {
             : 'tuple'
         : null,
     queryOwner: e.request.query_owner,
-    ...(e.path === '/api/v1/software/source-snapshots/{source}'
-      ? { rawSnapshot: e.method === 'POST' ? 'request' : 'document' }
-      : e.path === '/api/v1/software/source-snapshots/{source}/entries/{entry}' &&
-          e.method === 'GET'
-        ? { rawSnapshot: 'data' }
-        : {}),
+    ...(rawSnapshot ? { rawSnapshot } : {}),
     publicRead: !e.authentication,
     contentType: e.request.body?.content_type ?? null,
     requestHeaders: requestHeaders.map(([key]) => key),

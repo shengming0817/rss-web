@@ -44,6 +44,7 @@ export function resultReturnPath(value: string | null, expected?: string): strin
             'returnTo',
             'softwareResource',
             'softwareVersion',
+            'originalPolicyVersion',
           ]
         : path === '/software'
           ? ['resource', 'version', 'variant', 'filter', 'sort', 'field', 'limit', 'cursor']

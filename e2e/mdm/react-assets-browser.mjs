@@ -842,93 +842,101 @@ try {
     value: f.rule,
   })
   run.step('software-assets-real-collector-observation')
-  const collector = f.collector.runtime.deviceId,
-    collectionResource = randomUUID(),
-    collectionScope = randomUUID(),
-    collectionPolicy = randomUUID(),
-    collectionPath = '/api/v1/resources/' + collectionResource
-  const sourceResource = await api(
-    'POST',
-    collectionPath,
-    operation({
-      action: 'instantiate',
-      blueprint: 'macos.agent.applications_local',
-      version: '1',
-    }),
-  )
-  const sourceVersion = sourceResource.versions[0],
-    sourceVariant = sourceVersion.variants[0]
-  await api(
-    'POST',
-    collectionPath,
-    operation({ action: 'activate', version: sourceVersion.id }, sourceResource.revision),
-  )
-  const sourceScope = await api(
-    'POST',
-    '/api/v1/scopes/' + collectionScope,
-    operation({
-      action: 'put',
-      definition: {
-        targets: [{ kind: 'device', id: collector }],
-        limitations: null,
-        exclusions: [],
-      },
-    }),
-  )
-  for (let index = 0; index < 60; index++) {
-    const state = await api(
-      'GET',
-      '/api/v1/scopes/' + collectionScope + '/tasks/' + sourceScope.task,
+  const collector = f.collector.runtime.deviceId
+  for (const [blueprint, action] of [
+    ['macos.agent.os', 'software_assets_os'],
+    ['macos.agent.applications_local', 'software_assets'],
+  ]) {
+    const collectionResource = randomUUID(),
+      collectionScope = randomUUID(),
+      collectionPolicy = randomUUID(),
+      collectionPath = '/api/v1/resources/' + collectionResource
+    const sourceResource = await api(
+      'POST',
+      collectionPath,
+      operation({
+        action: 'instantiate',
+        blueprint,
+        version: '1',
+      }),
     )
-    if (state.status === 'completed') break
-    assert.ok(index < 59, 'software collector scope publication deadline')
-    await new Promise((done) => setTimeout(done, 250))
-  }
-  await api(
-    'POST',
-    '/api/v1/policies/' + collectionPolicy,
-    operation({
-      action: 'put',
-      enabled: true,
-      definition: {
-        scope: collectionScope,
-        alias: null,
-        customEvent: null,
-        action: {
-          kind: 'agent_collection',
-          resource: {
-            id: collectionResource,
-            version: sourceVersion.id,
-            variant: sourceVariant.key,
-            platform: sourceVariant.platform,
-            architecture: sourceVariant.architecture,
-          },
-          frequency: 'every_trigger',
-          schedule: {
-            trigger: { kind: 'interval', anchor: 0, seconds: 3600 },
-            misfire: { kind: 'coalesce_one' },
-            notBefore: 0,
-            until: null,
-            jitterSeconds: 0,
-            window: null,
-          },
-          runLifetimeSeconds: 86400,
+    const sourceVersion = sourceResource.versions[0],
+      sourceVariant = sourceVersion.variants.find(
+        (variant) => variant.platform === 'macos' && variant.architecture === 'aarch64',
+      )
+    assert.ok(sourceVariant, 'macOS collector variant')
+    await api(
+      'POST',
+      collectionPath,
+      operation({ action: 'activate', version: sourceVersion.id }, sourceResource.revision),
+    )
+    const sourceScope = await api(
+      'POST',
+      '/api/v1/scopes/' + collectionScope,
+      operation({
+        action: 'put',
+        definition: {
+          targets: [{ kind: 'device', id: collector }],
+          limitations: null,
+          exclusions: [],
         },
-      },
-    }),
-  )
-  const collected = spawnSync(
-    'python3',
-    [
-      fileURLToPath(new URL('./device-agent.py', import.meta.url)),
-      process.env.MDM_DEVICE_BROWSER_FIXTURE,
-      'software_assets',
-      collectionResource,
-      '0',
-    ],
-    { encoding: 'utf8', timeout: 150000, stdio: ['ignore', 'pipe', 'pipe'] },
-  )
-  assert.equal(collected.status, 0, 'real mTLS software collection')
+      }),
+    )
+    for (let index = 0; index < 60; index++) {
+      const state = await api(
+        'GET',
+        '/api/v1/scopes/' + collectionScope + '/tasks/' + sourceScope.task,
+      )
+      if (state.status === 'completed') break
+      assert.ok(index < 59, 'software collector scope publication deadline')
+      await new Promise((done) => setTimeout(done, 250))
+    }
+    await api(
+      'POST',
+      '/api/v1/policies/' + collectionPolicy,
+      operation({
+        action: 'put',
+        enabled: true,
+        definition: {
+          scope: collectionScope,
+          alias: null,
+          customEvent: null,
+          action: {
+            kind: 'agent_collection',
+            resource: {
+              id: collectionResource,
+              version: sourceVersion.id,
+              variant: sourceVariant.key,
+              platform: sourceVariant.platform,
+              architecture: sourceVariant.architecture,
+            },
+            frequency: 'every_trigger',
+            schedule: {
+              trigger: { kind: 'interval', anchor: 0, seconds: 3600 },
+              misfire: { kind: 'coalesce_one' },
+              notBefore: 0,
+              until: null,
+              jitterSeconds: 0,
+              window: null,
+            },
+            runLifetimeSeconds: 86400,
+          },
+        },
+      }),
+    )
+    const collected = spawnSync(
+      'python3',
+      [
+        fileURLToPath(new URL('./device-agent.py', import.meta.url)),
+        process.env.MDM_DEVICE_BROWSER_FIXTURE,
+        action,
+        collectionResource,
+        '0',
+      ],
+      { encoding: 'utf8', timeout: 150000, stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    assert.equal(collected.status, 0, 'real mTLS software collection')
+  }
   for (let index = 0; index < 60; index++) {
     const inventory = await api('GET', '/api/v1/devices/' + collector + '/inventory')
     if (inventory.asset.device.lists['device.software.installations']?.state?.kind === 'known')
@@ -944,7 +952,7 @@ try {
       '/api/v1/groups/' + group,
       operation({
         action: 'create',
-        presentation: { name: 'Software overlap ' + index },
+        presentation: { name: 'Software overlap ' + index, description: '' },
         assetContext: 'endpoint',
         criteria: null,
       }),
@@ -1040,7 +1048,7 @@ try {
       () => assetButton('提交软件查询').click(),
       202,
     )
-    const task = (await accepted.json()).asset.response.receipt.task
+    const task = (await accepted.json()).asset.task
     const state = await poll(
       '/api/v1/software-asset-queries/' + task,
       () => assetButton('读取任务状态').click(),

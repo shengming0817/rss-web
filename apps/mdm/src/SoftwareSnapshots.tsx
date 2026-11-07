@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Alert, Button, Card, Form, Input, Space } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
+import { formatFilter } from '@rss/api/mdm-filter'
 import type { Resource } from '@rss/mdm-resources'
 import type {
   createSoftwareSnapshots,
@@ -66,6 +67,7 @@ export function SoftwareSnapshots({
     [epoch, setEpoch] = useState(0),
     [newSource, setNewSource] = useState(''),
     [document, setDocument] = useState(''),
+    [fileIssue, setFileIssue] = useState<'size' | 'encoding' | null>(null),
     [extraction, setExtraction] = useState<SnapshotExtraction>({}),
     [pending, setPending] = useState<{ source: string; intent: SnapshotImport } | null>(null),
     [receipt, setReceipt] = useState<SnapshotReceipt | null>(null),
@@ -120,6 +122,25 @@ export function SoftwareSnapshots({
   function refreshSources() {
     setSourcePage(first)
     select(null)
+    setEpoch((previous) => previous + 1)
+  }
+  async function restartSource() {
+    if (!selected) {
+      refreshSources()
+      return
+    }
+    const id = selected.id
+    const result = await action.run(() =>
+      snapshots.sources({
+        filter: formatFilter({ kind: 'compare', field: 'source', operator: '==', values: [id] }),
+        fields: ['source', 'revision'],
+        limit: 1,
+      }),
+    )
+    if (!result.ok) return
+    const row = result.value.items.find((item) => item.source === id)
+    if (row?.revision !== undefined) select({ id, revision: row.revision })
+    else select(null)
     setEpoch((previous) => previous + 1)
   }
   function confirm(value: SnapshotReceipt) {
@@ -203,8 +224,8 @@ export function SoftwareSnapshots({
                     locale={locale}
                     busy={detail.busy}
                     error={detail.error}
-                    onRetry={detail.reload}
-                    onRestart={refreshSources}
+                    onRetry={() => void restartSource()}
+                    onRestart={() => void restartSource()}
                   />
                   {detail.value && (
                     <>
@@ -226,8 +247,8 @@ export function SoftwareSnapshots({
                 busy={entries.busy}
                 error={entries.error}
                 empty={entries.value?.items.length === 0}
-                onRetry={entries.reload}
-                onRestart={refreshSources}
+                onRetry={() => void restartSource()}
+                onRestart={() => void restartSource()}
               />
               {entries.value && (
                 <>
@@ -269,8 +290,8 @@ export function SoftwareSnapshots({
                   locale={locale}
                   busy={rawEntry.busy}
                   error={rawEntry.error}
-                  onRetry={rawEntry.reload}
-                  onRestart={refreshSources}
+                  onRetry={() => void restartSource()}
+                  onRestart={() => void restartSource()}
                 />
               )}
               {rawEntry.value && (
@@ -346,22 +367,43 @@ export function SoftwareSnapshots({
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   e.target.value = ''
-                  if (file)
-                    void action.run(async () => {
-                      if (file.size > 64 * 1024 * 1024)
-                        throw { cause: 'client', status: 413, code: 'request_too_large' }
+                  if (!file) return
+                  setDocument('')
+                  setFileIssue(null)
+                  if (file.size > 64 * 1024 * 1024) {
+                    setFileIssue('size')
+                    return
+                  }
+                  void action.run(async () => {
+                    try {
                       setDocument(
                         new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()),
                       )
-                    })
+                    } catch {
+                      setFileIssue('encoding')
+                    }
+                  })
                 }}
               />
             </label>
+            {fileIssue && (
+              <Alert
+                type="error"
+                title={
+                  fileIssue === 'size'
+                    ? l('所选文件超过 64 MiB。', 'The selected file exceeds 64 MiB.')
+                    : l('无法读取 UTF-8 JSON 文件。', 'The UTF-8 JSON file could not be read.')
+                }
+              />
+            )}
             <Form.Item label={l('导入 JSON 原文', 'JSON to import')}>
               <Input.TextArea
                 aria-label={l('导入 JSON 原文', 'JSON to import')}
                 value={document}
-                onChange={(e) => setDocument(e.target.value)}
+                onChange={(e) => {
+                  setFileIssue(null)
+                  setDocument(e.target.value)
+                }}
                 rows={6}
               />
             </Form.Item>
