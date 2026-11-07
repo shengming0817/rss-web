@@ -51,6 +51,15 @@ try {
   }
   await run.login(p)
   run.step('device-confirmation-and-unknown-acceptance')
+  const endpoint = await api('GET', `/api/v1/devices/${f.mdm}`)
+  const restart = endpoint.capabilities.find(
+    (fact) => fact.channel === 'mdm' && fact.action === 'restart',
+  )
+  assert.deepEqual(
+    [restart?.productSupport.state, restart?.devicePrerequisite.state, restart?.permission.allowed],
+    ['supported', 'supported', true],
+    'configured Windows restart applicability',
+  )
   await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   await button('核对设备与动作').click()
   let dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
@@ -94,7 +103,18 @@ try {
   await p.getByText('提交结果未知，请查询原操作，勿重新创建', { exact: false }).waitFor()
   assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.mdm}/operations`), 1)
   await p.context().unroute(`**/api/v1/devices/${f.mdm}/operations`)
-  await p.getByRole('link', { name: original.operationId, exact: true }).click()
+  await p
+    .locator('a')
+    .filter({ hasText: '查看操作排障' })
+    .and(p.locator('a[href*="owner=device_control"]'))
+    .click()
+  await p.getByRole('heading', { name: '操作排障', exact: true }).waitFor()
+  await p.getByText('原操作结果', { exact: true }).waitFor()
+  await p.getByText('执行证据', { exact: true }).waitFor()
+  await p.getByText('已受理', { exact: true }).waitFor()
+  assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.mdm}/operations`), 1)
+  const execution = new URLSearchParams({ kind: 'command', operation: original.operationId })
+  await run.nav(p, '/operations?' + execution, '执行与结果')
   await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
   await p.getByText('原操作与结果', { exact: true }).waitFor()
   await button('读取详细结果与证据').click()
@@ -129,48 +149,17 @@ try {
   assert.deepEqual((await repeated).postDataJSON(), cancellation)
   checks.push('real-cancellation-reuses-original-request-id-and-cas-after-unknown')
 
-  run.step('mac-lock-pin-and-danger-confirmation')
+  run.step('mac-action-capability-before-pin-and-confirmation')
   await run.nav(p, '/devices/endpoint/fixture-mac', '设备详情')
-  await run.choose(p, label('设备动作'), '锁定（macOS）')
-  await button('核对设备与动作').click()
-  dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
-  await dialog.getByRole('checkbox').check()
-  await label('六位锁定 PIN').fill('12345')
-  assert.equal(
-    await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).isDisabled(),
-    true,
-  )
-  await label('六位锁定 PIN').fill('123456')
-  await run.response(
-    p,
-    'POST',
-    '/api/v1/devices/fixture-mac/operations',
-    () => dialog.getByRole('button', { name: '确认提交此动作', exact: true }).click(),
-    501,
-  )
-  // No Apple device/security protocol facts were supplied; the real owner rejects support.
-  await p.getByText('未确认受理', { exact: false }).waitFor()
-  await p.waitForFunction(() =>
-    [...document.querySelectorAll('input[aria-label="六位锁定 PIN"]')].every(
-      (input) => input.value === '',
-    ),
-  )
-  await label('六位锁定 PIN').waitFor({ state: 'hidden' })
+  await run.choose(p, label('设备动作'), '锁定')
+  await p.getByText('当前设备证据不足', { exact: false }).last().waitFor()
+  assert.equal(await button('核对设备与动作').isDisabled(), true)
+  assert.equal(await label('六位锁定 PIN').count(), 0)
   await run.choose(p, label('设备动作'), '擦除设备')
-  await button('核对设备与动作').click()
-  dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
-  await dialog
-    .getByText('擦除可能永久删除设备上的数据。确认已核对目标和恢复安排。', { exact: true })
-    .waitFor()
-  assert.equal(
-    await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).isDisabled(),
-    true,
-  )
-  await p.keyboard.press('Escape')
-  await dialog.waitFor({ state: 'hidden' })
-  checks.push(
-    'real-rejected-macos-lock-six-digit-pin-cleared-and-wipe-separate-danger-confirmation',
-  )
+  assert.equal(await button('核对设备与动作').isDisabled(), true)
+  assert.equal(await p.getByRole('dialog', { name: '确认设备动作', exact: true }).count(), 0)
+  assert.equal(run.count(p, 'POST', '/api/v1/devices/fixture-mac/operations'), 0)
+  checks.push('real-macos-capability-unknown-blocked-before-pin-confirmation-and-post')
 
   run.step('script-policy-real-agent-lifecycle')
   const base = '/api/v1',
@@ -872,6 +861,46 @@ try {
     await p.getByText('已读取当前配置版本:', { exact: false }).waitFor()
     await button('结束或重新编辑此任务').last().click()
     checks.push('real-purpose-bound-enterprise-subject-save-and-current-configuration-comparison')
+    const daBase = '/api/v1/device-access/operation-diagnostics'
+    const daOperation = `${daBase}/operations/device_access/${bindingInput.operationId}`
+    const daQuery = new URLSearchParams({
+      context: 'da',
+      mode: 'operation',
+      owner: 'device_access',
+      operationId: bindingInput.operationId,
+      device: f.executionAccess.device,
+    })
+    await run.nav(p, '/operation-diagnostics?' + daQuery, '操作排障')
+    await p.getByText('原操作结果', { exact: true }).waitFor()
+    await p.getByText(bindingInput.operationId, { exact: true }).waitFor()
+    assert.equal(
+      (await api('GET', daOperation + '?device=' + encodeURIComponent(f.executionAccess.device)))
+        .originalResult.availability,
+      'available',
+    )
+    await run.nav(p, '/operation-diagnostics?context=da', '操作排障')
+    await label('原操作编号').fill(bindingInput.operationId)
+    const discovery = await run.response(p, 'GET', daBase, () => button('查询操作').click())
+    const daRequest = (await discovery.json()).items.find(
+      ({ fact }) => fact.origin === 'request' && fact.requestId,
+    )
+    assert.ok(daRequest)
+    const requestHref = `a[href*="context=da"][href*="requestId=${daRequest.fact.requestId}"]`
+    const row = p
+      .locator('details')
+      .filter({ has: p.locator(requestHref) })
+      .first()
+    await row.locator(':scope > summary').click()
+    const response = await run.response(
+      p,
+      'GET',
+      daBase + '/requests/' + daRequest.fact.requestId,
+      () => row.locator(requestHref).first().click(),
+    )
+    const attempts = await response.json()
+    assert.ok(attempts.items.some(({ fact }) => fact.requestId === daRequest.fact.requestId))
+    await p.getByText('请求尝试与关联证据', { exact: true }).waitFor()
+    checks.push('real-da-diagnostics-directory-request-and-original-receipt')
   }
 
   run.step('task-signing-trust-management-and-public-layout')
@@ -944,7 +973,9 @@ try {
   })
   checks.push('real-public-desktop-tablet-mobile-dark-layout-and-no-viewport-overflow')
   run.step('session-change-discards-device-confirmation')
-  await run.nav(p, `/devices/endpoint/${f.alone}`, '设备详情')
+  const controlPath = `/api/v1/devices/${f.mdm}/operations`
+  const postsBeforeSignout = run.count(p, 'POST', controlPath)
+  await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   await button('核对设备与动作').click()
   dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
   await dialog.getByRole('checkbox').check()
@@ -959,9 +990,9 @@ try {
     else await button('读取最新设备事实').click()
   }
   await p.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
-  assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.alone}/operations`), 0)
+  assert.equal(run.count(p, 'POST', controlPath), postsBeforeSignout)
   await run.login(p)
-  await run.nav(p, `/devices/endpoint/${f.alone}`, '设备详情')
+  await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   assert.equal(await p.getByRole('dialog', { name: '确认设备动作', exact: true }).count(), 0)
   await otherTab.close()
   checks.push(

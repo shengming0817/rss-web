@@ -196,3 +196,20 @@ it('projects exact current capability identity without leaking definitions or tr
   })
   expect(rows.request.mock.lastCall![0].query).not.toHaveProperty('alias')
 })
+
+it('requires the current audit fact shape and accepts an explicitly unknown origin', async () => {
+  const page = (item: unknown) => ({
+    items: [item],
+    nextCursor: null,
+    coverage: { complete: true },
+  })
+  const { origin, ...retiredShape } = fact
+  expect(origin).toBe('request')
+  await expect(fixture(page(retiredShape)).audit.search()).rejects.toThrow()
+  const current = fixture(page({ ...fact, origin: null }))
+  expect((await current.audit.timeline('device', { requestId: other })).items[0]).toMatchObject({
+    origin: null,
+    requestReplayed: true,
+  })
+  expect(current.request.mock.lastCall?.[0].query).toMatchObject({ requestId: other })
+})

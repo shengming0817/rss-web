@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Space } from 'antd'
-import { Link } from 'react-router-dom'
 import { freeze, identifier, operation, uuid, type Operation } from '@rss/mdm-inventory'
 import {
   validateSubscriptionChange,
@@ -15,7 +14,7 @@ import {
 import type { Locale } from './i18n'
 import { Failure, isUnknown, labels, useAction, validateInput } from './AdminUi'
 import { usePendingSelection } from './SelectionGuard'
-import { auditHref } from './audit-context'
+import { DiagnosticReference } from './DiagnosticReference'
 
 export type WebhookChange =
   | {
@@ -67,7 +66,7 @@ function validate(change: WebhookChange): void {
     }
   }
 }
-/** These four owners have no original-operation GET. Only the frozen request may be resubmitted. */
+/** Explicit resubmission, when chosen, uses only the frozen request. */
 export function useWebhookCommand(webhooks: Webhooks, permitted: boolean) {
   const action = useAction(),
     running = useRef(false),
@@ -173,11 +172,11 @@ export function WebhookCommandState({
       {pending && (
         <Descriptions column={1} size="small">
           <Descriptions.Item label={l('原操作', 'Original operation')}>
-            <code>{operationId}</code>{' '}
             {operationId && (
-              <Link to={auditHref({ operationId })}>
-                {l('定位原操作审计', 'Audit for the original operation')}
-              </Link>
+              <DiagnosticReference
+                locale={locale}
+                selection={{ mode: 'operation', address: { owner: 'webhook', operationId } }}
+              />
             )}
           </Descriptions.Item>
           <Descriptions.Item label={l('原操作类别', 'Original operation kind')}>
@@ -199,8 +198,8 @@ export function WebhookCommandState({
         <Alert
           type="warning"
           title={l(
-            '原写入结果未知。当前状态仅供比较；没有本操作的回执查询端点，请显式重提原 UUID 和冻结输入。',
-            'The original write outcome is unknown. Current state is for comparison only. This operation has no receipt-query endpoint; explicitly resubmit its original UUID and frozen input.',
+            '原写入结果未知。请先通过操作排障查询原回执。当前配置只供比较。',
+            'The original write outcome is unknown. Read the original receipt in Operation diagnostics first. Current configuration is for comparison.',
           )}
         />
       )}

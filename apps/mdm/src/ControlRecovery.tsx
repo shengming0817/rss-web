@@ -1,3 +1,4 @@
+import { DiagnosticReference } from './DiagnosticReference'
 import { useState } from 'react'
 import { Alert, Button, Checkbox, Space } from 'antd'
 import type { ControlRecovery } from '@rss/mdm-execution'
@@ -147,7 +148,19 @@ export function ControlRecoveryPanel({
       {pending && (
         <>
           <p>
-            {l('恢复请求 ID', 'Recovery request ID')}: {pending.input.requestId} · {outcome}
+            <DiagnosticReference
+              locale={locale}
+              selection={{
+                mode: 'operation',
+                address: {
+                  owner: 'device_control_request',
+                  operationId: pending.input.requestId,
+                  device,
+                },
+              }}
+            />
+            {' · '}
+            {outcome}
           </p>
           {outcome === 'unknown' && (
             <Button

@@ -1,3 +1,4 @@
+export * from './operation-diagnostics'
 export type * from './model'
 export { validateAuditQuery, validateActivityQuery, validatePolicyAddress } from './query'
 import { freeze, identifier, uuid } from '@rss/mdm-inventory'

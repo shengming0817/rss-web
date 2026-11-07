@@ -56,6 +56,7 @@ export function createMdmHttpTransport(
             headers: { ...options.headers, 'Content-Type': 'application/octet-stream' },
           },
           decodeMdmError,
+          true,
         )
       }
       if (
@@ -79,6 +80,7 @@ export function createMdmHttpTransport(
         30_000,
         raw ? { ...options, body: encoded } : options,
         decodeMdmError,
+        true,
       )
     },
   } as HttpTransport

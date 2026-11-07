@@ -117,3 +117,20 @@ it('resolves exact current addresses and retains a shared event as a multiple-po
   await expect(core.byEvent('daily.check')).rejects.toThrow()
   await expect(core.resolve({ kind: 'alias', alias: 'invalid alias' })).rejects.toThrow()
 })
+
+it('requires the original self-service actor and rejects a browser instance coordinate', async () => {
+  const { validateOperationAddress } = await import('./operation-diagnostics')
+  const address = {
+    owner: 'script_invocation',
+    operationId: '11111111-1111-4111-8111-111111111111',
+    device: 'endpoint',
+    registration: '22222222-2222-4222-8222-222222222222',
+    generation: 1,
+  }
+  expect(() => validateOperationAddress(address)).toThrow('Missing required operation coordinate')
+  const locator = { ...address, actor: 'registered-user' }
+  expect(() => validateOperationAddress(locator)).not.toThrow()
+  expect(() => validateOperationAddress({ ...locator, instance: address.operationId })).toThrow(
+    'Self-service invocation has no instance coordinate',
+  )
+})

@@ -63,6 +63,7 @@ function Bindings({
           </Button>
         </Space>
         <ReadState
+          diagnosticContext="da"
           locale={locale}
           busy={read.busy}
           error={read.error}
@@ -146,7 +147,12 @@ function Bindings({
         </Form>
         {operation && (
           <>
-            <ReadState locale={locale} busy={receipt.busy} error={receipt.error} />
+            <ReadState
+              diagnosticContext="da"
+              locale={locale}
+              busy={receipt.busy}
+              error={receipt.error}
+            />
             {receipt.value && (
               <p>
                 {l('原回执', 'Original receipt')}: {receipt.value.operationId} · {receipt.value.id}{' '}
@@ -239,6 +245,7 @@ export function DeviceAccess({ runtime, locale }: { runtime: Runtime; locale: Lo
             {l('配置企业应用或账户映射', 'Configure enterprise application or account mapping')}
           </Button>
           <ReadState
+            diagnosticContext="da"
             locale={locale}
             busy={read.busy}
             error={read.error}

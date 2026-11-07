@@ -21,6 +21,9 @@ export function validateAuditQuery(query: AuditQuery): void {
   for (const value of [query.targetId, query.targetType, query.device, query.actor, query.action])
     if (value !== undefined) identifier(value, 256)
   if (query.operationId !== undefined) uuid(query.operationId)
+  if (query.requestId !== undefined) uuid(query.requestId)
+  if (query.cursor !== undefined && query.cursor.length > 4096)
+    throw new Error('Invalid audit cursor')
   if (
     query.outcome !== undefined &&
     !['succeeded', 'denied', 'failed', 'unknown'].includes(query.outcome)

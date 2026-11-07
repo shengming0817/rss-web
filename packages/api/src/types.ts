@@ -59,6 +59,8 @@ export interface RssApiError extends Error {
   readonly cause: RssApiErrorCause
   readonly code: string
   readonly status?: number
+  /** Public MDM HTTP request coordinate from the response envelope. */
+  readonly requestId?: string
   /** Validated Agent signing attempt locator; never raw error metadata. */
   readonly issuanceId?: string
   /** Validated Identity 429 delta-seconds; never authorizes automatic replay. */

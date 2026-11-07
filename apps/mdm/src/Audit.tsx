@@ -1,3 +1,4 @@
+import { useAuditFactFilter } from './AuditFactFilter'
 import { EntryCopies, type CopyEntry } from './EntryCopies'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Select, Space } from 'antd'
@@ -48,6 +49,7 @@ type Draft = {
   targetType?: string | undefined
   targetId?: string | undefined
   operationId?: string | undefined
+  requestId?: string | undefined
   actor?: string | undefined
   action?: string | undefined
   outcome?: AuditContext['outcome']
@@ -284,7 +286,8 @@ export function AuditWorkspace({
   locale: Locale
   device?: string
 }) {
-  const l = labels(locale),
+  const l = labels(locale)
+  const factFilter = useAuditFactFilter(locale),
     prefix = useId(),
     visible = useSecretVisibility(),
     { audit, auditPolicyLookup, authorization, binding } = useAdministration(runtime),
@@ -507,6 +510,7 @@ export function AuditWorkspace({
                     ['targetType', l('目标类型', 'Target type')],
                     ['targetId', l('目标 ID', 'Target ID')],
                     ['operationId', l('原 operation ID', 'Original operation ID')],
+                    ['requestId', l('HTTP 请求编号', 'HTTP request ID')],
                     ['actor', l('主体', 'Actor')],
                     ['action', l('行为', 'Action')],
                   ]
@@ -598,9 +602,10 @@ export function AuditWorkspace({
                   ? l('本次未观察到索引缺口', 'No index gaps observed on this read')
                   : l('存在未覆盖事实', 'Some facts are not covered')}
               </p>
+              {factFilter.controls}
               <DataTable
                 locale={locale}
-                dataSource={facts.items}
+                dataSource={facts.items.filter(factFilter.matches)}
                 rowKey={(fact) => `${fact.source}/${fact.position}/${fact.eventId}`}
                 columns={[
                   {

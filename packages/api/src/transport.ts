@@ -17,6 +17,7 @@ import {
   networkError,
   protocolError,
   timeoutError,
+  withRequestId,
 } from './wire-error'
 
 const PATH_PARAM = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
@@ -184,11 +185,31 @@ async function boundedBinary(
   }
 }
 
+function sameOriginResponse(request: unknown): boolean {
+  if (typeof location === 'undefined') return true
+  const url =
+    request instanceof Request && request.mode === 'same-origin'
+      ? request.url
+      : typeof request === 'object' &&
+          request !== null &&
+          'responseURL' in request &&
+          typeof request.responseURL === 'string'
+        ? request.responseURL
+        : null
+  if (!url) return false
+  try {
+    return new URL(url).origin === location.origin
+  } catch {
+    return false
+  }
+}
+
 export async function execute<T>(
   instance: AxiosInstance,
   defaultTimeoutMs: number,
   options: NoContentRequest | RequestOptions<T>,
   decodeError: (status: number, value: unknown, retryAfter: unknown) => RssApiError,
+  preserveRequestId = false,
 ): Promise<T | void> {
   if (options.signal?.aborted === true) throw abortedError()
   const range =
@@ -222,7 +243,8 @@ export async function execute<T>(
     cancelBounded = () => bounded?.abort()
   let timedOut = false,
     deadline: ReturnType<typeof setTimeout> | undefined,
-    binaryOwned: ArrayBuffer | undefined
+    binaryOwned: ArrayBuffer | undefined,
+    responseRequestId: unknown
   options.signal?.addEventListener('abort', cancelBounded, { once: true })
   try {
     const config = requestConfig(options, defaultTimeoutMs)
@@ -232,6 +254,7 @@ export async function execute<T>(
       // Use Axios' stream adapter inside the same executor and instance. XHR progress cannot bound buffering.
       // ref: axios v1.16.1 lib/adapters/fetch.js and lib/helpers/trackStream.js.
       config.adapter = 'fetch'
+      if (preserveRequestId) config.fetchOptions = { mode: 'same-origin' }
       config.responseType = 'stream'
       config.signal = bounded.signal
       const timeout = config.timeout!
@@ -243,6 +266,10 @@ export async function execute<T>(
       if (options.signal?.aborted) bounded.abort()
     }
     const response = await instance.request(config)
+    if (preserveRequestId && sameOriginResponse(response.request))
+      responseRequestId = Object.entries(response.headers).find(
+        ([name]) => name.toLowerCase() === 'x-request-id',
+      )?.[1]
     if (bounded && maximumBytes !== undefined) {
       response.data = await boundedBinary(
         response.data,
@@ -352,19 +379,19 @@ export async function execute<T>(
     }
   } catch (error: unknown) {
     if (binaryOwned) new Uint8Array(binaryOwned).fill(0)
-    if (options.signal?.aborted) throw abortedError()
-    if (timedOut) throw timeoutError()
-    if (isRssApiError(error)) throw error
+    if (options.signal?.aborted) throw withRequestId(abortedError(), responseRequestId)
+    if (timedOut) throw withRequestId(timeoutError(), responseRequestId)
+    if (isRssApiError(error)) throw withRequestId(error, responseRequestId)
     if (axios.isCancel(error) || (axios.isAxiosError(error) && error.code === 'ERR_CANCELED')) {
-      throw abortedError()
+      throw withRequestId(abortedError(), responseRequestId)
     }
     if (
       axios.isAxiosError(error) &&
       (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')
     ) {
-      throw timeoutError()
+      throw withRequestId(timeoutError(), responseRequestId)
     }
-    throw networkError()
+    throw withRequestId(networkError(), responseRequestId)
   } finally {
     if (deadline !== undefined) clearTimeout(deadline)
     options.signal?.removeEventListener('abort', cancelBounded)

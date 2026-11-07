@@ -27,6 +27,7 @@
     "./certificate-archive": "./src/certificate-archive.ts",
     "./recovery-credentials": "./src/recovery-credentials.ts",
     "./audit": "./src/audit.ts",
+    "./operation-diagnostics": "./src/operation-diagnostics.ts",
     "./webhooks": "./src/webhooks.ts",
     "./scopes": "./src/scopes.ts",
     "./policies": "./src/policies.ts",

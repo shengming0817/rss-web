@@ -96,6 +96,7 @@ const names: Record<string, readonly [string, string]> = {
   known: ['已知', 'Known'],
   conflict: ['数据冲突', 'Conflicting observations'],
   missing: ['未上报', 'Missing'],
+  supported: ['支持', 'Supported'],
   unsupported: ['不支持', 'Unsupported'],
   deleted: ['已删除', 'Deleted'],
   null: ['空值', 'Null'],
