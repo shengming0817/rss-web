@@ -230,3 +230,10 @@ it('keeps recurring eligibility, current trigger knowledge and restricted execut
     currentRecord: { state: 'absent' },
   })
 })
+
+it('carries the assignment read cancellation signal to the sole HTTP executor', async () => {
+  const f = fixture({ items: [], nextCursor: null }),
+    controller = new AbortController()
+  await createPoliciesAdapter(f.transport).assignments(id, { limit: 20 }, controller.signal)
+  expect(f.request.mock.calls[0]![0].signal).toBe(controller.signal)
+})

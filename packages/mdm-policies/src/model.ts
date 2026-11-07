@@ -225,7 +225,7 @@ export interface PoliciesPort {
     scopeResult: string | null,
     query: WindowQuery,
   ): Promise<PolicyPreview>
-  assignments(id: string, query: WindowQuery): Promise<Page<Assignment>>
+  assignments(id: string, query: WindowQuery, signal?: AbortSignal): Promise<Page<Assignment>>
   runs(id: string, query: WindowQuery, signal?: AbortSignal): Promise<Page<PolicyRun>>
   rollout(id: string): Promise<RolloutProgress>
 }
@@ -331,6 +331,7 @@ export interface RunProgress {
   readonly startedAt: number | null
 }
 export interface PolicyRun {
+  readonly versionId: string | null
   readonly kind:
     | 'software'
     | 'access'

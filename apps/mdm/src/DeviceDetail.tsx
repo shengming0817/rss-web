@@ -1,11 +1,12 @@
 import { TelemetryWorkspace } from './Telemetry'
 import { DeviceControl } from './DeviceControl'
+import { resultSourcePath } from './execution-context'
 import { deviceExecutionsPath } from './Executions'
 import { DeviceSecurity, hasDeviceSecurity } from './DeviceSecurity'
 import { SelectionGuard, useSelectionGuard, usePendingSelection } from './SelectionGuard'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Result, Select } from 'antd'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams, useParams } from 'react-router-dom'
 import type { AssetState, DeviceRef, DeviceView, ViewEndpoint } from '@rss/mdm-devices'
 import { SecretTabs } from './SecretTabs'
 import type { Runtime } from './runtime'
@@ -326,12 +327,13 @@ function Detail({
   reference: DeviceRef
 }) {
   const guard = useSelectionGuard()
+  const [params, setParams] = useSearchParams()
+  const location = useLocation()
   const l = labels(locale),
     { devices, inventory, compliance, authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/device-asset-presentation`, authorization.effective),
     has = (operation: string) =>
       permissions.value?.grants.some((grant) => grant.operation === operation) ?? false,
-    [selected, setSelected] = useState(''),
     [snapshot, setSnapshot] = useState<DeviceView>(),
     [heldEndpoint, setHeldEndpoint] = useState<ViewEndpoint>(),
     read = useRead(
@@ -346,17 +348,27 @@ function Detail({
   // successful current read; a changed tenant/principal/session remounts this subtree.
   const retained = read.value ?? snapshot,
     view = read.value,
-    endpoint = selected ? view?.endpoints.find((e) => e.id === selected) : view?.endpoints[0],
+    requested = params.get('endpoint') || retained?.endpoints[0]?.id,
+    selected = guard.locked && heldEndpoint ? heldEndpoint.id : requested,
+    endpoint = view?.endpoints.find((e) => e.id === selected),
     mountedEndpoint = endpoint ?? heldEndpoint
   useEffect(() => {
     if (endpoint) {
       setHeldEndpoint(endpoint)
-      if (!selected) setSelected(endpoint.id)
     }
-  }, [endpoint, selected])
+  }, [endpoint])
+  useEffect(() => {
+    if (guard.locked && heldEndpoint && requested !== heldEndpoint.id) {
+      const next = new URLSearchParams(params)
+      next.set('endpoint', heldEndpoint.id)
+      setParams(next, { replace: true })
+    }
+  }, [guard.locked, heldEndpoint, params, requested, setParams])
   return (
     <>
-      <Link to="/devices">← {l('设备目录', 'Devices')}</Link>
+      <Link to={resultSourcePath(params.get('returnTo')) ?? '/devices'}>
+        ← {l('返回来源 / 设备目录', 'Return to source / devices')}
+      </Link>
       <Heading
         title={deviceName(view?.endpoints[0]?.displayName, l('设备详情', 'Device detail'))}
         hint={`${reference.kind} · ${reference.id}`}
@@ -403,7 +415,11 @@ function Detail({
                 value: e.id,
                 label: `${deviceName(e.displayName, e.id)} · ${e.id}`,
               }))}
-              onChange={(value: string) => setSelected(value)}
+              onChange={(value: string) => {
+                const next = new URLSearchParams(params)
+                next.set('endpoint', value)
+                setParams(next)
+              }}
             />
           </div>
           {!endpoint && mountedEndpoint && (
@@ -420,6 +436,12 @@ function Detail({
               <SecretTabs
                 key={mountedEndpoint.id}
                 uiLocale={locale}
+                activeKey={params.get('tab') ?? 'overview'}
+                onChange={(tab) => {
+                  const next = new URLSearchParams(params)
+                  next.set('tab', tab)
+                  setParams(next)
+                }}
                 authorizedKeys={
                   endpoint && view
                     ? [
@@ -452,9 +474,16 @@ function Detail({
                           endpoint={mountedEndpoint}
                         />
                         <div>
-                          <Link to={deviceExecutionsPath(mountedEndpoint.id)}>
-                            {l('查看设备执行', 'View device executions')}
-                          </Link>
+                          {has('operation_read') && (
+                            <Link
+                              to={deviceExecutionsPath(
+                                mountedEndpoint.id,
+                                location.pathname + location.search,
+                              )}
+                            >
+                              {l('查看设备执行', 'View device executions')}
+                            </Link>
+                          )}
                           <br />
                           <Link to="/device-access">Device Access</Link>
                         </div>

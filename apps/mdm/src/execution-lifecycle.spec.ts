@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Runtime } from './runtime'
 import type { ControlIntent, ControlRecovery } from '@rss/mdm-execution'
 import type { ViewEndpoint } from '@rss/mdm-devices'
+import { DeviceDetail } from './DeviceDetail'
 import { DeviceControl } from './DeviceControl'
 import { ControlRecoveryPanel } from './ControlRecovery'
 import { isUnknown } from './AdminUi'
@@ -14,6 +15,7 @@ import { decodeMdmError } from '@rss/api/mdm'
 import { EnterpriseEditor } from './EnterpriseEditor'
 import { BindingEditor } from './BindingEditor'
 import { Policies } from './Policies'
+import { resultReturnPath, resultSourcePath } from './execution-context'
 import { Executions, policyReturnPath } from './Executions'
 import type { EnterpriseConfiguration } from '@rss/mdm-device-access'
 vi.mock('./useOperationAuthorization', () => ({
@@ -283,6 +285,7 @@ it.each<EnterpriseConfiguration>([
         host: { serviceId: '22222222-2222-4222-8222-222222222222' },
         administration: () => ({
           binding: 'session-a',
+          devices: { views: async () => ({ items: [], nextCursor: null }) },
           authorization: {
             effective: async () => ({
               grants: [{ operation: 'enterprise_applications_write', scope: { kind: 'tenant' } }],
@@ -360,12 +363,12 @@ it.each(['runs', 'assignments'])(
         items: [
           {
             object: { kind: 'endpoint', id: 'device-a' },
-            qualification: { state: 'qualified' },
-            availability: 'available',
+            qualification: { state: 'eligible' },
+            availability: 'ready',
             sources: [],
             execution: {
-              kind: 'periodic',
-              latestRun: { taskId: run },
+              kind: 'recurring',
+              latestRun: { taskId: run, state: { execution: 'succeeded' } },
               currentRecord: { state: 'unknown' },
             },
           },
@@ -375,6 +378,7 @@ it.each(['runs', 'assignments'])(
       runtime = {
         administration: () => ({
           binding: 'session-a',
+          devices: { views: async () => ({ items: [], nextCursor: null }) },
           authorization: {
             effective: async () => ({
               grants: ['policy_read', 'operation_read', 'inventory_read'].map((operation) => ({
@@ -385,11 +389,19 @@ it.each(['runs', 'assignments'])(
           },
           policies: {
             list,
-            read: async () => ({ id: policy, definition: { action: { kind: 'script' } } }),
+            read: async () => ({ id: policy, definition: { action: { kind: 'execution' } } }),
             runs,
             assignments,
           },
           execution: {
+            summary: async () => ({
+              id: run,
+              device: 'device-a',
+              policy,
+              status: 'unknown',
+              registrationId: 'registration',
+              generation: 1,
+            }),
             list: async () => ({ items: [], nextCursor: null }),
             statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
             detail: async () => ({
@@ -450,6 +462,7 @@ it.each(['runs', 'assignments'])(
       expect(assignments.mock.lastCall).toEqual([
         policy,
         { limit: 20, cursor: 'assignment-page-2' },
+        expect.any(AbortSignal),
       ])
     expect(document.querySelector('[role=tab][aria-selected=true]')!.textContent).toContain(
       tab === 'runs' ? '执行事实' : '设备分配',
@@ -551,4 +564,458 @@ it('binds labels to their own controls when binding and enterprise editors share
   expect(
     [...host.querySelectorAll('label')].some((label) => label.textContent === 'Provider UUID'),
   ).toBe(true)
+})
+
+it('loads sensitive evidence explicitly and keeps the authorized summary when detail is denied', async () => {
+  const id = '11111111-1111-4111-8111-111111111111',
+    summary = vi.fn(async () => ({
+      id,
+      kind: 'command',
+      device: 'device-a',
+      registrationId: id,
+      generation: 3,
+      policy: null,
+      status: 'applied',
+    })),
+    detail = vi.fn(async () => {
+      throw decodeMdmError(403, { code: 'permission_denied' })
+    }),
+    create = vi.fn(),
+    runtime = {
+      administration: () => ({
+        binding: 'sensitive',
+        authorization: { effective: async () => ({ grants: [] }) },
+        execution: {
+          summary,
+          detail,
+          create,
+          list: async () => ({ items: [], nextCursor: null }),
+          statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+          trust: async () => ({ revision: 1, keys: [] }),
+        },
+      }),
+    } as unknown as Runtime
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        { initialEntries: [`/operations?kind=command&operation=${id}`] },
+        h(Executions, { runtime, locale: 'zh' }),
+      ),
+    ),
+  )
+  expect(host.textContent).toContain('目录状态')
+  expect(host.textContent).toContain('device-a')
+  expect(detail).not.toHaveBeenCalled()
+  await act(async () => button('读取详细结果与证据').click())
+  expect(detail).toHaveBeenCalledOnce()
+  expect(host.textContent).toContain('当前账户没有此操作权限')
+  expect(host.textContent).toContain('目录状态')
+  expect(create).not.toHaveBeenCalled()
+})
+
+it('shows historical success beside an absent current run and performs one bounded name lookup per page', async () => {
+  const { PolicyAssignments } = await import('./PolicyProgress'),
+    id = '11111111-1111-4111-8111-111111111111',
+    views = vi.fn(async () => ({
+      items: [
+        {
+          key: 'endpoint:device-a',
+          endpoints: [
+            {
+              id: 'device-a',
+              displayName: { kind: 'known', value: { kind: 'string', value: 'Lobby Mac' } },
+            },
+          ],
+        },
+      ],
+      nextCursor: null,
+    })),
+    assignments = vi.fn(async () => ({
+      items: [
+        {
+          object: { kind: 'endpoint', id: 'device-a' },
+          channel: 'agent',
+          qualification: { state: 'eligible' },
+          availability: 'ready',
+          reason: null,
+          target: null,
+          sources: [],
+          scopeResult: null,
+          taskAdmission: { state: 'waiting_check_in', nextAllowedStartAt: null },
+          execution: {
+            kind: 'recurring',
+            latestRun: { taskId: id, state: { execution: 'succeeded' } },
+            currentRecord: { state: 'absent' },
+          },
+        },
+      ],
+      nextCursor: null,
+    })),
+    admin = { policies: { assignments }, devices: { views } } as unknown as ReturnType<
+      Runtime['administration']
+    >,
+    policy = {
+      id,
+      versionId: id,
+      definition: { action: { kind: 'execution' } },
+    } as unknown as Parameters<typeof PolicyAssignments>[0]['policy']
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(PolicyAssignments, {
+          policies: admin.policies,
+          devices: admin.devices,
+          policy,
+          locale: 'zh',
+        }),
+      ),
+    ),
+  )
+  expect(host.textContent).toContain('Lobby Mac')
+  expect(host.textContent).toContain('成功')
+  expect(host.textContent).toContain('已核对，尚无运行')
+  expect(host.textContent).toContain('未知 / 等待事件')
+  expect(views).toHaveBeenCalledOnce()
+  expect(views.mock.calls[0]).toEqual([
+    { fields: ['key', 'reference', 'endpoints'], limit: 1, filter: "key=='endpoint:device-a'" },
+    expect.any(AbortSignal),
+  ])
+  expect(assignments.mock.calls[0]).toEqual([id, { limit: 20 }, expect.any(AbortSignal)])
+  await act(async () => button('读取分配').click())
+  expect(assignments).toHaveBeenCalledTimes(2)
+})
+
+it('accepts only public result return coordinates for the exact device page', () => {
+  expect(
+    resultReturnPath('/devices/endpoint/a?tab=history&endpoint=a', '/devices/endpoint/a'),
+  ).toBe('/devices/endpoint/a?tab=history&endpoint=a')
+  for (const value of [
+    '//evil.test/devices/endpoint/a',
+    '/devices/endpoint/b?tab=history',
+    '/devices/endpoint/a?secret=value',
+    '/devices/endpoint/a#secret',
+    '/devices/endpoint/a\\evil',
+  ])
+    expect(resultReturnPath(value, '/devices/endpoint/a')).toBeNull()
+})
+
+it('rejects malformed source locators without crashing a result page', () => {
+  for (const value of [
+    '/\\[',
+    '/\\evil',
+    '/devices/endpoint/a?secret=value',
+    '//evil.test/policies',
+    '/policies#fragment',
+  ])
+    expect(resultSourcePath(value)).toBeNull()
+})
+
+it('renders the original attempt nodes and carries the complete execution context to its device', async () => {
+  const id = '11111111-1111-4111-8111-111111111111',
+    policy = '22222222-2222-4222-8222-222222222222',
+    path = `/operations?kind=action_run&operation=${id}&policy=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
+    detail = vi.fn(async () => ({
+      item: null,
+      policy,
+      detail: {
+        kind: 'run',
+        owner: 'software',
+        id,
+        device: 'device-a',
+        versionId: policy,
+        occurrence: null,
+        availableAt: 1,
+        deadline: 2,
+        state: { execution: 'succeeded', cancellation: 'none', startedAt: 1 },
+        delivery: 'received',
+        effect: 'unknown',
+        authorization: null,
+        result: null,
+        attempt: id,
+        nodes: [{ stepId: 'install-original', definition: { id: 'package', version: 'v1' } }],
+        userAction: null,
+      },
+    })),
+    runtime = {
+      administration: () => ({
+        binding: 'nodes',
+        authorization: { effective: async () => ({ grants: [] }) },
+        execution: {
+          summary: async () => ({
+            id,
+            device: 'device-a',
+            policy,
+            status: 'succeeded',
+            registrationId: id,
+            generation: 1,
+          }),
+          detail,
+          list: async () => ({ items: [], nextCursor: null }),
+          statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+        },
+      }),
+    } as unknown as Runtime
+  await act(async () =>
+    root.render(
+      h(MemoryRouter, { initialEntries: [path] }, h(Executions, { runtime, locale: 'zh' })),
+    ),
+  )
+  const link = host.querySelector<HTMLAnchorElement>('a[href^="/devices/endpoint/device-a"]')!
+  expect(new URL(link.href).searchParams.get('returnTo')).toBe(path)
+  expect(detail).not.toHaveBeenCalled()
+  await act(async () => button('读取详细结果与证据').click())
+  expect(host.textContent).toContain('原尝试的冻结节点')
+  expect(host.textContent).toContain('install-original')
+  expect(host.textContent).toContain('v1')
+})
+
+it('retains an unknown recovery request while refreshing the containing result detail', async () => {
+  const id = '11111111-1111-4111-8111-111111111111',
+    item = {
+      id,
+      kind: 'command',
+      device: 'device-a',
+      policy: null,
+      origin: 'direct',
+      status: 'queued',
+      registrationId: id,
+      generation: 1,
+    },
+    cancel = vi.fn(async () => {
+      throw decodeMdmError(503, { code: 'service_unavailable' })
+    }),
+    detail = vi.fn(async () => ({
+      item,
+      policy: null,
+      detail: {
+        kind: 'command',
+        owner: 'device',
+        id,
+        device: 'device-a',
+        revision: 1,
+        delivery: 'queued',
+        authorization: { state: 'authorized' },
+        observation: { protocol: 'syncml', effect: 'waiting' },
+        target: { kind: 'device' },
+        task: { name: 'Restart', kind: 'command', platform: 'windows', objects: [] },
+        inputVersion: '1',
+        deadline: 2,
+        reauthorization: null,
+      },
+    })),
+    runtime = {
+      administration: () => ({
+        binding: 'recovery-owner',
+        authorization: {
+          effective: async () => ({
+            grants: [{ operation: 'operation_cancel', scope: { kind: 'all_devices' } }],
+          }),
+        },
+        execution: {
+          summary: async () => item,
+          detail,
+          cancel,
+          list: async () => ({ items: [], nextCursor: null }),
+          statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+        },
+      }),
+    } as unknown as Runtime
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        { initialEntries: [`/operations?kind=command&operation=${id}`] },
+        h(Executions, { runtime, locale: 'zh' }),
+      ),
+    ),
+  )
+  await act(async () => button('读取详细结果与证据').click())
+  const confirmation = [...host.querySelectorAll('label')]
+    .find((node) => node.textContent?.includes('我已核对原操作及注册'))!
+    .querySelector<HTMLInputElement>('input')!
+  await act(async () => confirmation.click())
+  await act(async () => button('请求取消原操作').click())
+  expect(cancel).toHaveBeenCalledOnce()
+  const original = cancel.mock.calls[0]
+  await act(async () => button('查询原操作当前事实').click())
+  expect(detail).toHaveBeenCalledTimes(2)
+  await act(async () => button('显式重提同一恢复请求').click())
+  expect(cancel.mock.calls[1]).toEqual(original)
+})
+
+it.each(['//[', '//%'])(
+  'keeps execution detail mounted with malformed return locator %s',
+  async (returnTo) => {
+    const id = '11111111-1111-4111-8111-111111111111',
+      runtime = {
+        administration: () => ({
+          binding: 'malformed',
+          authorization: { effective: async () => ({ grants: [] }) },
+          execution: {
+            summary: async () => ({
+              id,
+              device: 'device-a',
+              policy: id,
+              status: 'queued',
+              registrationId: id,
+              generation: 1,
+            }),
+            list: async () => ({ items: [], nextCursor: null }),
+            statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+          },
+        }),
+      } as unknown as Runtime
+    expect(resultReturnPath(returnTo, '/policies')).toBeNull()
+    await act(async () =>
+      root.render(
+        h(
+          MemoryRouter,
+          {
+            initialEntries: [
+              `/operations?${new URLSearchParams({ kind: 'command', operation: id, returnTo })}`,
+            ],
+          },
+          h(Executions, { runtime, locale: 'zh' }),
+        ),
+      ),
+    )
+    expect(host.textContent).toContain('device-a')
+    expect(host.textContent).toContain('原操作与结果')
+  },
+)
+
+it('keeps the default endpoint location during a delayed control preflight', async () => {
+  const view = { association: null, endpoints: [endpoint], fields: {} }
+  let release!: (value: typeof view) => void
+  const preflight = new Promise<typeof view>((resolve) => {
+    release = resolve
+  })
+  const read = vi.fn().mockResolvedValue(view).mockReturnValueOnce(Promise.resolve(view))
+  const runtime = {
+    administration: () => ({
+      binding: 'default-endpoint',
+      authorization: {
+        effective: async () => ({
+          grants: [{ operation: 'device_control', scope: { kind: 'all_devices' } }],
+        }),
+      },
+      devices: {
+        view: read,
+        endpoint: async () => ({ ...endpoint, capabilities: [] }),
+      },
+      execution: {},
+      connections: { agent: {} },
+    }),
+  } as unknown as Runtime
+  function Location() {
+    const location = useLocation()
+    return h('output', { 'data-location': true }, location.key + location.search)
+  }
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        { initialEntries: [`/devices/endpoint/${endpoint.id}`] },
+        h(Location),
+        h(
+          Routes,
+          null,
+          h(Route, {
+            path: '/devices/:kind/:id',
+            element: h(DeviceDetail, { runtime, locale: 'zh' }),
+          }),
+        ),
+      ),
+    ),
+  )
+  const location = () => host.querySelector('[data-location]')!.textContent
+  const before = location()
+  read.mockReturnValueOnce(preflight)
+  await act(async () => button('核对设备与动作').click())
+  expect(read).toHaveBeenLastCalledWith({ kind: 'endpoint', id: endpoint.id })
+  expect(location()).toBe(before)
+  await act(async () => release(view))
+  expect(document.querySelector('[role=dialog]')).not.toBeNull()
+  expect(location()).toBe(before)
+})
+
+it('uses URL endpoint selection for back and forward while retaining an unknown operation target', async () => {
+  const association = '33333333-3333-4333-8333-333333333333',
+    endpoints = [
+      { ...endpoint, id: 'device-a' },
+      { ...endpoint, id: 'device-b' },
+    ],
+    create = vi.fn(async (_input: ControlIntent) => {
+      throw decodeMdmError(503, { code: 'service_unavailable' })
+    }),
+    runtime = {
+      administration: () => ({
+        binding: 'association',
+        authorization: {
+          effective: async () => ({
+            grants: [{ operation: 'device_control', scope: { kind: 'all_devices' } }],
+          }),
+        },
+        devices: {
+          view: async () => ({ association: null, endpoints, fields: {} }),
+          endpoint: async (id: string) => ({
+            ...endpoints.find((e) => e.id === id),
+            capabilities: [],
+          }),
+        },
+        execution: { create },
+        connections: { agent: {} },
+      }),
+    } as unknown as Runtime,
+    path = `/devices/association/${association}`
+  function History() {
+    const navigate = useNavigate(),
+      location = useLocation()
+    return h(
+      Fragment,
+      null,
+      h('output', { 'data-location': true }, location.pathname + location.search),
+      h('button', { onClick: () => navigate(-1) }, '后退终端'),
+      h('button', { onClick: () => navigate(1) }, '前进终端'),
+      h('button', { onClick: () => navigate(path + '?endpoint=device-a') }, '定位另一个终端'),
+    )
+  }
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        {
+          initialEntries: [path + '?endpoint=device-a', path + '?endpoint=device-b'],
+          initialIndex: 1,
+        },
+        h(History),
+        h(
+          Routes,
+          null,
+          h(Route, {
+            path: '/devices/:kind/:id',
+            element: h(DeviceDetail, { runtime, locale: 'zh' }),
+          }),
+        ),
+      ),
+    ),
+  )
+  const current = () => host.querySelector('.device-endpoint-select')?.textContent
+  expect(current()).toContain('device-b')
+  await act(async () => button('后退终端').click())
+  expect(current()).toContain('device-a')
+  await act(async () => button('前进终端').click())
+  expect(current()).toContain('device-b')
+  await act(async () => button('核对设备与动作').click())
+  const dialog = document.querySelector('[role=dialog]')!
+  await act(async () => dialog.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  await act(async () => button('确认提交此动作').click())
+  expect(create.mock.calls[0]![0].device).toBe('device-b')
+  await act(async () => button('定位另一个终端').click())
+  expect(current()).toContain('device-b')
+  expect(host.querySelector('[data-location]')!.textContent).toContain('endpoint=device-b')
+  expect(create).toHaveBeenCalledOnce()
 })

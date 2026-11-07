@@ -73,6 +73,8 @@ const fields = {
 function policyRun(item: api.getApiV1PoliciesByIdRunsContract.Output['items'][number]): PolicyRun {
   return {
     kind: item.kind,
+    versionId:
+      'versionId' in item && typeof item.versionId === 'string' ? uuid(item.versionId) : null,
     nativeDelivery: item.kind === 'collection' && item.channel === 'mdm' ? item.delivery : null,
     report: item.kind === 'collection' ? item.report : null,
     taskId: uuid(item.taskId),
@@ -195,10 +197,10 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
           }
         },
       ),
-    assignments: (id, query) =>
+    assignments: (id, query, signal) =>
       api.getApiV1PoliciesByIdAssignments(
         transport,
-        { pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        { signal, pathParams: { id: uuid(id) }, query: windowQuery(query) },
         (value) => {
           safeNumbers(value)
           return {

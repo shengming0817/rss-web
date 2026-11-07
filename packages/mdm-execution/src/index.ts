@@ -20,29 +20,87 @@ export interface Execution extends ExecutionRef {
   readonly deadline: number
   readonly status: string
 }
-export interface ExecutionDetail {
-  readonly revision: number | null
+/** Public owner evidence, admitted by the generated HTTP contract in the adapter. */
+export type EvidenceDocument = Readonly<Record<string, unknown>>
+interface DetailIdentity {
+  readonly id: string
+  readonly device: string
+  readonly registrationId: string | null
+  readonly generation: number | null
+  readonly deadline: number
+}
+export interface CommandDetail extends DetailIdentity {
+  readonly kind: 'command'
+  readonly owner: 'configuration' | 'device' | 'software' | 'recovery' | 'registration'
+  readonly revision: number
+  readonly task: {
+    readonly name: string
+    readonly kind: string
+    readonly platform: string
+    readonly objects: readonly string[]
+  }
+  readonly target: EvidenceDocument
+  readonly inputVersion: string
+  readonly dispatchFailure: EvidenceDocument | null
+  readonly authorization: EvidenceDocument & { readonly state: string }
   readonly reauthorization: {
     readonly state: 'available' | 'unavailable' | 'not_applicable'
     readonly confirmationRequired: boolean
     readonly reason: string | null
   } | null
-  readonly dispatchFailure: string | null
-  readonly taskName: string | null
-
-  readonly id: string
-  readonly device: string
-  readonly registrationId: string | null
-  readonly generation: number | null
-  readonly owner: string
   readonly delivery: string
-  readonly execution: string | null
-  readonly effect: string | null
-  readonly cancellation: 'none' | 'requested' | 'confirmed' | null
-  readonly attempt: string | null
-  readonly deadline: number
-  readonly authorization: string | null
+  readonly observation: EvidenceDocument & { readonly protocol: string; readonly effect: string }
 }
+export interface RunState {
+  readonly delivery: {
+    readonly kind: string
+    readonly attempt?: string
+    readonly leaseUntil?: number
+  }
+  readonly execution:
+    | 'not_started'
+    | 'running'
+    | 'succeeded'
+    | 'failed'
+    | 'waiting_reboot'
+    | 'unknown'
+  readonly cancellation: 'none' | 'requested' | 'confirmed'
+  readonly deadline: number
+  readonly startedAt: number | null
+}
+interface RunIdentity extends DetailIdentity {
+  readonly kind: 'run'
+  readonly policyId: string
+  readonly versionId: string | null
+  readonly occurrence: string | null
+  readonly availableAt: number
+  readonly attempt: string | null
+  readonly state: RunState | null
+  readonly delivery: string
+  readonly effect: string | null
+  readonly authorization: EvidenceDocument | null
+}
+export type RunDetail = RunIdentity &
+  (
+    | {
+        readonly owner: 'script'
+        readonly resourceId: string
+        readonly result: EvidenceDocument | null
+      }
+    | {
+        readonly owner: 'collection'
+        readonly channel: 'agent' | 'mdm'
+        readonly report: EvidenceDocument | null
+        readonly result: EvidenceDocument | null
+      }
+    | {
+        readonly owner: 'software' | 'access' | 'credential' | 'enrollment' | 'execution'
+        readonly result: EvidenceDocument | string | null
+        readonly userAction: string | null
+        readonly nodes: readonly EvidenceDocument[]
+      }
+  )
+export type ExecutionDetail = CommandDetail | RunDetail
 export interface ExecutionStatistics {
   readonly total: number
   readonly commands: number
@@ -53,11 +111,27 @@ export interface ExecutionStatistics {
 export interface ExecutionPort extends ControlPort, TrustPort {
   statistics(filter?: string, signal?: AbortSignal): Promise<ExecutionStatistics>
   list(query: DirectoryQuery, signal?: AbortSignal): Promise<Page<Execution>>
-  command(device: string, id: string, signal?: AbortSignal): Promise<ExecutionDetail>
-  run(policy: string, id: string, signal?: AbortSignal): Promise<ExecutionDetail>
+  command(device: string, id: string, signal?: AbortSignal): Promise<CommandDetail>
+  run(policy: string, id: string, signal?: AbortSignal): Promise<RunDetail>
 }
 export function createExecution(port: ExecutionPort) {
+  async function summary(reference: ExecutionRef, signal?: AbortSignal) {
+    uuid(reference.id)
+    if (!['command', 'action_run'].includes(reference.kind))
+      throw new Error('Invalid execution kind')
+    const page = await port.list(
+      { filter: `id=='${reference.id}';kind=='${reference.kind}'`, limit: 2 },
+      signal,
+    )
+    if (!page.items.length && !page.nextCursor) return null
+    if (page.items.length !== 1 || page.nextCursor) throw new Error('Ambiguous execution identity')
+    const item = page.items[0]!
+    if (item.kind !== reference.kind || item.id !== reference.id)
+      throw new Error('Wrong execution identity')
+    return item
+  }
   return Object.freeze({
+    summary,
     ...createControl(port),
     ...createTrust(port),
     statistics: (filter?: string, signal?: AbortSignal) => port.statistics(filter, signal),
@@ -71,19 +145,8 @@ export function createExecution(port: ExecutionPort) {
         if (detail.id !== reference.id) throw new Error('Wrong run identity')
         return { item: null, detail, policy: reference.policy }
       }
-      const page = await port.list(
-        {
-          filter: `id=='${reference.id}';kind=='${reference.kind}'`,
-          limit: 2,
-        },
-        signal,
-      )
-      if (!page.items.length && !page.nextCursor) return null
-      if (page.items.length !== 1 || page.nextCursor)
-        throw new Error('Ambiguous execution identity')
-      const item = page.items[0]!
-      if (item.kind !== reference.kind || item.id !== reference.id)
-        throw new Error('Wrong execution identity')
+      const item = await summary(reference, signal)
+      if (!item) return null
       const detail =
         item.kind === 'command'
           ? await port.command(item.device, item.id, signal)

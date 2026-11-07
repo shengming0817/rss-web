@@ -379,6 +379,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                         children: (
                           <PolicyAssignments
                             policies={policies}
+                            devices={devices}
                             policy={selected.baseline}
                             locale={locale}
                           />
@@ -390,6 +391,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                         children: (
                           <PolicyRuns
                             policies={policies}
+                            devices={devices}
                             policy={selected.baseline}
                             locale={locale}
                           />

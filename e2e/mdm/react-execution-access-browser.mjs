@@ -97,6 +97,7 @@ try {
   await p.getByRole('link', { name: original.operationId, exact: true }).click()
   await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
   await p.getByText('原操作与结果', { exact: true }).waitFor()
+  await button('读取详细结果与证据').click()
   await p.getByText('维护原设备动作', { exact: true }).waitFor()
   const facts = await api('GET', `/api/v1/devices/${f.mdm}/operations/${original.operationId}`)
   assert.equal(facts.commandId, original.operationId)
@@ -389,6 +390,7 @@ try {
       .first()
       .click()
     await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
+    await button('读取详细结果与证据').click()
     await p.locator('.device-facts').getByText('运行中', { exact: true }).waitFor()
     if (terminal !== 'unknown') await agent(`script_${terminal}`, policy)
     const final = await until(
@@ -398,7 +400,7 @@ try {
         (terminal === 'success' ? 'succeeded' : terminal === 'failure' ? 'failed' : 'unknown'),
       terminal === 'unknown' ? 120000 : 45000,
     )
-    await button('重新查询原操作').click()
+    await button('读取详细结果与证据').click()
     await p
       .locator('.device-facts')
       .getByText({ succeeded: '成功', failed: '失败', unknown: '未知' }[final.state.execution], {
@@ -480,6 +482,7 @@ try {
   )
   await button(collected.task).click()
   await p.getByText('原操作与结果', { exact: true }).waitFor()
+  await button('读取详细结果与证据').click()
   await p.locator('.device-facts').getByText('成功', { exact: true }).first().waitFor()
   checks.push('real-collection-mtls-report-global-directory-evidence-and-original-run')
 
@@ -613,8 +616,9 @@ try {
   await p.getByRole('tab', { name: '设备分配', exact: true }).click()
   await p.getByRole('link', { name: command, exact: true }).click()
   await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
-  await p.getByRole('button', { name: command, exact: true }).click()
   await p.getByText('原操作与结果', { exact: true }).waitFor()
+  await button('读取详细结果与证据').click()
+  await p.getByText('原输入版本', { exact: true }).waitFor()
   const native = await api('GET', `${base}/devices/${f.mdm}/operations/${command}`)
   assert.equal(native.owner, 'configuration')
   assert.notEqual(native.observation.effect, 'verified')

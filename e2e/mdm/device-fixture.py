@@ -106,6 +106,9 @@ def seed():
                 f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
         if browser_module == 'react-recovery-browser.mjs' and channel == 'mdm':
             sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
+        if browser_module == 'react-execution-access-browser.mjs' and device == 'fixture-mac':
+            # Current source binding is a submission prerequisite, not proof of Apple device/security support.
+            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'mdm.apple',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
         if browser_module in {'react-audit-webhooks-browser.mjs', 'react-execution-access-browser.mjs'} and device == 'fixture-mdm':
             # Same controlled Windows capability prerequisite as rss-mdm device/mod.rs; no device effect claim.
             sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'mdm.windows',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
