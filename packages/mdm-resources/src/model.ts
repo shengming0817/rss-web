@@ -158,8 +158,12 @@ export interface ResourceReference {
   readonly release: 'retained_immutable' | 'archive_referencing_version'
 }
 export interface ResourcesPort {
-  list(query: DirectoryQuery<keyof ResourceRow>, kind?: ResourceKind): Promise<Page<ResourceRow>>
-  read(id: string): Promise<Resource>
+  list(
+    query: DirectoryQuery<keyof ResourceRow>,
+    kind?: ResourceKind,
+    signal?: AbortSignal,
+  ): Promise<Page<ResourceRow>>
+  read(id: string, signal?: AbortSignal): Promise<Resource>
   references(id: string, version: string, query: WindowQuery): Promise<Page<ResourceReference>>
   blueprints(): Promise<BlueprintCatalog>
   change(id: string, change: Operation<ResourceChange>): Promise<ResourceReceipt | Resource>

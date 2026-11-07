@@ -621,6 +621,12 @@ for (const e of endpoints) {
             : 'tuple'
         : null,
     queryOwner: e.request.query_owner,
+    ...(e.path === '/api/v1/software/source-snapshots/{source}'
+      ? { rawSnapshot: e.method === 'POST' ? 'request' : 'document' }
+      : e.path === '/api/v1/software/source-snapshots/{source}/entries/{entry}' &&
+          e.method === 'GET'
+        ? { rawSnapshot: 'data' }
+        : {}),
     publicRead: !e.authentication,
     contentType: e.request.body?.content_type ?? null,
     requestHeaders: requestHeaders.map(([key]) => key),

@@ -56,13 +56,17 @@ export function createResources(port: ResourcesPort) {
   return Object.freeze({
     references: (id: string, version: string, query: WindowQuery = {}) =>
       port.references(resourceId(id), resourceId(version), query),
-    list: (query: DirectoryQuery<keyof ResourceRow> = {}, kind?: ResourceKind) => {
+    list: (
+      query: DirectoryQuery<keyof ResourceRow> = {},
+      kind?: ResourceKind,
+      signal?: AbortSignal,
+    ) => {
       if (kind !== undefined && !resourceKinds.includes(kind))
         throw new Error('Invalid resource kind filter')
-      return port.list(query, kind)
+      return signal ? port.list(query, kind, signal) : port.list(query, kind)
     },
-    async read(id: string) {
-      const value = await port.read(resourceId(id))
+    async read(id: string, signal?: AbortSignal) {
+      const value = await (signal ? port.read(resourceId(id), signal) : port.read(resourceId(id)))
       if (value.id !== id) throw new Error('Wrong resource detail')
       return value
     },

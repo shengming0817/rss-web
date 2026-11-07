@@ -1,4 +1,5 @@
 import { Button } from 'antd'
+import { Link } from 'react-router-dom'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { Heading, labels, ReadState, useRead } from './AdminUi'
@@ -27,6 +28,7 @@ export function Inventory({ runtime, locale }: { runtime: Runtime; locale: Local
     <>
       <Heading
         title={l('资产查询', 'Inventory')}
+        actions={<Link to="/inventory/software">{l('软件资产', 'Software assets')}</Link>}
         hint={l(
           '查询授权范围内的资产事实，管理字段与采集映射。',
           'Query authorized asset facts and manage fields and collection mappings.',

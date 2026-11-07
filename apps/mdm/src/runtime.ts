@@ -23,10 +23,10 @@ import {
   createPublicEnrollment,
 } from '@rss/mdm-enrollment'
 import { createConnections } from '@rss/mdm-connections'
-import { createInventory } from '@rss/mdm-inventory'
+import { createInventory, createSoftwareAssets } from '@rss/mdm-inventory'
 import { createMappings, createResources } from '@rss/mdm-resources'
 import { createContent } from '@rss/mdm-content'
-import { createSoftware } from '@rss/mdm-software'
+import { createSoftware, createSoftwareSnapshots } from '@rss/mdm-software'
 import { createPublications } from '@rss/mdm-software/publications'
 import { createScopes } from '@rss/mdm-scopes'
 import { createScopesAdapter } from '@rss/mdm-http/scopes'
@@ -42,10 +42,12 @@ import { createAuditAdapter, createAuditPolicyLookupAdapter } from '@rss/mdm-htt
 import { createDevicePkiAdapter } from '@rss/mdm-http/device-pki'
 import { createCertificateArchiveAdapter } from '@rss/mdm-http/certificate-archive'
 import { createRecoveryCredentialsAdapter } from '@rss/mdm-http/recovery-credentials'
+import { createSoftwareAssetsAdapter } from '@rss/mdm-http/software-assets'
 import { createInventoryAdapter } from '@rss/mdm-http/inventory'
 import { createResourceMappingsAdapter } from '@rss/mdm-http/resource-mappings'
 import { createResourcesAdapter } from '@rss/mdm-http/resources'
 import { createContentAdapter } from '@rss/mdm-http/content'
+import { createSoftwareSnapshotsAdapter } from '@rss/mdm-http/software-snapshots'
 import { createSoftwareAdapter } from '@rss/mdm-http/software'
 import { createPublicationsAdapter } from '@rss/mdm-http/software-publications'
 import { createGroupsAdapter } from '@rss/mdm-http/groups'
@@ -151,10 +153,12 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         profiles: createProfiles(createProfilesAdapter(transport), state.identity.principalId),
         devices: createDevices(createDevicesAdapter(transport, tenant), tenant),
         inventory: createInventory(createInventoryAdapter(transport, tenant)),
+        softwareAssets: createSoftwareAssets(createSoftwareAssetsAdapter(transport, tenant)),
         resources: createResources(createResourcesAdapter(transport)),
         content,
         mappings: createMappings(createResourceMappingsAdapter(transport, content)),
         software: createSoftware(createSoftwareAdapter(transport)),
+        softwareSnapshots: createSoftwareSnapshots(createSoftwareSnapshotsAdapter(transport)),
         publications: createPublications(createPublicationsAdapter(transport)),
         execution: createExecution(createExecutionAdapter(transport, tenant, host.serviceId)),
         deviceAccess: createDeviceAccess(createDeviceAccessAdapter(transport)),

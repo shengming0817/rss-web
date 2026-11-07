@@ -28,11 +28,12 @@
     "test:coverage": "node ../../scripts/ensure-contracts.mjs && vitest run --coverage"
   },
   "dependencies": {
-    "axios": "catalog:"
+    "axios": "catalog:",
+    "jsonc-parser": "3.3.1"
   },
   "devDependencies": {
-    "vitest": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "axios-mock-adapter": "catalog:",
-    "@vitest/coverage-v8": "catalog:"
+    "vitest": "catalog:"
   }
 }

@@ -25,6 +25,7 @@ export function readFailure(error: unknown): 'conflict' | 'cursor' | 'result' | 
   switch (error.code) {
     case 'query_read_conflict':
       return 'conflict'
+    case 'resource_cursor_invalidated':
     case 'query_cursor_invalidated':
       return 'cursor'
     case 'query_result_unavailable':

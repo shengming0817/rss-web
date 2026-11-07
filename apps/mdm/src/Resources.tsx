@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
-import { Button, Card, Empty, Form, Input, Select, Space, Tag } from 'antd'
+import { Button, Card, Form, Input, Select, Space, Tag } from 'antd'
 import {
   resourceKinds,
   type Resource,
@@ -12,6 +12,7 @@ import {
   DirectoryControls,
   directoryQuery,
   Failure,
+  firstPage,
   Heading,
   labels,
   ReadState,
@@ -31,6 +32,12 @@ import { useAdministration } from './useAdministration'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { ResourceContentRecovery } from './ResourceContent'
+import {
+  ResourceCatalogSearch,
+  catalogQuery,
+  writeCatalogQuery,
+  type CatalogLocation,
+} from './ResourceCatalogSearch'
 import { ResourceBlueprints } from './ResourceBlueprints'
 
 const fields = [
@@ -102,6 +109,7 @@ export function ResourceDirectory({
   fixedKind,
   locator,
   canReadSoftware,
+  catalog,
 }: {
   resources: ResourcesUseCases
   content: ContentUseCases
@@ -115,23 +123,31 @@ export function ResourceDirectory({
       }
     | undefined
   fixedKind?: ResourceKind
+  catalog?: CatalogLocation | undefined
   canReadSoftware: boolean
 }) {
   const l = labels(locale),
     guard = useSelectionGuard(),
     action = useAction(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [localQuery, setLocalQuery] = useState<Query>({ limit: 20 }),
     [kind, setKind] = useState<ResourceKind | undefined>(fixedKind),
     [lookup, setLookup] = useState(locator?.resource ?? ''),
-    [localFilter, setLocalFilter] = useState(''),
-    [selected, setSelected] = useState<Resource | null>(null),
-    read = useRead(`resources/${kind ?? 'all'}/${JSON.stringify(query)}`, () =>
-      resources.list(directoryQuery(query, fields), fixedKind ?? kind),
-    )
-  const softwareRows = (read.value?.items ?? []).filter((row) =>
-      `${resourceName(row)} ${typeof row.presentation?.category === 'string' ? row.presentation.category : ''} ${row.id}`
-        .toLocaleLowerCase(locale)
-        .includes(localFilter.toLocaleLowerCase(locale)),
+    [localSelection, setSelected] = useState<Resource | null>(null),
+    query = catalog ? catalogQuery(catalog.params) : localQuery,
+    setQuery = (next: Query) => {
+      if (catalog) catalog.setParams(writeCatalogQuery(catalog.params, next))
+      else setLocalQuery(next)
+    },
+    linkedId = catalog?.params.get('resource'),
+    detail = useRead(`resource-detail/${linkedId ?? ''}`, async (signal) => {
+      if (!linkedId) return null
+      const resource = await resources.read(linkedId, signal)
+      if (resource.kind !== fixedKind) throw { cause: 'client', code: 'invalid_input' }
+      return resource
+    }),
+    selected = catalog ? detail.value : localSelection,
+    read = useRead(`resources/${kind ?? 'all'}/${JSON.stringify(query)}`, (signal) =>
+      resources.list(directoryQuery(query, fields), fixedKind ?? kind, signal),
     ),
     controls = (
       <DirectoryControls
@@ -144,7 +160,22 @@ export function ResourceDirectory({
       />
     )
   usePendingSelection(guard.locked || action.busy)
+  function selectResource(id: string | null) {
+    if (!catalog) {
+      if (!id) setSelected(null)
+      return
+    }
+    const params = new URLSearchParams(catalog.params)
+    for (const key of ['resource', 'version', 'variant']) params.delete(key)
+    if (id) params.set('resource', id)
+    catalog.setParams(params)
+  }
   async function open(id: string) {
+    if (catalog) {
+      if (id === linkedId) detail.reload()
+      else selectResource(id)
+      return
+    }
     const response = await action.run(async () => {
       const resource = await resources.read(id)
       validateInput(() => {
@@ -187,17 +218,13 @@ export function ResourceDirectory({
             )}
             {fixedKind === 'software' ? (
               <>
-                <label className="software-page-filter">
-                  {l('本页软件筛选', 'Filter software on this page')}
-                  <Input
-                    aria-label={l('本页软件筛选', 'Filter software on this page')}
-                    placeholder={l('名称、分类或资源标识', 'Name, category or Resource ID')}
-                    value={localFilter}
-                    allowClear
-                    disabled={guard.locked || action.busy}
-                    onChange={(event) => setLocalFilter(event.target.value)}
-                  />
-                </label>
+                <ResourceCatalogSearch
+                  key={query.filter ?? ''}
+                  locale={locale}
+                  query={query}
+                  onChange={setQuery}
+                  disabled={guard.locked || action.busy}
+                />
                 <details>
                   <summary>{l('高级目录筛选', 'Advanced catalog filters')}</summary>
                   {controls}
@@ -213,25 +240,14 @@ export function ResourceDirectory({
             busy={read.busy}
             error={read.error}
             empty={read.value?.items.length === 0}
+            onRetry={read.reload}
+            onRestart={() => setQuery(firstPage(query))}
           />
           {read.value && (
             <>
-              {fixedKind === 'software' && localFilter && (
-                <p className="subtitle">
-                  {l('本页匹配', 'Matches on this page')} {softwareRows.length} /{' '}
-                  {read.value.items.length}
-                </p>
-              )}
-              {fixedKind === 'software' &&
-                read.value.items.length > 0 &&
-                softwareRows.length === 0 && (
-                  <Empty
-                    description={l('本页没有匹配的软件', 'No matching software on this page')}
-                  />
-                )}
               {fixedKind === 'software' ? (
                 <div className="software-grid">
-                  {softwareRows.map((row) => (
+                  {read.value.items.map((row) => (
                     <article className="software-card" key={row.id}>
                       <div className="resource-card-top">
                         <span className="software-icon" aria-hidden="true">
@@ -308,6 +324,14 @@ export function ResourceDirectory({
           </Form>
         </fieldset>
         <Failure error={action.error} locale={locale} kind="read" />
+        {linkedId && (
+          <ReadState
+            locale={locale}
+            busy={detail.busy}
+            error={detail.error}
+            onRetry={detail.reload}
+          />
+        )}
       </Card>
       {selected && (
         <>
@@ -315,14 +339,21 @@ export function ResourceDirectory({
             <Button disabled={guard.locked || action.busy} onClick={() => void open(selected.id)}>
               {l('重新读取选定资源', 'Read selected resource again')}
             </Button>
-            <Button disabled={guard.locked || action.busy} onClick={() => setSelected(null)}>
+            <Button disabled={guard.locked || action.busy} onClick={() => selectResource(null)}>
               {l('关闭资源详情', 'Close resource detail')}
             </Button>
           </Space>
           <ResourceDetail
             key={`${selected.id}/${selected.revision}`}
-            initialVersion={selected.id === locator?.resource ? locator.version : undefined}
-            initialVariant={selected.id === locator?.resource ? locator.variant : undefined}
+            initialVersion={
+              catalog?.params.get('version') ??
+              (selected.id === locator?.resource ? locator.version : undefined)
+            }
+            initialVariant={
+              catalog?.params.get('variant') ??
+              (selected.id === locator?.resource ? locator.variant : undefined)
+            }
+            catalog={catalog}
             resources={resources}
             content={content}
             canReadSoftware={canReadSoftware}

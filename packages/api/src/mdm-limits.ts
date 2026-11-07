@@ -11,6 +11,7 @@ export const isMdmContentRequest = (method: string, path: string) =>
 /** Current management ingress budgets, shared with the HTTP demo. */
 export function mdmJsonBodyLimit(method: string, path: string) {
   if (method === 'POST') {
+    if (path === '/api/v1/software/source-snapshots/{source}') return 64 * 1024 * 1024
     if (
       /^\/api\/v1\/apple\/materials\/(?:apns|profile|managed_account)\/(?:keys|certificates)$/.test(
         path,

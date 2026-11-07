@@ -90,10 +90,11 @@ export function createResourcesAdapter(transport: HttpTransport): ResourcesPort 
       }
       return prepareVersionMaterials(draft)
     },
-    list: (query, kind) =>
+    list: (query, kind, signal) =>
       api.getApiV1Resources(
         transport,
         {
+          signal,
           query: queryParameters({
             limit: 20,
             ...query,
@@ -102,8 +103,8 @@ export function createResourcesAdapter(transport: HttpTransport): ResourcesPort 
         },
         (value) => projectedPage(value, fields, query.fields, ['id']),
       ),
-    read: (id) =>
-      api.getApiV1ResourcesById(transport, { pathParams: { id } }, (value) =>
+    read: (id, signal) =>
+      api.getApiV1ResourcesById(transport, { pathParams: { id }, signal }, (value) =>
         resourceRead(value, id),
       ),
     blueprints: () =>

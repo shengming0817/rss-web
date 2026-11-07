@@ -93,7 +93,7 @@ def query_digest(query):
 
 
 def collect(fixture, action, resource, cycle):
-    check(action in {'memory', 'memory_partial', 'applications', 'partial'}, 'collector-action')
+    check(action in {'memory', 'memory_partial', 'applications', 'partial', 'software_assets'}, 'collector-action')
     uuid.UUID(resource)
     agent = fixture['collector']
     def request(path, body=None, method='POST'):
@@ -128,6 +128,8 @@ def collect(fixture, action, resource, cycle):
             check(d['kind'] == 'macos_applications', 'collector-application-query')
             user = d['root'] == 'user_applications'
             rows = [dict(id='app-'+str(i), native_id='com.fixture.app'+str(i), name='Periodic app '+str(i), version='1', publisher='Fixture', scope='user' if user else 'device', owner='501' if user else '', origin='application', location='/controlled/fixture/'+str(i), signature_status='signed') for i in range(45)]
+            if action == 'software_assets':
+                rows = [dict(row, name='Browser Editor', version=str(i+1)) for i, row in enumerate(rows[:3])]
         queries[key] = dict(scan=None, queryDigest=query_digest(query), collectedAt=now,
                             status='partial' if action in {'partial', 'memory_partial'} else 'complete', enumerationComplete=action not in {'partial', 'memory_partial'}, rowCount=len(rows), rows=rows, users=None)
     operation = str(uuid.uuid4())

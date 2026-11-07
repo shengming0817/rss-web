@@ -31,6 +31,7 @@ export interface EndpointDescription {
   requiredHeaders: readonly string[]
   contentType: string | null
   binary: boolean
+  rawSnapshot?: 'request' | 'document' | 'data'
   statuses: readonly number[]
   checks: {
     headers: Readonly<Record<string, Validate>>

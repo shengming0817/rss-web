@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { decodeSnapshotResponse } from './mdm-snapshot-json'
 import { validateEndpointResponse } from './mdm-contract-response'
 import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 import type {
@@ -209,6 +210,12 @@ export async function execute<T>(
   options.signal?.addEventListener('abort', cancelBounded, { once: true })
   try {
     const config = requestConfig(options, defaultTimeoutMs)
+    const rawSnapshot = options.contract?.rawSnapshot
+    if (rawSnapshot === 'request') config.transformRequest = [(value: unknown) => value]
+    if (rawSnapshot === 'document' || rawSnapshot === 'data') {
+      config.responseType = 'text'
+      config.transformResponse = [(value: unknown) => value]
+    }
     if (bounded && maximumBytes !== undefined) {
       if (typeof ReadableStream === 'undefined') throw clientError()
       // Use Axios' stream adapter inside the same executor and instance. XHR progress cannot bound buffering.
@@ -225,6 +232,8 @@ export async function execute<T>(
       if (options.signal?.aborted) bounded.abort()
     }
     const response = await instance.request(config)
+    if (rawSnapshot === 'document' || rawSnapshot === 'data')
+      response.data = decodeSnapshotResponse(response.data, rawSnapshot, response.status)
     if (bounded && maximumBytes !== undefined) {
       response.data = await boundedBinary(
         response.data,

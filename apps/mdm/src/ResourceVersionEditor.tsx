@@ -129,6 +129,7 @@ export function ResourceVersionEditor({
   locale,
   canWrite,
   blocked,
+  snapshotSeed,
 }: {
   resources: ResourcesUseCases
   content: ContentUseCases
@@ -136,6 +137,7 @@ export function ResourceVersionEditor({
   locale: Locale
   canWrite: boolean
   blocked: boolean
+  snapshotSeed?: { readonly packageId: string | null; readonly version: string | null }
 }) {
   const l = labels(locale),
     action = useAction(),
@@ -487,12 +489,32 @@ export function ResourceVersionEditor({
                 />
               )}
               {selected.declaration.kind === 'software' && (
-                <SoftwareAuthor
-                  onHashFile={hashSoftwareFile}
-                  value={selected.declaration.definition}
-                  onChange={(definition) => changeDeclaration({ kind: 'software', definition })}
-                  locale={locale}
-                />
+                <>
+                  {snapshotSeed && (
+                    <Button
+                      disabled={locked || (!snapshotSeed.packageId && !snapshotSeed.version)}
+                      onClick={() => {
+                        if (selected.declaration.kind !== 'software') return
+                        changeDeclaration({
+                          kind: 'software',
+                          definition: {
+                            ...selected.declaration.definition,
+                            ...(snapshotSeed.packageId ? { package: snapshotSeed.packageId } : {}),
+                            ...(snapshotSeed.version ? { version: snapshotSeed.version } : {}),
+                          },
+                        })
+                      }}
+                    >
+                      {l('复制所选记录字段', 'Copy selected record fields')}
+                    </Button>
+                  )}
+                  <SoftwareAuthor
+                    onHashFile={hashSoftwareFile}
+                    value={selected.declaration.definition}
+                    onChange={(definition) => changeDeclaration({ kind: 'software', definition })}
+                    locale={locale}
+                  />
+                </>
               )}
               {(selected.declaration.kind === 'script' ||
                 selected.declaration.kind === 'configuration') && (

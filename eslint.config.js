@@ -559,7 +559,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:@rss/(?!auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$))',
+              '^(?:@rss/(?!api/mdm-filter$|auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$))',
             message: 'Feature pages consume domain use cases; only runtime assembles adapters.',
           },
         ],

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { isMdmContentRequest, MDM_CONTENT_BODY_LIMIT, mdmJsonBodyLimit } from './mdm-limits'
+import { encodeSnapshotRequest } from './mdm-snapshot-json'
 import { execute } from './transport'
 import { clientError } from './wire-error'
 import type { HttpTransport, NoContentRequest, RequestOptions, RssApiError } from './types'
@@ -63,13 +64,20 @@ export function createMdmHttpTransport(
         (typeof Blob !== 'undefined' && options.body instanceof Blob)
       )
         throw clientError()
+      const raw = contract?.rawSnapshot === 'request'
+      const encoded = raw ? encodeSnapshotRequest(options.body) : JSON.stringify(options.body)
       if (
-        options.body !== undefined &&
-        new TextEncoder().encode(JSON.stringify(options.body)).byteLength >
+        encoded !== undefined &&
+        new TextEncoder().encode(encoded).byteLength >
           mdmJsonBodyLimit(options.method, options.path)
       )
         throw decodeMdmError(413, undefined)
-      return execute(instance, 30_000, options, decodeMdmError)
+      return execute(
+        instance,
+        30_000,
+        raw ? { ...options, body: encoded } : options,
+        decodeMdmError,
+      )
     },
   } as HttpTransport
 }

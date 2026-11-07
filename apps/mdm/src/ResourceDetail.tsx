@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import type { CatalogLocation } from './ResourceCatalogSearch'
 import { Alert, Button, Card, Select, Space, Tag } from 'antd'
 import { declarationMaterials, variantKey, type Resource } from '@rss/mdm-resources'
 import { CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'
@@ -23,6 +25,7 @@ export function ResourceDetail({
   canWrite,
   blocked,
   canReadSoftware,
+  catalog,
 }: {
   initialVersion?: string | undefined
   initialVariant?: string | undefined
@@ -33,20 +36,47 @@ export function ResourceDetail({
   canWrite: boolean
   blocked: boolean
   canReadSoftware: boolean
+  catalog?: CatalogLocation | undefined
 }) {
   const l = labels(locale),
     command = useResourceCommand(resources),
-    [versionId, setVersionId] = useState(
+    [localVersion, setVersionId] = useState(
       initialVersion ??
         resource.versions.find((version) => version.state === 'active')?.id ??
         resource.versions[0]?.id ??
         '',
     ),
+    versionId = catalog ? (initialVersion ?? localVersion) : localVersion,
     version = resource.versions.find((version) => version.id === versionId),
-    [selection, setSelection] = useState(initialVariant ?? ''),
+    [localSelection, setSelection] = useState(initialVariant ?? ''),
+    selection = catalog ? (initialVariant ?? '') : localSelection,
     selected =
       version?.variants.find((variant) => variantKey(variant) === selection) ??
       (selection ? undefined : version?.variants[0])
+  function locate(version: string, variant?: string) {
+    if (!catalog) {
+      setVersionId(version)
+      setSelection(variant ?? '')
+      return
+    }
+    const params = new URLSearchParams(catalog.params)
+    params.set('version', version)
+    if (variant) params.set('variant', variant)
+    else params.delete('variant')
+    catalog.setParams(params)
+  }
+  function policyLink(draft: boolean) {
+    const source = new URLSearchParams(catalog?.params)
+    source.set('resource', resource.id)
+    source.set('version', versionId)
+    if (selected) source.set('variant', variantKey(selected))
+    return `/policies?${new URLSearchParams({
+      softwareResource: resource.id,
+      softwareVersion: versionId,
+      returnTo: `/software?${source}`,
+      ...(draft && selected ? { softwareVariant: variantKey(selected) } : {}),
+    })}`
+  }
   return (
     <div className="resource-detail">
       <div className="resource-detail-heading">
@@ -85,10 +115,7 @@ export function ResourceDetail({
                 value: version.id,
                 label: `${version.id} · ${version.state}`,
               }))}
-              onChange={(id) => {
-                setVersionId(id)
-                setSelection('')
-              }}
+              onChange={(id) => locate(id)}
             />
           </label>
           <label>
@@ -101,7 +128,7 @@ export function ResourceDetail({
                 value: variantKey(variant),
                 label: `${variant.platform} / ${variant.architecture} / ${variant.key}`,
               }))}
-              onChange={setSelection}
+              onChange={(variant) => locate(versionId, variant)}
             />
           </label>
         </div>
@@ -115,6 +142,20 @@ export function ResourceDetail({
                 {version.digest.map((value) => value.toString(16).padStart(2, '0')).join('')}
               </code>
             </p>
+            {catalog && (
+              <Space wrap>
+                {catalog.canWritePolicy && selected && version.state === 'active' && (
+                  <Link to={policyLink(true)}>
+                    {l('从此版本新建分配', 'Create assignment from this version')}
+                  </Link>
+                )}
+                {catalog.canReadPolicy && (
+                  <Link to={policyLink(false)}>
+                    {l('查看此版本的分配', 'View assignments for this version')}
+                  </Link>
+                )}
+              </Space>
+            )}
             {selected && (
               <>
                 <DataTable

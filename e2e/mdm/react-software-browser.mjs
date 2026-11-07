@@ -625,25 +625,138 @@ try {
   assert.equal(instantiated.request, undefined)
   checks.push('real-blueprint-exact-origin-resource-result-and-independent-content-activation')
 
-  run.step('software-design-and-single-catalog')
+  run.step('software-rsql-beyond-first-page-and-version-policy-context')
+  const searchName = String.raw`Acme ÉCLAIR O'Reilly \ %_ 企业应用`
+  const catalogResource = await api('GET', resourcePath(resource))
+  await api('POST', resourcePath(resource), {
+    operationId: randomUUID(),
+    expectedRevision: catalogResource.revision,
+    input: {
+      action: 'present',
+      presentation: { ...catalogResource.presentation, name: searchName },
+    },
+  })
+  const catalogVersion = await api('GET', resourcePath(resource))
+  if (catalogVersion.activeVersion !== 'resource-v1')
+    await api('POST', resourcePath(resource), {
+      operationId: randomUUID(),
+      expectedRevision: catalogVersion.revision,
+      input: { action: 'activate', version: 'resource-v1' },
+    })
+  for (let index = 0; index < 21; index++)
+    await api('POST', resourcePath('aa-catalog-' + String(index).padStart(2, '0')), {
+      operationId: randomUUID(),
+      expectedRevision: 0,
+      input: { action: 'create', kind: 'software' },
+    })
+  const firstCatalog = await api('GET', '/api/v1/resources?filter=kind%3D%3Dsoftware&limit=20')
+  assert.equal(
+    firstCatalog.items.some((row) => row.id === resource),
+    false,
+  )
+  assert.ok(firstCatalog.nextCursor)
   await run.nav(p, '/software', '软件目录')
   await tab('组织软件')
-  await label('本页软件筛选').fill(resource)
+  const detailRequests = []
+  const captureDetails = (request) => {
+    if (
+      request.method() === 'GET' &&
+      new URL(request.url()).pathname.startsWith('/api/v1/resources/')
+    )
+      detailRequests.push(new URL(request.url()).pathname)
+  }
+  p.on('request', captureDetails)
+  await label('软件名称').fill(String.raw`éclair O'Reilly \ %_`)
+  await label('分类').fill('业务工具')
+  await run.choose(p, label('激活状态'), '有激活版本')
   const softwareDirectory = await run.response(p, 'GET', '/api/v1/resources', () =>
-    button('读取资源目录').click(),
+    button('搜索软件').click(),
   )
   const softwareRows = (await softwareDirectory.json()).items
-  assert.ok(softwareRows.every((row) => row.kind === 'software'))
-  assert.equal(softwareRows.filter((row) => row.id === resource).length, 1)
-  await p.waitForFunction(() => document.querySelectorAll('.software-card').length === 1)
-  assert.equal(await p.locator('.software-card').count(), 1)
+  assert.deepEqual(
+    softwareRows.map((row) => row.id),
+    [resource],
+  )
+  assert.equal(detailRequests.length, 0)
+  p.off('request', captureDetails)
+  await button('查看版本与材料').click()
+  await p.getByRole('link', { name: '从此版本新建分配', exact: true }).waitFor()
+  await p.getByRole('link', { name: '从此版本新建分配', exact: true }).click()
+  await p
+    .getByText(resource + ' @ resource-v1', { exact: true })
+    .first()
+    .waitFor()
+  await button('返回来源').click()
+  await p.getByRole('link', { name: '查看此版本的分配', exact: true }).waitFor()
+  await button('清除条件').click()
+  await p.locator('.resource-toolbar summary').click()
+  await label('服务端筛选').fill(`id=='${direct}'`)
+  await run.response(p, 'GET', '/api/v1/resources', () => button('应用').click())
+  await button('查看版本与材料').click()
+  await p.getByRole('link', { name: '查看此版本的分配', exact: true }).click()
+  await p.getByRole('button', { name: '查看策略 ' + policyId, exact: true }).waitFor()
+  await p.getByRole('link', { name: '返回来源', exact: true }).click()
+  await button('清除条件').click()
+  await p.waitForFunction(() => document.querySelectorAll('.software-card').length === 20)
   assert.equal(Math.round((await p.locator('aside.sidebar').boundingBox()).width), 218)
   assert.equal(Math.round((await p.locator('header.topbar').boundingBox()).height), 58)
-  await label('本页软件筛选').fill('')
+  checks.push('real-resource-rsql-cross-page-and-exact-policy-navigation')
+
+  run.step('snapshot-lossless-unknown-receipt-and-independent-resource-draft')
+  await tab('JSON 来源快照')
+  const snapshot = 'browser-snapshot-' + randomUUID(),
+    snapshotPath = '/api/v1/software/source-snapshots/' + snapshot,
+    json = String.raw`[{"id":"fixture.package","name":"Editor \u4e2d","version":"7.1","number":9007199254740993,"ratio":0.123456789123456789},{"id":"fixture.package","version":"7.2"}]`
+  await label('新来源标识').fill(snapshot)
+  await label('导入 JSON 原文').fill(json)
+  await p.getByText('可选 JSON Pointer', { exact: true }).click()
+  await label('packageId JSON Pointer').fill('/id')
+  await label('name JSON Pointer').fill('/name')
+  await label('version JSON Pointer').fill('/version')
+  const lostSnapshot = await loseFirst('**' + snapshotPath, 200)
+  await button('导入新快照').click()
+  await waitUntil(() => lostSnapshot.statuses.length === 1)
+  await button('查询原回执').click()
+  await p.getByRole('status').filter({ hasText: '原操作已确认' }).waitFor()
+  await lostSnapshot.stop()
+  await button(snapshot).click()
+  await button('读取文档原文').click()
   await p.waitForFunction(
-    (expected) => document.querySelectorAll('.software-card').length === expected,
-    softwareRows.length,
+    (expected) => document.querySelector('textarea[aria-label="文档原文"]')?.value === expected,
+    json,
   )
+  const digest = createHash('sha256').update(json).digest('hex')
+  await p.getByText(digest, { exact: true }).waitFor()
+  await p
+    .getByRole('button', { name: /^读取记录 / })
+    .first()
+    .click()
+  await button('用于软件草稿').click()
+  await label('软件名称').fill('ÉCLAIR')
+  await button('搜索软件').click()
+  await button(searchName).click()
+  await button('复制所选记录字段').click()
+  const version = await label('实际软件版本').inputValue()
+  assert.ok(['7.1', '7.2'].includes(version))
+  await label('导入 JSON 原文').fill('{"id":"replaced"}')
+  await run.response(p, 'POST', snapshotPath, () => button('完整替换快照').click())
+  assert.equal(await label('实际软件版本').inputValue(), version)
+  await label('新资源固定版本').fill('snapshot-copy')
+  await button('准备完整资源版本').click()
+  await run.response(p, 'POST', resourcePath(resource), () => button('声明此完整固定版本').click())
+  const savedSnapshot = await api('GET', resourcePath(resource))
+  assert.equal(
+    savedSnapshot.versions.find((row) => row.id === 'snapshot-copy').variants[0].declaration
+      .definition.version,
+    version,
+  )
+  checks.push(
+    'real-json-snapshot-lossless-original-receipt-replacement-and-independent-resource-version',
+  )
+
+  run.step('software-responsive-layout')
+  await tab('组织软件')
+  await p.waitForFunction(() => document.querySelectorAll('.software-card').length === 20)
   const columns = () =>
     p
       .locator('.software-grid')

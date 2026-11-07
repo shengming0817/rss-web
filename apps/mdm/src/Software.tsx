@@ -1,22 +1,29 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Alert, Button } from 'antd'
 import { Heading, labels, ReadState, useRead } from './AdminUi'
 import { ResourceDirectory } from './Resources'
+import { SnapshotDraft, SoftwareSnapshots } from './SoftwareSnapshots'
 import { SoftwareSources } from './SoftwareSources'
 import { SoftwareImport } from './SoftwareImport'
 import { SoftwareAdmission } from './SoftwareAdmission'
 import { SoftwarePublications } from './SoftwarePublications'
 import { SecretTabs } from './SecretTabs'
 import { useAdministration } from './useAdministration'
+import type { SnapshotEntry } from '@rss/mdm-software'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 
 export function Software({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
-    { resources, content, software, publications, authorization, binding } =
+    { resources, content, software, softwareSnapshots, publications, authorization, binding } =
       useAdministration(runtime),
     permissions = useRead(`${binding}/software-presentation`, authorization.effective),
+    [params, setParams] = useSearchParams(),
     [tab, setTab] = useState('catalog'),
+    [snapshotSeed, setSnapshotSeed] = useState<{ entry: SnapshotEntry; binding: string } | null>(
+      null,
+    ),
     has = (operation: string) =>
       permissions.value?.grants.some(
         (grant) => grant.scope.kind === 'tenant' && grant.operation === operation,
@@ -29,7 +36,7 @@ export function Software({ runtime, locale }: { runtime: Runtime; locale: Locale
     releaseRead = has('release_read'),
     authorized = [
       ...(resourceRead ? ['catalog'] : []),
-      ...(softwareRead || softwareWrite ? ['sources'] : []),
+      ...(softwareRead || softwareWrite ? ['sources', 'snapshots'] : []),
       ...(softwareRead && softwareWrite && resourceWrite ? ['imports'] : []),
       ...(softwareRead ? ['admission'] : []),
       ...(releaseRead ? ['publications'] : []),
@@ -78,6 +85,12 @@ export function Software({ runtime, locale }: { runtime: Runtime; locale: Locale
                 canWrite={resourceWrite}
                 canReadSoftware={softwareRead}
                 fixedKind="software"
+                catalog={{
+                  params,
+                  setParams,
+                  canReadPolicy: has('policy_read'),
+                  canWritePolicy: has('policy_write'),
+                }}
               />
             ),
           },
@@ -91,6 +104,25 @@ export function Software({ runtime, locale }: { runtime: Runtime; locale: Locale
                 canRead={softwareRead}
                 canWrite={softwareWrite}
                 canWithdraw={softwareWithdraw}
+              />
+            ),
+          },
+          {
+            key: 'snapshots',
+            label: l('JSON 来源快照', 'JSON source snapshots'),
+            children: (
+              <SoftwareSnapshots
+                key={binding}
+                snapshots={softwareSnapshots}
+                binding={binding}
+                locale={locale}
+                canRead={softwareRead}
+                canWrite={softwareWrite}
+                useEntry={
+                  softwareRead && resourceRead && resourceWrite && !snapshotSeed
+                    ? (entry) => setSnapshotSeed({ entry, binding })
+                    : undefined
+                }
               />
             ),
           },
@@ -139,6 +171,16 @@ export function Software({ runtime, locale }: { runtime: Runtime; locale: Locale
           },
         ]}
       />
+      {snapshotSeed?.binding === binding && resourceRead && resourceWrite && (
+        <SnapshotDraft
+          key={binding}
+          seed={snapshotSeed.entry}
+          resources={resources}
+          content={content}
+          locale={locale}
+          close={() => setSnapshotSeed(null)}
+        />
+      )}
     </>
   )
 }

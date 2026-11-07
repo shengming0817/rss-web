@@ -1,6 +1,9 @@
 // New React pages over the existing isolated HTTPS product fixture. No mocked business response.
 import { realBrowser } from './react-mdm-browser.mjs'
 import { randomUUID } from 'node:crypto'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import process from 'node:process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -838,6 +841,267 @@ try {
     expectedRevision: latestAuthority.revision,
     value: f.rule,
   })
+  run.step('software-assets-real-collector-observation')
+  const collector = f.collector.runtime.deviceId,
+    collectionResource = randomUUID(),
+    collectionScope = randomUUID(),
+    collectionPolicy = randomUUID(),
+    collectionPath = '/api/v1/resources/' + collectionResource
+  const sourceResource = await api(
+    'POST',
+    collectionPath,
+    operation({
+      action: 'instantiate',
+      blueprint: 'macos.agent.applications_local',
+      version: '1',
+    }),
+  )
+  const sourceVersion = sourceResource.versions[0],
+    sourceVariant = sourceVersion.variants[0]
+  await api(
+    'POST',
+    collectionPath,
+    operation({ action: 'activate', version: sourceVersion.id }, sourceResource.revision),
+  )
+  const sourceScope = await api(
+    'POST',
+    '/api/v1/scopes/' + collectionScope,
+    operation({
+      action: 'put',
+      definition: {
+        targets: [{ kind: 'device', id: collector }],
+        limitations: null,
+        exclusions: [],
+      },
+    }),
+  )
+  for (let index = 0; index < 60; index++) {
+    const state = await api(
+      'GET',
+      '/api/v1/scopes/' + collectionScope + '/tasks/' + sourceScope.task,
+    )
+    if (state.status === 'completed') break
+    assert.ok(index < 59, 'software collector scope publication deadline')
+    await new Promise((done) => setTimeout(done, 250))
+  }
+  await api(
+    'POST',
+    '/api/v1/policies/' + collectionPolicy,
+    operation({
+      action: 'put',
+      enabled: true,
+      definition: {
+        scope: collectionScope,
+        alias: null,
+        customEvent: null,
+        action: {
+          kind: 'agent_collection',
+          resource: {
+            id: collectionResource,
+            version: sourceVersion.id,
+            variant: sourceVariant.key,
+            platform: sourceVariant.platform,
+            architecture: sourceVariant.architecture,
+          },
+          frequency: 'every_trigger',
+          schedule: {
+            trigger: { kind: 'interval', anchor: 0, seconds: 3600 },
+            misfire: { kind: 'coalesce_one' },
+            notBefore: 0,
+            until: null,
+            jitterSeconds: 0,
+            window: null,
+          },
+          runLifetimeSeconds: 86400,
+        },
+      },
+    }),
+  )
+  const collected = spawnSync(
+    'python3',
+    [
+      fileURLToPath(new URL('./device-agent.py', import.meta.url)),
+      process.env.MDM_DEVICE_BROWSER_FIXTURE,
+      'software_assets',
+      collectionResource,
+      '0',
+    ],
+    { encoding: 'utf8', timeout: 150000, stdio: ['ignore', 'pipe', 'pipe'] },
+  )
+  assert.equal(collected.status, 0, 'real mTLS software collection')
+  for (let index = 0; index < 60; index++) {
+    const inventory = await api('GET', '/api/v1/devices/' + collector + '/inventory')
+    if (inventory.asset.device.lists['device.software.installations']?.state?.kind === 'known')
+      break
+    assert.ok(index < 59, 'software collection projection deadline')
+    await new Promise((done) => setTimeout(done, 250))
+  }
+
+  const overlappingGroups = [randomUUID(), randomUUID()]
+  for (const [index, group] of overlappingGroups.entries()) {
+    const created = await api(
+      'POST',
+      '/api/v1/groups/' + group,
+      operation({
+        action: 'create',
+        presentation: { name: 'Software overlap ' + index },
+        assetContext: 'endpoint',
+        criteria: null,
+      }),
+    )
+    const membership = await api(
+      'POST',
+      '/api/v1/groups/' + group,
+      operation(
+        {
+          action: 'members',
+          add: [{ kind: 'endpoint', id: collector }],
+          remove: [],
+        },
+        created.group.revision,
+      ),
+      202,
+    )
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const result = await api('GET', '/api/v1/groups/' + group + '/tasks/' + membership.task)
+      if (result.status === 'completed') break
+      assert.ok(attempt < 59, 'software group publication deadline')
+      await new Promise((done) => setTimeout(done, 250))
+    }
+  }
+
+  run.step('software-asset-configuration-and-retained-query')
+  await run.nav(p, '/inventory/software', '软件资产')
+  await tab('标准软件')
+  const assetButton = (name) =>
+    p.getByRole('button', { name, exact: true }).filter({ visible: true })
+  await assetButton('新建标准软件').click()
+  await visibleLabel('标准软件名称').fill('Browser standard editor')
+  assert.equal(await assetButton('保存标准软件').isDisabled(), true)
+  await run.choose(p, visibleLabel('风险'), '中')
+  await visibleLabel('统一设备 预警阈值').fill('2')
+  await visibleLabel('终端 预警阈值').fill('1')
+  const endpointAssessment = p.getByRole('group', { name: '终端', exact: true })
+  await endpointAssessment.getByRole('checkbox', { name: '仅允许所选组安装（任一组匹配）' }).check()
+  async function chooseOverlap(container) {
+    await container.getByRole('button', { name: '选择同域设备组', exact: true }).click()
+    for (const id of overlappingGroups) {
+      await container.getByLabel('候选组服务端筛选', { exact: true }).fill('id==' + id)
+      await run.response(p, 'GET', '/api/v1/groups', () =>
+        container.getByRole('button', { name: '查询候选组', exact: true }).click(),
+      )
+      await container.getByRole('button', { name: '使用此组', exact: true }).click()
+    }
+    await container.getByRole('button', { name: '关闭组选择器', exact: true }).click()
+  }
+  await chooseOverlap(endpointAssessment)
+  let standard
+  const standardPattern = '**/api/v1/standard-software/*'
+  await intercept(standardPattern, async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue()
+    const response = await route.fetch()
+    assert.equal(response.status(), 200)
+    standard = (await response.json()).asset.response.receipt.id
+    await route.abort('failed')
+  })
+  await assetButton('保存标准软件').click()
+  await waitUntil(() => Boolean(standard))
+  await assetButton('查询原回执').click()
+  await p.unroute(standardPattern)
+  await assetButton('Browser standard editor').click()
+  assert.equal(await visibleLabel('标准软件名称').inputValue(), 'Browser standard editor')
+  await tab('映射规则')
+  await assetButton('新建映射').click()
+  await assetButton('选择标准软件').click()
+  await assetButton('Browser standard editor').click()
+  await run.choose(p, visibleLabel('平台'), 'macos')
+  await visibleLabel('来源标识').fill('application')
+  await visibleLabel('单条安装记录条件（RSQL）').fill("name=='Browser Editor';publisher=='Fixture'")
+  const mappingSaved = p.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      new URL(response.url()).pathname.startsWith('/api/v1/software-mappings/'),
+  )
+  await assetButton('保存映射').click()
+  assert.equal((await mappingSaved).status(), 200)
+
+  await tab('软件资产查询')
+  for (const [domain, label] of [
+    ['associated_device', '统一设备'],
+    ['endpoint', '终端'],
+  ]) {
+    await run.choose(p, visibleLabel('统计域'), label)
+    if (domain === 'endpoint')
+      await chooseOverlap(p.getByRole('group', { name: '设备条件', exact: true }))
+    const accepted = await run.response(
+      p,
+      'POST',
+      '/api/v1/software-asset-queries',
+      () => assetButton('提交软件查询').click(),
+      202,
+    )
+    const task = (await accepted.json()).asset.response.receipt.task
+    const state = await poll(
+      '/api/v1/software-asset-queries/' + task,
+      () => assetButton('读取任务状态').click(),
+      (value) => value.asset.response,
+      (value) => value.status === 'completed' || value.status === 'failed',
+    )
+    assert.equal(state.status, 'completed')
+    assert.equal(state.coordinates.context, domain)
+    await assetButton('Browser standard editor').click()
+    const bucket = (
+      await api('GET', '/api/v1/software-asset-queries/' + task + '/software')
+    ).asset.response.items.find((row) => row.identity.id === standard)
+    assert.equal(bucket.devices, 1)
+    if (domain === 'associated_device') assert.equal(bucket.threshold, 2)
+    else {
+      assert.equal(bucket.thresholdState, 'reached')
+      assert.equal(bucket.compliance.compliant, 1)
+    }
+    const base =
+      '/api/v1/software-asset-queries/' + task + '/software/' + encodeURIComponent(bucket.id)
+    const evidencePromise = p.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.startsWith(base + '/devices/') &&
+        new URL(response.url()).pathname.endsWith('/evidence'),
+    )
+    await assetButton('查看证据').click()
+    const evidence = await evidencePromise
+    assert.equal(evidence.status(), 200)
+    assert.equal(
+      (await evidence.json()).asset.response.items.filter((row) => row.confirmed).length,
+      3,
+    )
+    await run.choose(p, visibleLabel('分桶维度'), '版本')
+    const breakdown = await api('GET', base + '/breakdowns/version')
+    assert.deepEqual(
+      breakdown.asset.response.items.map((row) => [row.value, row.devices]),
+      [
+        ['1', 1],
+        ['2', 1],
+        ['3', 1],
+      ],
+    )
+    const coverage = await run.response(
+      p,
+      'GET',
+      '/api/v1/software-asset-queries/' + task + '/coverage',
+      () => assetButton('查看覆盖质量').click(),
+    )
+    assert.equal((await coverage.json()).asset.response.task, task)
+    await assetButton('释放结果').click()
+    await run.response(p, 'POST', '/api/v1/software-asset-queries/' + task + '/release', () =>
+      p.getByRole('button', { name: '确定', exact: true }).filter({ visible: true }).click(),
+    )
+  }
+  assert.equal(
+    (await api('GET', '/api/v1/standard-software/' + standard)).asset.response.record.definition
+      .risk,
+    'medium',
+  )
+  checks.push('real-software-asset-standard-mapping-two-query-domains-coverage-and-release')
+
   const anonymous = await run.page()
   assert.equal((await anonymous.request.get(origin + '/api/v1/groups')).status(), 401)
   checks.push(

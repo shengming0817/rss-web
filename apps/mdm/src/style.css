@@ -1039,10 +1039,6 @@ html:has(.mdm-overlay-open) {
 .software-lifecycle code {
   overflow-wrap: anywhere;
 }
-.software-page-filter {
-  flex: 1 1 260px;
-  max-width: 360px;
-}
 .resource-toolbar > details {
   padding-block: 8px;
 }
@@ -1477,4 +1473,9 @@ html:has(.mdm-overlay-open) {
   color: #ff9b99;
   background: #402020;
   border-color: #723434;
+}
+
+.software-asset-panels {
+  display: flex;
+  width: 100%;
 }

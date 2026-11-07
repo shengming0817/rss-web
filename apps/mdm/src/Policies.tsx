@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Collapse, Modal, Segmented, Space, Tag } from 'antd'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import type { Policy, PolicyRow } from '@rss/mdm-policies'
+import { formatFilter } from '@rss/api/mdm-filter'
+import { variantKey } from '@rss/mdm-resources'
+import type { Policy, PolicyDefinition, PolicyRow } from '@rss/mdm-policies'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import {
@@ -23,7 +25,7 @@ import { PolicyAssignments, PolicyRollout, PolicyRuns } from './PolicyProgress'
 import { resultReturnPath } from './execution-context'
 import { PolicyNames } from './PolicyNames'
 import { PolicyEvents } from './PolicyEvents'
-import { policyActionLabel } from './PolicyActionEditor'
+import { newPolicyAction, policyActionLabel } from './PolicyActionEditor'
 
 const fields = [
   'id',
@@ -38,6 +40,7 @@ const fields = [
   'toolName',
   'resource',
   'category',
+  'definition',
 ] as const satisfies readonly (keyof PolicyRow)[]
 export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
@@ -64,15 +67,40 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     state = ['enabled', 'disabled', 'archived'].includes(params.get('state') ?? '')
       ? params.get('state')!
       : 'all',
-    listFilter = [state === 'all' ? '' : `state=='${state}'`, query.filter]
+    softwareResource = params.get('softwareResource'),
+    softwareVersion = params.get('softwareVersion'),
+    softwareVariant = params.get('softwareVariant'),
+    fixedSoftware = softwareResource && softwareVersion,
+    softwareFilter = fixedSoftware
+      ? (() => {
+          try {
+            return formatFilter({
+              kind: 'and',
+              children: [
+                { kind: 'compare', field: 'action', operator: '==', values: ['software'] },
+                { kind: 'compare', field: 'resource', operator: '==', values: [softwareResource] },
+                {
+                  kind: 'compare',
+                  field: 'definition.action.resource.version',
+                  operator: '==',
+                  values: [softwareVersion],
+                },
+              ],
+            })
+          } catch {
+            return null
+          }
+        })()
+      : null,
+    listFilter = [softwareFilter, state === 'all' ? '' : `state=='${state}'`, query.filter]
       .filter(Boolean)
       .map((part) => `(${part})`)
       .join(';'),
     guard = useSelectionGuard(),
     read = usePageRead(
-      `${binding}/policy-directory/${state}/${JSON.stringify(query)}/${has('policy_read')}`,
+      `${binding}/policy-directory/${listFilter}/${JSON.stringify(query)}/${has('policy_read')}`,
       () =>
-        has('policy_read')
+        has('policy_read') && (!fixedSoftware || softwareFilter)
           ? policies.list(
               directoryQuery(
                 {
@@ -84,7 +112,34 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
             )
           : Promise.resolve(null),
     ),
-    [selected, setSelected] = useState<{ id: string; baseline: Policy | null } | null>(null)
+    [selected, setSelected] = useState<{
+      id: string
+      baseline: Policy | null
+      initialAction?: PolicyDefinition['action']
+    } | null>(null),
+    draftResource =
+      fixedSoftware && softwareVariant && has('policy_write') && has('resource_read')
+        ? softwareResource
+        : null,
+    draft = usePageRead(
+      `${binding}/software-draft/${JSON.stringify([draftResource, softwareVersion, softwareVariant])}`,
+      async (signal) => {
+        if (!draftResource) return null
+        const resource = await resources.read(draftResource, signal)
+        const version = resource.versions.find(
+          (row) => row.id === softwareVersion && row.state === 'active',
+        )
+        const variant = version?.variants.find((row) => variantKey(row) === softwareVariant)
+        if (
+          resource.kind !== 'software' ||
+          !version ||
+          !variant ||
+          variant.declaration.kind !== 'software'
+        )
+          throw { cause: 'client', code: 'invalid_input' }
+        return { resource, version, variant }
+      },
+    )
   usePendingSelection(guard.locked)
   const linkedPolicy = params.get('policy'),
     canRead = has('policy_read'),
@@ -92,7 +147,11 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     canOperations = has('operation_read', true),
     returnSource = resultReturnPath(params.get('returnTo')),
     policyTarget =
-      params.has('tab') && canRead && !guard.locked && selected?.id !== linkedPolicy
+      params.has('tab') &&
+      !softwareVariant &&
+      canRead &&
+      !guard.locked &&
+      selected?.id !== linkedPolicy
         ? linkedPolicy
         : null,
     detail = usePageRead(
@@ -104,6 +163,30 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
   useEffect(() => {
     if (!linkedPolicy && !guard.locked) setSelected(null)
   }, [linkedPolicy, guard.locked])
+  useEffect(() => {
+    if (!draft.value || (linkedPolicy && selected?.id === linkedPolicy) || guard.locked) return
+    const { resource, version, variant } = draft.value
+    const action = newPolicyAction('software', params.get('scope') ?? '')
+    if (action.kind !== 'software') return
+    const id = linkedPolicy ?? crypto.randomUUID()
+    setSelected({
+      id,
+      baseline: null,
+      initialAction: {
+        ...action,
+        resource: {
+          kind: 'software',
+          id: resource.id,
+          version: version.id,
+          variants: { [`${variant.platform}_${variant.architecture}`]: variant.key },
+        },
+      },
+    })
+    const next = new URLSearchParams(params)
+    next.set('policy', id)
+    next.set('tab', 'definition')
+    setParams(next, { replace: true })
+  }, [draft.value, linkedPolicy, selected?.id, guard.locked, params, setParams])
   useEffect(() => {
     if (detail.value && detail.value.id === policyTarget)
       setSelected({ id: policyTarget, baseline: detail.value })
@@ -122,12 +205,13 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     const next = new URLSearchParams(params)
     next.set('policy', id)
     next.set('tab', 'definition')
+    next.delete('softwareVariant')
     next.delete('assignmentCursor')
     next.delete('runCursor')
     setParams(next, { replace: true })
   }
   function close() {
-    if (returnSource) {
+    if (returnSource && (!fixedSoftware || selected?.baseline === null)) {
       if (new URLSearchParams(returnSource.split('?')[1]).get('policy') === selected?.id)
         setSelected(null)
       navigate(returnSource)
@@ -187,6 +271,23 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           />
         )}
         <ReadState locale={locale} busy={permissions.busy} error={permissions.error} />
+        {fixedSoftware && (
+          <p>
+            {l('固定软件资源版本', 'Fixed software resource version')} ·{' '}
+            <code>
+              {softwareResource} @ {softwareVersion}
+            </code>
+          </p>
+        )}
+        {fixedSoftware && !softwareFilter && (
+          <Alert type="error" title={l('软件版本定位无效', 'Invalid software version locator')} />
+        )}
+        {draftResource && (
+          <ReadState locale={locale} busy={draft.busy} error={draft.error} onRetry={draft.reload} />
+        )}
+        {returnSource && !dialogOpen && (
+          <Link to={returnSource}>{l('返回来源', 'Return to source')}</Link>
+        )}
         {!selected &&
           ((!linkedPolicy && params.get('tab') === 'events' && params.get('eventDevice')) ||
             guard.locked) && (
@@ -271,6 +372,14 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                           </Button>
                           <div className="policy-meta">
                             <span>{row.action ? policyActionLabel(row.action, locale) : '—'}</span>
+                            {row.definition?.action.kind === 'software' && (
+                              <span>
+                                <code>
+                                  {row.definition.action.resource.id} @{' '}
+                                  {row.definition.action.resource.version}
+                                </code>
+                              </span>
+                            )}
                             {row.scope && (
                               <Link to={`/scopes?scope=${encodeURIComponent(row.scope)}`}>
                                 {l('范围', 'Scope')} · {row.scope}
