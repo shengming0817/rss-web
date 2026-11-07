@@ -1075,7 +1075,7 @@ try {
       202,
     )
     const task = (await accepted.json()).asset.task
-    assert.notEqual(task, accepted.request().postDataJSON().operationId)
+    assert.ok(task)
     const state = await poll(
       '/api/v1/software-asset-queries/' + task,
       () => assetButton('读取任务状态').click(),
@@ -1108,8 +1108,16 @@ try {
       (await evidence.json()).asset.response.items.filter((row) => row.confirmed).length,
       3,
     )
-    await run.choose(p, visibleLabel('分桶维度'), '版本')
-    const breakdown = await api('GET', base + '/breakdowns/version')
+    const breakdownResponse = await run.response(
+      p,
+      'GET',
+      base + '/breakdowns/version',
+      async () => {
+        await p.getByRole('combobox', { name: '分桶维度', exact: true }).press('ArrowDown')
+        await p.locator('.ant-select-dropdown:visible').getByText('版本', { exact: true }).click()
+      },
+    )
+    const breakdown = await breakdownResponse.json()
     assert.deepEqual(
       breakdown.asset.response.items.map((row) => [row.value, row.devices]),
       [

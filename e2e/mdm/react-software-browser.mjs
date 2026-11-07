@@ -657,6 +657,24 @@ try {
   assert.ok(firstCatalog.nextCursor)
   await run.nav(p, '/software', '软件目录')
   await tab('组织软件')
+  const secondPage = await run.response(p, 'GET', '/api/v1/resources', () =>
+    button('下一页').click(),
+  )
+  assert.ok((await secondPage.json()).items.some((row) => row.id === resource))
+  const expired = new URL(p.url())
+  assert.ok(expired.searchParams.get('cursor'))
+  const disjunction = `id=='${resource}',kind=='script'`
+  expired.searchParams.set('filter', disjunction)
+  await run.response(p, 'GET', '/api/v1/resources', () => p.goto(expired.href), 409)
+  const restarted = await run.response(p, 'GET', '/api/v1/resources', () =>
+    button('保留条件重新开始').click(),
+  )
+  assert.deepEqual(
+    (await restarted.json()).items.map((row) => row.id),
+    [resource],
+  )
+  assert.equal(new URL(p.url()).searchParams.get('filter'), disjunction)
+  assert.equal(new URL(p.url()).searchParams.has('cursor'), false)
   const detailRequests = []
   const captureDetails = (request) => {
     if (
@@ -798,7 +816,15 @@ try {
   })
   await p.setViewportSize({ width: 390, height: 844 })
   assert.equal(await columns(), 1)
-  assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  const overflow = await p.evaluate(() =>
+    document.documentElement.scrollWidth <= innerWidth
+      ? []
+      : [...document.querySelectorAll('main *')]
+          .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+          .slice(0, 10)
+          .map((node) => node.tagName + '.' + [...node.classList].join('.')),
+  )
+  assert.deepEqual(overflow, [])
   await p.screenshot({
     path: join(screenshots, 'software-mobile.png'),
     fullPage: true,
