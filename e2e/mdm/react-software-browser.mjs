@@ -744,8 +744,8 @@ try {
   const snapshot = 'browser-snapshot-' + randomUUID(),
     snapshotPath = '/api/v1/software/source-snapshots/' + snapshot,
     entryJson = String.raw`{"id":"fixture.package","name":"Editor \u4e2d","version":"7.1","number":9007199254740993,"ratio":0.123456789123456789}`,
-    pasted = '[\r\n' + Array(22).fill(entryJson).join(',\r\n') + '\r\n]',
-    json = pasted.slice(0, -1) + ' ]'
+    pasted = '[\n\r\n' + Array(22).fill(entryJson).join(',\r\n') + '\r\n]',
+    json = '[' + pasted.slice(2, -1) + ' ]'
   await label('新来源标识').fill(snapshot)
   await label('导入 JSON 原文').evaluate((element, text) => {
     const clipboardData = new window.DataTransfer()
@@ -755,6 +755,8 @@ try {
     )
   }, pasted)
   await label('导入 JSON 原文').focus()
+  await label('导入 JSON 原文').evaluate((element) => element.setSelectionRange(1, 2))
+  await label('导入 JSON 原文').press('Backspace')
   await label('导入 JSON 原文').evaluate((element) =>
     element.setSelectionRange(element.value.length - 1, element.value.length - 1),
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type ComponentRef } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Space } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
 import { formatFilter } from '@rss/api/mdm-filter'
@@ -52,10 +52,34 @@ function originalOffset(text: string, offset: number): number {
   return raw
 }
 
-function editSnapshotText(raw: string, next: string): string {
+type SnapshotSelection = { start: number; end: number; inputType: string }
+
+function editSnapshotText(raw: string, next: string, selection: SnapshotSelection | null): string {
   if (!raw.includes('\r')) return next
   const visible = raw.replace(/\r\n?/g, '\n')
   if (visible === next) return raw
+  if (selection) {
+    let { start, end } = selection
+    const deleted = visible.length - next.length
+    if (start === end && deleted > 0 && selection.inputType.startsWith('delete')) {
+      if (selection.inputType.endsWith('Backward')) start -= deleted
+      if (selection.inputType.endsWith('Forward')) end += deleted
+    }
+    const newEnd = next.length - (visible.length - end)
+    if (
+      start >= 0 &&
+      end <= visible.length &&
+      newEnd >= start &&
+      next.startsWith(visible.slice(0, start)) &&
+      next.endsWith(visible.slice(end))
+    ) {
+      return (
+        raw.slice(0, originalOffset(raw, start)) +
+        next.slice(start, newEnd) +
+        raw.slice(originalOffset(raw, end))
+      )
+    }
+  }
   let start = 0
   while (start < visible.length && start < next.length && visible[start] === next[start]) start++
   let oldEnd = visible.length
@@ -124,6 +148,8 @@ export function SoftwareSnapshots({
 }) {
   const l = labels(locale),
     action = useAction(),
+    textArea = useRef<ComponentRef<typeof Input.TextArea>>(null),
+    selectionBeforeInput = useRef<SnapshotSelection | null>(null),
     [source, setSource] = useState<{ id: string; revision: number } | null>(null),
     [sourcePage, setSourcePage] = useState<Query>(first),
     [entryPage, setEntryPage] = useState<Query>(first),
@@ -187,6 +213,24 @@ export function SoftwareSnapshots({
           : Promise.resolve(null),
     )
   usePendingSelection(action.busy || pending !== null)
+  useEffect(() => {
+    const element = textArea.current?.nativeElement
+    if (!element) return
+    // The native event captures textarea selection before deletion and IME edits.
+    function capture(event: Event) {
+      if (!(event instanceof InputEvent) || !(event.target instanceof HTMLTextAreaElement)) return
+      selectionBeforeInput.current = {
+        start: event.target.selectionStart,
+        end: event.target.selectionEnd,
+        inputType: event.inputType,
+      }
+    }
+    element.addEventListener('beforeinput', capture)
+    return () => {
+      selectionBeforeInput.current = null
+      element.removeEventListener('beforeinput', capture)
+    }
+  }, [canWrite])
   function select(next: typeof source) {
     setSource(next)
     setEntryPage(first)
@@ -506,12 +550,15 @@ export function SoftwareSnapshots({
             )}
             <Form.Item label={l('导入 JSON 原文', 'JSON to import')}>
               <Input.TextArea
+                ref={textArea}
                 aria-label={l('导入 JSON 原文', 'JSON to import')}
                 value={document}
+                spellCheck={false}
                 onPaste={(event) => {
                   const text = event.clipboardData.getData('text/plain')
                   if (!text) return
                   event.preventDefault()
+                  selectionBeforeInput.current = null
                   const { selectionStart, selectionEnd } = event.currentTarget
                   const from = originalOffset(document, selectionStart)
                   const to = originalOffset(document, selectionEnd)
@@ -520,7 +567,9 @@ export function SoftwareSnapshots({
                 }}
                 onChange={(e) => {
                   setFileIssue(null)
-                  setDocument(editSnapshotText(document, e.target.value))
+                  const selection = selectionBeforeInput.current
+                  selectionBeforeInput.current = null
+                  setDocument(editSnapshotText(document, e.target.value, selection))
                 }}
                 rows={6}
               />
