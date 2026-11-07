@@ -1,4 +1,6 @@
 import { auditContextKeys, auditHref, readAuditContext } from './audit-context'
+export const originalRunKeys = ['attempt', 'registration', 'generation', 'version'] as const
+export type OriginalRun = Partial<Record<(typeof originalRunKeys)[number], string>>
 // ref: remix-run/react-router packages/react-router/lib/router/utils.ts@react-router@7.9.6
 /** Only public locators on existing owner pages may be carried through result navigation. */
 export function resultReturnPath(value: string | null, expected?: string): string | null {
@@ -42,7 +44,7 @@ export function resultReturnPath(value: string | null, expected?: string): strin
             'returnTo',
           ]
         : path === '/operations'
-          ? ['filter', 'cursor', 'operation', 'kind', 'policy', 'returnTo']
+          ? ['filter', 'cursor', 'operation', 'kind', 'policy', 'returnTo', ...originalRunKeys]
           : /^\/devices\/(endpoint|association)\/[^/]+$/.test(path)
             ? ['tab', 'endpoint', 'retirement', 'returnTo', ...auditContextKeys]
             : []

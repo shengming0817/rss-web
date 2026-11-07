@@ -35,7 +35,7 @@ export function PolicyNames({
       `policy-names/${policy.id}/${policy.revision}`,
       async (signal) => {
         const page = await policies.list(
-          { limit: 2, fields: nameFields, filter: `id=='${policy.id}'` },
+          { limit: 2, fields: nameFields, filter: `id=='${policy.id}';state=='${policy.state}'` },
           signal,
         )
         const row = page.items[0]

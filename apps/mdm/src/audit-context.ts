@@ -4,11 +4,14 @@ import {
   type ActivityQuery,
   type AuditQuery,
 } from '@rss/mdm-audit'
+import { uuid } from '@rss/mdm-inventory'
 
 export type AuditView = 'audit' | 'timeline' | 'activities'
 export interface AuditContext extends AuditQuery, ActivityQuery {
   readonly view: AuditView
   readonly activity?: string | undefined
+  /** Web narrows the current server task page by this original coordinate. */
+  readonly attempt?: string | undefined
 }
 const auditFields = [
   'targetId',
@@ -39,7 +42,7 @@ const activityFields = [
   'cursor',
 ] as const
 export const auditContextKeys: readonly string[] = [
-  ...new Set([...auditFields, ...activityFields, 'view', 'activity']),
+  ...new Set([...auditFields, ...activityFields, 'view', 'activity', 'attempt']),
 ]
 function selected(context: AuditContext, fields: readonly string[]) {
   return Object.fromEntries(
@@ -54,6 +57,10 @@ export function factQuery(context: AuditContext): AuditQuery {
   return result
 }
 export function activityQuery(context: AuditContext): ActivityQuery {
+  if (context.view === 'activities' && context.attempt !== undefined) {
+    if (!context.task) throw new Error('Original attempt requires a task')
+    uuid(context.attempt)
+  }
   const result = selected(context, activityFields) as ActivityQuery
   validateActivityQuery(result)
   return result
@@ -77,6 +84,7 @@ export function readAuditContext(
   if (!['audit', 'timeline', 'activities'].includes(String(values['view'])))
     throw new Error('Invalid audit view')
   const context = values as unknown as AuditContext
+  if (context.attempt && context.view !== 'activities') throw new Error('Wrong attempt view')
   factQuery(context)
   activityQuery(context)
   return context

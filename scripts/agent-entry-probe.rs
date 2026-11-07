@@ -49,8 +49,16 @@ fn main() {
         ))
         .is_err());
     }
+    let unaddressable_aliases = [".", ".."];
+    for alias in unaddressable_aliases {
+        let intent = EntryIntent::parse(&format!(
+            "rssmdm://view/v1/alias/{alias}?{namespace}&{version}"
+        ))
+        .expect("the existing CLI accepts the alias");
+        assert!(intent.uri().and_then(|uri| EntryIntent::parse(&uri)).is_err());
+    }
     println!(
         "{}",
-        json!({"schema": schemars::schema_for!(EntryIntent), "nodes": PAGE_NODES, "maxBytes": ENTRY_URI_BYTES, "vectors": vectors})
+        json!({"schema": schemars::schema_for!(EntryIntent), "nodes": PAGE_NODES, "maxBytes": ENTRY_URI_BYTES, "vectors": vectors, "unaddressableAliases": unaddressable_aliases})
     );
 }

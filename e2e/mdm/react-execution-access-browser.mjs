@@ -431,15 +431,44 @@ try {
     if (terminal === 'success') {
       await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
       await button('显示 Agent 查看入口').click()
+      await button('复制链接 · 原任务').waitFor()
+      await p.evaluate(() => {
+        const clipboard = globalThis.navigator.clipboard,
+          write = clipboard.write.bind(clipboard)
+        clipboard.write = (items) => {
+          globalThis.document.documentElement.dataset.entryCopyStarted = 'true'
+          return write(items)
+        }
+      })
+      let releaseCopy
+      const delayedCopy = new Promise((done) => {
+          releaseCopy = done
+        }),
+        registrationPath = `**${base}/devices/${final.device}`
+      await p.route(registrationPath, async (route) => {
+        if (route.request().method() === 'GET') await delayedCopy
+        await route.continue()
+      })
       await button('复制链接 · 原任务').click()
+      try {
+        await p.waitForFunction(
+          () => globalThis.document.documentElement.dataset.entryCopyStarted === 'true',
+        )
+      } finally {
+        releaseCopy()
+      }
       await p.getByRole('status').filter({ hasText: '已复制 · 原任务' }).waitFor()
+      await p.unroute(registrationPath)
       const copied = new URL(await p.evaluate(() => globalThis.navigator.clipboard.readText()))
       assert.equal(copied.pathname, `/v1/task/${task.task}`)
       assert.equal(copied.searchParams.get('attempt'), final.attemptId)
       assert.equal(copied.searchParams.get('registration'), final.registrationId)
       await p.getByRole('link', { name: '查看此执行的管理活动', exact: true }).click()
       await p.waitForURL(
-        (url) => url.pathname === '/audit' && url.searchParams.get('task') === task.task,
+        (url) =>
+          url.pathname === '/audit' &&
+          url.searchParams.get('task') === task.task &&
+          url.searchParams.get('attempt') === final.attemptId,
       )
       const facts = await until(
         () => api('GET', `${base}/devices/${final.device}/management-activities?task=${task.task}`),

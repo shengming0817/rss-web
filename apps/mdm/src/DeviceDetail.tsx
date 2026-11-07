@@ -656,7 +656,12 @@ function Detail({
                     key: 'retirement',
                     label: l('退管状态', 'Retirement'),
                     children: (
-                      <DeviceRetirement runtime={runtime} locale={locale} reference={reference} />
+                      <DeviceRetirement
+                        runtime={runtime}
+                        locale={locale}
+                        reference={reference}
+                        grants={permissions.value?.grants ?? []}
+                      />
                     ),
                   },
                   {

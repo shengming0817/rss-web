@@ -633,6 +633,11 @@ try {
   await p.getByRole('link', { name: /返回来源 \/ 设备目录/ }).click()
   await p.waitForURL(originalBatchUrl)
   await p.getByText('批次成员与原操作进度', { exact: true }).waitFor()
+  await button('显示 Agent 查看入口').click()
+  await p
+    .getByText('当前 Agent 无法可靠查询此类活动批次；请在管理端查看。', { exact: true })
+    .waitFor()
+  assert.equal(await button('复制命令 · 原事件批次').count(), 0)
   assert.equal(run.count(p, 'POST', path), 1)
   checks.push('real-batch-member-opens-original-retirement-and-returns-without-replay')
 

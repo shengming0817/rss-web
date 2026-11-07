@@ -51,7 +51,11 @@ async function probe() {
     if (result.status !== 0) {
       const diagnostic = result.stderr
         .split('\n')
-        .filter((line) => /^(fatal:|error:|Caused by:| {2}(failed|error|No such))/.test(line))
+        .filter((line) =>
+          /^(fatal:|error:|Caused by:|thread .*panicked|assertion failed:| {2}(failed|error|No such))/.test(
+            line,
+          ),
+        )
         .slice(0, 8)
         .join('\n')
         .replace(/https?:\/\/[^\s/]+@/g, 'https://[redacted]@')
@@ -66,7 +70,6 @@ async function probe() {
   let exported
   try {
     await mkdir(join(scratch, 'agent'))
-    await mkdir(join(scratch, 'probe', 'src'), { recursive: true })
     await bounded(
       '/usr/bin/git',
       [
@@ -81,12 +84,10 @@ async function probe() {
       60_000,
     )
     await bounded('tar', ['-xf', 'source.tar', '-C', 'agent'], 60_000)
+    const examples = join(scratch, 'agent/crates/execution-contract/examples')
+    await mkdir(examples, { recursive: true })
     await writeFile(
-      join(scratch, 'probe', 'Cargo.toml'),
-      `[package]\nname = "rss-web-agent-entry-probe"\nversion = "0.0.0"\nedition = "2021"\n[workspace]\n[dependencies]\nexecution-contract = { path = "../agent/crates/execution-contract" }\nschemars = "=1.2.2"\nserde_json = "=1.0.151"\n`,
-    )
-    await writeFile(
-      join(scratch, 'probe/src/main.rs'),
+      join(examples, 'rss_web_entry_probe.rs'),
       await readFile(join(root, 'scripts/agent-entry-probe.rs')),
     )
     exported = JSON.parse(
@@ -96,9 +97,14 @@ async function probe() {
           '+1.96.0',
           'run',
           '--quiet',
+          '--locked',
           '--offline',
           '--manifest-path',
-          join(scratch, 'probe/Cargo.toml'),
+          join(scratch, 'agent/Cargo.toml'),
+          '-p',
+          'execution-contract',
+          '--example',
+          'rss_web_entry_probe',
         ],
         600_000,
         {
@@ -137,7 +143,7 @@ const types = await compile(document.schema, 'EntryIntent', {
   maxItems: -1,
 })
 const binding = await format(
-  `${types}\nexport const entryUriBytes = ${document.maxBytes} as const\nexport const entryNodes = ${JSON.stringify(document.nodes)} as const\n`,
+  `${types}\nexport const entryUriBytes = ${document.maxBytes} as const\nexport const entryNodes = ${JSON.stringify(document.nodes)} as const\nexport const unaddressableAliases = ${JSON.stringify(document.unaddressableAliases)} as const\n`,
   {
     ...(await resolveConfig(generated)),
     parser: 'typescript',

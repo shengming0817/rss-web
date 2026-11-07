@@ -7,11 +7,20 @@ import { Failure, ReadState, codeOf, readFailure, labels, useAction, usePageRead
 import { useAdministration } from './useAdministration'
 import { useProtectedDelivery } from './useProtectedDelivery'
 import { EndpointPicker } from './EndpointPicker'
-import { agentViewEntry, type EntryTarget } from './agent-entry'
+import { addressableAlias, agentViewEntry, type EntryTarget } from './agent-entry'
 
 export type CopyEntry = { readonly label: string; readonly target: EntryTarget }
-const unavailable = (entry: CopyEntry) =>
+const desktopUnavailable = (entry: CopyEntry) =>
   entry.target.selector.kind === 'event' || entry.target.step !== undefined
+function unaddressableAlias({ target: { selector } }: CopyEntry) {
+  return (
+    selector.kind === 'capability' &&
+    selector.selector.kind === 'alias' &&
+    !addressableAlias(selector.selector.alias)
+  )
+}
+const unavailable = (entry: CopyEntry) =>
+  desktopUnavailable(entry) || entry.target.selector.kind === 'batch' || unaddressableAlias(entry)
 type Registration = { readonly registrationId: string; readonly generation: number }
 function agentRegistration(endpoint: Endpoint | undefined, expected?: Registration) {
   const active = endpoint?.channels.filter(
@@ -62,16 +71,15 @@ export function EntryCopies({
     stale = codeOf(copy.error) === 'registration_changed' || readFailure(copy.error) === 'denied'
   latest.current = context
   async function write(entry: CopyEntry, command: boolean) {
-    if (
-      !selected ||
-      !current ||
-      unavailable(entry) ||
-      (entry.target.selector.kind === 'batch' && !command)
-    )
-      return
+    if (!selected || !current || unavailable(entry)) return
     setCopied('')
     const epoch = delivery.capture()
-    const result = await copy.run(async () => {
+    const stillCurrent = () =>
+      delivery.isCurrent(epoch) &&
+      latest.current === context &&
+      runtime.administration().binding === binding
+    async function verify() {
+      if (!selected || !current) throw new Error('Agent registration unavailable')
       const endpoint = await devices.endpoint(selected),
         registration = agentRegistration(endpoint, expected)
       if (
@@ -80,12 +88,7 @@ export function EntryCopies({
         registration.generation !== current.generation
       )
         throw { cause: 'client', code: 'registration_changed' }
-      if (
-        !delivery.isCurrent(epoch) ||
-        latest.current !== context ||
-        runtime.administration().binding !== binding
-      )
-        return false
+      if (!stillCurrent()) throw { cause: 'client', code: 'stale' }
       const formatted = agentViewEntry(entry.target, {
         instance: runtime.host.serviceId,
         tenant: runtime.tenant,
@@ -93,16 +96,20 @@ export function EntryCopies({
         registration: registration.registrationId,
         generation: registration.generation,
       })
-      await navigator.clipboard.writeText(
-        entry.target.selector.kind === 'batch'
-          ? `rssmdm batches show '${entry.target.selector.id}'`
-          : command
-            ? formatted.command
-            : formatted.uri,
-      )
-      return true
+      return new Blob([command ? formatted.command : formatted.uri], { type: 'text/plain' })
+    }
+    const result = await copy.run(async () => {
+      // WebKit needs the write to begin during the click. No bytes are provided
+      // to the ClipboardItem until the original binding has been verified.
+      const content = verify()
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'text/plain': content })])
+      } catch (error) {
+        await content
+        throw error
+      }
     })
-    if (result.ok && result.value && delivery.isCurrent(epoch)) setCopied(entry.label)
+    if (result.ok && stillCurrent()) setCopied(entry.label)
   }
   if (!entries.length) return null
   return (
@@ -126,7 +133,7 @@ export function EntryCopies({
               'Copied links open a view for this tenant and registration. Agent checks identity and permission again.',
             )}
           </p>
-          {entries.some(unavailable) && (
+          {entries.some(desktopUnavailable) && (
             <p>
               {l(
                 '当前 Agent 桌面未接通事件或精确步骤定位；请在管理端查看。',
@@ -137,8 +144,16 @@ export function EntryCopies({
           {entries.some((entry) => entry.target.selector.kind === 'batch') && (
             <p>
               {l(
-                '批次仅提供只读 CLI 查询，请在已核对的 Agent 终端运行；当前桌面不支持批次链接。',
-                'Batch queries are available through the read-only CLI on the verified Agent endpoint. The current desktop does not open batch links.',
+                '当前 Agent 无法可靠查询此类活动批次；请在管理端查看。',
+                'The current Agent cannot reliably query these activity batches. View them in the management console.',
+              )}
+            </p>
+          )}
+          {entries.some(unaddressableAlias) && (
+            <p>
+              {l(
+                '当前别名无法生成 Agent 查看入口；请使用策略 ID、稳定工具名或更换别名。',
+                'This alias cannot form an Agent view address. Use the policy ID or stable tool name, or change the alias.',
               )}
             </p>
           )}
@@ -179,11 +194,9 @@ export function EntryCopies({
               <p key={entry.label}>
                 <Space wrap>
                   <span>{entry.label}</span>
-                  {entry.target.selector.kind !== 'batch' && (
-                    <Button disabled={copy.busy} onClick={() => void write(entry, false)}>
-                      {l('复制链接', 'Copy link')} · {entry.label}
-                    </Button>
-                  )}
+                  <Button disabled={copy.busy} onClick={() => void write(entry, false)}>
+                    {l('复制链接', 'Copy link')} · {entry.label}
+                  </Button>
                   <Button disabled={copy.busy} onClick={() => void write(entry, true)}>
                     {l('复制命令', 'Copy command')} · {entry.label}
                   </Button>

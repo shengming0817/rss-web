@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import type { EntryIntent } from './agent-entry.generated'
-import { agentViewEntry, type EntryTarget } from './agent-entry'
+import { addressableAlias, agentViewEntry, type EntryTarget } from './agent-entry'
+import { unaddressableAliases } from './agent-entry.generated'
 
 const { vectors } = JSON.parse(
   readFileSync(new URL('../../../contracts/agent-entry/contract.json', import.meta.url), 'utf8'),
@@ -37,6 +38,15 @@ it('emits exactly the canonical Rust URI and CLI open command for every supporte
 it('rejects privilege and secret extensions, malformed selectors, and incomplete enterprise coordinates', () => {
   const namespace = vectors[0]!.intent.namespace!,
     target: EntryTarget = { selector: { kind: 'event', name: 'repair.event' } }
+  for (const alias of unaddressableAliases) {
+    expect(addressableAlias(alias)).toBe(false)
+    expect(() =>
+      agentViewEntry(
+        { selector: { kind: 'capability', selector: { kind: 'alias', alias } } },
+        namespace,
+      ),
+    ).toThrow()
+  }
   for (const invalid of [
     { ...target, confirm: true },
     { ...target, parameters: { secret: 'value' } },

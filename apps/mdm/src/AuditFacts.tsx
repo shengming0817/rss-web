@@ -181,6 +181,13 @@ export function ActivityFactView({
     source = location.pathname + location.search,
     targetDevice = fact.target?.device ?? device,
     window = { from: context?.from, until: context?.until, limit: context?.limit },
+    original = {
+      ...(fact.links.attempt ? { attempt: fact.links.attempt } : {}),
+      ...(fact.links.version ? { version: fact.links.version } : {}),
+      ...(fact.target
+        ? { registration: fact.target.registration, generation: String(fact.target.generation) }
+        : {}),
+    },
     dimensions = [
       [l('投递证据', 'Delivery evidence'), fact.delivery],
       [l('执行事实', 'Execution fact'), fact.execution],
@@ -261,14 +268,17 @@ export function ActivityFactView({
               fact.links.task,
               fact.links.policy ?? undefined,
               source,
+              original,
             )}
           >
             {l('查看原任务执行', 'View original task run')}
           </Link>
         )}
-        {fact.kind === 'configuration' && fact.links.operation && (
+        {['configuration', 'execution'].includes(fact.kind) && fact.links.operation && (
           <Link to={executionPath('command', fact.links.operation, undefined, source)}>
-            {l('查看原配置命令', 'View original configuration command')}
+            {fact.kind === 'configuration'
+              ? l('查看原配置命令', 'View original configuration command')
+              : l('查看原生命令', 'View original native command')}
           </Link>
         )}
         {fact.links.retirement && (
@@ -287,6 +297,9 @@ export function ActivityFactView({
                     reference.id,
                     reference.kind === 'run' ? (fact.links.policy ?? undefined) : undefined,
                     source,
+                    reference.kind === 'run' && reference.id === fact.links.task
+                      ? original
+                      : undefined,
                   )
             }
           >

@@ -13,7 +13,7 @@ import type {
   AuditPolicyLookup,
 } from '@rss/mdm-audit'
 import { AuditWorkspace } from './Audit'
-import { AuditFactView } from './AuditFacts'
+import { ActivityFactView, AuditFactView } from './AuditFacts'
 import type { Runtime } from './runtime'
 
 let host: HTMLDivElement, root: Root
@@ -121,6 +121,34 @@ const activities: ActivityPage = {
   retainedFrom: null,
   coverage: [{ source: 'native', complete: false, reasons: ['not_retained'] }],
 }
+it('links original task and native command coordinates from their producer activity', async () => {
+  const task = '22222222-2222-4222-8222-222222222222',
+    attempt = '33333333-3333-4333-8333-333333333333',
+    version = '44444444-4444-4444-8444-444444444444',
+    operation = '55555555-5555-4555-8555-555555555555',
+    fact = {
+      ...detail.activity,
+      links: { ...detail.activity.links, task, attempt, version, operation },
+    }
+  await render(
+    h(
+      MemoryRouter,
+      { initialEntries: ['/audit?view=activities&device=device'] },
+      h(ActivityFactView, { fact, locale: 'zh', device: 'device' }),
+    ),
+  )
+  const params = (name: string) =>
+    new URL([...host.querySelectorAll('a')].find((link) => link.textContent === name)!.href)
+      .searchParams
+  expect(Object.fromEntries(params('查看原任务执行'))).toMatchObject({
+    operation: task,
+    attempt,
+    version,
+    registration: fact.target!.registration,
+    generation: '1',
+  })
+  expect(Object.fromEntries(params('查看原生命令'))).toMatchObject({ kind: 'command', operation })
+})
 function runtime(
   audit: Partial<Audit>,
   grants: readonly unknown[] = [{ operation: 'audit_read', scope: { kind: 'tenant' } }],

@@ -1,6 +1,7 @@
 import {
   entryNodes,
   entryUriBytes,
+  unaddressableAliases,
   type EntryNamespace,
   type EntrySelector,
 } from './agent-entry.generated'
@@ -16,6 +17,8 @@ export type EntryTarget = {
 }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const name = /^[a-z0-9._-]{1,64}$/
+export const addressableAlias = (alias: string) =>
+  name.test(alias) && !(unaddressableAliases as readonly string[]).includes(alias)
 const bytes = new TextEncoder()
 const id = (value: string) =>
   typeof value === 'string' && uuid.test(value) && /[1-9a-f]/.test(value)
@@ -88,7 +91,7 @@ export function agentViewEntry(target: EntryTarget, ns: EntryNamespace) {
         only(address, ['kind', 'alias'])
         kind = 'alias'
         value = address.alias
-        if (!name.test(value)) throw new Error('Invalid Agent alias')
+        if (!addressableAlias(value)) throw new Error('Unaddressable Agent alias')
       } else throw new Error('Invalid Agent capability')
       break
     }

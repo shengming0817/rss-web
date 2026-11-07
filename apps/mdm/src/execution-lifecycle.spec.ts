@@ -9,6 +9,7 @@ import type { ControlIntent, ControlRecovery } from '@rss/mdm-execution'
 import type { ViewEndpoint } from '@rss/mdm-devices'
 import { DeviceDetail } from './DeviceDetail'
 import { DeviceControl } from './DeviceControl'
+import { DeviceRetirement } from './DeviceRetirement'
 import { ControlRecoveryPanel } from './ControlRecovery'
 import { isUnknown } from './AdminUi'
 import { decodeMdmError } from '@rss/api/mdm'
@@ -713,63 +714,131 @@ it('rejects malformed source locators without crashing a result page', () => {
     expect(resultReturnPath(value)).toBeNull()
 })
 
-it('renders the original attempt nodes and carries the complete execution context to its device', async () => {
-  const id = '11111111-1111-4111-8111-111111111111',
-    policy = '22222222-2222-4222-8222-222222222222',
-    path = `/operations?kind=action_run&operation=${id}&policy=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
-    detail = vi.fn(async () => ({
-      item: null,
-      policy,
-      detail: {
-        kind: 'run',
-        owner: 'software',
-        id,
-        device: 'device-a',
-        versionId: policy,
-        occurrence: null,
-        availableAt: 1,
-        deadline: 2,
-        state: { execution: 'succeeded', cancellation: 'none', startedAt: 1 },
-        delivery: 'received',
-        effect: 'unknown',
-        authorization: null,
-        result: null,
-        attempt: id,
-        nodes: [{ stepId: 'install-original', definition: { id: 'package', version: 'v1' } }],
-        userAction: null,
-      },
-    })),
-    runtime = {
-      administration: () => ({
-        binding: 'nodes',
-        authorization: { effective: async () => ({ grants: [] }) },
-        execution: {
-          summary: async () => ({
-            id,
-            device: 'device-a',
-            policy,
-            status: 'succeeded',
-            registrationId: id,
-            generation: 1,
-          }),
-          detail,
-          list: async () => ({ items: [], nextCursor: null }),
-          statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+it.each([false, true])(
+  'renders original attempt evidence only if the coordinates match (%s mismatch)',
+  async (mismatch) => {
+    const id = '11111111-1111-4111-8111-111111111111',
+      policy = '22222222-2222-4222-8222-222222222222',
+      path = `/operations?kind=action_run&operation=${id}&policy=${policy}&attempt=${mismatch ? policy : id}&registration=${id}&generation=1&version=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
+      detail = vi.fn(async () => ({
+        item: null,
+        policy,
+        detail: {
+          kind: 'run',
+          owner: 'software',
+          id,
+          device: 'device-a',
+          versionId: policy,
+          occurrence: null,
+          availableAt: 1,
+          deadline: 2,
+          state: { execution: 'succeeded', cancellation: 'none', startedAt: 1 },
+          delivery: 'received',
+          effect: 'unknown',
+          authorization: null,
+          result: null,
+          attempt: id,
+          registrationId: id,
+          generation: 1,
+          nodes: [{ stepId: 'install-original', definition: { id: 'package', version: 'v1' } }],
+          userAction: null,
         },
-      }),
-    } as unknown as Runtime
+      })),
+      runtime = {
+        administration: () => ({
+          binding: 'nodes',
+          authorization: { effective: async () => ({ grants: [] }) },
+          execution: {
+            summary: async () => ({
+              id,
+              device: 'device-a',
+              policy,
+              status: 'succeeded',
+              registrationId: id,
+              generation: 1,
+            }),
+            detail,
+            list: async () => ({ items: [], nextCursor: null }),
+            statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+          },
+        }),
+      } as unknown as Runtime
+    await act(async () =>
+      root.render(
+        h(MemoryRouter, { initialEntries: [path] }, h(Executions, { runtime, locale: 'zh' })),
+      ),
+    )
+    const link = host.querySelector<HTMLAnchorElement>('a[href^="/devices/endpoint/device-a"]')!
+    expect(new URL(link.href).searchParams.get('returnTo')).toBe(path)
+    expect(detail).not.toHaveBeenCalled()
+    await act(async () => button('读取详细结果与证据').click())
+    if (mismatch) {
+      expect(host.textContent).toContain('原尝试详情不可用')
+      expect(host.textContent).not.toContain('install-original')
+      expect(host.textContent).not.toContain('显示 Agent 查看入口')
+      return
+    }
+    expect(host.textContent).toContain('原尝试的冻结节点')
+    expect(host.textContent).toContain('install-original')
+    expect(host.textContent).toContain('v1')
+  },
+)
+
+it('keeps a deep-linked retirement read-only when any affected endpoint lacks revocation authority', async () => {
+  const id = '11111111-1111-4111-8111-111111111111'
+  const forceRetirement = vi.fn()
+  const runtime = {
+    administration: () => ({
+      binding: 'retirement',
+      devices: {
+        retirement: async () => ({
+          target: {
+            object: { kind: 'endpoint', id: 'device-a' },
+            members: [{ device: 'device-a' }, { device: 'device-b' }],
+          },
+          createdAt: 20,
+          forcedAt: null,
+          channels: [
+            {
+              device: 'device-a',
+              channel: 'mdm',
+              registration: id,
+              generation: 1,
+              stage: 'queued',
+            },
+            {
+              device: 'device-b',
+              channel: 'agent',
+              registration: id,
+              generation: 1,
+              stage: 'queued',
+            },
+          ],
+        }),
+        forceRetirement,
+      },
+    }),
+  } as unknown as Runtime
   await act(async () =>
     root.render(
-      h(MemoryRouter, { initialEntries: [path] }, h(Executions, { runtime, locale: 'zh' })),
+      h(
+        MemoryRouter,
+        { initialEntries: [`/devices/endpoint/device-a?tab=retirement&retirement=${id}`] },
+        h(DeviceRetirement, {
+          runtime,
+          locale: 'zh',
+          reference: { kind: 'endpoint', id: 'device-a' },
+          grants: [
+            { operation: 'inventory_read', scope: { kind: 'all_devices' } },
+            { operation: 'device_unmanage', scope: { kind: 'device', id: 'device-a' } },
+          ],
+        }),
+      ),
     ),
   )
-  const link = host.querySelector<HTMLAnchorElement>('a[href^="/devices/endpoint/device-a"]')!
-  expect(new URL(link.href).searchParams.get('returnTo')).toBe(path)
-  expect(detail).not.toHaveBeenCalled()
-  await act(async () => button('读取详细结果与证据').click())
-  expect(host.textContent).toContain('原尝试的冻结节点')
-  expect(host.textContent).toContain('install-original')
-  expect(host.textContent).toContain('v1')
+  expect(host.textContent).toContain('device-b')
+  expect(host.textContent).not.toContain('请求强制撤销')
+  expect(forceRetirement).not.toHaveBeenCalled()
 })
 
 it('retains an unknown recovery request while refreshing the containing result detail', async () => {

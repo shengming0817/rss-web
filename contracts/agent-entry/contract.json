@@ -47,15 +47,8 @@
             "additionalProperties": false,
             "description": "Canonical Policy identity.",
             "properties": {
-              "id": {
-                "description": "Object ID.",
-                "format": "uuid",
-                "type": "string"
-              },
-              "kind": {
-                "const": "id",
-                "type": "string"
-              }
+              "id": { "description": "Object ID.", "format": "uuid", "type": "string" },
+              "kind": { "const": "id", "type": "string" }
             },
             "required": ["kind", "id"],
             "type": "object"
@@ -64,14 +57,8 @@
             "additionalProperties": false,
             "description": "Server-generated tool name.",
             "properties": {
-              "kind": {
-                "const": "tool_name",
-                "type": "string"
-              },
-              "name": {
-                "description": "Complete canonical name.",
-                "type": "string"
-              }
+              "kind": { "const": "tool_name", "type": "string" },
+              "name": { "description": "Complete canonical name.", "type": "string" }
             },
             "required": ["kind", "name"],
             "type": "object"
@@ -84,10 +71,7 @@
                 "$ref": "#/$defs/PolicyAlias",
                 "description": "Canonical tenant-local alias."
               },
-              "kind": {
-                "const": "alias",
-                "type": "string"
-              }
+              "kind": { "const": "alias", "type": "string" }
             },
             "required": ["kind", "alias"],
             "type": "object"
@@ -104,11 +88,7 @@
       "EntryAction": {
         "description": "The external link selects a view or prepares an original user interface.",
         "oneOf": [
-          {
-            "const": "view",
-            "description": "Read/open only.",
-            "type": "string"
-          },
+          { "const": "view", "description": "Read/open only.", "type": "string" },
           {
             "const": "invoke",
             "description": "Open the exact input summary; a real user must submit it.",
@@ -120,10 +100,7 @@
         "additionalProperties": false,
         "description": "Enterprise coordinates are compared with the active registration, never used to switch it.",
         "properties": {
-          "device": {
-            "description": "Exact device identity.",
-            "type": "string"
-          },
+          "device": { "description": "Exact device identity.", "type": "string" },
           "generation": {
             "description": "Exact registration generation.",
             "format": "uint64",
@@ -134,14 +111,8 @@
             "description": "Product instance identity, not a server URL.",
             "type": "string"
           },
-          "registration": {
-            "description": "Exact registration UUID.",
-            "type": "string"
-          },
-          "tenant": {
-            "description": "Exact tenant UUID.",
-            "type": "string"
-          }
+          "registration": { "description": "Exact registration UUID.", "type": "string" },
+          "tenant": { "description": "Exact tenant UUID.", "type": "string" }
         },
         "required": ["instance", "tenant", "device", "registration", "generation"],
         "type": "object"
@@ -153,14 +124,8 @@
             "additionalProperties": false,
             "description": "One packaged local tool; its existing owner supplies schema and qualification.",
             "properties": {
-              "kind": {
-                "const": "localTool",
-                "type": "string"
-              },
-              "name": {
-                "$ref": "#/$defs/LocalTool",
-                "description": "Stable tool name."
-              }
+              "kind": { "const": "localTool", "type": "string" },
+              "name": { "$ref": "#/$defs/LocalTool", "description": "Stable tool name." }
             },
             "required": ["kind", "name"],
             "type": "object"
@@ -169,14 +134,8 @@
             "additionalProperties": false,
             "description": "Stable page or page section.",
             "properties": {
-              "id": {
-                "description": "Explicit owner-registered ID.",
-                "type": "string"
-              },
-              "kind": {
-                "const": "node",
-                "type": "string"
-              }
+              "id": { "description": "Explicit owner-registered ID.", "type": "string" },
+              "kind": { "const": "node", "type": "string" }
             },
             "required": ["kind", "id"],
             "type": "object"
@@ -185,10 +144,7 @@
             "additionalProperties": false,
             "description": "Server-owned ID, tool name or unique alias.",
             "properties": {
-              "kind": {
-                "const": "capability",
-                "type": "string"
-              },
+              "kind": { "const": "capability", "type": "string" },
               "selector": {
                 "$ref": "#/$defs/CapabilitySelector",
                 "description": "Canonical producer selector."
@@ -201,10 +157,7 @@
             "additionalProperties": false,
             "description": "Explicit one-to-many event, never an alias lookup.",
             "properties": {
-              "kind": {
-                "const": "event",
-                "type": "string"
-              },
+              "kind": { "const": "event", "type": "string" },
               "name": {
                 "$ref": "#/$defs/PolicyEventName",
                 "description": "Producer-normalized name."
@@ -217,10 +170,7 @@
             "additionalProperties": false,
             "description": "Original preparation or execution.",
             "properties": {
-              "kind": {
-                "const": "request",
-                "type": "string"
-              },
+              "kind": { "const": "request", "type": "string" },
               "request": {
                 "$ref": "#/$defs/RequestId",
                 "description": "Original business request."
@@ -233,10 +183,7 @@
             "additionalProperties": false,
             "description": "Exact periodic collection session.",
             "properties": {
-              "kind": {
-                "const": "sampling",
-                "type": "string"
-              },
+              "kind": { "const": "sampling", "type": "string" },
               "query": {
                 "$ref": "#/$defs/QueryRef",
                 "description": "Original definition and revision."
@@ -249,14 +196,8 @@
             "additionalProperties": false,
             "description": "Original source-qualified management fact.",
             "properties": {
-              "id": {
-                "description": "Producer fact identity.",
-                "type": "string"
-              },
-              "kind": {
-                "const": "activity",
-                "type": "string"
-              }
+              "id": { "description": "Producer fact identity.", "type": "string" },
+              "kind": { "const": "activity", "type": "string" }
             },
             "required": ["kind", "id"],
             "type": "object"
@@ -265,14 +206,8 @@
             "additionalProperties": false,
             "description": "Existing producer batch.",
             "properties": {
-              "id": {
-                "description": "Canonical batch UUID.",
-                "type": "string"
-              },
-              "kind": {
-                "const": "batch",
-                "type": "string"
-              }
+              "id": { "description": "Canonical batch UUID.", "type": "string" },
+              "kind": { "const": "batch", "type": "string" }
             },
             "required": ["kind", "id"],
             "type": "object"
@@ -281,18 +216,9 @@
             "additionalProperties": false,
             "description": "Original remote execution and attempt.",
             "properties": {
-              "attempt": {
-                "description": "Exact attempt UUID.",
-                "type": "string"
-              },
-              "kind": {
-                "const": "task",
-                "type": "string"
-              },
-              "task": {
-                "description": "Backend task UUID.",
-                "type": "string"
-              }
+              "attempt": { "description": "Exact attempt UUID.", "type": "string" },
+              "kind": { "const": "task", "type": "string" },
+              "task": { "description": "Backend task UUID.", "type": "string" }
             },
             "required": ["kind", "task", "attempt"],
             "type": "object"
@@ -326,10 +252,7 @@
           }
         ]
       },
-      "PolicyAlias": {
-        "description": "Tenant-local canonical Policy alias.",
-        "type": "string"
-      },
+      "PolicyAlias": { "description": "Tenant-local canonical Policy alias.", "type": "string" },
       "PolicyEventName": {
         "description": "Tenant-local event name shared by any number of Policies; never an object alias.",
         "type": "string"
@@ -338,10 +261,7 @@
         "additionalProperties": false,
         "description": "Exact service-owned query definition.",
         "properties": {
-          "id": {
-            "$ref": "#/$defs/Id",
-            "description": "Stable resource identity."
-          },
+          "id": { "$ref": "#/$defs/Id", "description": "Stable resource identity." },
           "revision": {
             "$ref": "#/$defs/Digest",
             "description": "Digest of the complete current definition."
@@ -362,19 +282,9 @@
     "additionalProperties": false,
     "description": "One bounded navigation intent; neither origin nor confirmation is accepted here.",
     "properties": {
-      "action": {
-        "$ref": "#/$defs/EntryAction",
-        "description": "Requested navigation behavior."
-      },
+      "action": { "$ref": "#/$defs/EntryAction", "description": "Requested navigation behavior." },
       "namespace": {
-        "anyOf": [
-          {
-            "$ref": "#/$defs/EntryNamespace"
-          },
-          {
-            "type": "null"
-          }
-        ],
+        "anyOf": [{ "$ref": "#/$defs/EntryNamespace" }, { "type": "null" }],
         "description": "Mandatory for enterprise links; absent for purely local page nodes."
       },
       "parameters": {
@@ -388,10 +298,7 @@
         "minimum": 0,
         "type": ["integer", "null"]
       },
-      "selector": {
-        "$ref": "#/$defs/EntrySelector",
-        "description": "Shared exact selector."
-      },
+      "selector": { "$ref": "#/$defs/EntrySelector", "description": "Shared exact selector." },
       "step": {
         "description": "Owner-qualified node inside the exact attempt.",
         "type": ["string", "null"]
@@ -405,6 +312,7 @@
     "title": "EntryIntent",
     "type": "object"
   },
+  "unaddressableAliases": [".", ".."],
   "vectors": [
     {
       "intent": {
@@ -420,10 +328,7 @@
         "revision": 4,
         "selector": {
           "kind": "capability",
-          "selector": {
-            "id": "534610c5-1c82-42b1-bc9d-4b834c973cb3",
-            "kind": "id"
-          }
+          "selector": { "id": "534610c5-1c82-42b1-bc9d-4b834c973cb3", "kind": "id" }
         },
         "step": null,
         "version": "11111111-1111-4111-8111-111111111111"
@@ -444,10 +349,7 @@
         "revision": 4,
         "selector": {
           "kind": "capability",
-          "selector": {
-            "kind": "tool_name",
-            "name": "policy_534610c51c8242b1bc9d4b834c973cb3"
-          }
+          "selector": { "kind": "tool_name", "name": "policy_534610c51c8242b1bc9d4b834c973cb3" }
         },
         "step": null,
         "version": "11111111-1111-4111-8111-111111111111"
@@ -468,10 +370,7 @@
         "revision": 4,
         "selector": {
           "kind": "capability",
-          "selector": {
-            "alias": "repair.device",
-            "kind": "alias"
-          }
+          "selector": { "alias": "repair.device", "kind": "alias" }
         },
         "step": null,
         "version": "11111111-1111-4111-8111-111111111111"
@@ -490,10 +389,7 @@
         },
         "parameters": {},
         "revision": null,
-        "selector": {
-          "kind": "event",
-          "name": "repair.event"
-        },
+        "selector": { "kind": "event", "name": "repair.event" },
         "step": null,
         "version": null
       },
@@ -511,10 +407,7 @@
         },
         "parameters": {},
         "revision": null,
-        "selector": {
-          "id": "11111111-1111-4111-8111-111111111111",
-          "kind": "batch"
-        },
+        "selector": { "id": "11111111-1111-4111-8111-111111111111", "kind": "batch" },
         "step": null,
         "version": null
       },
@@ -554,10 +447,7 @@
         },
         "parameters": {},
         "revision": null,
-        "selector": {
-          "id": "mdm.policy:11111111-1111-4111-8111-111111111111",
-          "kind": "activity"
-        },
+        "selector": { "id": "mdm.policy:11111111-1111-4111-8111-111111111111", "kind": "activity" },
         "step": "verify.1",
         "version": null
       },
@@ -575,10 +465,7 @@
         },
         "parameters": {},
         "revision": null,
-        "selector": {
-          "id": "tasks.management",
-          "kind": "node"
-        },
+        "selector": { "id": "tasks.management", "kind": "node" },
         "step": null,
         "version": null
       },

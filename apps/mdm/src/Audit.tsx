@@ -58,6 +58,7 @@ type Draft = {
   request?: string | undefined
   batch?: string | undefined
   task?: string | undefined
+  attempt?: string | undefined
   operation?: string | undefined
   related?: string | undefined
 }
@@ -143,6 +144,10 @@ function ActivityDetail({
     if (denied) onDenied()
   }, [denied])
   const fact = read.value?.activity,
+    mismatch =
+      context.attempt &&
+      fact &&
+      (fact.links.task !== context.task || fact.links.attempt !== context.attempt),
     entries: CopyEntry[] = fact
       ? [
           {
@@ -180,7 +185,16 @@ function ActivityDetail({
     >
       <ReadState busy={read.busy} error={read.error} locale={locale} />
       <ReadState busy={!!cursor && related.busy} error={related.error} locale={locale} />
-      {read.value && !read.error && !related.error && !denied && (
+      {mismatch && (
+        <Alert
+          type="warning"
+          title={l(
+            '此活动不属于原尝试。',
+            'This activity does not belong to the original attempt.',
+          )}
+        />
+      )}
+      {read.value && !mismatch && !read.error && !related.error && !denied && (
         <>
           <ActivityFactView
             fact={read.value.activity}
@@ -378,6 +392,7 @@ export function AuditWorkspace({
       const raw: AuditContext = {
         ...value,
         view: value.view,
+        ...(value.view !== 'activities' ? { attempt: undefined } : {}),
         ...(fixedDevice ? { device: fixedDevice } : {}),
         from: recordedTime(value.from),
         until: recordedTime(value.until),
@@ -475,6 +490,13 @@ export function AuditWorkspace({
                     ['operation', l('原生 operation ID', 'Native operation ID')],
                     ['request', l('原请求 ID', 'Original request ID')],
                     ['task', l('任务 ID', 'Task ID')],
+                    [
+                      'attempt',
+                      l(
+                        '原尝试 ID（当前页内匹配）',
+                        'Original attempt ID (match within the current page)',
+                      ),
+                    ],
                     ['batch', l('批次 ID', 'Batch ID')],
                     ['source', l('来源', 'Source')],
                     ['kind', l('活动类别', 'Activity kind')],
@@ -635,7 +657,28 @@ export function AuditWorkspace({
                   {coverage.reasons.join(' · ')}
                 </p>
               ))}
-              <ActivityRows rows={activities.items} locale={locale} onOpen={open} />
+              {context.attempt && (
+                <p className="subtitle">
+                  {l(
+                    '仅显示本页匹配的原尝试事实。分页与覆盖仍对应服务端任务查询。',
+                    'Only facts for the original attempt on this page are shown. Pagination and coverage apply to the server task query.',
+                  )}{' '}
+                  <code>{context.attempt}</code>
+                </p>
+              )}
+              <ActivityRows
+                rows={
+                  context.attempt
+                    ? activities.items.filter(
+                        (fact) =>
+                          fact.links.task === context.task &&
+                          fact.links.attempt === context.attempt,
+                      )
+                    : activities.items
+                }
+                locale={locale}
+                onOpen={open}
+              />
               <p className="subtitle">
                 {l(
                   '固定历史快照，不提供浏览器增量同步。',

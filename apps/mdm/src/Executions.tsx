@@ -13,15 +13,16 @@ import { devicePath } from './Devices'
 import { EntryCopies, type CopyEntry } from './EntryCopies'
 import { auditHref } from './audit-context'
 import { ExecutionEvidence } from './ExecutionEvidence'
-import { resultReturnPath } from './execution-context'
+import { originalRunKeys, resultReturnPath, type OriginalRun } from './execution-context'
 import { timestamp, Status } from './DevicePresentation'
 export function executionPath(
   kind: 'command' | 'action_run',
   id: string,
   policy?: string,
   returnTo?: string,
+  original?: OriginalRun,
 ) {
-  return `/operations?${new URLSearchParams({ kind, operation: id, ...(policy ? { policy } : {}), ...(returnTo ? { returnTo } : {}) })}`
+  return `/operations?${new URLSearchParams({ kind, operation: id, ...(policy ? { policy } : {}), ...(returnTo ? { returnTo } : {}), ...original })}`
 }
 /** Return context is a resource locator, never authority or a redirect to another host. */
 export function policyReturnPath(policy: string, returnTo: string | null) {
@@ -58,7 +59,22 @@ function ExecutionFacts({
       (signal) => (expanded ? execution.detail(reference, signal) : Promise.resolve(null)),
       { retryReadConflict: true },
     ),
-    detail = read.value?.detail,
+    observed = read.value?.detail,
+    original = reference.kind === 'action_run' && originalRunKeys.some((key) => params.has(key)),
+    mismatch =
+      original &&
+      observed &&
+      (observed.kind !== 'run' ||
+        originalRunKeys.some((key) => {
+          const actual = {
+            attempt: observed.attempt,
+            registration: observed.registrationId,
+            generation: observed.generation,
+            version: observed.versionId,
+          }[key]
+          return params.has(key) && (actual === null || String(actual) !== params.get(key))
+        })),
+    detail = mismatch ? undefined : observed,
     item = summary.value,
     policy = read.value?.policy ?? item?.policy,
     device = detail?.device ?? item?.device,
@@ -117,7 +133,14 @@ function ExecutionFacts({
         </div>
         {item && (
           <div>
-            <dt>{l('目录状态', 'Directory state')}</dt>
+            <dt>
+              {original
+                ? l(
+                    '当前目录状态（不代表原尝试）',
+                    'Current directory state (not the original attempt)',
+                  )
+                : l('目录状态', 'Directory state')}
+            </dt>
             <dd>
               <Status locale={locale} value={item.status} />
             </dd>
@@ -146,7 +169,7 @@ function ExecutionFacts({
             </dd>
           </div>
         )}
-        {item && (
+        {item && !original && (
           <div>
             <dt>{l('执行注册 / 代次', 'Execution registration / generation')}</dt>
             <dd>
@@ -155,6 +178,11 @@ function ExecutionFacts({
           </div>
         )}
       </dl>
+      {original && params.get('attempt') && (
+        <p>
+          {l('原尝试', 'Original attempt')} · <code>{params.get('attempt')}</code>
+        </p>
+      )}
       <Button
         onClick={() => {
           if (expanded) read.reload()
@@ -178,6 +206,15 @@ function ExecutionFacts({
           onRetry={read.reload}
         />
       )}
+      {mismatch && (
+        <Alert
+          type="warning"
+          title={l(
+            '原尝试详情不可用；当前读取与原坐标不同，请返回来源查看历史事实。',
+            'Original attempt details are unavailable. The current read has different coordinates; return to the source for historical facts.',
+          )}
+        />
+      )}
       {device && (
         <Link
           to={auditHref({
@@ -185,7 +222,12 @@ function ExecutionFacts({
             device,
             ...(reference.kind === 'command'
               ? { operation: reference.id }
-              : { task: reference.id }),
+              : {
+                  task: reference.id,
+                  attempt:
+                    params.get('attempt') ??
+                    (detail?.kind === 'run' ? (detail.attempt ?? undefined) : undefined),
+                }),
           })}
         >
           {l('查看此执行的管理活动', 'View management activity for this execution')}
@@ -411,6 +453,7 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
                 next.delete('operation')
                 next.delete('kind')
                 next.delete('policy')
+                for (const key of originalRunKeys) next.delete(key)
                 setParams(next)
               }}
             >
@@ -418,7 +461,11 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
             </Button>
           </Space>
           <ExecutionFacts
-            key={`${binding}/${reference.kind}/${reference.id}/${reference.policy ?? ''}`}
+            key={JSON.stringify([
+              binding,
+              reference,
+              ...originalRunKeys.map((key) => params.get(key)),
+            ])}
             runtime={runtime}
             locale={locale}
             reference={reference}

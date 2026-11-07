@@ -387,3 +387,4 @@ export const entryNodes = [
   'system.security',
   'system.about',
 ] as const
+export const unaddressableAliases = ['.', '..'] as const
