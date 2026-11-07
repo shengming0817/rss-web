@@ -175,3 +175,57 @@ it('rejects an unbounded range before allocating a response buffer or issuing a 
   ).rejects.toMatchObject({ cause: 'client' })
   expect(call).not.toHaveBeenCalled()
 })
+
+it('retains an MDM request UUID on enforced same-origin browser ranges only', async () => {
+  const origin = 'https://rss-web.test'
+  const id = '11111111-1111-4111-8111-111111111111'
+  vi.stubGlobal('location', { origin })
+  try {
+    for (const mode of ['same-origin', 'cors'] as const) {
+      const instance = axios.create()
+      const bytes = new TextEncoder().encode(JSON.stringify({ code: 'permission_denied' }))
+      const call = vi.spyOn(instance, 'request').mockResolvedValue({
+        data: new ReadableStream({
+          start(controller) {
+            controller.enqueue(bytes)
+            controller.close()
+          },
+        }),
+        headers: { 'X-Request-Id': id },
+        status: 403,
+        request: new Request(origin + '/api/v1/resources/r', { mode }),
+      })
+      const result = execute(instance, 30000, request(), decodeMdmError, true)
+      if (mode === 'same-origin') await expect(result).rejects.toMatchObject({ requestId: id })
+      else await expect(result).rejects.not.toHaveProperty('requestId')
+      expect(call.mock.calls[0]?.[0]).toMatchObject({ fetchOptions: { mode: 'same-origin' } })
+    }
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
+
+it('retains received request metadata after a same-origin stream fails', async () => {
+  const origin = 'https://rss-web.test'
+  const id = '11111111-1111-4111-8111-111111111111'
+  vi.stubGlobal('location', { origin })
+  try {
+    const instance = axios.create()
+    vi.spyOn(instance, 'request').mockResolvedValue({
+      data: new ReadableStream({
+        start(controller) {
+          controller.error(new Error('connection interrupted'))
+        },
+      }),
+      headers: { 'X-Request-Id': id },
+      status: 206,
+      request: new Request(origin + '/api/v1/resources/r', { mode: 'same-origin' }),
+    })
+    await expect(execute(instance, 30000, request(), decodeMdmError, true)).rejects.toMatchObject({
+      cause: 'network',
+      requestId: id,
+    })
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})

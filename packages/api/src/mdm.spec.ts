@@ -121,3 +121,32 @@ it('enforces the complete UTF-8 JSON ingress budget on generated operations', as
   expect(new TextEncoder().encode(mock.history.post[0]!.data).byteLength).toBe(16384)
   mock.restore()
 })
+
+it('preserves only a public HTTP response request UUID and leaves response loss unlocated', async () => {
+  const instance = axios.create()
+  const mock = new AxiosMockAdapter(instance)
+  const spy = vi.spyOn(axios, 'create').mockReturnValueOnce(instance)
+  const transport = createMdmTransport()
+  spy.mockRestore()
+  const id = '11111111-1111-4111-8111-111111111111'
+  const url = `/api/v1/policies/${id}/assignments`
+  const read = () => getApiV1PoliciesByIdAssignments(transport, { pathParams: { id } })
+  mock
+    .onGet(url)
+    .replyOnce(
+      403,
+      { code: 'permission_denied' },
+      { 'Content-Type': 'application/json', 'X-Request-Id': id },
+    )
+  await expect(read()).rejects.toMatchObject({ code: 'permission_denied', requestId: id })
+  mock
+    .onGet(url)
+    .replyOnce(
+      403,
+      { code: 'permission_denied' },
+      { 'Content-Type': 'application/json', 'X-Request-Id': 'private-header' },
+    )
+  await expect(read()).rejects.not.toHaveProperty('requestId')
+  mock.onGet(url).networkErrorOnce()
+  await expect(read()).rejects.not.toHaveProperty('requestId')
+})

@@ -1,6 +1,12 @@
+import { DiagnosticReference } from './DiagnosticReference'
 import { Alert, Descriptions, Space } from 'antd'
 import { Link, useLocation } from 'react-router-dom'
-import type { ActivityLinks, AuditFact, ManagementActivity } from '@rss/mdm-audit'
+import type {
+  ActivityLinks,
+  AuditFact,
+  DiagnosticsContext,
+  ManagementActivity,
+} from '@rss/mdm-audit'
 import type { Locale } from './i18n'
 import { labels } from './AdminUi'
 import { Status, timestamp } from './DevicePresentation'
@@ -50,10 +56,12 @@ export function AuditFactView({
   fact,
   locale,
   context,
+  diagnosticsContext,
 }: {
   fact: AuditFact
   locale: Locale
   context?: AuditContext
+  diagnosticsContext?: DiagnosticsContext
 }) {
   const l = labels(locale),
     window = { from: context?.from, until: context?.until, limit: context?.limit },
@@ -100,26 +108,37 @@ export function AuditFactView({
         </Descriptions.Item>
       </Descriptions>
       <Space wrap>
-        {timelineDevice && (
+        {fact.origin === 'request' && fact.requestId && (
+          <DiagnosticReference
+            locale={locale}
+            context={diagnosticsContext}
+            selection={{ mode: 'request', id: fact.requestId }}
+          />
+        )}
+        {timelineDevice && (!diagnosticsContext || diagnosticsContext === 'mdm') && (
           <Link to={auditHref({ ...window, view: 'timeline', device: timelineDevice })}>
             {l('查看设备时间线', 'Device timeline')}
           </Link>
         )}
         {fact.operationId && (
-          <Link to={auditHref({ ...window, operationId: fact.operationId })}>
-            {l('定位此原操作的审计', 'Audit for this original operation')}
+          <DiagnosticReference
+            locale={locale}
+            context={diagnosticsContext}
+            selection={{ mode: 'discover', query: { operationId: fact.operationId } }}
+          />
+        )}
+        {(!diagnosticsContext || diagnosticsContext === 'mdm') && (
+          <Link
+            to={auditHref({
+              ...window,
+              device: context?.device,
+              targetType: fact.target.type,
+              targetId: fact.target.id,
+            })}
+          >
+            {l('查看此资源审计', 'Audit for this resource')}
           </Link>
         )}
-        <Link
-          to={auditHref({
-            ...window,
-            device: context?.device,
-            targetType: fact.target.type,
-            targetId: fact.target.id,
-          })}
-        >
-          {l('查看此资源审计', 'Audit for this resource')}
-        </Link>
       </Space>
       <details>
         <summary>{l('精确事实标识', 'Exact fact identifiers')}</summary>

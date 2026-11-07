@@ -1,3 +1,5 @@
+import { CapabilityPermission, CapabilityState } from './DeviceCapability'
+import { DiagnosticReference } from './DiagnosticReference'
 import { EntryCopies } from './EntryCopies'
 import { TelemetryWorkspace } from './Telemetry'
 import { DeviceControl } from './DeviceControl'
@@ -5,11 +7,17 @@ import { eventBatchPath, resultReturnPath } from './execution-context'
 import { deviceExecutionsPath } from './Executions'
 import { DeviceSecurity, devicePermission, hasDeviceSecurity } from './DeviceSecurity'
 import { SelectionGuard, useSelectionGuard, usePendingSelection } from './SelectionGuard'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Result, Select } from 'antd'
 import { Link, useLocation, useSearchParams, useParams } from 'react-router-dom'
-import type { AssetState, DeviceRef, DeviceView, ViewEndpoint } from '@rss/mdm-devices'
-import { SecretTabs } from './SecretTabs'
+import type {
+  AssetState,
+  DeviceRef,
+  DeviceView,
+  EndpointDetail,
+  ViewEndpoint,
+} from '@rss/mdm-devices'
+import { SecretTabs, useSecretVisibility } from './SecretTabs'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { Failure, Heading, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'
@@ -191,21 +199,15 @@ function AssetRecord({
   )
 }
 function EndpointFacts({
-  runtime,
   locale,
   endpoint,
+  detail,
 }: {
-  runtime: Runtime
   locale: Locale
   endpoint: ViewEndpoint
+  detail: { value?: EndpointDetail; busy: boolean; error?: unknown; reload(): void }
 }) {
-  const l = labels(locale),
-    { devices, binding } = useAdministration(runtime),
-    read = useRead(
-      `${binding}/endpoint-detail/${endpoint.id}`,
-      (signal) => devices.endpoint(endpoint.id, signal),
-      { retryReadConflict: true },
-    )
+  const l = labels(locale)
   return (
     <>
       <Card title={l('终端摘要', 'Endpoint summary')}>
@@ -289,27 +291,33 @@ function EndpointFacts({
         ))}
       </Card>
       <Card title={l('当前能力事实', 'Current capability facts')}>
-        <ReadState busy={read.busy} error={read.error} locale={locale} onRetry={read.reload} />
-        {read.value && (
+        <ReadState
+          busy={detail.busy}
+          error={detail.error}
+          locale={locale}
+          onRetry={detail.reload}
+        />
+        {detail.value && (
           <DataTable
             locale={locale}
-            dataSource={read.value.capabilities}
+            dataSource={detail.value.capabilities}
             rowKey={(row) => `${row.channel}/${row.action}`}
             columns={[
               { title: l('能力', 'Capability'), dataIndex: 'action' },
               { title: l('通道', 'Channel'), dataIndex: 'channel' },
               {
                 title: l('产品支持', 'Product support'),
-                render: (_, row) => <Status value={row.productSupport.state} locale={locale} />,
+                render: (_, row) => <CapabilityState value={row.productSupport} locale={locale} />,
               },
               {
                 title: l('设备前提', 'Device prerequisite'),
-                render: (_, row) => <Status value={row.devicePrerequisite.state} locale={locale} />,
+                render: (_, row) => (
+                  <CapabilityState value={row.devicePrerequisite} locale={locale} />
+                ),
               },
               {
                 title: l('当前权限', 'Current permission'),
-                render: (_, row) =>
-                  row.permission.allowed ? l('允许', 'Allowed') : l('拒绝', 'Denied'),
+                render: (_, row) => <CapabilityPermission value={row.permission} locale={locale} />,
               },
             ]}
           />
@@ -318,6 +326,59 @@ function EndpointFacts({
     </>
   )
 }
+function EndpointOverview({
+  runtime,
+  locale,
+  endpoint,
+  authorityKey,
+  authorityBusy,
+  canReadOriginal,
+  children,
+}: {
+  runtime: Runtime
+  locale: Locale
+  endpoint: ViewEndpoint
+  authorityKey: string
+  authorityBusy: boolean
+  canReadOriginal: boolean
+  children: ReactNode
+}) {
+  const { binding, devices } = useAdministration(runtime)
+  const active = useSecretVisibility() && !authorityBusy
+  const read = useRead(
+    JSON.stringify([binding, endpoint.id, endpoint.primaryMdmRegistration, authorityKey, active]),
+    (signal) => (active ? devices.endpoint(endpoint.id, signal) : Promise.resolve(undefined)),
+    { retryReadConflict: true },
+  )
+  const [invalid, setInvalid] = useState<EndpointDetail>()
+  const snapshot = read.value !== invalid ? read.value : undefined
+  return (
+    <div className="device-detail-grid">
+      <EndpointFacts
+        locale={locale}
+        endpoint={endpoint}
+        detail={{
+          busy: read.busy || authorityBusy,
+          error: read.error,
+          reload: read.reload,
+          ...(snapshot ? { value: snapshot } : {}),
+        }}
+      />
+      {children}
+      <DeviceControl
+        runtime={runtime}
+        locale={locale}
+        endpoint={endpoint}
+        snapshot={snapshot}
+        onReload={read.reload}
+        onStale={() => setInvalid(read.value)}
+        canReadOriginal={canReadOriginal}
+      />
+      <AgentObservation runtime={runtime} locale={locale} endpoint={endpoint} />
+    </div>
+  )
+}
+
 function Detail({
   runtime,
   locale,
@@ -468,13 +529,25 @@ function Detail({
                     key: 'overview',
                     label: l('概览', 'Overview'),
                     children: (
-                      <div className="device-detail-grid">
-                        <EndpointFacts
-                          runtime={runtime}
-                          locale={locale}
-                          endpoint={mountedEndpoint}
-                        />
+                      <EndpointOverview
+                        key={`${binding}/${mountedEndpoint.id}`}
+                        runtime={runtime}
+                        locale={locale}
+                        endpoint={mountedEndpoint}
+                        authorityBusy={permissions.busy}
+                        authorityKey={JSON.stringify(permissions.value?.grants ?? null)}
+                        canReadOriginal={devicePermission(
+                          permissions.value?.grants ?? [],
+                          mountedEndpoint.id,
+                          'operation_read',
+                        )}
+                      >
                         <div>
+                          <DiagnosticReference
+                            locale={locale}
+                            selection={{ mode: 'discover', query: { device: mountedEndpoint.id } }}
+                          />
+                          <br />
                           {devicePermission(
                             permissions.value?.grants ?? [],
                             mountedEndpoint.id,
@@ -522,19 +595,7 @@ function Detail({
                           <br />
                           <Link to="/device-access">Device Access</Link>
                         </div>
-                        <DeviceControl
-                          key={`${binding}/${mountedEndpoint.id}/${mountedEndpoint.primaryMdmRegistration?.registrationId}/${mountedEndpoint.primaryMdmRegistration?.generation}`}
-                          runtime={runtime}
-                          locale={locale}
-                          endpoint={mountedEndpoint}
-                          grants={permissions.value?.grants ?? []}
-                        />
-                        <AgentObservation
-                          runtime={runtime}
-                          locale={locale}
-                          endpoint={mountedEndpoint}
-                        />
-                      </div>
+                      </EndpointOverview>
                     ),
                   },
                   {

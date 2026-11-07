@@ -2,6 +2,7 @@ import type { RssApiError, RssApiErrorCause } from './types'
 
 class RssApiErrorImpl extends Error implements RssApiError {
   override readonly name = 'RssApiError' as const
+  declare readonly requestId?: string
   declare readonly issuanceId?: string
   declare readonly retryAfterSeconds?: number
   declare readonly status?: number
@@ -9,10 +10,11 @@ class RssApiErrorImpl extends Error implements RssApiError {
     override readonly cause: RssApiErrorCause,
     readonly code: string,
     status?: number,
-    details: { issuanceId?: string; retryAfterSeconds?: number } = {},
+    details: { issuanceId?: string; retryAfterSeconds?: number; requestId?: string } = {},
   ) {
     super(code)
     if (status !== undefined) this.status = status
+    if (details.requestId !== undefined) this.requestId = details.requestId
     if (details.issuanceId !== undefined) this.issuanceId = details.issuanceId
     if (details.retryAfterSeconds !== undefined) this.retryAfterSeconds = details.retryAfterSeconds
   }
@@ -52,4 +54,17 @@ export function identityWireFailure(
 /** Only the closed Agent error decoder supplies this validated locator. */
 export function agentWireFailure(status: number, code: string, issuanceId?: string): RssApiError {
   return new RssApiErrorImpl('wire', code, status, issuanceId === undefined ? {} : { issuanceId })
+}
+
+export function withRequestId(error: RssApiError, value: unknown): RssApiError {
+  if (
+    typeof value !== 'string' ||
+    !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value) ||
+    value === '00000000-0000-0000-0000-000000000000'
+  )
+    return error
+  return new RssApiErrorImpl(error.cause, error.code, error.status, {
+    ...error,
+    requestId: value.toLowerCase(),
+  })
 }

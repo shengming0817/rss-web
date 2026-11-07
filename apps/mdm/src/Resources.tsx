@@ -1,3 +1,4 @@
+import { DiagnosticReference } from './DiagnosticReference'
 import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { Button, Card, Empty, Form, Input, Select, Space, Tag } from 'antd'
@@ -315,6 +316,13 @@ export function ResourceDirectory({
             <Button disabled={guard.locked || action.busy} onClick={() => void open(selected.id)}>
               {l('重新读取选定资源', 'Read selected resource again')}
             </Button>
+            <DiagnosticReference
+              locale={locale}
+              selection={{
+                mode: 'discover',
+                query: { targetType: 'resource', targetId: selected.id },
+              }}
+            />
             <Button disabled={guard.locked || action.busy} onClick={() => setSelected(null)}>
               {l('关闭资源详情', 'Close resource detail')}
             </Button>

@@ -5,6 +5,7 @@ export interface AuditQuery extends WindowQuery {
   readonly targetId?: string | undefined
   readonly targetType?: string | undefined
   readonly device?: string | undefined
+  readonly requestId?: string | undefined
   readonly operationId?: string | undefined
   readonly actor?: string | undefined
   readonly action?: string | undefined

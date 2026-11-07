@@ -180,3 +180,47 @@ it('keeps a forced retirement receipt pending and checks its operation binding',
     devices.forceRetirement(mdmRegistration, operationId, 'Recovery approved'),
   ).rejects.toThrow('Wrong retirement receipt')
 })
+
+it('requires the exact MDM capability, current registration and independent permission', async () => {
+  const { controlApplicability } = await import('./control-applicability')
+  const base = {
+    ...endpoint('control-device', 'mdm', 1),
+    primaryMdmRegistration: {
+      registrationId: '11111111-1111-4111-8111-111111111111',
+      generation: 1,
+      source: 'mdm.windows' as const,
+    },
+  }
+  const fact = {
+    action: 'restart',
+    channel: 'mdm',
+    productSupport: { state: 'supported' as const, reason: null },
+    devicePrerequisite: { state: 'supported' as const, reason: null },
+    permission: { allowed: true, reason: null },
+  }
+  expect(controlApplicability({ ...base, capabilities: [fact] }, 'restart').ready).toBe(true)
+  expect(
+    controlApplicability({ ...base, capabilities: [{ ...fact, channel: 'agent' }] }, 'restart')
+      .ready,
+  ).toBe(false)
+  expect(
+    controlApplicability(
+      {
+        ...base,
+        capabilities: [{ ...fact, permission: { allowed: false, reason: 'permission_denied' } }],
+      },
+      'restart',
+    ).ready,
+  ).toBe(false)
+  expect(
+    controlApplicability(
+      {
+        ...base,
+        capabilities: [
+          { ...fact, devicePrerequisite: { state: 'unknown', reason: 'capability_unknown' } },
+        ],
+      },
+      'restart',
+    ).ready,
+  ).toBe(false)
+})

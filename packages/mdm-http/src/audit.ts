@@ -21,11 +21,11 @@ import type {
 import { boolean, count, enumeration, list, nullable, positive, text, uuid } from './decode'
 import { distinct, integer, requestInput } from './inventory-values'
 
-function fact(value: unknown): AuditFact {
+export function auditFact(value: unknown): AuditFact {
   if (!schema.getApiV1AuditEventsResponse.validateFactView(value))
     throw new Error('Invalid safe audit fact')
   return {
-    origin: value.origin ?? null,
+    origin: value.origin,
     source: text(value.source),
     eventId: text(value.eventId),
     position: count(value.position),
@@ -54,7 +54,7 @@ function fact(value: unknown): AuditFact {
 function auditPage(value: unknown): AuditPage {
   if (!schema.getApiV1AuditEventsResponse.validateRoot(value)) throw new Error('Invalid audit page')
   return {
-    items: list(value.items, fact, 200),
+    items: list(value.items, auditFact, 200),
     nextCursor: nextCursor(value.nextCursor),
     coverage: { complete: boolean(value.coverage.complete) },
   }

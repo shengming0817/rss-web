@@ -27,6 +27,7 @@ from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
 from pki_fixtures import running as pki
+from windows_fixtures import generate as windows_inputs
 from candidate_installation_driver import Browser
 from runtime_fixture import storage, readiness as readiness_status
 
@@ -258,9 +259,17 @@ try:
     phase = 'task-signing'
     operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
     operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
-    status, trust = operator.call('POST', '/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0), str(uuid.uuid4()))
+    trust_operation = str(uuid.uuid4())
+    trust_request = dict(action='prepare',expectedRevision=0)
+    status, trust = operator.call('POST', '/api/v1/task-signing/trust', trust_request, trust_operation)
     if status != 200 or trust['revision'] != 1:
         raise RuntimeError('task-signing')
+    if browser_module == 'react-audit-webhooks-browser.mjs':
+        # This owner requires a final request fact and explicitly marks the replay.
+        status, replayed = operator.call('POST', '/api/v1/task-signing/trust', trust_request, trust_operation)
+        if status != 200 or replayed != trust:
+            raise RuntimeError('task-signing-replay')
+        console['signerOperation'] = trust_operation
     stop()
     for child in reversed(processes):
         child.wait(timeout=10)
@@ -268,6 +277,16 @@ try:
     config = json.loads(config_path.read_text())
     config['task_signing'] = dict(revision=trust['revision'])
     config['agent_pki'] = agent
+    if browser_module == 'react-execution-access-browser.mjs':
+        # Exercise the real configured Windows channel alongside the bounded synthetic device facts.
+        windows = windows_inputs(native)
+        windows['enrollment']['origin'] = f"https://localhost:{environment.host_ports()['backend']}"
+        windows['management']['origin'] = initialized['origin']
+        private(native/'windows.json', windows)
+        providers.enter_context(pki(native, dict(os.environ), case=str(WEB)+':execution-browser', windows=True))
+        config.setdefault('native_protocols', {})['windows'] = json.loads((native/'windows.json').read_text())
+        config['device_pki'] = json.loads((native/'device-pki.json').read_text())
+
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
     private(config_path, config)
@@ -326,6 +345,20 @@ try:
     if browser_module == 'react-audit-webhooks-browser.mjs':
         phase = 'console-prerequisites'
         console_fixture.prepare(operator, console, environment)
+        password = secrets.token_urlsafe(32)
+        login = 'fixture-diagnostics-writer'
+        status, writer = operator.call('POST', f'/api/v1/identity/tenants/{TENANTS[0]}/accounts',
+            dict(login=login, password=password))
+        if status != 201: raise RuntimeError('diagnostics-writer-create')
+        writer_rule = dict(subject=dict(kind='user', user=dict(instanceId=INSTANCE,
+            tenantId=TENANTS[0], principalId=writer['principalId'])), grants=[
+                dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write']])
+        status, _ = operator.call('PUT', f'/api/v1/authorization/rules/{uuid.uuid4()}',
+            dict(operationId=str(uuid.uuid4()), expectedRevision=0, value=writer_rule))
+        if status != 200: raise RuntimeError('diagnostics-writer-grant')
+        writer_password = private(environment.root/'diagnostics-writer-password', password)
+        console['diagnosticsWriter'] = dict(login=login, passwordFile=str(writer_password))
+
     person_b = None
     if browser_module == 'react-devices-browser.mjs':
         status, account_b = operator.call('POST', f'/api/v1/identity/tenants/{TENANTS[0]}/accounts',

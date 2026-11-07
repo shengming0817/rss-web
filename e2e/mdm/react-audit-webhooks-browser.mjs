@@ -102,18 +102,12 @@ try {
   if (!designOnly) {
     run.step('real-native-facts-and-independent-activity-read')
     const operations = []
+    const deadline = Math.floor(Date.now() / 1000) + 3600
+    const controlPath = `/api/v1/devices/${f.mdm}/operations`
+    const restart = (operationId) => ({ operationId, action: { kind: 'restart' }, deadline })
     for (let i = 0; i < 3; i++) {
       const operationId = randomUUID()
-      const value = await api(
-        'POST',
-        `/api/v1/devices/${f.mdm}/operations`,
-        {
-          operationId,
-          action: { kind: 'restart' },
-          deadline: Math.floor(Date.now() / 1000) + 3600,
-        },
-        202,
-      )
+      const value = await api('POST', controlPath, restart(operationId), 202)
       assert.equal(value.operationId, operationId)
       operations.push(operationId)
     }
@@ -436,10 +430,28 @@ try {
           await route.abort('failed').catch(() => {})
         }
       }
+    let contextWrites = 0
+    const observeWrites = (request) => {
+      if (request.method() === 'PUT' && new URL(request.url()).pathname === path) contextWrites++
+    }
+    p.context().on('request', observeWrites)
     await p.context().route(pattern, lose)
     await button('保存订阅配置').click()
     await button('显式重提原 Webhook 请求').waitFor()
     assert.equal(run.count(p, 'PUT', path), 1)
+    const diagnosticHref = await p.locator('a[href*="owner=webhook"]').getAttribute('href')
+    assert.ok(diagnosticHref)
+    const receiptPage = await p.context().newPage()
+    try {
+      await run.nav(receiptPage, diagnosticHref, '操作排障')
+      await receiptPage.getByText(original.operationId, { exact: true }).waitFor()
+    } finally {
+      await receiptPage.close()
+      await p.bringToFront()
+    }
+    p.context().off('request', observeWrites)
+    assert.equal(contextWrites, 1)
+
     const saved = await api('GET', path)
     assert.equal(saved.enabled, false)
     assert.deepEqual(saved.settings.presentation.vendor, { retained: false, zero: 0 })
@@ -466,6 +478,106 @@ try {
     checks.push(
       'real-disabled-subscription-whole-metadata-preservation-committed-response-loss-no-auto-write-same-UUID-replay',
     )
+
+    run.step('diagnostics-after-a-different-writer-and-audit-revocation')
+    const other = await run.page()
+    await run.login(other, f.console.diagnosticsWriter)
+    const priorSubscription = await api('GET', path)
+    const otherSession = await other.request.get(
+      origin + `/api/v1/identity/tenants/${f.tenant}/session`,
+    )
+    assert.equal(otherSession.status(), 200)
+    const edit = await other.request.put(origin + path, {
+      headers: {
+        Origin: origin,
+        'X-Identity-Request': '1',
+        'X-CSRF-Token': (await otherSession.json()).csrfToken,
+      },
+      data: {
+        operationId: randomUUID(),
+        expectedRevision: priorSubscription.revision,
+        change: { kind: 'enabled', value: false },
+      },
+    })
+    assert.equal(edit.status(), 200)
+    assert.equal((await api('GET', path)).enabled, false)
+    const diagnosticBase = '/api/v1/operation-diagnostics'
+    const diagnosticPath = `${diagnosticBase}/operations/webhook/${original.operationId}`
+    const operationQuery = new URLSearchParams({
+      mode: 'operation',
+      owner: 'webhook',
+      operationId: original.operationId,
+    })
+    const originalResult = (await api('GET', diagnosticPath)).originalResult
+    assert.equal(originalResult.availability, 'available')
+    assert.ok(originalResult.value.revision < (await api('GET', path)).revision)
+    const discovery = await until(
+      () => api('GET', diagnosticBase + '?operationId=' + original.operationId),
+      (page) => page.items.some(({ fact }) => fact.origin === 'request' && fact.requestId),
+    )
+    const attempt = discovery.items.find(
+      ({ fact }) => fact.origin === 'request' && fact.requestId,
+    ).fact
+    const auditByRequest = await api('GET', '/api/v1/audit-events?requestId=' + attempt.requestId)
+    const indexedAttempt = auditByRequest.items.find((fact) => fact.eventId === attempt.eventId)
+    assert.equal(indexedAttempt?.origin, 'request')
+    assert.equal(typeof indexedAttempt?.requestReplayed, 'boolean')
+    assert.equal(indexedAttempt.requestReplayed, attempt.requestReplayed)
+    const timeline = await api(
+      'GET',
+      `/api/v1/devices/${f.mdm}/timeline?operationId=${operationId}`,
+    )
+    assert.ok(
+      timeline.items.length &&
+        timeline.items.every(
+          (fact) => typeof fact.requestReplayed === 'boolean' && fact.effect !== 'verified',
+        ),
+    )
+    await run.nav(p, '/operation-diagnostics', '操作排障')
+    await label('原操作编号').fill(original.operationId)
+    await run.response(p, 'GET', diagnosticBase, () => button('查询操作').click())
+    const requestLink = p.locator(`a[href*="requestId=${attempt.requestId}"]`)
+    const row = p.locator('details').filter({ has: requestLink }).first()
+    await row.locator(':scope > summary').click()
+    await run.response(p, 'GET', diagnosticBase + '/requests/' + attempt.requestId, () =>
+      row.locator(requestLink).first().click(),
+    )
+    await p.getByText('请求尝试与关联证据', { exact: true }).waitFor()
+
+    const replay = await until(
+      () => api('GET', diagnosticBase + '?operationId=' + f.console.signerOperation),
+      (page) => page.items.some(({ fact }) => fact.requestReplayed),
+    )
+    const replayFact = replay.items.find(({ fact }) => fact.requestReplayed).fact
+    assert.equal(replayFact.origin, 'request')
+    assert.ok(replayFact.requestId)
+    await run.nav(
+      p,
+      '/operation-diagnostics?' +
+        new URLSearchParams({ mode: 'request', requestId: replayFact.requestId }),
+      '操作排障',
+    )
+    await p.locator('details > summary').filter({ hasText: replayFact.action }).first().click()
+    await p.getByText('服务端重用原请求', { exact: false }).first().waitFor()
+    await p.getByText('HTTP 请求', { exact: false }).first().waitFor()
+
+    await run.nav(p, '/operation-diagnostics?' + operationQuery, '操作排障')
+    await p.getByText('原操作结果', { exact: true }).waitFor()
+    await changeAuthority(f.rule.grants.filter((grant) => grant.operation !== 'audit_read'))
+    await button('读取请求与审计证据').click()
+    await p.getByText('当前权限无法读取此证据。', { exact: true }).first().waitFor()
+    await p.getByText('原操作结果', { exact: true }).waitFor()
+    assert.deepEqual((await api('GET', diagnosticPath)).originalResult, originalResult)
+    await changeAuthority(f.rule.grants)
+    const latest = await api('GET', path)
+    await api('PUT', path, {
+      operationId: randomUUID(),
+      expectedRevision: latest.revision,
+      change: { kind: 'enabled', value: true },
+    })
+    await run.nav(p, '/webhooks?subscription=' + subscription, 'Webhook 集成')
+    await p.getByRole('heading', { name: 'Webhook 订阅详情', exact: true }).waitFor()
+    checks.push('real-original-webhook-receipt-after-other-writer-and-independent-audit-revocation')
 
     run.step('subscription-detail-CAS-and-pending-delivery-observation')
     await button('编辑订阅').click()

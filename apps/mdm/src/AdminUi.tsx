@@ -1,3 +1,6 @@
+import { uuid } from '@rss/mdm-inventory'
+import type { DiagnosticsContext } from '@rss/mdm-audit'
+import { DiagnosticReference } from './DiagnosticReference'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Alert, Button, Empty, Form, Input, InputNumber, Select, Space, Spin } from 'antd'
@@ -47,6 +50,7 @@ export function isUnknown(error: unknown): boolean {
   return (
     !status ||
     status >= 500 ||
+    (status >= 200 && status < 300 && 'cause' in e && e.cause === 'protocol') ||
     [
       'outcome_unknown',
       'operation_unknown',
@@ -69,7 +73,12 @@ export function Failure({
   error,
   locale,
   kind = 'write',
-}: AdminProps & { error: unknown; kind?: 'read' | 'write' }) {
+  diagnosticContext,
+}: AdminProps & {
+  error: unknown
+  kind?: 'read' | 'write'
+  diagnosticContext?: DiagnosticsContext | undefined
+}) {
   if (!error) return null
   const l = labels(locale),
     code = codeOf(error)
@@ -127,7 +136,36 @@ export function Failure({
                       '请求未完成，请检查输入、权限或当前状态。',
                       'Request was not completed. Check the input, permissions or current state.',
                     )
-  return <Alert type="error" showIcon title={title} role="alert" />
+  let requestId: string | undefined
+  if (
+    error instanceof Error &&
+    error.name === 'RssApiError' &&
+    'requestId' in error &&
+    typeof error.requestId === 'string'
+  ) {
+    try {
+      requestId = uuid(error.requestId)
+    } catch {
+      // Only valid public request coordinates are rendered.
+    }
+  }
+  return (
+    <Alert
+      type="error"
+      showIcon
+      title={title}
+      role="alert"
+      description={
+        requestId && (
+          <DiagnosticReference
+            locale={locale}
+            context={diagnosticContext}
+            selection={{ mode: 'request', id: requestId }}
+          />
+        )
+      }
+    />
+  )
 }
 /** Presentation lifecycle only. Session admission and response fencing stay with the sole owner. */
 export function useAction() {
@@ -281,10 +319,12 @@ export function ReadState({
   locale,
   onRetry,
   onRestart,
+  diagnosticContext,
 }: AdminProps & {
   busy: boolean
   error?: unknown
   empty?: boolean
+  diagnosticContext?: DiagnosticsContext | undefined
   onRetry?: (() => void) | undefined
   onRestart?: (() => void) | undefined
 }) {
@@ -300,7 +340,7 @@ export function ReadState({
     const restart = failure === 'cursor' || failure === 'result'
     return (
       <Space orientation="vertical" className="read-failure">
-        <Failure error={error} locale={locale} kind="read" />
+        <Failure error={error} locale={locale} kind="read" diagnosticContext={diagnosticContext} />
         {restart && onRestart ? (
           <Button onClick={onRestart}>
             {failure === 'result'

@@ -18,6 +18,7 @@ const auditFields = [
   'targetType',
   'device',
   'operationId',
+  'requestId',
   'actor',
   'action',
   'outcome',

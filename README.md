@@ -48,6 +48,8 @@ Web 使用 `rssmdm://view/v1` 查看地址。规范向量在 `contracts/agent-en
 
 新 React `/setup` 从首次配置意图、显式跳过理由进入实际配置与当前观察核对；`/settings` 提供业务与管理租户的授权过滤目录。首次配置完成意图由后端持有，后续降级仍显示当前状态，不重新强制进入引导。刷新/重登录可读取后台意图并按原操作 UUID 查询回执；近期认证后须显式继续，未知结果不自动重放。
 
+操作排障位于 `/operation-diagnostics`，平台管理使用 `/platform/operation-diagnostics`。可用 HTTP 请求编号、原操作定位或对象、设备、主体及记录时间发现证据。原回执、请求尝试、审计和设备执行分别展示。DA 排障使用业务会话中的 Device Access 上下文。设备动作在输入 PIN 或确认前显示当前产品支持、设备前提与权限。排障和动作预览的真实 HTTPS Chromium 证据由执行、审计及管理旅程覆盖，真机效果单独验收。
+
 `/diagnostics` 使用独立运行诊断权限。当前后端仍输出旧中央聚合，正式入口明确显示新合同尚未就绪，缺口登记为 #3140。`pnpm dev:mdm:diagnostics:demo` 在 loopback 启动显式模拟页面，展示候选 owner 的健康、队列及恢复进度；该入口只演示诊断，不提供登录或产品服务，不进入生产构建。`pnpm test:mdm:react-diagnostics-demo-browser` 验证模拟页面；`MDM_REACT_SETUP_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-setup-browser` 验证真实初始化 HTTP/UI 接缝并确认隔离清理。模拟结果不证明实际后端健康或 Windows/macOS 设备效果。
 
 ## Web 组件开发

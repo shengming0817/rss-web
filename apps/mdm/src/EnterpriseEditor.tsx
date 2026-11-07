@@ -1,3 +1,4 @@
+import { DiagnosticReference } from './DiagnosticReference'
 import { useEffect, useId, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space, Switch } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
@@ -159,6 +160,7 @@ export function EnterpriseEditor({
         locale={locale}
         busy={read.busy || permissions.busy}
         error={read.error ?? permissions.error}
+        diagnosticContext={read.error ? 'da' : undefined}
         onRetry={read.error ? read.reload : permissions.reload}
       />
       {id && (
@@ -280,8 +282,16 @@ export function EnterpriseEditor({
         <>
           <p>
             {l('原操作 / 预期版本', 'Original operation / expected revision')}:{' '}
-            {pending.operationId} / {pending.expectedRevision} ·{' '}
-            {enterpriseId(pending.configuration)}
+            <DiagnosticReference
+              locale={locale}
+              context="da"
+              selection={{
+                mode: 'operation',
+                address: { owner: 'enterprise_configuration', operationId: pending.operationId },
+              }}
+            />
+            {' / '}
+            {pending.expectedRevision} · {enterpriseId(pending.configuration)}
           </p>
           <Space>
             <Button
@@ -333,7 +343,7 @@ export function EnterpriseEditor({
       <Button disabled={action.busy || (!pending && !id)} onClick={() => void refresh()}>
         {l('刷新当前配置以核对', 'Read current configuration for comparison')}
       </Button>
-      <Failure locale={locale} error={action.error} />
+      <Failure locale={locale} error={action.error} diagnosticContext="da" />
       {outcome === 'unknown' && (
         <Alert
           type="warning"
