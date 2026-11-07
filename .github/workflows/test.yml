@@ -7,16 +7,22 @@ on:
   push:
     branches: [develop]
 
+permissions:
+  contents: read
+
 jobs:
   # ── 单测 + lint + 构建 ─────────────────────────────────────────────────────
   unit:
     name: typecheck / lint / test / build
     # The backend and its Cargo Git dependencies are private.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    environment: rss-mdm-contract
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -35,15 +41,12 @@ jobs:
       - name: Prepare pinned MDM HTTP contract
         env:
           RSS_AZURE_REPOS_READ_PAT: ${{ secrets.RSS_AZURE_REPOS_READ_PAT }}
+          CARGO_PROFILE_DEV_DEBUG: '0'
+          CARGO_PROFILE_DEV_INCREMENTAL: 'false'
         run: |
-          : "${RSS_AZURE_REPOS_READ_PAT:?Configure the Azure Repos read-only PAT for contract preparation}"
+          : "${RSS_AZURE_REPOS_READ_PAT:?Configure the Azure Repos read-only PAT in the rss-mdm-contract environment}"
           auth="$(printf ':%s' "$RSS_AZURE_REPOS_READ_PAT" | base64 -w0)"
           echo "::add-mask::$auth"
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0=http.https://dev.azure.com/shengming0923/rss/_git/.extraHeader
-          export GIT_CONFIG_VALUE_0="Authorization: Basic $auth"
-          export CARGO_NET_GIT_FETCH_WITH_CLI=true
-          unset RSS_AZURE_REPOS_READ_PAT
           make prepare-contract
 
       - name: Install (frozen lockfile)

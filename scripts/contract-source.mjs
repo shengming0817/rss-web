@@ -26,7 +26,7 @@ export async function contractSource(root = new URL('../', import.meta.url)) {
   const source = await readContractPin(root)
   const bytes = await readFile(new URL('contracts/mdm/http-v1.json', root))
   if (contractSha256(bytes) !== source.sha256)
-    throw new Error('Local MDM contract differs from its pin')
+    throw new Error('Local MDM contract differs from its pin. Run make prepare-contract first.')
   const document = JSON.parse(bytes.toString())
   if (
     document.formatVersion !== 1 ||

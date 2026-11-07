@@ -91,13 +91,17 @@ IDENTITY_BACKEND_FIXTURE=/absolute/path/to/rss-identity pnpm test:identity:joint
 
 ## 固定 MDM HTTP 契约
 
-`contracts/mdm/source.json` 固定后端 commit、生成入口和 SHA-256。从干净 checkout 开始，在安装或构建镜像前运行一次 `make prepare-contract`。它用 Git 检出固定的后端 commit，运行后端现有的导出命令，校验 SHA-256 后将 JSON 写到忽略的 `contracts/mdm/http-v1.json`。已有匹配文件时直接复用。首次准备需要 Node、Git、Python 3、后端固定的 Rust 工具链及私有 Git 依赖的读取权限。GitHub Actions 的可信分支使用仓库 secret `RSS_AZURE_REPOS_READ_PAT`（Azure Repos Code Read），外部 fork PR 不运行该 job。
+`contracts/mdm/source.json` 固定后端 commit、生成入口和 SHA-256。从干净 checkout 开始，或切换到不同的 pin 后，在安装或构建镜像前运行 `make prepare-contract`。它用 Git 检出固定的后端 commit，运行后端现有的导出命令，校验 SHA-256 后将 JSON 写到忽略的 `contracts/mdm/http-v1.json`。已有匹配文件时直接复用。
+
+首次准备在 macOS 或 Linux 上运行，需要 Node、Git、Python 3、后端固定的 Rust 工具链及私有 Git 依赖的读取权限。Linux 安装 `libxml2-dev clang pkg-config`，macOS 可用 `brew install libxml2 pkg-config llvm`。编译缓存默认在 `~/.cache/rss-web/mdm-http-contract`，也可通过 `CARGO_TARGET_DIR` 指定独立目标目录。
+
+GitHub Actions 使用受保护的 `rss-mdm-contract` 环境。先为环境设置所需审核人并启用禁止自审，再在该环境添加 `RSS_AZURE_REPOS_READ_PAT`（Azure Repos Code Read）。凭据用于源码和锁定依赖的拉取，随后离线编译导出。外部 fork PR 跳过该 job。
 
 `pnpm install --frozen-lockfile` 安装后自动生成静态端点、类型和 CSP 安全的校验器，供编辑器使用；根命令及依赖 API 的包级 `dev`、`demo`、`typecheck`、`test`、`test:coverage`、`build` 也会先确保生成完成。生成输入未变化时直接复用本地结果；删除生成目录后，下次命令会重建。安装时若使用 `--ignore-scripts`，可执行 `pnpm generate:contracts` 初始化编辑器类型。
 
 `packages/api/src/generated/` 是忽略的本地产物，不提交 Git。`pnpm generate:contracts` 强制重新生成；`pnpm check:contracts` 确保生成目录存在后核对本地输入与生成结果，已进入 `make ci`。并发包命令共用生成锁，失败会阻止后续命令。
 
-前端升级时自行选择后端 commit，例如当时的 `rss-mdm/develop` HEAD。在该 commit 的干净 checkout 中执行 `python3 hack/http_contract_artifact.py --output artifacts/http-contract/http-v1.json`，记录文件 SHA-256 并更新 `source.json`。随后运行 `make prepare-contract` 和 `pnpm generate:contracts`，按需迁移实际消费者。生产 HTTP 调用使用 `@rss/api/mdm-operations`；作者模型和 canonical 编码复用 `@rss/api/mdm-types`、`@rss/api/mdm-validators`；其它领域投影和未知编辑输入使用 `@rss/api/mdm-schemas` 自动导出的 scoped 类型与静态校验器，不维护第二套 wire 定义。整数按 JavaScript 精确范围校验，浮点字段保留 producer 的数值语义。Identity 与宿主静态配置继续使用原有边界。
+前端升级时自行选择后端 commit，例如当时的 `rss-mdm/develop` HEAD。在该 commit 的干净 checkout 中执行 `python3 hack/http_contract_artifact.py --output /absolute/path/to/rss-web/contracts/mdm/http-v1.json`，记录文件 SHA-256 并更新 `source.json`。随后运行 `make prepare-contract` 校验已有导出，再运行 `pnpm generate:contracts` 并按需迁移实际消费者。生产 HTTP 调用使用 `@rss/api/mdm-operations`；作者模型和 canonical 编码复用 `@rss/api/mdm-types`、`@rss/api/mdm-validators`；其它领域投影和未知编辑输入使用 `@rss/api/mdm-schemas` 自动导出的 scoped 类型与静态校验器，不维护第二套 wire 定义。整数按 JavaScript 精确范围校验，浮点字段保留 producer 的数值语义。Identity 与宿主静态配置继续使用原有边界。
 
 新 React `/resources` 统一管理软件、脚本、配置、Native/Agent 采集和遥测方案的精确版本、变体、Blueprint 与完整定义。元数据保留未编辑键；声明版本、每份内容提交和激活分别确认。文件按块校验与传输；尚未发起上传的本地准备可以放弃。开始请求结果未知时保留原上传标识，显式恢复；冲突或提交未知后，显式读取原上传位置或内容回执，再继续同一操作。下载支持浏览器流式保存，以及最大 16 MiB 的小文件模式；隐藏、权限变化或离开会释放内容与临时下载。
 
