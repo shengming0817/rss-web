@@ -2,7 +2,7 @@ import { TaskTrust } from './TaskTrust'
 import { ControlRecoveryPanel } from './ControlRecovery'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, Space } from 'antd'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import type { ExecutionRef } from '@rss/mdm-execution'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
@@ -42,6 +42,7 @@ function ExecutionFacts({
   reference: ExecutionRef & { readonly policy?: string }
 }) {
   const l = labels(locale),
+    location = useLocation(),
     [params] = useSearchParams(),
     { execution, binding } = useAdministration(runtime),
     summary = usePageRead(
@@ -107,7 +108,14 @@ function ExecutionFacts({
           <div>
             <dt>{l('设备', 'Device')}</dt>
             <dd>
-              <Link to={returnDevice ?? deviceHref}>{device}</Link>
+              <Link
+                to={
+                  returnDevice ??
+                  `${deviceHref}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`
+                }
+              >
+                {device}
+              </Link>
             </dd>
           </div>
         )}
@@ -175,6 +183,7 @@ function ExecutionFacts({
 
 export function Executions({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
+    location = useLocation(),
     { execution, binding } = useAdministration(runtime),
     [params, setParams] = useSearchParams(),
     filter = params.get('filter') ?? '',
@@ -320,7 +329,11 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
               {
                 title: l('设备', 'Device'),
                 render: (_, row) => (
-                  <Link to={devicePath('endpoint', row.device)}>{row.device}</Link>
+                  <Link
+                    to={`${devicePath('endpoint', row.device)}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`}
+                  >
+                    {row.device}
+                  </Link>
                 ),
               },
               {

@@ -14,7 +14,7 @@ import { decodeMdmError } from '@rss/api/mdm'
 import { EnterpriseEditor } from './EnterpriseEditor'
 import { BindingEditor } from './BindingEditor'
 import { Policies } from './Policies'
-import { resultReturnPath } from './execution-context'
+import { resultReturnPath, resultSourcePath } from './execution-context'
 import { Executions, policyReturnPath } from './Executions'
 import type { EnterpriseConfiguration } from '@rss/mdm-device-access'
 vi.mock('./useOperationAuthorization', () => ({
@@ -699,4 +699,74 @@ it('accepts only public result return coordinates for the exact device page', ()
     '/devices/endpoint/a\\evil',
   ])
     expect(resultReturnPath(value, '/devices/endpoint/a')).toBeNull()
+})
+
+it('rejects malformed source locators without crashing a result page', () => {
+  for (const value of [
+    '/\\[',
+    '/\\evil',
+    '/devices/endpoint/a?secret=value',
+    '//evil.test/policies',
+    '/policies#fragment',
+  ])
+    expect(resultSourcePath(value)).toBeNull()
+})
+
+it('renders the original attempt nodes and carries the complete execution context to its device', async () => {
+  const id = '11111111-1111-4111-8111-111111111111',
+    policy = '22222222-2222-4222-8222-222222222222',
+    path = `/operations?kind=action_run&operation=${id}&policy=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
+    detail = vi.fn(async () => ({
+      item: null,
+      policy,
+      detail: {
+        kind: 'run',
+        owner: 'software',
+        id,
+        device: 'device-a',
+        versionId: policy,
+        occurrence: null,
+        availableAt: 1,
+        deadline: 2,
+        state: { execution: 'succeeded', cancellation: 'none', startedAt: 1 },
+        delivery: 'received',
+        effect: 'unknown',
+        authorization: null,
+        result: null,
+        attempt: id,
+        nodes: [{ stepId: 'install-original', definition: { id: 'package', version: 'v1' } }],
+        userAction: null,
+      },
+    })),
+    runtime = {
+      administration: () => ({
+        binding: 'nodes',
+        authorization: { effective: async () => ({ grants: [] }) },
+        execution: {
+          summary: async () => ({
+            id,
+            device: 'device-a',
+            policy,
+            status: 'succeeded',
+            registrationId: id,
+            generation: 1,
+          }),
+          detail,
+          list: async () => ({ items: [], nextCursor: null }),
+          statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+        },
+      }),
+    } as unknown as Runtime
+  await act(async () =>
+    root.render(
+      h(MemoryRouter, { initialEntries: [path] }, h(Executions, { runtime, locale: 'zh' })),
+    ),
+  )
+  const link = host.querySelector<HTMLAnchorElement>('a[href^="/devices/endpoint/device-a"]')!
+  expect(new URL(link.href).searchParams.get('returnTo')).toBe(path)
+  expect(detail).not.toHaveBeenCalled()
+  await act(async () => button('读取详细结果与证据').click())
+  expect(host.textContent).toContain('原尝试的冻结节点')
+  expect(host.textContent).toContain('install-original')
+  expect(host.textContent).toContain('v1')
 })

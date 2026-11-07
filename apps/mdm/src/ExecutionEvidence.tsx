@@ -117,6 +117,12 @@ export function ExecutionEvidence({ detail, locale }: { detail: ExecutionDetail;
               value={detail.report}
             />
           )}
+          {'nodes' in detail && detail.nodes.length > 0 && (
+            <details>
+              <summary>{l('原尝试的冻结节点', 'Frozen nodes of the original attempt')}</summary>
+              <pre className="public-json">{JSON.stringify(detail.nodes, null, 2)}</pre>
+            </details>
+          )}
           {'userAction' in detail && detail.userAction && (
             <p>
               {l('用户动作', 'User action')}: {detail.userAction}

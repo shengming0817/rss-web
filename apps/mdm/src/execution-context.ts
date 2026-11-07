@@ -30,7 +30,18 @@ export function resultReturnPath(value: string | null, expected: string): string
 }
 
 export function resultSourcePath(value: string | null): string | null {
-  if (!value?.startsWith('/') || value.startsWith('//')) return null
-  const url = new URL(value, 'https://mdm.invalid')
-  return resultReturnPath(value, url.pathname)
+  if (
+    !value ||
+    value.length > 16384 ||
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    /[\\\p{Cc}]/u.test(value)
+  )
+    return null
+  try {
+    const url = new URL(value, 'https://mdm.invalid')
+    return resultReturnPath(value, url.pathname)
+  } catch {
+    return null
+  }
 }
