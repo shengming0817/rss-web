@@ -770,3 +770,77 @@ it('renders the original attempt nodes and carries the complete execution contex
   expect(host.textContent).toContain('install-original')
   expect(host.textContent).toContain('v1')
 })
+
+it('retains an unknown recovery request while refreshing the containing result detail', async () => {
+  const id = '11111111-1111-4111-8111-111111111111',
+    item = {
+      id,
+      kind: 'command',
+      device: 'device-a',
+      policy: null,
+      origin: 'direct',
+      status: 'queued',
+      registrationId: id,
+      generation: 1,
+    },
+    cancel = vi.fn(async () => {
+      throw decodeMdmError(503, { code: 'service_unavailable' })
+    }),
+    detail = vi.fn(async () => ({
+      item,
+      policy: null,
+      detail: {
+        kind: 'command',
+        owner: 'device',
+        id,
+        device: 'device-a',
+        revision: 1,
+        delivery: 'queued',
+        authorization: { state: 'authorized' },
+        observation: { protocol: 'syncml', effect: 'waiting' },
+        target: { kind: 'device' },
+        task: { name: 'Restart', kind: 'command', platform: 'windows', objects: [] },
+        inputVersion: '1',
+        deadline: 2,
+        reauthorization: null,
+      },
+    })),
+    runtime = {
+      administration: () => ({
+        binding: 'recovery-owner',
+        authorization: {
+          effective: async () => ({
+            grants: [{ operation: 'operation_cancel', scope: { kind: 'all_devices' } }],
+          }),
+        },
+        execution: {
+          summary: async () => item,
+          detail,
+          cancel,
+          list: async () => ({ items: [], nextCursor: null }),
+          statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+        },
+      }),
+    } as unknown as Runtime
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        { initialEntries: [`/operations?kind=command&operation=${id}`] },
+        h(Executions, { runtime, locale: 'zh' }),
+      ),
+    ),
+  )
+  await act(async () => button('读取详细结果与证据').click())
+  const confirmation = [...host.querySelectorAll('label')]
+    .find((node) => node.textContent?.includes('我已核对原操作及注册'))!
+    .querySelector<HTMLInputElement>('input')!
+  await act(async () => confirmation.click())
+  await act(async () => button('请求取消原操作').click())
+  expect(cancel).toHaveBeenCalledOnce()
+  const original = cancel.mock.calls[0]
+  await act(async () => button('查询原操作当前事实').click())
+  expect(detail).toHaveBeenCalledTimes(2)
+  await act(async () => button('显式重提同一恢复请求').click())
+  expect(cancel.mock.calls[1]).toEqual(original)
+})

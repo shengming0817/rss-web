@@ -64,7 +64,9 @@ function ExecutionFacts({
     returnDevice = deviceHref ? resultReturnPath(params.get('returnTo'), deviceHref) : null,
     [recovery, setRecovery] = useState<Parameters<typeof ControlRecoveryPanel>[0] | null>(null)
   useEffect(() => {
-    if (detail?.kind === 'command' && detail.owner === 'device' && item?.origin === 'direct')
+    // A pending recovery owner survives read refreshes and denied reads.
+    if (!detail || !item) return
+    if (detail.kind === 'command' && detail.owner === 'device' && item?.origin === 'direct')
       setRecovery({
         runtime,
         locale,
