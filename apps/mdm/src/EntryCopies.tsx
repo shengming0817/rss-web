@@ -1,4 +1,4 @@
-import { Button, Space } from 'antd'
+import { Alert, Button, Space } from 'antd'
 import { useRef, useState } from 'react'
 import type { Endpoint } from '@rss/mdm-devices'
 import type { Runtime } from './runtime'
@@ -56,7 +56,8 @@ export function EntryCopies({
     [copied, setCopied] = useState(''),
     context = JSON.stringify([selected, expected, entries]),
     latest = useRef(context),
-    stale = codeOf(copy.error) === 'registration_changed' || readFailure(copy.error) === 'denied'
+    copyError = codeOf(copy.error),
+    stale = copyError === 'registration_changed' || readFailure(copy.error) === 'denied'
   latest.current = context
   async function write(entry: CopyEntry, command: boolean) {
     if (!selected || !current) return
@@ -92,9 +93,9 @@ export function EntryCopies({
       const content = verify()
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'text/plain': content })])
-      } catch (error) {
+      } catch {
         await content
-        throw error
+        throw { cause: 'client', code: 'clipboard_unavailable' }
       }
     })
     if (result.ok && stillCurrent()) setCopied(entry.label)
@@ -133,7 +134,17 @@ export function EntryCopies({
             />
           )}
           <ReadState locale={locale} busy={read.busy} error={read.error} onRetry={read.reload} />
-          <Failure locale={locale} error={copy.error} kind="read" />
+          {copyError === 'clipboard_unavailable' ? (
+            <Alert
+              type="error"
+              title={l(
+                '无法写入剪贴板，请检查浏览器权限。',
+                'Check browser clipboard permissions and try again.',
+              )}
+            />
+          ) : (
+            <Failure locale={locale} error={copy.error} kind="read" />
+          )}
           {stale && (
             <Button
               onClick={() => {
