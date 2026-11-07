@@ -36,7 +36,7 @@ Webhook 材料写入要求最近 300 秒认证，本地密码账户可在原材�
 
 新 React `/scopes` 与 `/policies` 提供范围定义、服务端计算结果、精确 Resource/Scope 绑定、策略配置、自助发布、分配资格、独立设备事件及软件灰度。保存 Scope 会排队计算；Policy 资格预览不保存策略、不创建运行。配置修订、执行版本、成员受理、投递与设备效果分别展示。保存响应丢失时提示结果未知，保留原操作标识且不自动重放；管理员可刷新查看当前配置。事件继续只查询原批次。Scope 保存前可按 Agent/MDM 通道预览当前草稿的匹配样例，扫描未完成或存在未知时不会把空样例说成空范围；独立重算使用已保存定义且不递增定义修订。Group/Scope/字段/资源版本提供直接引用摘要，Group 的递归影响单独查询；空摘要不构成删除或归档许可。
 
-Policy 的“名称与入口”区分显示名称、稳定工具名、唯一别名和共享事件；清空字段并保存撤回该策略的关联，历史批次成员保持原版本。选择已核对的 Agent 终端后可复制查看链接或等价 `rssmdm open` 命令；原任务链接须匹配 attempt 与注册代次。当前固定 Agent 桌面尚未消费事件、批次和步骤定位；Web 保留这些事实的查看路径，并为批次提供现有 `rssmdm batches show` 只读查询命令。命令不承载参数、凭据或批准。批次成员可进入原执行、Policy 与活动审计，各页仍按原权限读取。
+Policy 的“名称与入口”区分显示名称、稳定工具名、唯一别名和共享事件；清空字段并保存撤回该策略的关联，历史批次成员保持原版本。选择已核对的 Agent 终端后可复制可用的查看链接或等价 `rssmdm open` 命令；原任务链接须匹配 attempt 与注册代次。固定 Agent 尚不能可靠打开事件、批次或精确步骤，这些事实可在 Web 查看。命令不承载参数、凭据或批准。批次成员可进入原执行、Policy 与活动审计，各页仍按原权限读取。
 
 Web 固定使用 `contracts/agent-entry/` 中的现有 Agent Rust 契约与规范向量。普通安装与构建不读取 Agent checkout；`MDM_AGENT_ENTRY_SOURCE=/absolute/rss-mdm-agent pnpm test:agent-entry:rust` 使用固定 revision 的原 Rust 编解码器复核。首次复核需 Rust 1.96.0，并在检出的固定 Agent 修订运行 `cargo +1.96.0 fetch --locked` 准备离线依赖。升级 pin 后以同一变量运行 `node scripts/agent-entry-contract.mjs --refresh`。
 
