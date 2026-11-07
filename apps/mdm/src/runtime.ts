@@ -1,3 +1,5 @@
+import { createOperationDiagnostics, createAudit, createAuditPolicyLookup } from '@rss/mdm-audit'
+import { createOperationDiagnosticsAdapter } from '@rss/mdm-http/operation-diagnostics'
 import { createTenantSetup } from '@rss/mdm-tenant-setup'
 import { createRuntimeDiagnostics } from '@rss/mdm-runtime-diagnostics'
 import { createTenantSetupAdapter, createCatalogAdapter } from '@rss/mdm-http/tenant-setup'
@@ -35,7 +37,6 @@ import { createCompliance } from '@rss/mdm-compliance'
 import { createDevicePki } from '@rss/mdm-certificates/device-pki'
 import { createCertificateArchive } from '@rss/mdm-certificates/archive'
 import { createRecoveryCredentials } from '@rss/mdm-recovery-credentials'
-import { createAudit, createAuditPolicyLookup } from '@rss/mdm-audit'
 import { createWebhooks } from '@rss/mdm-webhooks'
 import { createWebhooksAdapter } from '@rss/mdm-http/webhooks'
 import { createAuditAdapter, createAuditPolicyLookupAdapter } from '@rss/mdm-http/audit'
@@ -137,6 +138,16 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         tenantSetup: setup,
         settingsCatalog: createCatalogAdapter(transport, management),
         diagnostics: createRuntimeDiagnostics(createRuntimeDiagnosticsAdapter()),
+        operationDiagnostics: management
+          ? {
+              management: createOperationDiagnostics(
+                createOperationDiagnosticsAdapter(transport, 'management'),
+              ),
+            }
+          : {
+              mdm: createOperationDiagnostics(createOperationDiagnosticsAdapter(transport, 'mdm')),
+              da: createOperationDiagnostics(createOperationDiagnosticsAdapter(transport, 'da')),
+            },
         telemetry: createTelemetry(createTelemetryAdapter(transport, tenant), tenant),
         binding: `${tenant}/${state.identity.principalId}/${state.session.id}`,
         identity: createIdentityAdministration(

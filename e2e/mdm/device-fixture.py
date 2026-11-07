@@ -326,6 +326,20 @@ try:
     if browser_module == 'react-audit-webhooks-browser.mjs':
         phase = 'console-prerequisites'
         console_fixture.prepare(operator, console, environment)
+        password = secrets.token_urlsafe(32)
+        login = 'fixture-diagnostics-writer'
+        status, writer = operator.call('POST', f'/api/v1/identity/tenants/{TENANTS[0]}/accounts',
+            dict(login=login, password=password))
+        if status != 201: raise RuntimeError('diagnostics-writer-create')
+        writer_rule = dict(subject=dict(kind='user', user=dict(instanceId=INSTANCE,
+            tenantId=TENANTS[0], principalId=writer['principalId'])), grants=[
+                dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write']])
+        status, _ = operator.call('PUT', f'/api/v1/authorization/rules/{uuid.uuid4()}',
+            dict(operationId=str(uuid.uuid4()), expectedRevision=0, value=writer_rule))
+        if status != 200: raise RuntimeError('diagnostics-writer-grant')
+        writer_password = private(environment.root/'diagnostics-writer-password', password)
+        console['diagnosticsWriter'] = dict(login=login, passwordFile=str(writer_password))
+
     person_b = None
     if browser_module == 'react-devices-browser.mjs':
         status, account_b = operator.call('POST', f'/api/v1/identity/tenants/{TENANTS[0]}/accounts',

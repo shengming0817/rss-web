@@ -424,7 +424,7 @@ export function BindingEditor({
           </Button>
         </>
       )}
-      <Failure locale={locale} error={action.error} />
+      <Failure locale={locale} error={action.error} diagnosticContext="da" />
       {outcome === 'unknown' && (
         <Alert
           type="warning"

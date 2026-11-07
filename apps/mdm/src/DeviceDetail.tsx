@@ -1,3 +1,5 @@
+import { CapabilityPermission, CapabilityState } from './DeviceCapability'
+import { DiagnosticReference } from './DiagnosticReference'
 import { EntryCopies } from './EntryCopies'
 import { TelemetryWorkspace } from './Telemetry'
 import { DeviceControl } from './DeviceControl'
@@ -8,7 +10,13 @@ import { SelectionGuard, useSelectionGuard, usePendingSelection } from './Select
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Result, Select } from 'antd'
 import { Link, useLocation, useSearchParams, useParams } from 'react-router-dom'
-import type { AssetState, DeviceRef, DeviceView, ViewEndpoint } from '@rss/mdm-devices'
+import type {
+  AssetState,
+  DeviceRef,
+  DeviceView,
+  EndpointDetail,
+  ViewEndpoint,
+} from '@rss/mdm-devices'
 import { SecretTabs } from './SecretTabs'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
@@ -191,21 +199,15 @@ function AssetRecord({
   )
 }
 function EndpointFacts({
-  runtime,
   locale,
   endpoint,
+  detail,
 }: {
-  runtime: Runtime
   locale: Locale
   endpoint: ViewEndpoint
+  detail: { value?: EndpointDetail; busy: boolean; error?: unknown; reload(): void }
 }) {
-  const l = labels(locale),
-    { devices, binding } = useAdministration(runtime),
-    read = useRead(
-      `${binding}/endpoint-detail/${endpoint.id}`,
-      (signal) => devices.endpoint(endpoint.id, signal),
-      { retryReadConflict: true },
-    )
+  const l = labels(locale)
   return (
     <>
       <Card title={l('终端摘要', 'Endpoint summary')}>
@@ -289,27 +291,33 @@ function EndpointFacts({
         ))}
       </Card>
       <Card title={l('当前能力事实', 'Current capability facts')}>
-        <ReadState busy={read.busy} error={read.error} locale={locale} onRetry={read.reload} />
-        {read.value && (
+        <ReadState
+          busy={detail.busy}
+          error={detail.error}
+          locale={locale}
+          onRetry={detail.reload}
+        />
+        {detail.value && (
           <DataTable
             locale={locale}
-            dataSource={read.value.capabilities}
+            dataSource={detail.value.capabilities}
             rowKey={(row) => `${row.channel}/${row.action}`}
             columns={[
               { title: l('能力', 'Capability'), dataIndex: 'action' },
               { title: l('通道', 'Channel'), dataIndex: 'channel' },
               {
                 title: l('产品支持', 'Product support'),
-                render: (_, row) => <Status value={row.productSupport.state} locale={locale} />,
+                render: (_, row) => <CapabilityState value={row.productSupport} locale={locale} />,
               },
               {
                 title: l('设备前提', 'Device prerequisite'),
-                render: (_, row) => <Status value={row.devicePrerequisite.state} locale={locale} />,
+                render: (_, row) => (
+                  <CapabilityState value={row.devicePrerequisite} locale={locale} />
+                ),
               },
               {
                 title: l('当前权限', 'Current permission'),
-                render: (_, row) =>
-                  row.permission.allowed ? l('允许', 'Allowed') : l('拒绝', 'Denied'),
+                render: (_, row) => <CapabilityPermission value={row.permission} locale={locale} />,
               },
             ]}
           />
@@ -353,6 +361,16 @@ function Detail({
     selected = guard.locked && heldEndpoint ? heldEndpoint.id : requested,
     endpoint = view?.endpoints.find((e) => e.id === selected),
     mountedEndpoint = endpoint ?? heldEndpoint
+  const activeDetail = (params.get('tab') ?? 'overview') === 'overview' ? endpoint : undefined
+  const endpointRead = useRead(
+    `${binding}/endpoint-detail/${activeDetail?.id ?? ''}/${activeDetail?.primaryMdmRegistration?.registrationId ?? ''}/${activeDetail?.primaryMdmRegistration?.generation ?? ''}`,
+    (signal) =>
+      activeDetail ? devices.endpoint(activeDetail.id, signal) : Promise.resolve(undefined),
+    { retryReadConflict: true },
+  )
+  const [invalidDetail, setInvalidDetail] = useState<EndpointDetail>()
+  const currentDetail = endpointRead.value !== invalidDetail ? endpointRead.value : undefined
+
   useEffect(() => {
     if (endpoint) {
       setHeldEndpoint(endpoint)
@@ -470,11 +488,21 @@ function Detail({
                     children: (
                       <div className="device-detail-grid">
                         <EndpointFacts
-                          runtime={runtime}
                           locale={locale}
                           endpoint={mountedEndpoint}
+                          detail={{
+                            busy: endpointRead.busy,
+                            error: endpointRead.error,
+                            reload: endpointRead.reload,
+                            ...(currentDetail ? { value: currentDetail } : {}),
+                          }}
                         />
                         <div>
+                          <DiagnosticReference
+                            locale={locale}
+                            selection={{ mode: 'discover', query: { device: mountedEndpoint.id } }}
+                          />
+                          <br />
                           {devicePermission(
                             permissions.value?.grants ?? [],
                             mountedEndpoint.id,
@@ -523,11 +551,18 @@ function Detail({
                           <Link to="/device-access">Device Access</Link>
                         </div>
                         <DeviceControl
-                          key={`${binding}/${mountedEndpoint.id}/${mountedEndpoint.primaryMdmRegistration?.registrationId}/${mountedEndpoint.primaryMdmRegistration?.generation}`}
+                          key={`${binding}/${mountedEndpoint.id}`}
                           runtime={runtime}
                           locale={locale}
                           endpoint={mountedEndpoint}
-                          grants={permissions.value?.grants ?? []}
+                          snapshot={currentDetail}
+                          onReload={endpointRead.reload}
+                          onStale={() => setInvalidDetail(endpointRead.value)}
+                          canReadOriginal={devicePermission(
+                            permissions.value?.grants ?? [],
+                            mountedEndpoint.id,
+                            'operation_read',
+                          )}
                         />
                         <AgentObservation
                           runtime={runtime}

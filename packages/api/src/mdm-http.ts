@@ -55,6 +55,7 @@ export function createMdmHttpTransport(
             headers: { ...options.headers, 'Content-Type': 'application/octet-stream' },
           },
           decodeMdmError,
+          true,
         )
       }
       if (
@@ -69,7 +70,7 @@ export function createMdmHttpTransport(
           mdmJsonBodyLimit(options.method, options.path)
       )
         throw decodeMdmError(413, undefined)
-      return execute(instance, 30_000, options, decodeMdmError)
+      return execute(instance, 30_000, options, decodeMdmError, true)
     },
   } as HttpTransport
 }

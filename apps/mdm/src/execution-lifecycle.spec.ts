@@ -6,9 +6,10 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Runtime } from './runtime'
 import type { ControlIntent, ControlRecovery } from '@rss/mdm-execution'
-import type { ViewEndpoint } from '@rss/mdm-devices'
+import type { EndpointDetail, ViewEndpoint } from '@rss/mdm-devices'
 import { DeviceDetail } from './DeviceDetail'
 import { DeviceControl } from './DeviceControl'
+import { OperationDiagnostics } from './OperationDiagnostics'
 import { DeviceRetirement } from './DeviceRetirement'
 import { ControlRecoveryPanel } from './ControlRecovery'
 import { isUnknown } from './AdminUi'
@@ -80,6 +81,21 @@ const endpoint: ViewEndpoint = {
   channels: [],
   enrollments: [],
 }
+function detailSnapshot(target = endpoint, allowed = ['restart']): EndpointDetail {
+  return {
+    ...target,
+    capabilities: ['restart', 'lock', 'wipe'].map((action) => ({
+      action,
+      channel: 'mdm',
+      productSupport: { state: 'supported', reason: null },
+      devicePrerequisite: { state: 'supported', reason: null },
+      permission: {
+        allowed: allowed.includes(action),
+        reason: allowed.includes(action) ? null : 'permission_denied',
+      },
+    })),
+  }
+}
 it('separates a formal unsupported action rejection from an unknown server response', () => {
   expect(isUnknown(decodeMdmError(501, { code: 'action_not_supported' }))).toBe(false)
   expect(isUnknown(decodeMdmError(501, {}))).toBe(true)
@@ -93,7 +109,7 @@ it('retains the original write as unknown across hiding and a late public receip
     create = vi.fn((_input: ControlIntent) => deferred),
     runtime = {
       administration: () => ({
-        devices: { view: async () => ({ endpoints: [endpoint] }) },
+        devices: { endpoint: async () => detailSnapshot() },
         execution: { create },
       }),
     } as unknown as Runtime
@@ -106,7 +122,10 @@ it('retains the original write as unknown across hiding and a late public receip
           runtime,
           locale: 'zh',
           endpoint,
-          grants: [{ operation: 'device_control', scope: { kind: 'all_devices' } }],
+          snapshot: detailSnapshot(),
+          canReadOriginal: true,
+          onReload: vi.fn(),
+          onStale: vi.fn(),
         }),
       ),
     ),
@@ -152,19 +171,23 @@ it('allows a wipe-only principal to confirm backend-authorized recovery without 
     } as unknown as Runtime
   await act(async () =>
     root.render(
-      h(ControlRecoveryPanel, {
-        runtime,
-        locale: 'zh',
-        device: 'device-a',
-        id: '11111111-1111-4111-8111-111111111111',
-        revision: 4,
-        registration: '22222222-2222-4222-8222-222222222222',
-        generation: 7,
-        canReauthorize: true,
-        confirmationRequired: true,
-        terminal: false,
-        onRefresh() {},
-      }),
+      h(
+        MemoryRouter,
+        null,
+        h(ControlRecoveryPanel, {
+          runtime,
+          locale: 'zh',
+          device: 'device-a',
+          id: '11111111-1111-4111-8111-111111111111',
+          revision: 4,
+          registration: '22222222-2222-4222-8222-222222222222',
+          generation: 7,
+          canReauthorize: true,
+          confirmationRequired: true,
+          terminal: false,
+          onRefresh() {},
+        }),
+      ),
     ),
   )
   await act(async () => document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
@@ -192,7 +215,7 @@ it('allows a wipe-only principal to select, review and explicitly submit a wipe'
     })),
     runtime = {
       administration: () => ({
-        devices: { view: async () => ({ endpoints: [endpoint] }) },
+        devices: { endpoint: async () => detailSnapshot(endpoint, ['wipe']) },
         execution: { create },
       }),
     } as unknown as Runtime
@@ -205,7 +228,10 @@ it('allows a wipe-only principal to select, review and explicitly submit a wipe'
           runtime,
           locale: 'zh',
           endpoint,
-          grants: [{ operation: 'device_wipe', scope: { kind: 'all_devices' } }],
+          snapshot: detailSnapshot(endpoint, ['wipe']),
+          canReadOriginal: true,
+          onReload: vi.fn(),
+          onStale: vi.fn(),
         }),
       ),
     ),
@@ -296,7 +322,9 @@ it.each<EnterpriseConfiguration>([
         }),
       } as unknown as Runtime
     await act(async () =>
-      root.render(h(EnterpriseEditor, { runtime, locale: 'zh', id, onChanged() {} })),
+      root.render(
+        h(MemoryRouter, null, h(EnterpriseEditor, { runtime, locale: 'zh', id, onChanged() {} })),
+      ),
     )
     await act(async () => button('冻结并核对企业配置').click())
     await act(async () => document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
@@ -1044,11 +1072,13 @@ it.each(['//[', '//%'])(
 
 it('keeps the default endpoint location during a delayed control preflight', async () => {
   const view = { association: null, endpoints: [endpoint], fields: {} }
-  let release!: (value: typeof view) => void
-  const preflight = new Promise<typeof view>((resolve) => {
+  let release!: (value: EndpointDetail) => void
+  const preflight = new Promise<EndpointDetail>((resolve) => {
     release = resolve
   })
-  const read = vi.fn().mockResolvedValue(view).mockReturnValueOnce(Promise.resolve(view))
+  const detail = detailSnapshot()
+  const read = vi.fn().mockResolvedValueOnce(detail).mockReturnValueOnce(preflight)
+  const create = vi.fn()
   const runtime = {
     administration: () => ({
       binding: 'default-endpoint',
@@ -1058,10 +1088,10 @@ it('keeps the default endpoint location during a delayed control preflight', asy
         }),
       },
       devices: {
-        view: read,
-        endpoint: async () => ({ ...endpoint, capabilities: [] }),
+        view: async () => view,
+        endpoint: read,
       },
-      execution: {},
+      execution: { create },
       connections: { agent: {} },
     }),
   } as unknown as Runtime
@@ -1088,12 +1118,21 @@ it('keeps the default endpoint location during a delayed control preflight', asy
   )
   const location = () => host.querySelector('[data-location]')!.textContent
   const before = location()
-  read.mockReturnValueOnce(preflight)
   await act(async () => button('核对设备与动作').click())
-  expect(read).toHaveBeenLastCalledWith({ kind: 'endpoint', id: endpoint.id })
+  expect(read).toHaveBeenCalledOnce()
+  const dialog = document.querySelector('[role=dialog]')!
+  await act(async () => dialog.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  await act(async () => button('确认提交此动作').click())
+  expect(read).toHaveBeenLastCalledWith(endpoint.id)
   expect(location()).toBe(before)
-  await act(async () => release(view))
-  expect(document.querySelector('[role=dialog]')).not.toBeNull()
+  await act(async () =>
+    release({
+      ...detail,
+      primaryMdmRegistration: { ...detail.primaryMdmRegistration!, generation: 2 },
+    }),
+  )
+  expect(create).not.toHaveBeenCalled()
+  expect(button('核对设备与动作').disabled).toBe(true)
   expect(location()).toBe(before)
 })
 
@@ -1116,10 +1155,7 @@ it('uses URL endpoint selection for back and forward while retaining an unknown 
         },
         devices: {
           view: async () => ({ association: null, endpoints, fields: {} }),
-          endpoint: async (id: string) => ({
-            ...endpoints.find((e) => e.id === id),
-            capabilities: [],
-          }),
+          endpoint: async (id: string) => detailSnapshot(endpoints.find((e) => e.id === id)!),
         },
         execution: { create },
         connections: { agent: {} },
@@ -1246,4 +1282,59 @@ it('opens the exact linked event batch and member read-only until the user verif
   expect(host.querySelector(`a[href*="operation=${operation}"]`)?.textContent).toContain(operation)
   expect(button('提交设备事件').matches(':disabled')).toBe(true)
   expect(submit).not.toHaveBeenCalled()
+})
+
+it('aborts evidence on a context switch and ignores a late receipt from the former context', async () => {
+  const id = endpoint.primaryMdmRegistration!.registrationId
+  let resolve!: (value: unknown) => void
+  const pending = new Promise((done) => {
+    resolve = done
+  })
+  const mdmOperation = vi.fn(() => pending)
+  const daRequest = vi.fn(async () => ({
+    items: [],
+    nextCursor: null,
+    coverage: { complete: false },
+  }))
+  const runtime = {
+    management: false,
+    administration: () => ({
+      binding: 'diagnostics-session',
+      operationDiagnostics: { mdm: { operation: mdmOperation }, da: { request: daRequest } },
+    }),
+  } as unknown as Runtime
+  function Navigate() {
+    const navigate = useNavigate()
+    return h(
+      'button',
+      {
+        onClick: () => navigate('/operation-diagnostics?context=da&mode=request&requestId=' + id),
+      },
+      'DA request',
+    )
+  }
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        {
+          initialEntries: [
+            '/operation-diagnostics?mode=operation&owner=resource&operationId=' + id,
+          ],
+        },
+        h(Navigate),
+        h(OperationDiagnostics, { runtime, locale: 'zh' }),
+      ),
+    ),
+  )
+  expect(mdmOperation.mock.calls).toHaveLength(1)
+  const signal = (mdmOperation.mock.calls[0] as unknown[])[2] as AbortSignal
+  await act(async () => button('DA request').click())
+  expect(signal.aborted).toBe(true)
+  expect(daRequest).toHaveBeenCalledOnce()
+  await act(async () =>
+    resolve({ originalResult: { availability: 'available', value: { object: 'stale-result' } } }),
+  )
+  expect(host.textContent).not.toContain('stale-result')
+  expect(host.textContent).toContain('索引覆盖不完整')
 })

@@ -181,3 +181,9 @@ export function createDevices(port: DevicesPort, tenant: string) {
   })
 }
 export type Devices = ReturnType<typeof createDevices>
+
+export {
+  controlActions,
+  controlApplicability,
+  type DeviceControlAction,
+} from './control-applicability'

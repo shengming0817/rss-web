@@ -669,6 +669,36 @@ try {
     '',
   )
   await shut(manager, '创建并供应业务租户')
+  const diagnosticBase = '/api/v1/tenant-administration/operation-diagnostics'
+  const diagnosticPath = `${diagnosticBase}/operations/tenant_administration/${provisionOperation}`
+  const diagnosticQuery = new URLSearchParams({
+    mode: 'operation',
+    owner: 'tenant_administration',
+    operationId: provisionOperation,
+  })
+  await nav(manager, '/platform/operation-diagnostics?' + diagnosticQuery, '操作排障')
+  await manager.getByText('原操作结果', { exact: true }).waitFor()
+  const diagnostics = await manager.request.get(origin + diagnosticPath)
+  assert.equal(diagnostics.status(), 200)
+  assert.equal((await diagnostics.json()).originalResult.availability, 'available')
+  const indexed = await manager.request.get(
+    origin + diagnosticBase + '?operationId=' + provisionOperation,
+  )
+  assert.equal(indexed.status(), 200)
+  const attempt = (await indexed.json()).items.find(
+    ({ fact }) => fact.origin === 'request' && fact.requestId,
+  )
+  assert.ok(attempt)
+  assert.equal(
+    (
+      await manager.request.get(origin + diagnosticBase + '/requests/' + attempt.fact.requestId)
+    ).status(),
+    200,
+  )
+  assert.ok([401, 403].includes((await admin.request.get(origin + diagnosticPath)).status()))
+  checks.push('real-platform-diagnostics-directory-request-and-exact-read')
+  await nav(manager, '/platform/tenants', '租户管理')
+
   await manager.getByRole('button', { name: '重新读取', exact: true }).click()
   await manager
     .locator('.main tbody tr')

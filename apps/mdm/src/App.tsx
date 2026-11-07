@@ -1,3 +1,4 @@
+import { OperationDiagnostics } from './OperationDiagnostics'
 import { TenantSetup } from './TenantSetup'
 import { Settings } from './Settings'
 import { Diagnostics } from './Diagnostics'
@@ -246,6 +247,11 @@ const featureRoutes: readonly FeatureRoute[] = [
   },
   { path: '/settings', label: 'settings', render: (ui) => <Settings {...ui} /> },
   { path: '/diagnostics', label: 'diagnostics', render: (ui) => <Diagnostics {...ui} /> },
+  {
+    path: '/operation-diagnostics',
+    label: 'operationDiagnostics',
+    render: (ui) => <OperationDiagnostics {...ui} />,
+  },
   { path: '/devices', label: 'devices', realm: 'tenant', render: (ui) => <Devices {...ui} /> },
   {
     path: '/inventory',

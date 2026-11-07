@@ -467,6 +467,64 @@ try {
       'real-disabled-subscription-whole-metadata-preservation-committed-response-loss-no-auto-write-same-UUID-replay',
     )
 
+    run.step('diagnostics-after-a-different-writer-and-audit-revocation')
+    const other = await run.page()
+    await run.login(other, f.console.diagnosticsWriter)
+    const current = await api('GET', path)
+    const otherSession = await other.request.get(
+      origin + `/api/v1/identity/tenants/${f.tenant}/session`,
+    )
+    assert.equal(otherSession.status(), 200)
+    const edit = await other.request.put(origin + path, {
+      headers: {
+        Origin: origin,
+        'X-Identity-Request': '1',
+        'X-CSRF-Token': (await otherSession.json()).csrfToken,
+      },
+      data: {
+        operationId: randomUUID(),
+        expectedRevision: current.revision,
+        change: { kind: 'enabled', value: false },
+      },
+    })
+    assert.equal(edit.status(), 200)
+    assert.equal((await api('GET', path)).enabled, false)
+    const diagnosticBase = '/api/v1/operation-diagnostics'
+    const diagnosticPath = `${diagnosticBase}/operations/webhook/${original.operationId}`
+    const operationQuery = new URLSearchParams({
+      mode: 'operation',
+      owner: 'webhook',
+      operationId: original.operationId,
+    })
+    const originalResult = (await api('GET', diagnosticPath)).originalResult
+    assert.equal(originalResult.availability, 'available')
+    assert.ok(originalResult.value.revision < (await api('GET', path)).revision)
+    const discovery = await until(
+      () => api('GET', diagnosticBase + '?operationId=' + original.operationId),
+      (page) => page.items.some(({ fact }) => fact.requestReplayed),
+    )
+    const replay = discovery.items.find(({ fact }) => fact.requestReplayed).fact
+    assert.equal(replay.origin, 'request')
+    assert.ok(replay.requestId)
+    assert.ok((await api('GET', diagnosticBase + '/requests/' + replay.requestId)).items.length)
+    await run.nav(p, '/operation-diagnostics?' + operationQuery, '操作排障')
+    await p.getByText('原操作结果', { exact: true }).waitFor()
+    await changeAuthority(f.rule.grants.filter((grant) => grant.operation !== 'audit_read'))
+    await button('读取请求与审计证据').click()
+    await p.getByText('当前权限无法读取此证据。', { exact: true }).first().waitFor()
+    await p.getByText('原操作结果', { exact: true }).waitFor()
+    assert.deepEqual((await api('GET', diagnosticPath)).originalResult, originalResult)
+    await changeAuthority(f.rule.grants)
+    const latest = await api('GET', path)
+    await api('PUT', path, {
+      operationId: randomUUID(),
+      expectedRevision: latest.revision,
+      change: { kind: 'enabled', value: true },
+    })
+    await run.nav(p, '/webhooks?subscription=' + subscription, 'Webhook 集成')
+    await p.getByRole('heading', { name: 'Webhook 订阅详情', exact: true }).waitFor()
+    checks.push('real-original-webhook-receipt-after-other-writer-and-independent-audit-revocation')
+
     run.step('subscription-detail-CAS-and-pending-delivery-observation')
     await button('编辑订阅').click()
     await label('订阅名称').fill('Stale React edit')

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Space } from 'antd'
-import { Link } from 'react-router-dom'
 import { freeze, identifier, operation, uuid, type Operation } from '@rss/mdm-inventory'
 import {
   validateSubscriptionChange,
@@ -15,7 +14,7 @@ import {
 import type { Locale } from './i18n'
 import { Failure, isUnknown, labels, useAction, validateInput } from './AdminUi'
 import { usePendingSelection } from './SelectionGuard'
-import { auditHref } from './audit-context'
+import { DiagnosticReference } from './DiagnosticReference'
 
 export type WebhookChange =
   | {
@@ -173,11 +172,11 @@ export function WebhookCommandState({
       {pending && (
         <Descriptions column={1} size="small">
           <Descriptions.Item label={l('原操作', 'Original operation')}>
-            <code>{operationId}</code>{' '}
             {operationId && (
-              <Link to={auditHref({ operationId })}>
-                {l('定位原操作审计', 'Audit for the original operation')}
-              </Link>
+              <DiagnosticReference
+                locale={locale}
+                selection={{ mode: 'operation', address: { owner: 'webhook', operationId } }}
+              />
             )}
           </Descriptions.Item>
           <Descriptions.Item label={l('原操作类别', 'Original operation kind')}>

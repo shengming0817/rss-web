@@ -1,3 +1,5 @@
+import { useSearchParams } from 'react-router-dom'
+import { DiagnosticReference } from './DiagnosticReference'
 import { DataTable } from './DataTable'
 import { useEffect, useState } from 'react'
 import type { ComponentProps } from 'react'
@@ -186,7 +188,14 @@ function Provision({
     <>
       {id && (
         <Space className="admin-section-actions">
-          <code>{id}</code>
+          <DiagnosticReference
+            locale={locale}
+            context="management"
+            selection={{
+              mode: 'operation',
+              address: { owner: 'tenant_administration', operationId: id },
+            }}
+          />
           <Button
             disabled={action.busy}
             onClick={() => {
@@ -628,9 +637,20 @@ function Registry(props: Props) {
   const { runtime, locale } = props,
     l = labels(locale),
     { tenants, binding } = useAdministration(runtime)
+  const [params, setParams] = useSearchParams()
+  const linked = params.get('tenant')
   const [query, setQuery] = useState<Query>({ limit: 20 }),
-    [id, setId] = useState<string | null>(null),
+    [selected, setId] = useState<string | null>(null),
     [create, setCreate] = useState(false)
+  const id = selected ?? linked
+  function close() {
+    setId(null)
+    if (linked) {
+      const next = new URLSearchParams(params)
+      next.delete('tenant')
+      setParams(next, { replace: true })
+    }
+  }
   const fields: (keyof Tenant)[] = [
     'tenantId',
     'name',
@@ -706,7 +726,7 @@ function Registry(props: Props) {
         rootClassName="mdm-overlay-open"
         destroyOnHidden
         footer={null}
-        onCancel={() => setId(null)}
+        onCancel={close}
       >
         <ReadState busy={detail.busy} error={detail.error} locale={locale} />
         {detail.value && (
