@@ -117,8 +117,8 @@ export function EntryCopies({
         <>
           <p>
             {l(
-              '复制的链接只打开同一租户和注册下的查看入口。Agent 会重新核对身份和权限。',
-              'Copied links open a view for this tenant and registration. Agent checks identity and permission again.',
+              'Agent 会核对当前租户和注册，并显示当前可见的记录。',
+              'Agent checks the current tenant and registration and displays the records it can read.',
             )}
           </p>
           {!device && (
