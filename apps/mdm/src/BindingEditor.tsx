@@ -1,3 +1,4 @@
+import { DiagnosticReference } from './DiagnosticReference'
 import { useEffect, useId, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
@@ -215,6 +216,7 @@ export function BindingEditor({
         locale={locale}
         busy={read.busy || permissions.busy}
         error={read.error ?? permissions.error}
+        diagnosticContext={read.error ? 'da' : undefined}
         onRetry={read.error ? read.reload : permissions.reload}
       />
       {read.value && (
@@ -378,7 +380,16 @@ export function BindingEditor({
         <>
           <p>
             {l('原操作 / 预期版本', 'Original operation / expected revision')}:{' '}
-            {pending.operationId} / {pending.expectedRevision} · {pending.action.kind}
+            <DiagnosticReference
+              locale={locale}
+              context="da"
+              selection={{
+                mode: 'operation',
+                address: { owner: 'device_access', operationId: pending.operationId, device },
+              }}
+            />
+            {' / '}
+            {pending.expectedRevision} · {pending.action.kind}
           </p>
           <Space>
             <Button

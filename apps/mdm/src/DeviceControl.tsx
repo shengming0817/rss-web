@@ -202,10 +202,11 @@ export function DeviceControl({
         </Button>
       )}
       <Failure locale={locale} error={action.error} />
-      {pending && canReadOriginal && snapshot && (
+      {pending && (
         <p>
           <DiagnosticReference
             locale={locale}
+            canNavigate={canReadOriginal}
             selection={{
               mode: 'operation',
               address: {
@@ -216,10 +217,14 @@ export function DeviceControl({
             }}
           />
           {' · '}
-          <Link to={executionPath('command', pending.operationId)}>
-            {l('查看设备执行', 'View device execution')}
-          </Link>{' '}
-          ·{' '}
+          {canReadOriginal && (
+            <>
+              <Link to={executionPath('command', pending.operationId)}>
+                {l('查看设备执行', 'View device execution')}
+              </Link>
+              {' · '}
+            </>
+          )}
           {outcome === 'unknown'
             ? l(
                 '提交结果未知，请查询原操作，勿重新创建',

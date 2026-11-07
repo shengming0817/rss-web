@@ -62,3 +62,51 @@ it.each([
   await expect(client.operation({ owner, operationId: id }, { cursor: 'cursor' })).rejects.toThrow()
   expect(request).toHaveBeenCalledTimes(3)
 })
+
+it('retains delivery, asynchronous progress and effect from the generated RunState', async () => {
+  const request = vi.fn(async (input: RequestOptions<unknown>) =>
+    input.decode({
+      operation: {
+        product: 'mdm',
+        owner: 'device_action',
+        operationId: id,
+        actor: null,
+        instance: null,
+        device: 'endpoint',
+        target: null,
+        registration: null,
+        generation: null,
+      },
+      originalResult: { availability: 'not_found' },
+      requestEvidence: { availability: 'not_requested' },
+      auditEvidence: { availability: 'not_requested' },
+      executionEvidence: {
+        availability: 'available',
+        value: {
+          owner: 'device',
+          state: {
+            delivery: { kind: 'received', attempt: id, leaseUntil: 15 },
+            execution: 'waiting_reboot',
+            cancellation: 'none',
+            deadline: 20,
+            startedAt: 1,
+          },
+          result: null,
+          effect: 'waiting',
+        },
+      },
+      originalResultUrl: null,
+      currentResourceUrl: null,
+    }),
+  )
+  const client = createOperationDiagnostics(
+    createOperationDiagnosticsAdapter({ request } as unknown as HttpTransport, 'mdm'),
+  )
+  expect(
+    (await client.operation({ owner: 'device_action', operationId: id, device: 'endpoint' }))
+      .executionEvidence,
+  ).toEqual({
+    availability: 'available',
+    value: { owner: 'device', delivery: 'received', state: 'waiting_reboot', effect: 'waiting' },
+  })
+})

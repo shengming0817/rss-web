@@ -177,14 +177,21 @@ async function boundedBinary(
 
 function sameOriginResponse(request: unknown): boolean {
   if (typeof location === 'undefined') return true
-  if (
-    typeof request !== 'object' ||
-    request === null ||
-    !('responseURL' in request) ||
-    typeof request.responseURL !== 'string'
-  )
+  const url =
+    request instanceof Request && request.mode === 'same-origin'
+      ? request.url
+      : typeof request === 'object' &&
+          request !== null &&
+          'responseURL' in request &&
+          typeof request.responseURL === 'string'
+        ? request.responseURL
+        : null
+  if (!url) return false
+  try {
+    return new URL(url).origin === location.origin
+  } catch {
     return false
-  return URL.parse(request.responseURL)?.origin === location.origin
+  }
 }
 
 export async function execute<T>(
@@ -229,6 +236,7 @@ export async function execute<T>(
       // Use Axios' stream adapter inside the same executor and instance. XHR progress cannot bound buffering.
       // ref: axios v1.16.1 lib/adapters/fetch.js and lib/helpers/trackStream.js.
       config.adapter = 'fetch'
+      if (preserveRequestId) config.fetchOptions = { mode: 'same-origin' }
       config.responseType = 'stream'
       config.signal = bounded.signal
       const timeout = config.timeout!

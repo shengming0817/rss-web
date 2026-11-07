@@ -87,11 +87,15 @@ function receipt(value: ReceiptSummary): ReceiptSummary {
 function execution(value: WireExecution): ExecutionEvidence {
   const { owner } = value
   if (owner === 'native') {
-    const { commandStatus, observation } = value.detail
+    const { commandStatus, observation, dispatchFailure } = value.detail
     return {
       owner,
       delivery: commandStatus,
       state: observation.progress,
+      ...(dispatchFailure ? { dispatchFailure: dispatchFailure.reason } : {}),
+      ...('receipts' in observation && Array.isArray(observation.receipts)
+        ? { nativeReceipts: observation.receipts.length }
+        : {}),
       effect: observation.effect,
       ...('effectReason' in observation && typeof observation.effectReason === 'string'
         ? { reason: observation.effectReason }
@@ -113,10 +117,28 @@ function execution(value: WireExecution): ExecutionEvidence {
       state: value.identity,
       stages: value.devices.map((device) => ({ name: device.device, state: device.phase })),
     }
+  const state = 'state' in value ? value.state : undefined
+  const run =
+    schema.getApiV1OperationDiagnosticsOperationsByOwnerByOperationIdResponse.validateRunState(
+      state,
+    )
+      ? state
+      : null
+  const delivery =
+    run?.delivery.kind ??
+    ('delivery' in value && typeof value.delivery === 'string' ? value.delivery : undefined)
+  const progress = run?.execution ?? (typeof state === 'string' ? state : undefined)
+  const effect =
+    owner === 'access' && value.result
+      ? value.result.effect.state
+      : 'effect' in value && typeof value.effect === 'string'
+        ? value.effect
+        : undefined
   return {
     owner,
-    ...('state' in value && typeof value.state === 'string' ? { state: value.state } : {}),
-    ...('effect' in value && typeof value.effect === 'string' ? { effect: value.effect } : {}),
+    ...(delivery ? { delivery } : {}),
+    ...(progress ? { state: progress } : {}),
+    ...(effect ? { effect } : {}),
   }
 }
 

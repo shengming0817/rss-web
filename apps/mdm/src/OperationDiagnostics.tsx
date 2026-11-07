@@ -69,7 +69,9 @@ function Facts({
               {' · '}
               <DiagnosticReference
                 locale={locale}
-                context={context}
+                context={
+                  context === 'da' && operation.owner === 'device_access_task' ? 'mdm' : context
+                }
                 selection={{ mode: 'operation', address: operation }}
               />
             </p>
@@ -183,6 +185,16 @@ function Execution({ value, locale }: { value: ExecutionEvidence; locale: Locale
           <Status locale={locale} value={value.delivery} />
         </Descriptions.Item>
       )}
+      {value.nativeReceipts !== undefined && (
+        <Descriptions.Item label={l('原生回执数量', 'Native receipt count')}>
+          {value.nativeReceipts}
+        </Descriptions.Item>
+      )}
+      {value.dispatchFailure && (
+        <Descriptions.Item label={l('派发失败原因', 'Dispatch failure reason')}>
+          {value.dispatchFailure}
+        </Descriptions.Item>
+      )}
       {value.state && (
         <Descriptions.Item label={l('执行进度', 'Execution progress')}>
           <Status locale={locale} value={value.state} />
@@ -271,6 +283,7 @@ function Results({
   const request =
     detail?.requestEvidence.availability === 'available' ? detail.requestEvidence.value : undefined
   const resource = detail ? currentResource(detail) : null
+  const evidenceContext = context === 'mdm' && detail?.operation.product === 'da' ? 'da' : context
   const denied = ['permission_denied', 'forbidden', 'unauthorized'].includes(codeOf(read.error))
   return (
     <>
@@ -321,14 +334,14 @@ function Results({
             value={detail.requestEvidence}
             locale={locale}
           >
-            {(facts) => <Facts locale={locale} context={context} page={facts} />}
+            {(facts) => <Facts locale={locale} context={evidenceContext} page={facts} />}
           </Section>
           <Section
             title={l('审计证据', 'Audit evidence')}
             value={detail.auditEvidence}
             locale={locale}
           >
-            {(facts) => <Facts locale={locale} context={context} page={facts} />}
+            {(facts) => <Facts locale={locale} context={evidenceContext} page={facts} />}
           </Section>
           <Section
             title={l('执行证据', 'Execution evidence')}

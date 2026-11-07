@@ -8,10 +8,12 @@ export function DiagnosticReference({
   locale,
   selection,
   context,
+  canNavigate = true,
 }: {
   locale: Locale
   selection: DiagnosticSelection
   context?: DiagnosticsContext | undefined
+  canNavigate?: boolean
 }) {
   const { pathname } = useLocation()
   const destination = context ?? (pathname.startsWith('/platform/') ? 'management' : 'mdm')
@@ -46,9 +48,11 @@ export function DiagnosticReference({
           {' · '}
         </>
       )}
-      <Link to={diagnosticsPath(destination, selection)}>
-        {locale === 'zh' ? '查看操作排障' : 'Open operation diagnostics'}
-      </Link>
+      {canNavigate && (
+        <Link to={diagnosticsPath(destination, selection)}>
+          {locale === 'zh' ? '查看操作排障' : 'Open operation diagnostics'}
+        </Link>
+      )}
     </span>
   )
 }

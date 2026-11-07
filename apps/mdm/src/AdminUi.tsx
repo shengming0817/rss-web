@@ -76,7 +76,7 @@ export function Failure({
 }: AdminProps & {
   error: unknown
   kind?: 'read' | 'write'
-  diagnosticContext?: DiagnosticsContext
+  diagnosticContext?: DiagnosticsContext | undefined
 }) {
   if (!error) return null
   const l = labels(locale),
@@ -318,10 +318,12 @@ export function ReadState({
   locale,
   onRetry,
   onRestart,
+  diagnosticContext,
 }: AdminProps & {
   busy: boolean
   error?: unknown
   empty?: boolean
+  diagnosticContext?: DiagnosticsContext | undefined
   onRetry?: (() => void) | undefined
   onRestart?: (() => void) | undefined
 }) {
@@ -337,7 +339,7 @@ export function ReadState({
     const restart = failure === 'cursor' || failure === 'result'
     return (
       <Space orientation="vertical" className="read-failure">
-        <Failure error={error} locale={locale} kind="read" />
+        <Failure error={error} locale={locale} kind="read" diagnosticContext={diagnosticContext} />
         {restart && onRestart ? (
           <Button onClick={onRestart}>
             {failure === 'result'

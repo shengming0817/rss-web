@@ -507,6 +507,17 @@ try {
     assert.equal(replay.origin, 'request')
     assert.ok(replay.requestId)
     assert.ok((await api('GET', diagnosticBase + '/requests/' + replay.requestId)).items.length)
+    await run.nav(p, '/operation-diagnostics', '操作排障')
+    await label('原操作编号').fill(original.operationId)
+    await run.response(p, 'GET', diagnosticBase, () => button('查询操作').click())
+    const requestLink = p.locator(`a[href*="requestId=${replay.requestId}"]`)
+    const row = p.locator('details').filter({ has: requestLink }).first()
+    await row.locator(':scope > summary').click()
+    await run.response(p, 'GET', diagnosticBase + '/requests/' + replay.requestId, () =>
+      row.locator(requestLink).first().click(),
+    )
+    await p.getByText('请求尝试与关联证据', { exact: true }).waitFor()
+
     await run.nav(p, '/operation-diagnostics?' + operationQuery, '操作排障')
     await p.getByText('原操作结果', { exact: true }).waitFor()
     await changeAuthority(f.rule.grants.filter((grant) => grant.operation !== 'audit_read'))

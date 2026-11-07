@@ -160,6 +160,7 @@ export function EnterpriseEditor({
         locale={locale}
         busy={read.busy || permissions.busy}
         error={read.error ?? permissions.error}
+        diagnosticContext={read.error ? 'da' : undefined}
         onRetry={read.error ? read.reload : permissions.reload}
       />
       {id && (

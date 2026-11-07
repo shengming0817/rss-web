@@ -1338,3 +1338,80 @@ it('aborts evidence on a context switch and ignores a late receipt from the form
   expect(host.textContent).not.toContain('stale-result')
   expect(host.textContent).toContain('索引覆盖不完整')
 })
+
+it('clears a confirmed lock PIN on permission loss and again when issuing the write', async () => {
+  const target: ViewEndpoint = {
+    ...endpoint,
+    primaryMdmRegistration: { ...endpoint.primaryMdmRegistration!, source: 'mdm.apple' },
+  }
+  const permitted = detailSnapshot(target, ['lock'])
+  const create = vi.fn(async (input: ControlIntent, _pin?: string) => ({
+    operationId: input.operationId,
+    revision: 1,
+  }))
+  const runtime = {
+    administration: () => ({ devices: { endpoint: async () => permitted }, execution: { create } }),
+  } as unknown as Runtime
+  async function show(snapshot: EndpointDetail) {
+    await act(async () =>
+      root.render(
+        h(
+          MemoryRouter,
+          null,
+          h(DeviceControl, {
+            runtime,
+            locale: 'zh',
+            endpoint: target,
+            snapshot,
+            canReadOriginal: false,
+            onReload() {},
+            onStale() {},
+          }),
+        ),
+      ),
+    )
+  }
+  async function fill(value: string) {
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="六位锁定 PIN"]')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+  await show(permitted)
+  await act(async () =>
+    document
+      .querySelector('[role=combobox]')!
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true })),
+  )
+  await act(async () =>
+    [...document.querySelectorAll<HTMLElement>('.ant-select-item-option')]
+      .find((node) => node.textContent === '锁定')!
+      .click(),
+  )
+  await act(async () => button('核对设备与动作').click())
+  await act(async () => document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  await fill('12345')
+  expect(button('确认提交此动作').disabled).toBe(true)
+  await fill('123456')
+  expect(button('确认提交此动作').disabled).toBe(false)
+  await show(detailSnapshot(target, []))
+  expect(button('核对设备与动作').disabled).toBe(true)
+  await show(permitted)
+  await act(async () => button('核对设备与动作').click())
+  expect(document.querySelector<HTMLInputElement>('input[aria-label="六位锁定 PIN"]')!.value).toBe(
+    '',
+  )
+  await act(async () => document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  await fill('987654')
+  await act(async () => button('确认提交此动作').click())
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({ action: expect.objectContaining({ kind: 'lock' }) }),
+    '987654',
+  )
+  expect(
+    document.querySelector<HTMLInputElement>('input[aria-label="六位锁定 PIN"]')?.value ?? '',
+  ).toBe('')
+  expect(host.textContent).toContain(create.mock.calls[0]![0].operationId)
+  expect(host.querySelector('a[href*="owner=device_control"]')).toBeNull()
+})

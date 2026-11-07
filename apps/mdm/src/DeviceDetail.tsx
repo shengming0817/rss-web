@@ -7,7 +7,7 @@ import { eventBatchPath, resultReturnPath } from './execution-context'
 import { deviceExecutionsPath } from './Executions'
 import { DeviceSecurity, devicePermission, hasDeviceSecurity } from './DeviceSecurity'
 import { SelectionGuard, useSelectionGuard, usePendingSelection } from './SelectionGuard'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Result, Select } from 'antd'
 import { Link, useLocation, useSearchParams, useParams } from 'react-router-dom'
 import type {
@@ -17,7 +17,7 @@ import type {
   EndpointDetail,
   ViewEndpoint,
 } from '@rss/mdm-devices'
-import { SecretTabs } from './SecretTabs'
+import { SecretTabs, useSecretVisibility } from './SecretTabs'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { Failure, Heading, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'
@@ -326,6 +326,59 @@ function EndpointFacts({
     </>
   )
 }
+function EndpointOverview({
+  runtime,
+  locale,
+  endpoint,
+  authorityKey,
+  authorityBusy,
+  canReadOriginal,
+  children,
+}: {
+  runtime: Runtime
+  locale: Locale
+  endpoint: ViewEndpoint
+  authorityKey: string
+  authorityBusy: boolean
+  canReadOriginal: boolean
+  children: ReactNode
+}) {
+  const { binding, devices } = useAdministration(runtime)
+  const active = useSecretVisibility() && !authorityBusy
+  const read = useRead(
+    JSON.stringify([binding, endpoint.id, endpoint.primaryMdmRegistration, authorityKey, active]),
+    (signal) => (active ? devices.endpoint(endpoint.id, signal) : Promise.resolve(undefined)),
+    { retryReadConflict: true },
+  )
+  const [invalid, setInvalid] = useState<EndpointDetail>()
+  const snapshot = read.value !== invalid ? read.value : undefined
+  return (
+    <div className="device-detail-grid">
+      <EndpointFacts
+        locale={locale}
+        endpoint={endpoint}
+        detail={{
+          busy: read.busy || authorityBusy,
+          error: read.error,
+          reload: read.reload,
+          ...(snapshot ? { value: snapshot } : {}),
+        }}
+      />
+      {children}
+      <DeviceControl
+        runtime={runtime}
+        locale={locale}
+        endpoint={endpoint}
+        snapshot={snapshot}
+        onReload={read.reload}
+        onStale={() => setInvalid(read.value)}
+        canReadOriginal={canReadOriginal}
+      />
+      <AgentObservation runtime={runtime} locale={locale} endpoint={endpoint} />
+    </div>
+  )
+}
+
 function Detail({
   runtime,
   locale,
@@ -361,16 +414,6 @@ function Detail({
     selected = guard.locked && heldEndpoint ? heldEndpoint.id : requested,
     endpoint = view?.endpoints.find((e) => e.id === selected),
     mountedEndpoint = endpoint ?? heldEndpoint
-  const activeDetail = (params.get('tab') ?? 'overview') === 'overview' ? endpoint : undefined
-  const endpointRead = useRead(
-    `${binding}/endpoint-detail/${activeDetail?.id ?? ''}/${activeDetail?.primaryMdmRegistration?.registrationId ?? ''}/${activeDetail?.primaryMdmRegistration?.generation ?? ''}`,
-    (signal) =>
-      activeDetail ? devices.endpoint(activeDetail.id, signal) : Promise.resolve(undefined),
-    { retryReadConflict: true },
-  )
-  const [invalidDetail, setInvalidDetail] = useState<EndpointDetail>()
-  const currentDetail = endpointRead.value !== invalidDetail ? endpointRead.value : undefined
-
   useEffect(() => {
     if (endpoint) {
       setHeldEndpoint(endpoint)
@@ -486,17 +529,19 @@ function Detail({
                     key: 'overview',
                     label: l('概览', 'Overview'),
                     children: (
-                      <div className="device-detail-grid">
-                        <EndpointFacts
-                          locale={locale}
-                          endpoint={mountedEndpoint}
-                          detail={{
-                            busy: endpointRead.busy,
-                            error: endpointRead.error,
-                            reload: endpointRead.reload,
-                            ...(currentDetail ? { value: currentDetail } : {}),
-                          }}
-                        />
+                      <EndpointOverview
+                        key={`${binding}/${mountedEndpoint.id}`}
+                        runtime={runtime}
+                        locale={locale}
+                        endpoint={mountedEndpoint}
+                        authorityBusy={permissions.busy}
+                        authorityKey={JSON.stringify(permissions.value?.grants ?? null)}
+                        canReadOriginal={devicePermission(
+                          permissions.value?.grants ?? [],
+                          mountedEndpoint.id,
+                          'operation_read',
+                        )}
+                      >
                         <div>
                           <DiagnosticReference
                             locale={locale}
@@ -550,26 +595,7 @@ function Detail({
                           <br />
                           <Link to="/device-access">Device Access</Link>
                         </div>
-                        <DeviceControl
-                          key={`${binding}/${mountedEndpoint.id}`}
-                          runtime={runtime}
-                          locale={locale}
-                          endpoint={mountedEndpoint}
-                          snapshot={currentDetail}
-                          onReload={endpointRead.reload}
-                          onStale={() => setInvalidDetail(endpointRead.value)}
-                          canReadOriginal={devicePermission(
-                            permissions.value?.grants ?? [],
-                            mountedEndpoint.id,
-                            'operation_read',
-                          )}
-                        />
-                        <AgentObservation
-                          runtime={runtime}
-                          locale={locale}
-                          endpoint={mountedEndpoint}
-                        />
-                      </div>
+                      </EndpointOverview>
                     ),
                   },
                   {

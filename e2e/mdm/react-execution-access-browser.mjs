@@ -946,7 +946,9 @@ try {
   })
   checks.push('real-public-desktop-tablet-mobile-dark-layout-and-no-viewport-overflow')
   run.step('session-change-discards-device-confirmation')
-  await run.nav(p, `/devices/endpoint/${f.alone}`, '设备详情')
+  const controlPath = `/api/v1/devices/${f.mdm}/operations`
+  const postsBeforeSignout = run.count(p, 'POST', controlPath)
+  await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   await button('核对设备与动作').click()
   dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
   await dialog.getByRole('checkbox').check()
@@ -961,9 +963,9 @@ try {
     else await button('读取最新设备事实').click()
   }
   await p.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
-  assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.alone}/operations`), 0)
+  assert.equal(run.count(p, 'POST', controlPath), postsBeforeSignout)
   await run.login(p)
-  await run.nav(p, `/devices/endpoint/${f.alone}`, '设备详情')
+  await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   assert.equal(await p.getByRole('dialog', { name: '确认设备动作', exact: true }).count(), 0)
   await otherTab.close()
   checks.push(

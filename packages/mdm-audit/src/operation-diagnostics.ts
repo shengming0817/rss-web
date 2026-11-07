@@ -69,6 +69,8 @@ export interface ExecutionEvidence {
   readonly state?: string
   readonly effect?: string
   readonly reason?: string
+  readonly dispatchFailure?: string
+  readonly nativeReceipts?: number
   readonly stages?: readonly { name: string; state: string; effect?: string }[]
 }
 
