@@ -821,11 +821,16 @@ try {
   })
   await p.setViewportSize({ width: 390, height: 844 })
   assert.equal(await columns(), 1)
+  await p
+    .waitForFunction(() => document.documentElement.scrollWidth <= innerWidth, undefined, {
+      timeout: 5000,
+    })
+    .catch(() => undefined)
   const overflow = await p.evaluate(() => {
     if (document.documentElement.scrollWidth <= innerWidth) return null
     return {
       width: document.documentElement.scrollWidth,
-      elements: [...document.querySelectorAll('main *')]
+      elements: [...document.body.querySelectorAll('*')]
         .filter((node) => {
           if (node.getBoundingClientRect().right <= innerWidth + 1) return false
           for (let parent = node.parentElement; parent; parent = parent.parentElement)
@@ -836,12 +841,13 @@ try {
               return false
           return true
         })
-        .slice(0, 10)
         .map((node) => ({
           tag: node.tagName + '.' + [...node.classList].join('.'),
           parent: [...(node.parentElement?.classList ?? [])].join('.'),
           right: Math.round(node.getBoundingClientRect().right),
-        })),
+        }))
+        .sort((a, b) => b.right - a.right)
+        .slice(0, 6),
     }
   })
   if (overflow)

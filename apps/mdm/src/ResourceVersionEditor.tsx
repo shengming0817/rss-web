@@ -312,7 +312,10 @@ export function ResourceVersionEditor({
     })
   }
   return (
-    <Card title={l('完整定义：创建新固定版本', 'Complete definition: create a new fixed version')}>
+    <Card
+      className="resource-version-author"
+      title={l('完整定义：创建新固定版本', 'Complete definition: create a new fixed version')}
+    >
       <Alert
         type="info"
         title={l(

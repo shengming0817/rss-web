@@ -940,6 +940,10 @@ html:has(.mdm-overlay-open) {
   min-inline-size: 0;
   max-inline-size: 100%;
 }
+.resource-version-author,
+.software-snapshot-draft {
+  overflow-wrap: anywhere;
+}
 .software-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1006,12 +1010,18 @@ html:has(.mdm-overlay-open) {
 .resource-author,
 .author-record {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-block: 16px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   min-width: 0;
+}
+.resource-author .ant-select,
+.author-record .ant-select {
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 .author-record > .resource-card-top {
   margin-bottom: 8px;

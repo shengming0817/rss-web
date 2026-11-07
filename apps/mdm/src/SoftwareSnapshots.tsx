@@ -509,7 +509,10 @@ export function SnapshotDraft({
   usePendingSelection(guard.locked)
   return (
     <SelectionGuard.Provider value={guard.register}>
-      <Card title={l('独立软件草稿', 'Independent software draft')}>
+      <Card
+        className="software-snapshot-draft"
+        title={l('独立软件草稿', 'Independent software draft')}
+      >
         <p>
           <code>
             {seed.source} · {seed.revision} · {seed.entryId}
