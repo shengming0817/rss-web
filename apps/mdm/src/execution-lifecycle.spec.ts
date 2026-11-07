@@ -746,8 +746,16 @@ it.each([false, true])(
         },
       })),
       runtime = {
+        host: { serviceId: another },
+        tenant: policy,
         administration: () => ({
           binding: 'nodes',
+          devices: {
+            endpoint: async () => ({
+              id: 'device-a',
+              channels: [{ channel: 'agent', status: 'active', registrationId: id, generation: 1 }],
+            }),
+          },
           authorization: { effective: async () => ({ grants: [] }) },
           execution: {
             summary: async () => ({
@@ -801,6 +809,39 @@ it.each([false, true])(
     expect(host.textContent).toContain('原尝试的冻结节点')
     expect(host.textContent).toContain('install-original')
     expect(host.textContent).toContain('v1')
+    await act(async () => button('显示 Agent 查看入口').click())
+    expect(button('复制链接 · 步骤 install-original')).toBeDefined()
+    let copied = ''
+    class TestClipboardItem {
+      constructor(readonly data: Record<string, Promise<Blob>>) {}
+    }
+    vi.stubGlobal('ClipboardItem', TestClipboardItem)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        async write([item]: [TestClipboardItem]) {
+          const value = await item.data['text/plain']!
+          copied = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(String(reader.result))
+            reader.onerror = reject
+            reader.readAsText(value)
+          })
+        },
+      },
+    })
+    try {
+      await act(async () => {
+        button('复制命令 · 步骤 install-original').click()
+        await vi.waitFor(() => expect(copied).toMatch(/^rssmdm open '/))
+      })
+      const uri = new URL(copied.slice("rssmdm open '".length, -1))
+      expect(uri.pathname).toBe(`/v1/task/${id}`)
+      expect(uri.searchParams.get('attempt')).toBe(id)
+      expect(uri.searchParams.get('step')).toBe('install-original')
+    } finally {
+      Reflect.deleteProperty(navigator, 'clipboard')
+    }
   },
 )
 

@@ -1,0 +1,222 @@
+[
+  {
+    "target": {
+      "selector": {
+        "kind": "capability",
+        "selector": {
+          "id": "534610c5-1c82-42b1-bc9d-4b834c973cb3",
+          "kind": "id"
+        }
+      },
+      "version": "11111111-1111-4111-8111-111111111111",
+      "revision": 4
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/id/534610c5-1c82-42b1-bc9d-4b834c973cb3?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&revision=4&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3&version=11111111-1111-4111-8111-111111111111"
+  },
+  {
+    "target": {
+      "selector": {
+        "kind": "capability",
+        "selector": {
+          "kind": "tool_name",
+          "name": "policy_534610c51c8242b1bc9d4b834c973cb3"
+        }
+      },
+      "version": "11111111-1111-4111-8111-111111111111",
+      "revision": 4
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/tool/policy_534610c51c8242b1bc9d4b834c973cb3?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&revision=4&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3&version=11111111-1111-4111-8111-111111111111"
+  },
+  {
+    "target": {
+      "selector": {
+        "kind": "capability",
+        "selector": {
+          "alias": "repair.device",
+          "kind": "alias"
+        }
+      },
+      "version": "11111111-1111-4111-8111-111111111111",
+      "revision": 4
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/alias/repair.device?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&revision=4&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3&version=11111111-1111-4111-8111-111111111111"
+  },
+  {
+    "target": {
+      "selector": {
+        "kind": "event",
+        "name": "repair.event"
+      }
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/event/repair.event?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3"
+  },
+  {
+    "target": {
+      "selector": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "kind": "batch"
+      }
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/batch/11111111-1111-4111-8111-111111111111?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3"
+  },
+  {
+    "target": {
+      "selector": {
+        "attempt": "22222222-2222-4222-8222-222222222222",
+        "kind": "task",
+        "task": "11111111-1111-4111-8111-111111111111"
+      },
+      "step": "install.1"
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/task/11111111-1111-4111-8111-111111111111?attempt=22222222-2222-4222-8222-222222222222&device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&step=install.1&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3"
+  },
+  {
+    "target": {
+      "selector": {
+        "id": "mdm.policy:11111111-1111-4111-8111-111111111111",
+        "kind": "activity"
+      },
+      "step": "verify.1"
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/activity/mdm.policy:11111111-1111-4111-8111-111111111111?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&step=verify.1&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3"
+  },
+  {
+    "target": {
+      "selector": {
+        "id": "tasks.management",
+        "kind": "node"
+      }
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/node/tasks.management?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3"
+  },
+  {
+    "target": {
+      "selector": {
+        "kind": "capability",
+        "selector": {
+          "alias": ".",
+          "kind": "alias"
+        }
+      },
+      "version": "11111111-1111-4111-8111-111111111111",
+      "revision": 4
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/alias/~.?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&revision=4&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3&version=11111111-1111-4111-8111-111111111111"
+  },
+  {
+    "target": {
+      "selector": {
+        "kind": "event",
+        "name": "."
+      }
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/event/~.?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3"
+  },
+  {
+    "target": {
+      "selector": {
+        "kind": "capability",
+        "selector": {
+          "alias": "..",
+          "kind": "alias"
+        }
+      },
+      "version": "11111111-1111-4111-8111-111111111111",
+      "revision": 4
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/alias/~..?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&revision=4&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3&version=11111111-1111-4111-8111-111111111111"
+  },
+  {
+    "target": {
+      "selector": {
+        "kind": "event",
+        "name": ".."
+      }
+    },
+    "namespace": {
+      "device": "fixture + 测试",
+      "generation": 3,
+      "instance": "17c72b26-774a-492c-9bf4-5e1c47c8501e",
+      "registration": "360a2191-9d5f-4fea-9f5c-6ecb02394aad",
+      "tenant": "534610c5-1c82-42b1-bc9d-4b834c973cb3"
+    },
+    "uri": "rssmdm://view/v1/event/~..?device=fixture%20%2B%20%E6%B5%8B%E8%AF%95&generation=3&instance=17c72b26-774a-492c-9bf4-5e1c47c8501e&registration=360a2191-9d5f-4fea-9f5c-6ecb02394aad&tenant=534610c5-1c82-42b1-bc9d-4b834c973cb3"
+  }
+]

@@ -1,52 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
-import type { EntryIntent } from './agent-entry.generated'
-import { addressableAlias, agentViewEntry, type EntryTarget } from './agent-entry'
-import { unaddressableAliases } from './agent-entry.generated'
+import { agentViewEntry, type EntryTarget } from './agent-entry'
 
-const { vectors } = JSON.parse(
-  readFileSync(new URL('../../../contracts/agent-entry/contract.json', import.meta.url), 'utf8'),
-) as { vectors: { intent: EntryIntent; uri: string }[] }
+const vectors = JSON.parse(
+  readFileSync(new URL('../../../contracts/agent-entry/v1-vectors.json', import.meta.url), 'utf8'),
+) as {
+  target: EntryTarget
+  namespace: Parameters<typeof agentViewEntry>[1]
+  uri: string
+}[]
 
-it('emits exactly the canonical Rust URI and CLI open command for every supported locator', () => {
-  expect(vectors.map(({ intent }) => intent.selector.kind)).toEqual([
-    'capability',
-    'capability',
-    'capability',
-    'event',
-    'batch',
-    'task',
-    'activity',
-    'node',
-  ])
-  for (const { intent, uri } of vectors) {
-    const { selector, namespace, version, revision, step } = intent
-    const formatted = agentViewEntry(
-      {
-        selector,
-        ...(version ? { version } : {}),
-        ...(revision ? { revision } : {}),
-        ...(step ? { step } : {}),
-      } as EntryTarget,
-      namespace!,
-    )
-    expect(formatted.uri).toBe(uri)
-    expect(formatted.command).toBe(`rssmdm open '${uri}'`)
-  }
+it.each(vectors)('copies the v1 URI $uri and its CLI command', ({ target, namespace, uri }) => {
+  expect(agentViewEntry(target, namespace)).toEqual({ uri, command: `rssmdm open '${uri}'` })
+  expect(new URL(uri).href).toBe(uri)
 })
 
 it('rejects privilege and secret extensions, malformed selectors, and incomplete enterprise coordinates', () => {
-  const namespace = vectors[0]!.intent.namespace!,
+  const namespace = vectors[0]!.namespace,
     target: EntryTarget = { selector: { kind: 'event', name: 'repair.event' } }
-  for (const alias of unaddressableAliases) {
-    expect(addressableAlias(alias)).toBe(false)
-    expect(() =>
-      agentViewEntry(
-        { selector: { kind: 'capability', selector: { kind: 'alias', alias } } },
-        namespace,
-      ),
-    ).toThrow()
-  }
   for (const invalid of [
     { ...target, confirm: true },
     { ...target, parameters: { secret: 'value' } },
