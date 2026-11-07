@@ -338,6 +338,13 @@ try {
     assert.equal(copiedEvent.pathname, `/v1/event/${event}`)
     assert.equal(copiedEvent.searchParams.get('device'), f.agent)
     assert.equal(copiedEvent.searchParams.get('tenant'), f.tenant)
+    const registered = (await api('GET', `/api/v1/devices/${f.agent}`)).channels.find(
+      (channel) => channel.channel === 'agent' && channel.status === 'active',
+    )
+    assert.ok(registered)
+    assert.equal(copiedEvent.searchParams.get('instance'), f.instance)
+    assert.equal(copiedEvent.searchParams.get('registration'), registered.registrationId)
+    assert.equal(copiedEvent.searchParams.get('generation'), String(registered.generation))
     checks.push('real-shared-event-copy-for-current-agent-registration')
     await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
     await label('唯一别名').fill('react.audit.1')

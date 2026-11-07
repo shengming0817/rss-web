@@ -720,7 +720,9 @@ it.each([false, true])(
     const id = '11111111-1111-4111-8111-111111111111',
       policy = '22222222-2222-4222-8222-222222222222',
       another = '33333333-3333-4333-8333-333333333333',
-      path = `/operations?kind=action_run&operation=${id}&policy=${policy}&attempt=${mismatch ? policy : id}&registration=${id}&generation=1&version=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
+      attempt = '44444444-4444-4444-8444-444444444444',
+      registrationId = '55555555-5555-4555-8555-555555555555',
+      path = `/operations?kind=action_run&operation=${id}&policy=${policy}&attempt=${mismatch ? policy : attempt}&registration=${registrationId}&generation=3&version=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
       detail = vi.fn(async () => ({
         item: null,
         policy,
@@ -738,9 +740,9 @@ it.each([false, true])(
           effect: 'unknown',
           authorization: null,
           result: null,
-          attempt: id,
-          registrationId: id,
-          generation: 1,
+          attempt,
+          registrationId,
+          generation: 3,
           nodes: [{ stepId: 'install-original', definition: { id: 'package', version: 'v1' } }],
           userAction: null,
         },
@@ -753,7 +755,7 @@ it.each([false, true])(
           devices: {
             endpoint: async () => ({
               id: 'device-a',
-              channels: [{ channel: 'agent', status: 'active', registrationId: id, generation: 1 }],
+              channels: [{ channel: 'agent', status: 'active', registrationId, generation: 3 }],
             }),
           },
           authorization: { effective: async () => ({ grants: [] }) },
@@ -763,8 +765,8 @@ it.each([false, true])(
               device: 'device-a',
               policy,
               status: 'succeeded',
-              registrationId: id,
-              generation: 1,
+              registrationId,
+              generation: 3,
             }),
             detail,
             list: async () => ({
@@ -837,7 +839,9 @@ it.each([false, true])(
       })
       const uri = new URL(copied.slice("rssmdm open '".length, -1))
       expect(uri.pathname).toBe(`/v1/task/${id}`)
-      expect(uri.searchParams.get('attempt')).toBe(id)
+      expect(uri.searchParams.get('attempt')).toBe(attempt)
+      expect(uri.searchParams.get('registration')).toBe(registrationId)
+      expect(uri.searchParams.get('generation')).toBe('3')
       expect(uri.searchParams.get('step')).toBe('install-original')
     } finally {
       Reflect.deleteProperty(navigator, 'clipboard')

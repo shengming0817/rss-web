@@ -658,6 +658,13 @@ try {
   assert.equal(batchUri.pathname, `/v1/batch/${agentEvent.batchId}`)
   assert.equal(batchUri.searchParams.get('device'), f.agent)
   assert.equal(batchUri.searchParams.get('tenant'), f.tenant)
+  const registered = (await api('GET', `/api/v1/devices/${f.agent}`)).channels.find(
+    (channel) => channel.channel === 'agent' && channel.status === 'active',
+  )
+  assert.ok(registered)
+  assert.equal(batchUri.searchParams.get('instance'), f.instance)
+  assert.equal(batchUri.searchParams.get('registration'), registered.registrationId)
+  assert.equal(batchUri.searchParams.get('generation'), String(registered.generation))
   checks.push('real-batch-copy-for-current-agent-registration')
 
   await run.nav(
