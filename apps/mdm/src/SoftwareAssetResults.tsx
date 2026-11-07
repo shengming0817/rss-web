@@ -10,7 +10,15 @@ import {
   type SoftwareQuality,
   type SoftwareTask,
 } from '@rss/mdm-inventory'
-import { CursorControls, labels, readFailure, ReadState, usePageRead, type Query } from './AdminUi'
+import {
+  codeOf,
+  CursorControls,
+  labels,
+  readFailure,
+  ReadState,
+  usePageRead,
+  type Query,
+} from './AdminUi'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
 import {
@@ -61,10 +69,12 @@ function ResultPage<T, P extends Page<T>>({
     failure = readFailure(read.error),
     unrequested =
       reopenedDimension &&
-      read.error &&
-      typeof read.error === 'object' &&
+      !query.cursor &&
+      read.error instanceof Error &&
+      read.error.cause === 'wire' &&
       'status' in read.error &&
-      read.error.status === 400,
+      read.error.status === 400 &&
+      codeOf(read.error) === 'malformed_request',
     invalid =
       failure === 'result' ||
       failure === 'denied' ||

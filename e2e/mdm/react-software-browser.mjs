@@ -721,7 +721,7 @@ try {
   assert.equal(sourceUrl.pathname, '/software')
   assert.equal(sourceUrl.searchParams.get('resource'), resource)
   assert.equal(sourceUrl.searchParams.get('version'), 'resource-v1')
-  assert.ok(sourceUrl.searchParams.get('variant'))
+  assert.equal(sourceUrl.searchParams.get('variant'), JSON.stringify(['windows', 'x86_64', 'main']))
   await draftReturn.click()
   await p.waitForURL(sourceUrl.href)
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).waitFor()
@@ -744,7 +744,8 @@ try {
   const snapshot = 'browser-snapshot-' + randomUUID(),
     snapshotPath = '/api/v1/software/source-snapshots/' + snapshot,
     entryJson = String.raw`{"id":"fixture.package","name":"Editor \u4e2d","version":"7.1","number":9007199254740993,"ratio":0.123456789123456789}`,
-    json = '[\r\n' + Array(22).fill(entryJson).join(',\r\n') + '\r\n]'
+    pasted = '[\r\n' + Array(22).fill(entryJson).join(',\r\n') + '\r\n]',
+    json = pasted.slice(0, -1) + ' ]'
   await label('新来源标识').fill(snapshot)
   await label('导入 JSON 原文').evaluate((element, text) => {
     const clipboardData = new window.DataTransfer()
@@ -752,18 +753,29 @@ try {
     element.dispatchEvent(
       new window.ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }),
     )
-  }, json)
+  }, pasted)
+  await label('导入 JSON 原文').focus()
+  await label('导入 JSON 原文').evaluate((element) =>
+    element.setSelectionRange(element.value.length - 1, element.value.length - 1),
+  )
+  await label('导入 JSON 原文').press('Space')
   await p.getByText('可选 JSON Pointer', { exact: true }).click()
-  await label('packageId JSON Pointer').fill('/id')
+  await label('packageId JSON Pointer').fill('invalid-pointer')
   await label('name JSON Pointer').fill('/name')
   await label('version JSON Pointer').fill('/version')
+  await run.response(p, 'POST', snapshotPath, () => button('导入新快照').click(), 400)
+  await p.getByText('检查 JSON 语法、来源修订和 JSON Pointer。', { exact: true }).waitFor()
+  await label('packageId JSON Pointer').fill('/id')
   const lostSnapshot = await loseFirst('**' + snapshotPath, 200)
   await button('导入新快照').click()
   await waitUntil(() => lostSnapshot.statuses.length === 1)
   await button('查询原回执').click()
   await p.getByRole('status').filter({ hasText: '原操作已确认' }).waitFor()
   await lostSnapshot.stop()
-  await button(snapshot).click()
+  const entriesPath = snapshotPath + '/entries'
+  const firstEntries = await run.response(p, 'GET', entriesPath, () => button(snapshot).click())
+  const firstIds = new Set((await firstEntries.json()).items.map((row) => row.entryId))
+  assert.equal(firstIds.size, 20)
   await button('读取文档原文').click()
   await p.waitForFunction(
     (expected) => document.querySelector('textarea[aria-label="文档原文"]')?.value === expected,
@@ -771,10 +783,16 @@ try {
   )
   const digest = createHash('sha256').update(json).digest('hex')
   await p.getByText(digest, { exact: true }).waitFor()
-  await button('下一页').last().click()
-  const recordButton = p.getByRole('button', { name: /^读取记录 / }).first()
+  const secondEntries = await run.response(p, 'GET', entriesPath, () =>
+    button('下一页').last().click(),
+  )
+  assert.ok(new URL(secondEntries.url()).searchParams.get('cursor'))
+  const secondRows = (await secondEntries.json()).items
+  assert.equal(secondRows.length, 2)
+  assert.ok(secondRows.every((row) => !firstIds.has(row.entryId)))
+  const previousEntry = '读取记录 ' + secondRows[0].entryId
+  const recordButton = p.getByRole('button', { name: previousEntry, exact: true })
   await recordButton.click()
-  const previousEntry = await recordButton.getAttribute('aria-label')
   await button('用于软件草稿').click()
   await label('软件名称').fill('ÉCLAIR')
   await button('搜索软件').click()
@@ -785,10 +803,11 @@ try {
   await label('导入 JSON 原文').fill('{"id":"replaced"}')
   await run.response(p, 'POST', snapshotPath, () => button('完整替换快照').click())
   await label('记录原文').waitFor({ state: 'hidden' })
-  await button(snapshot).click()
+  const currentEntries = await run.response(p, 'GET', entriesPath, () => button(snapshot).click())
+  assert.equal(new URL(currentEntries.url()).searchParams.has('cursor'), false)
+  assert.equal((await currentEntries.json()).items[0].revision, 2)
   await p.getByText(snapshot + ' · 2', { exact: true }).waitFor()
   assert.equal(await p.getByRole('button', { name: previousEntry, exact: true }).count(), 0)
-  assert.equal(await button('返回首页').last().isDisabled(), true)
   assert.equal(await label('实际软件版本').inputValue(), version)
   const privateSource = 'browser-snapshot-private',
     source = await api('POST', '/api/v1/software/sources/' + privateSource + '/revisions/1', {
@@ -912,6 +931,31 @@ try {
   console.log(JSON.stringify({ journey: 'react-software', screenshots }))
   checks.push('canonical-resource-software-card-desktop-mobile-dark-design')
   checks.push('software-catalog-bilingual-keyboard')
+
+  const authority = (await api('GET', '/api/v1/authorization/rules')).items.find(
+    (row) => row.id === f.ruleId,
+  )
+  await api('PUT', '/api/v1/authorization/rules/' + f.ruleId, {
+    operationId: randomUUID(),
+    expectedRevision: authority.revision,
+    value: {
+      ...f.rule,
+      grants: f.rule.grants.filter((grant) => grant.operation !== 'software_read'),
+    },
+  })
+  await run.nav(p, '/software', '软件目录')
+  await tab('JSON 来源快照')
+  await label('来源标识').fill(snapshot)
+  await label('已知来源修订').fill('2')
+  await label('导入 JSON 原文').fill('[]')
+  await label('来源标识').fill(snapshot + '-other')
+  assert.equal(await label('已知来源修订').inputValue(), '')
+  assert.equal(await button('导入新快照').isDisabled(), true)
+  await label('来源标识').fill(snapshot)
+  await label('已知来源修订').fill('2')
+  await run.response(p, 'POST', snapshotPath, () => button('完整替换快照').click())
+  await p.getByRole('status').filter({ hasText: '原操作已确认' }).waitFor()
+  checks.push('real-write-only-snapshot-cas-is-bound-to-the-entered-source')
 } catch (error) {
   failure = error
   if (diagnosticPage)

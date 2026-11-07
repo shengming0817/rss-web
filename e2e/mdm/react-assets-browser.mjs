@@ -1132,14 +1132,23 @@ try {
       await run.nav(p, '/inventory/software?task=' + task, '软件资产')
       await assetButton('Browser standard editor').click()
     }
-    const breakdownResponse = await run.response(
-      p,
-      'GET',
-      base + '/breakdowns/version',
-      async () => {
-        await p.getByRole('combobox', { name: '分桶维度', exact: true }).press('ArrowDown')
-        await p.locator('.ant-select-dropdown:visible').getByText('版本', { exact: true }).click()
-      },
+    async function chooseBreakdown(label) {
+      await p.getByRole('combobox', { name: '分桶维度', exact: true }).press('ArrowDown')
+      await p.locator('.ant-select-dropdown:visible').getByText(label, { exact: true }).click()
+    }
+    if (domain === 'endpoint') {
+      await run.response(p, 'GET', base + '/breakdowns/os', () => chooseBreakdown('操作系统'), 400)
+      await p.getByText('原任务未请求此分桶维度。', { exact: true }).waitFor()
+      const malformedResponse = '**/breakdowns/version*'
+      await p.route(malformedResponse, (route) =>
+        route.fulfill({ status: 400, contentType: 'application/json', body: '{}' }),
+      )
+      await run.response(p, 'GET', base + '/breakdowns/version', () => chooseBreakdown('版本'), 400)
+      await assetButton('重新读取').waitFor()
+      await p.unroute(malformedResponse)
+    }
+    const breakdownResponse = await run.response(p, 'GET', base + '/breakdowns/version', () =>
+      domain === 'endpoint' ? assetButton('重新读取').click() : chooseBreakdown('版本'),
     )
     const breakdown = await breakdownResponse.json()
     assert.deepEqual(
@@ -1165,6 +1174,13 @@ try {
     await run.response(p, 'POST', '/api/v1/software-asset-queries/' + task + '/release', () =>
       p.getByRole('button', { name: '确定', exact: true }).filter({ visible: true }).click(),
     )
+    await poll(
+      '/api/v1/software-asset-queries/' + task,
+      () => assetButton('读取任务状态').click(),
+      (value) => value.asset.response,
+      (value) => value.resultState === 'released',
+    )
+    await p.getByText('已释放', { exact: true }).waitFor()
     await assetButton('Browser standard editor').waitFor({ state: 'hidden' })
   }
   assert.equal(

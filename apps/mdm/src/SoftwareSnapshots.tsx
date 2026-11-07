@@ -44,6 +44,33 @@ const first = { limit: 20 }
 const digest = (bytes: readonly number[]) =>
   bytes.map((b) => b.toString(16).padStart(2, '0')).join('')
 
+function originalOffset(text: string, offset: number): number {
+  if (!text.includes('\r')) return offset
+  let raw = 0
+  for (let visible = 0; visible < offset; visible++, raw++)
+    if (text[raw] === '\r' && text[raw + 1] === '\n') raw++
+  return raw
+}
+
+function editSnapshotText(raw: string, next: string): string {
+  if (!raw.includes('\r')) return next
+  const visible = raw.replace(/\r\n?/g, '\n')
+  if (visible === next) return raw
+  let start = 0
+  while (start < visible.length && start < next.length && visible[start] === next[start]) start++
+  let oldEnd = visible.length
+  let newEnd = next.length
+  while (oldEnd > start && newEnd > start && visible[oldEnd - 1] === next[newEnd - 1]) {
+    oldEnd--
+    newEnd--
+  }
+  return (
+    raw.slice(0, originalOffset(raw, start)) +
+    next.slice(start, newEnd) +
+    raw.slice(originalOffset(raw, oldEnd))
+  )
+}
+
 function sourceIdentity(id: string) {
   return {
     filter: formatFilter({ kind: 'compare', field: 'source', operator: '==', values: [id] }),
@@ -103,8 +130,10 @@ export function SoftwareSnapshots({
     [entry, setEntry] = useState<string | null>(null),
     [documentOpen, setDocumentOpen] = useState(false),
     [epoch, setEpoch] = useState(0),
-    [newSource, setNewSource] = useState(''),
-    [expectedRevision, setExpectedRevision] = useState<number | null>(0),
+    [manualSource, setManualSource] = useState<{ id: string; revision: number | null }>({
+      id: '',
+      revision: null,
+    }),
     [document, setDocument] = useState(''),
     [fileIssue, setFileIssue] = useState<'size' | 'encoding' | null>(null),
     [extraction, setExtraction] = useState<SnapshotExtraction>({}),
@@ -112,6 +141,9 @@ export function SoftwareSnapshots({
     [receipt, setReceipt] = useState<SnapshotReceipt | null>(null),
     [receiptMissing, setReceiptMissing] = useState(false),
     selected = canRead ? source : null,
+    target = selected?.id ?? manualSource.id.trim(),
+    revision = selected?.revision ?? (canRead ? 0 : manualSource.revision),
+    validRevision = revision !== null && Number.isSafeInteger(revision) && revision >= 0,
     sources = usePageRead(
       `${binding}/snapshot-sources/${canRead}/${epoch}/${JSON.stringify(sourcePage)}`,
       (signal) =>
@@ -182,10 +214,7 @@ export function SoftwareSnapshots({
   function confirm(value: SnapshotReceipt) {
     setReceipt(value)
     setReceiptMissing(false)
-    if (!canRead) {
-      setNewSource(value.source)
-      setExpectedRevision(value.revision)
-    }
+    if (!canRead) setManualSource({ id: value.source, revision: value.revision })
     setPending(null)
     setDocument('')
     setExtraction({})
@@ -383,16 +412,7 @@ export function SoftwareSnapshots({
             layout="vertical"
             disabled={pending !== null || action.busy}
             onFinish={() => {
-              const target = selected?.id ?? newSource.trim()
-              const revision = selected?.revision ?? (canRead ? 0 : expectedRevision)
-              if (
-                !target ||
-                !document ||
-                revision === null ||
-                !Number.isSafeInteger(revision) ||
-                revision < 0
-              )
-                return
+              if (!target || !document || !validRevision) return
               void send(
                 freeze({
                   source: target,
@@ -417,8 +437,14 @@ export function SoftwareSnapshots({
                   aria-label={
                     canRead ? l('新来源标识', 'New source ID') : l('来源标识', 'Source ID')
                   }
-                  value={newSource}
-                  onChange={(e) => setNewSource(e.target.value)}
+                  value={manualSource.id}
+                  onChange={(e) => {
+                    const id = e.target.value
+                    setManualSource((current) => ({
+                      id,
+                      revision: id.trim() === current.id.trim() ? current.revision : null,
+                    }))
+                  }}
                 />
               </Form.Item>
             )}
@@ -430,8 +456,8 @@ export function SoftwareSnapshots({
                   aria-label={l('已知来源修订', 'Known source revision')}
                   min={0}
                   precision={0}
-                  value={expectedRevision}
-                  onChange={setExpectedRevision}
+                  value={manualSource.revision}
+                  onChange={(revision) => setManualSource((current) => ({ ...current, revision }))}
                 />
               </Form.Item>
             )}
@@ -487,23 +513,14 @@ export function SoftwareSnapshots({
                   if (!text) return
                   event.preventDefault()
                   const { selectionStart, selectionEnd } = event.currentTarget
-                  // DOM textarea offsets count CRLF as a single character.
-                  const originalOffset = (offset: number) => {
-                    if (!document.includes('\r')) return offset
-                    let rawOffset = 0
-                    for (let index = 0; index < offset; index++, rawOffset++)
-                      if (document[rawOffset] === '\r' && document[rawOffset + 1] === '\n')
-                        rawOffset++
-                    return rawOffset
-                  }
-                  const from = originalOffset(selectionStart)
-                  const to = originalOffset(selectionEnd)
+                  const from = originalOffset(document, selectionStart)
+                  const to = originalOffset(document, selectionEnd)
                   setFileIssue(null)
                   setDocument(document.slice(0, from) + text + document.slice(to))
                 }}
                 onChange={(e) => {
                   setFileIssue(null)
-                  setDocument(e.target.value)
+                  setDocument(editSnapshotText(document, e.target.value))
                 }}
                 rows={6}
               />
@@ -534,9 +551,9 @@ export function SoftwareSnapshots({
             <Button
               type="primary"
               htmlType="submit"
-              disabled={!document || !(selected || newSource.trim())}
+              disabled={!document || !target || !validRevision}
             >
-              {selected || (!canRead && Boolean(expectedRevision))
+              {selected || (!canRead && revision !== null && revision > 0)
                 ? l('完整替换快照', 'Replace snapshot')
                 : l('导入新快照', 'Import snapshot')}
             </Button>
@@ -551,7 +568,9 @@ export function SoftwareSnapshots({
           type="error"
           title={l('完整 UTF-8 请求超过 64 MiB。', 'The complete UTF-8 request exceeds 64 MiB.')}
         />
-      ) : ['invalid_input', 'INVALID_REQUEST', 'malformed'].includes(codeOf(action.error)) ? (
+      ) : ['invalid_input', 'INVALID_REQUEST', 'malformed_request'].includes(
+          codeOf(action.error),
+        ) ? (
         <Alert
           type="error"
           title={l(
