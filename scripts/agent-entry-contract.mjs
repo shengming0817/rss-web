@@ -51,7 +51,7 @@ async function probe() {
     if (result.status !== 0) {
       const diagnostic = result.stderr
         .split('\n')
-        .filter((line) => /^(fatal:|error:|Caused by:|  (failed|error|No such))/.test(line))
+        .filter((line) => /^(fatal:|error:|Caused by:| {2}(failed|error|No such))/.test(line))
         .slice(0, 8)
         .join('\n')
         .replace(/https?:\/\/[^\s/]+@/g, 'https://[redacted]@')
@@ -63,6 +63,7 @@ async function probe() {
   }
   process.on('SIGINT', interrupt)
   process.on('SIGTERM', interrupt)
+  let exported
   try {
     await mkdir(join(scratch, 'agent'))
     await mkdir(join(scratch, 'probe', 'src'), { recursive: true })
@@ -88,7 +89,7 @@ async function probe() {
       join(scratch, 'probe/src/main.rs'),
       await readFile(join(root, 'scripts/agent-entry-probe.rs')),
     )
-    return JSON.parse(
+    exported = JSON.parse(
       await bounded(
         'cargo',
         [
@@ -113,8 +114,9 @@ async function probe() {
       process.off('SIGINT', interrupt)
       process.off('SIGTERM', interrupt)
     }
-    if (interrupted) throw new Error('Agent contract probe interrupted; scratch cleaned')
   }
+  if (interrupted) throw new Error('Agent contract probe interrupted; scratch cleaned')
+  return exported
 }
 
 if (refresh)

@@ -433,7 +433,7 @@ try {
       await button('显示 Agent 查看入口').click()
       await button('复制链接 · 原任务').click()
       await p.getByRole('status').filter({ hasText: '已复制 · 原任务' }).waitFor()
-      const copied = new URL(await p.evaluate(() => navigator.clipboard.readText()))
+      const copied = new URL(await p.evaluate(() => globalThis.navigator.clipboard.readText()))
       assert.equal(copied.pathname, `/v1/task/${task.task}`)
       assert.equal(copied.searchParams.get('attempt'), final.attemptId)
       assert.equal(copied.searchParams.get('registration'), final.registrationId)
@@ -462,7 +462,7 @@ try {
         .click()
       await button('复制链接 · 唯一别名').click()
       await p.getByRole('status').filter({ hasText: '已复制 · 唯一别名' }).waitFor()
-      const aliasUri = await p.evaluate(() => navigator.clipboard.readText()),
+      const aliasUri = await p.evaluate(() => globalThis.navigator.clipboard.readText()),
         alias = new URL(aliasUri),
         resolved = await api('POST', `${base}/policies/resolve`, {
           kind: 'alias',
@@ -481,7 +481,7 @@ try {
       })
       await button('复制命令 · 唯一别名').click()
       await p.waitForFunction(
-        async (expected) => (await navigator.clipboard.readText()) === expected,
+        async (expected) => (await globalThis.navigator.clipboard.readText()) === expected,
         `rssmdm open '${aliasUri}'`,
       )
       checks.push('real-task-copy-current-attempt-registration-and-audit-navigation')

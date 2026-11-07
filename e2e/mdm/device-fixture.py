@@ -104,14 +104,11 @@ def seed():
             column, origin = 'certificate_grant_id', grant
         sql += [f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,{column},state,purpose,epoch) VALUES('{tenant}','{registration}','{device}','{channel}',1,'{origin}','active','primary',gen_random_uuid())",
                 f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
-        if browser_module == 'react-recovery-browser.mjs' and channel == 'mdm':
+        if channel == 'mdm':
+            # Device reads require the active registration's native source binding.
             sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
-        if browser_module == 'react-execution-access-browser.mjs' and device == 'fixture-mac':
-            # Current source binding is a submission prerequisite, not proof of Apple device/security support.
-            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'mdm.apple',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
         if browser_module in {'react-audit-webhooks-browser.mjs', 'react-execution-access-browser.mjs'} and device == 'fixture-mdm':
             # Same controlled Windows capability prerequisite as rss-mdm device/mod.rs; no device effect claim.
-            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'mdm.windows',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
             sql.append(f"INSERT INTO mdm_windows.capabilities(tenant_id,registration,generation,os_version,edition,session,observed_at) VALUES('{tenant}','{registration}',1,'10.0.22621.0',48,1,1)")
         fact=dict(state=dict(kind='known',value=dict(kind='string',value=device)),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
         sql.append(f"INSERT INTO mdm.manual_assignments(tenant_id,device,field,revision,fact) VALUES('{tenant}','{device}','custom.asset_tag',1,{q(json.dumps(fact))}::jsonb)")
@@ -279,11 +276,16 @@ try:
     if browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
         execution_access_fixture.seed(environment, execution_access, TENANTS[0], INSTANCE, ADMIN)
     phase = 'readiness'
-    backend_readiness = start(binary, initialized, log, expected=None if browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'} else 200)
-    if browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
+    audit_journey = browser_module == 'react-audit-webhooks-browser.mjs'
+    management_only = audit_journey or browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}
+    backend_readiness = start(binary, initialized, log, expected=None if management_only else 200)
+    if management_only:
         phase = 'management-seams'
         # These are actual authenticated reads, not substitute health/authority facts.
-        for path in ('/api/v1/authorization', '/api/v1/operations?limit=1'):
+        paths = ['/api/v1/authorization', '/api/v1/operations?limit=1']
+        if audit_journey:
+            paths += ['/api/v1/audit-events?limit=1', '/api/v1/webhooks/subscriptions?limit=1']
+        for path in paths:
             status, _ = operator.call('GET', path)
             if status != 200:
                 print(json.dumps(dict(phase=phase, path=path.split('?')[0], status=status)), flush=True)
