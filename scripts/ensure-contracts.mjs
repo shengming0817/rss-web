@@ -21,10 +21,12 @@ for (const path of [
   'pnpm-lock.yaml',
   '.prettierrc',
 ]) {
-  hash
-    .update(path)
-    .update('\0')
-    .update(await readFile(new URL(path, root)))
+  const bytes = await readFile(new URL(path, root)).catch((error) => {
+    if (error.code === 'ENOENT' && path === 'contracts/mdm/http-v1.json')
+      throw new Error('MDM HTTP contract is missing. Run make prepare-contract first.')
+    throw error
+  })
+  hash.update(path).update('\0').update(bytes)
 }
 const fingerprint = hash.digest('hex')
 let owner

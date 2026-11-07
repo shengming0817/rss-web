@@ -5,6 +5,7 @@
 ## 开发与演示
 
 ```sh
+make prepare-contract
 pnpm install --frozen-lockfile
 pnpm dev:device-access:demo
 # http://127.0.0.1:4328
