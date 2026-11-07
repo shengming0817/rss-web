@@ -1,12 +1,12 @@
-import type {
-  DiagnosticPage,
-  DiagnosticsContext,
-  Evidence,
-  OperationDetail,
-  OperationDiagnostics as Diagnostics,
-  ReceiptSummary,
-  ExecutionEvidence,
+import {
   requiredOperationCoordinates,
+  type DiagnosticPage,
+  type DiagnosticsContext,
+  type Evidence,
+  type OperationDetail,
+  type OperationDiagnostics as Diagnostics,
+  type ReceiptSummary,
+  type ExecutionEvidence,
   type OperationCoordinates,
 } from '@rss/mdm-audit'
 import { useState, type ReactNode } from 'react'
