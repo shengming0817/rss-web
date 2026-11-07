@@ -28,7 +28,7 @@ async function withSnapshot(bytes, changes, work) {
     await rm(temporary, { recursive: true, force: true })
   }
 }
-test('reads the committed contract without a backend checkout or Git object store', async () => {
+test('reads the prepared contract without a backend checkout or Git object store', async () => {
   const { document, source } = await contractSource()
   assert.equal(source.revision, current.revision)
   assert.equal(document.formatVersion, 1)

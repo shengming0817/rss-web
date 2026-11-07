@@ -11,6 +11,8 @@ jobs:
   # ── 单测 + lint + 构建 ─────────────────────────────────────────────────────
   unit:
     name: typecheck / lint / test / build
+    # The backend and its Cargo Git dependencies are private.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,6 +26,25 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - name: Install MDM export build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libxml2-dev clang pkg-config
+
+      - name: Prepare pinned MDM HTTP contract
+        env:
+          RSS_AZURE_REPOS_READ_PAT: ${{ secrets.RSS_AZURE_REPOS_READ_PAT }}
+        run: |
+          : "${RSS_AZURE_REPOS_READ_PAT:?Configure the Azure Repos read-only PAT for contract preparation}"
+          auth="$(printf ':%s' "$RSS_AZURE_REPOS_READ_PAT" | base64 -w0)"
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://dev.azure.com/shengming0923/rss/_git/.extraHeader
+          export GIT_CONFIG_VALUE_0="Authorization: Basic $auth"
+          export CARGO_NET_GIT_FETCH_WITH_CLI=true
+          unset RSS_AZURE_REPOS_READ_PAT
+          make prepare-contract
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile

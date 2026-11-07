@@ -17,5 +17,7 @@ dist/
 coverage/
 .vitest/
 
-# Generated from the committed MDM HTTP contract
+# Local MDM contract export and generated TypeScript
+/contracts/mdm/http-v1.json
+/contracts/mdm/.prepare-*/
 packages/api/src/generated/

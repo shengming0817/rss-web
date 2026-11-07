@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 
-/** The committed snapshot is the complete input; provenance stays in the producer pin. */
-export async function contractSource(root = new URL('../', import.meta.url)) {
+export async function readContractPin(root = new URL('../', import.meta.url)) {
   const source = JSON.parse(await readFile(new URL('contracts/mdm/source.json', root), 'utf8'))
   if (
     !source ||
@@ -16,8 +15,17 @@ export async function contractSource(root = new URL('../', import.meta.url)) {
       'python3 hack/http_contract_artifact.py --output artifacts/http-contract/http-v1.json'
   )
     throw new Error('Invalid fixed MDM source')
+  return source
+}
+
+export function contractSha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+export async function contractSource(root = new URL('../', import.meta.url)) {
+  const source = await readContractPin(root)
   const bytes = await readFile(new URL('contracts/mdm/http-v1.json', root))
-  if (createHash('sha256').update(bytes).digest('hex') !== source.sha256)
+  if (contractSha256(bytes) !== source.sha256)
     throw new Error('Local MDM contract differs from its pin')
   const document = JSON.parse(bytes.toString())
   if (

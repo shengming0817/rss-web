@@ -1,4 +1,7 @@
-.PHONY: ci
+.PHONY: prepare-contract ci
+prepare-contract:
+	node scripts/prepare-mdm-contract.mjs
+
 ci:
 	@logs=$$(mktemp -d "$${TMPDIR:-/tmp}/rss-web-ci.XXXXXX"); failed=0; index=0; \
 	for check in 'pnpm check:contracts' 'pnpm test:contracts' 'pnpm typecheck' 'pnpm lint' 'pnpm format:check' 'pnpm test:coverage' 'pnpm test:boundary' 'pnpm build:identity' 'pnpm build:mdm' 'pnpm build:ui-preview' 'pnpm build:device-access'; do \
