@@ -1,7 +1,4 @@
-.PHONY: prepare-contract ci
-prepare-contract:
-	node scripts/prepare-mdm-contract.mjs
-
+.PHONY: ci prepare-contract
 ci:
 	@logs=$$(mktemp -d "$${TMPDIR:-/tmp}/rss-web-ci.XXXXXX"); failed=0; index=0; \
 	for check in 'pnpm check:contracts' 'pnpm test:contracts' 'pnpm typecheck' 'pnpm lint' 'pnpm format:check' 'pnpm test:coverage' 'pnpm test:boundary' 'pnpm build:identity' 'pnpm build:mdm' 'pnpm build:ui-preview' 'pnpm build:device-access'; do \
@@ -9,3 +6,6 @@ ci:
 		if sh -c "$$check" >"$$logs/$$index.log" 2>&1; then printf 'PASS\n'; \
 		else failed=1; printf 'FAIL — %s/%s.log\n' "$$logs" "$$index"; tail -n 40 "$$logs/$$index.log"; fi; \
 	done; printf '\nComplete check logs: %s\n' "$$logs"; exit $$failed
+
+prepare-contract:
+	node scripts/prepare-mdm-contract.mjs

@@ -12,7 +12,7 @@ Identity 应用独立装配 `@rss/auth-core` 与 `@rss/auth-http` 的唯一会�
 
 密码操作的 `429 / rate_limited` 必须携带正整数秒数 `Retry-After`，缺失或畸形按协议错误处理。界面按响应时间加该秒数显示本地语言的最早重试时间，清除密码草稿并等待用户明确重新提交；不自动重放。合法 429 保留同租户已接受会话、CSRF 与原到期时间；匿名登录保持匿名，不跨租户恢复旧会话。账户失败窗口从首次失败起固定十分钟，五次失败后等待窗口结束；被拒绝请求不延长窗口。来源预算独立，正确密码也可能受该预算限制，以服务端 Retry-After 为准。自动化使用产品授权范围内的 APIKey 或复用已建立会话，避免循环密码登录；APIKey 的资源权限由消费产品控制。
 
-构建：`pnpm install --frozen-lockfile` 后运行 `pnpm build`，输出 apps/identity/dist。前端独立 Node/Nginx 多阶段镜像通过 `pnpm image:identity --tag rss-identity-web:my-version` 构建当前工作树，不要求 Git revision 或先提交。镜像使用当前 Docker/BuildKit 平台与固定基础镜像摘要，运行身份为 UID/GID 10001:10001；构建复用 `pnpm build:identity` 的类型检查、生产编译及产物安全扫描，无需后端 checkout。
+从干净工作树先运行 `make prepare-contract`，再运行 `pnpm install --frozen-lockfile` 和 `pnpm build`，输出 apps/identity/dist。准备契约后，可通过 `pnpm image:identity --tag rss-identity-web:my-version` 构建当前工作树。Node/Nginx 多阶段镜像使用当前 Docker/BuildKit 平台与固定基础镜像摘要，运行身份为 UID/GID 10001:10001，构建复用 `pnpm build:identity` 的类型检查、生产编译及产物安全扫描。
 
 部署时挂载 `/run/config/gateway.conf`、`/run/config/ui.json`、TLS 证书及私钥；配置与域名不进入静态镜像。#2436 的 renderer 用 `--identity-image` 和 `--web-image` 在目标 daemon 解析 immutable image ID 并写入 Compose，禁止隐式拉取。前后端镜像独立，前端升级不要求重建后端或替换备份；不再生产或消费 candidate.json、OCI tar 或裸二进制候选包。
 
@@ -37,6 +37,7 @@ Vitest JSON 只在内存消费，记录仅投影固定测试 ID、闭合步骤 I
 在与开发宿主 Docker daemon 相同的机器上，进入 rss-web 根目录。终端一运行：
 
 ```sh
+make prepare-contract
 pnpm install --frozen-lockfile
 pnpm dev
 ```
