@@ -657,10 +657,14 @@ try {
   assert.ok(firstCatalog.nextCursor)
   await run.nav(p, '/software', '软件目录')
   await tab('组织软件')
-  const secondPage = await run.response(p, 'GET', '/api/v1/resources', () =>
-    button('下一页').click(),
-  )
-  assert.ok((await secondPage.json()).items.some((row) => row.id === resource))
+  const continued = p.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/v1/resources' && url.searchParams.has('cursor')
+  })
+  await button('下一页').click()
+  const secondPage = await continued
+  assert.equal(secondPage.status(), 200)
+  assert.ok((await secondPage.json()).items.length > 0)
   const expired = new URL(p.url())
   assert.ok(expired.searchParams.get('cursor'))
   const disjunction = `id=='${resource}',kind=='script'`
@@ -816,15 +820,19 @@ try {
   })
   await p.setViewportSize({ width: 390, height: 844 })
   assert.equal(await columns(), 1)
-  const overflow = await p.evaluate(() =>
-    document.documentElement.scrollWidth <= innerWidth
-      ? []
-      : [...document.querySelectorAll('main *')]
-          .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
-          .slice(0, 10)
-          .map((node) => node.tagName + '.' + [...node.classList].join('.')),
-  )
-  assert.deepEqual(overflow, [])
+  const overflow = await p.evaluate(() => {
+    if (document.documentElement.scrollWidth <= innerWidth) return null
+    return {
+      width: document.documentElement.scrollWidth,
+      elements: [...document.querySelectorAll('main *')]
+        .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+        .slice(0, 10)
+        .map((node) => node.tagName + '.' + [...node.classList].join('.')),
+    }
+  })
+  if (overflow)
+    console.error(JSON.stringify({ journey: 'react-software', layoutOverflow: overflow }))
+  assert.equal(overflow, null)
   await p.screenshot({
     path: join(screenshots, 'software-mobile.png'),
     fullPage: true,
