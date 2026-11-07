@@ -46,10 +46,12 @@ async function probe() {
         terminate = undefined
       },
     })
-    if (result.status !== 0 || result.timedOut || interrupted) {
+    if (interrupted) throw new Error('Agent contract probe interrupted')
+    if (result.timedOut) throw new Error(`${cmd} exceeded the Agent probe budget (${timeoutMs}ms)`)
+    if (result.status !== 0) {
       const diagnostic = result.stderr
         .split('\n')
-        .filter((line) => /^(error:|Caused by:|  (failed|error|No such))/.test(line))
+        .filter((line) => /^(fatal:|error:|Caused by:|  (failed|error|No such))/.test(line))
         .slice(0, 8)
         .join('\n')
         .replace(/https?:\/\/[^\s/]+@/g, 'https://[redacted]@')
@@ -105,9 +107,13 @@ async function probe() {
       ),
     )
   } finally {
-    process.off('SIGINT', interrupt)
-    process.off('SIGTERM', interrupt)
-    await rm(scratch, { recursive: true, force: true })
+    try {
+      await rm(scratch, { recursive: true, force: true })
+    } finally {
+      process.off('SIGINT', interrupt)
+      process.off('SIGTERM', interrupt)
+    }
+    if (interrupted) throw new Error('Agent contract probe interrupted; scratch cleaned')
   }
 }
 

@@ -287,7 +287,7 @@ try {
       'real-current-policy-id-alias-tool-name-and-shared-event-directory-navigation-without-history-rewrite',
     )
 
-    run.step('policy-entry-clipboard-and-authorized-alias-withdrawal')
+    run.step('policy-entry-availability-and-authorized-alias-withdrawal')
     const policyPath = '/api/v1/policies/' + policyIds[0]
     await run.nav(
       p,
@@ -302,38 +302,37 @@ try {
       .filter({ hasText: resolved.capability.toolName })
       .waitFor()
     assert.equal(await associations.locator('tbody tr').count(), 2)
-    await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
-    await button('显示 Agent 查看入口').click()
-    await names
-      .locator('tbody tr')
-      .filter({ hasText: f.agent })
-      .getByRole('button', { name: '使用此终端', exact: true })
-      .click()
-    await button('复制链接 · 唯一别名').click()
-    await p.getByRole('status').filter({ hasText: '已复制 · 唯一别名' }).waitFor()
-    const copied = await p.evaluate(() => navigator.clipboard.readText()),
-      uri = new URL(copied),
-      endpoint = await api('GET', '/api/v1/devices/' + encodeURIComponent(f.agent)),
-      registration = endpoint.channels.find(
-        (channel) => channel.channel === 'agent' && channel.status === 'active',
-      )
-    assert.equal(uri.protocol, 'rssmdm:')
-    assert.equal(uri.hostname, 'view')
-    assert.equal(uri.pathname, '/v1/alias/react.audit.0')
-    assert.deepEqual(Object.fromEntries(uri.searchParams), {
-      device: f.agent,
-      generation: String(registration.generation),
-      instance: resolved.capability.instance,
-      registration: registration.registrationId,
-      revision: String(resolved.capability.revision),
-      tenant: f.tenant,
-      version: resolved.capability.version,
+    await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
+    await label('唯一别名').waitFor()
+    await names.getByRole('tab', { name: '名称与入口', exact: true }).click()
+    let releasePolicy
+    const heldPolicy = new Promise((done) => {
+        releasePolicy = done
+      }),
+      otherPolicyPath = '/api/v1/policies/' + policyIds[1]
+    await p.route('**' + otherPolicyPath, async (route) => {
+      if (route.request().method() === 'GET') await heldPolicy
+      await route.continue()
     })
-    await button('复制命令 · 唯一别名').click()
-    await p.waitForFunction(
-      async (expected) => (await navigator.clipboard.readText()) === expected,
-      `rssmdm open '${copied}'`,
-    )
+    await associations
+      .locator('tbody tr')
+      .filter({ hasText: 'react.audit.1' })
+      .getByRole('link')
+      .click()
+    await p.waitForURL((url) => url.searchParams.get('policy') === policyIds[1])
+    assert.equal(await label('唯一别名').count(), 0)
+    releasePolicy()
+    await label('唯一别名').waitFor()
+    assert.equal(await label('唯一别名').inputValue(), 'react.audit.1')
+    await p.unroute('**' + otherPolicyPath)
+    await button('返回来源').click()
+    await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
+    await button('显示 Agent 查看入口').click()
+    await p
+      .getByText('当前 Agent 桌面未接通事件或精确步骤定位；请在管理端查看。', { exact: true })
+      .waitFor()
+    assert.equal(await button('复制链接 · 唯一别名').count(), 0)
+    assert.equal(await button('复制链接 · 共享事件').count(), 0)
     await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
     await label('唯一别名').fill('react.audit.1')
     await label('确认范围、资源、调度与潜在影响').check()
@@ -372,7 +371,7 @@ try {
       { kind: 'alias', alias: 'react.audit.renamed' },
       404,
     )
-    checks.push('real-policy-owner-alias-duplicate-cas-rename-withdraw-and-canonical-clipboard')
+    checks.push('real-policy-owner-alias-duplicate-cas-rename-withdraw-and-unpublished-entry-gate')
 
     run.step('subscription-commit-response-loss-and-explicit-original-replay')
     await run.nav(p, '/webhooks', 'Webhook 集成')

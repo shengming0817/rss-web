@@ -1,6 +1,6 @@
 import { usePendingSelection } from './SelectionGuard'
 import { useSearchParams } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Space } from 'antd'
 import type { DeviceRef } from '@rss/mdm-devices'
 import type { Runtime } from './runtime'
@@ -18,19 +18,20 @@ export function DeviceRetirement({
   locale: Locale
   reference: DeviceRef
 }) {
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const initial = params.get('retirement') ?? ''
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
     action = useAction(),
     [draft, setDraft] = useState(initial),
-    [id, setId] = useState(initial),
     [reason, setReason] = useState(''),
     [approved, setApproved] = useState(false),
     [pending, setPending] = useState<{ id: string; operationId: string; reason: string } | null>(
       null,
     ),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
+    locked = pending !== null && (action.busy || outcome === 'unknown'),
+    id = locked ? pending.id : initial,
     read = useRead(`${binding}/retirement/${reference.kind}/${reference.id}/${id}`, async () => {
       if (!id) return null
       const value = await devices.retirement(id)
@@ -42,9 +43,22 @@ export function DeviceRetirement({
       if (!sameObject && !memberEndpoint) throw new Error('Wrong retirement target')
       return value
     })
-  usePendingSelection(
-    action.busy || (pending !== null && !['confirmed', 'rejected'].includes(outcome)),
-  )
+  usePendingSelection(locked || action.busy)
+  useEffect(() => {
+    if (locked && initial !== id) {
+      const next = new URLSearchParams(params)
+      next.set('retirement', id)
+      setParams(next, { replace: true })
+    }
+  }, [locked, initial, id, params, setParams])
+  useEffect(() => {
+    setDraft(id)
+    setApproved(false)
+    setReason('')
+    setPending(null)
+    setOutcome('none')
+    action.clear()
+  }, [id])
   async function force(change: { id: string; operationId: string; reason: string }) {
     const result = await action.run(() =>
       devices.forceRetirement(change.id, change.operationId, change.reason),
@@ -70,7 +84,11 @@ export function DeviceRetirement({
         className="admin-toolbar"
         layout="inline"
         onFinish={() => {
-          setId(draft)
+          if (locked) return
+          const next = new URLSearchParams(params)
+          if (draft) next.set('retirement', draft)
+          else next.delete('retirement')
+          setParams(next)
           read.reload()
         }}
       >

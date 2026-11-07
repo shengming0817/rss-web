@@ -13,6 +13,7 @@ import type { Locale } from './i18n'
 import {
   CursorControls,
   firstPage,
+  readFailure,
   Failure,
   isUnknown,
   labels,
@@ -31,6 +32,7 @@ export function PolicyEvents({
   events,
   devices,
   runtime,
+  ownerPolicy,
   event,
   locale,
   canSubmit,
@@ -38,6 +40,7 @@ export function PolicyEvents({
   events: EventsUseCases
   devices: DevicesUseCases
   runtime: Runtime
+  ownerPolicy?: string
   event: string | null
   locale: Locale
   canSubmit: boolean
@@ -50,13 +53,20 @@ export function PolicyEvents({
     source = resultReturnPath(params.get('returnTo'))
   usePendingSelection(guard.locked)
   useEffect(() => {
-    if (guard.locked && verified && params.get('eventDevice') !== verified) {
+    if (
+      guard.locked &&
+      verified &&
+      (params.get('eventDevice') !== verified || params.get('policy') !== (ownerPolicy ?? null))
+    ) {
       const next = new URLSearchParams(params)
       next.set('eventDevice', verified)
+      next.set('tab', 'events')
+      if (ownerPolicy) next.set('policy', ownerPolicy)
+      else next.delete('policy')
       for (const key of ['batch', 'member', 'batchCursor', 'memberCursor']) next.delete(key)
       setParams(next, { replace: true })
     }
-  }, [guard.locked, verified, params, setParams])
+  }, [guard.locked, verified, ownerPolicy, params, setParams])
   function select(id: string) {
     const next = new URLSearchParams(params)
     next.set('eventDevice', id)
@@ -68,7 +78,7 @@ export function PolicyEvents({
   return (
     <SelectionGuard.Provider value={guard.register}>
       <Card title={l('独立设备事件', 'Independent device events')}>
-        {source && <Link to={source}>{l('返回来源', 'Return to source')}</Link>}
+        {source && !guard.locked && <Link to={source}>{l('返回来源', 'Return to source')}</Link>}
         <p className="subtitle">
           {l(
             '事件面向一个已核对终端，可匹配多个策略；批次接受、成员决定和设备执行分别读取。',
@@ -245,6 +255,11 @@ function DeviceEvents({
         onRetry={read.reload}
         onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
       />
+      {!!read.error && query.cursor && readFailure(read.error) === 'other' && (
+        <Button onClick={() => setQuery(firstPage(query))}>
+          {l('返回批次首页', 'First batch page')}
+        </Button>
+      )}
       {read.value && (
         <>
           <DataTable
@@ -288,6 +303,7 @@ function DeviceEvents({
           runtime={runtime}
           device={device}
           batch={selected}
+          locked={locked}
           locale={locale}
         />
       )}
@@ -299,12 +315,14 @@ function EventMembers({
   runtime,
   device,
   batch,
+  locked,
   locale,
 }: {
   events: EventsUseCases
   runtime: Runtime
   device: string
   batch: string
+  locked: boolean
   locale: Locale
 }) {
   const l = labels(locale),
@@ -358,17 +376,20 @@ function EventMembers({
       >
         {l('读取成员与进度', 'Read members and progress')}
       </Button>
+      <ReadState locale={locale} busy={detail.busy} error={detail.error} onRetry={detail.reload} />
       <ReadState
         locale={locale}
-        busy={detail.busy || read.busy}
-        error={detail.error ?? read.error}
+        busy={read.busy}
+        error={read.error}
         empty={read.value?.items.length === 0}
-        onRetry={() => {
-          detail.reload()
-          read.reload()
-        }}
+        onRetry={read.reload}
         onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
       />
+      {!!read.error && query.cursor && readFailure(read.error) === 'other' && (
+        <Button onClick={() => setQuery(firstPage(query))}>
+          {l('返回成员首页', 'First member page')}
+        </Button>
+      )}
       {member && (
         <Button
           onClick={() => {
@@ -381,16 +402,46 @@ function EventMembers({
           {l('查看全部成员', 'View all members')}
         </Button>
       )}
-      {detail.value && !read.error && (
+      {detail.value && (
         <>
           <p>
             {detail.value.event} · {l('来源', 'Source')}: {detail.value.request.source.kind} ·{' '}
             {l('截止时间（UTC 秒）', 'Deadline (UTC seconds)')} {detail.value.deadline} ·{' '}
             {detail.value.processingFailure ?? '—'}
           </p>
-          <Link to={auditHref({ view: 'activities', device, batch })}>
-            {l('查看批次管理活动', 'View batch management activity')}
-          </Link>
+          <p>
+            {l('原事件请求', 'Original event request')}: <code>{detail.value.operationId}</code> ·{' '}
+            {l('冻结成员数', 'Frozen member count')}: {detail.value.members}
+          </p>
+          <p>
+            {Object.entries(detail.value.admission)
+              .map(([state, count]) => `${state}: ${count}`)
+              .join(' · ')}
+          </p>
+          {detail.value.request.source.kind === 'policy' && (
+            <p>
+              {l('原来源运行', 'Original source run')}:{' '}
+              {locked ? (
+                detail.value.request.source.runId
+              ) : (
+                <Link
+                  to={executionPath(
+                    'action_run',
+                    detail.value.request.source.runId,
+                    undefined,
+                    source,
+                  )}
+                >
+                  {detail.value.request.source.runId}
+                </Link>
+              )}
+            </p>
+          )}
+          {!locked && (
+            <Link to={auditHref({ view: 'activities', device, batch })}>
+              {l('查看批次管理活动', 'View batch management activity')}
+            </Link>
+          )}
           <EntryCopies
             runtime={runtime}
             locale={locale}
@@ -399,10 +450,6 @@ function EventMembers({
               {
                 label: l('原事件批次', 'Original event batch'),
                 target: { selector: { kind: 'batch', id: batch } },
-              },
-              {
-                label: l('共享事件', 'Shared event'),
-                target: { selector: { kind: 'event', name: detail.value.event } },
               },
             ]}
           />
@@ -419,11 +466,15 @@ function EventMembers({
                 title: l('策略 / 执行版本', 'Policy / execution version'),
                 render: (_, row) => (
                   <>
-                    <Link
-                      to={`/policies?${new URLSearchParams({ policy: row.policyId, tab: 'definition', returnTo: source })}`}
-                    >
-                      {row.policyId}
-                    </Link>{' '}
+                    {locked ? (
+                      row.policyId
+                    ) : (
+                      <Link
+                        to={`/policies?${new URLSearchParams({ policy: row.policyId, tab: 'definition', returnTo: source })}`}
+                      >
+                        {row.policyId}
+                      </Link>
+                    )}{' '}
                     / {row.versionId} · r{row.revision}
                   </>
                 ),
@@ -440,20 +491,26 @@ function EventMembers({
                     ? '—'
                     : row.operations.map((operation) => (
                         <p key={`${operation.reference.kind}/${operation.reference.id}`}>
-                          <Link
-                            to={
-                              operation.reference.kind === 'retirement'
-                                ? retirementPath(device, operation.reference.id, source)
-                                : executionPath(
-                                    operation.reference.kind === 'run' ? 'action_run' : 'command',
-                                    operation.reference.id,
-                                    operation.reference.kind === 'run' ? row.policyId : undefined,
-                                    source,
-                                  )
-                            }
-                          >
-                            {operation.reference.kind}/{operation.reference.id}
-                          </Link>{' '}
+                          {locked ? (
+                            <code>
+                              {operation.reference.kind}/{operation.reference.id}
+                            </code>
+                          ) : (
+                            <Link
+                              to={
+                                operation.reference.kind === 'retirement'
+                                  ? retirementPath(device, operation.reference.id, source)
+                                  : executionPath(
+                                      operation.reference.kind === 'run' ? 'action_run' : 'command',
+                                      operation.reference.id,
+                                      operation.reference.kind === 'run' ? row.policyId : undefined,
+                                      source,
+                                    )
+                              }
+                            >
+                              {operation.reference.kind}/{operation.reference.id}
+                            </Link>
+                          )}{' '}
                           ·{' '}
                           {typeof operation.state === 'string'
                             ? operation.state

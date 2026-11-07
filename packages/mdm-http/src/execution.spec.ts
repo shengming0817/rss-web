@@ -170,3 +170,50 @@ it('binds trust to the current tenant and service and carries the original idemp
   )
   expect(await fixture(null).adapter.trustObservation('device')).toBeNull()
 })
+
+it('projects the exact software attempt step digest from the formal 32-byte wire field', async () => {
+  const stepId = [0, 1, 15, 16, 255, ...Array<number>(27).fill(171)]
+  const value = {
+    kind: 'software',
+    taskId: id,
+    policyId: registrationId,
+    registrationId,
+    device: 'pc',
+    generation: 2,
+    attemptId: id,
+    availableAt: 1,
+    deadline: 100,
+    effect: 'unknown',
+    userAction: null,
+    result: null,
+    state: {
+      delivery: { kind: 'queued' },
+      execution: 'unknown',
+      cancellation: 'none',
+      deadline: 100,
+      startedAt: null,
+    },
+    nodes: [
+      {
+        stepId,
+        definition: {
+          resource: 'package',
+          version: 'v1',
+          variant: 'default',
+          digest: Array<number>(32).fill(1),
+        },
+      },
+    ],
+  }
+  expect(await fixture(value).adapter.run(registrationId, id)).toMatchObject({
+    owner: 'software',
+    attempt: id,
+    nodes: [{ ...value.nodes[0], stepId: '00010f10ff' + 'ab'.repeat(27) }],
+  })
+  await expect(
+    fixture({ ...value, nodes: [{ ...value.nodes[0], stepId: [1] }] }).adapter.run(
+      registrationId,
+      id,
+    ),
+  ).rejects.toThrow()
+})

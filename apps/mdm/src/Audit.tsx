@@ -365,7 +365,13 @@ export function AuditWorkspace({
     setSelected('')
     setInputError(null)
     const href = auditHref(next)
-    setParams(new URLSearchParams(href.split('?')[1] ?? ''))
+    const nextParams = new URLSearchParams(href.split('?')[1] ?? '')
+    if (fixedDevice)
+      for (const key of ['tab', 'endpoint', 'retirement', 'returnTo']) {
+        const value = params.get(key)
+        if (value !== null) nextParams.set(key, value)
+      }
+    setParams(nextParams)
   }
   function submit(value: Draft) {
     try {

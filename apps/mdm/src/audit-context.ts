@@ -38,7 +38,7 @@ const activityFields = [
   'limit',
   'cursor',
 ] as const
-const publicFields: readonly string[] = [
+export const auditContextKeys: readonly string[] = [
   ...new Set([...auditFields, ...activityFields, 'view', 'activity']),
 ]
 function selected(context: AuditContext, fields: readonly string[]) {
@@ -64,7 +64,7 @@ export function readAuditContext(
   fallback: AuditView = 'audit',
 ): AuditContext {
   const values: Record<string, string | number> = { view: fallback }
-  for (const key of publicFields) {
+  for (const key of auditContextKeys) {
     const value = params.get(key)
     if (value === null || value === '') continue
     if (['from', 'until', 'limit'].includes(key)) {
@@ -84,7 +84,7 @@ export function readAuditContext(
 export function auditHref(context: Partial<AuditContext> = {}): string {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(context))
-    if (publicFields.includes(key) && value !== undefined && value !== '')
+    if (auditContextKeys.includes(key) && value !== undefined && value !== '')
       query.set(key, String(value))
   const search = query.toString()
   return '/audit' + (search ? '?' + search : '')

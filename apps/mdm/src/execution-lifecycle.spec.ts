@@ -973,6 +973,9 @@ it('opens the exact linked event batch and member read-only until the user verif
     batch = vi.fn(async () => ({
       id,
       event: 'shared.event',
+      operationId: operation,
+      members: 1,
+      admission: { accepted: 1 },
       request: { source: { kind: 'human' } },
       deadline: 2,
       processingFailure: null,

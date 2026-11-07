@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Collapse, Modal, Segmented, Space, Tag } from 'antd'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type { Policy, PolicyRow } from '@rss/mdm-policies'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
@@ -53,6 +53,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           (grant.scope.kind === 'tenant' || (allDevices && grant.scope.kind === 'all_devices')),
       ) ?? false,
     [params, setParams] = useSearchParams(),
+    navigate = useNavigate(),
     pageLimit = Number(params.get('limit') ?? 20),
     query: Query = {
       limit:
@@ -96,8 +97,13 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
   const linkedPolicy = params.get('policy'),
     canRead = has('policy_read'),
     canInventory = has('inventory_read', true),
-    canOperations = has('operation_read', true)
+    canOperations = has('operation_read', true),
+    returnSource = resultReturnPath(params.get('returnTo'))
   useEffect(() => {
+    if (!linkedPolicy && !guard.locked) {
+      setSelected(null)
+      return
+    }
     if (
       !linkedPolicy ||
       !params.has('tab') ||
@@ -144,6 +150,10 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
   }
   function close() {
     setSelected(null)
+    if (returnSource) {
+      navigate(returnSource)
+      return
+    }
     const next = new URLSearchParams(params)
     for (const key of [
       'policy',
@@ -204,21 +214,18 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           />
         )}
         <ReadState locale={locale} busy={permissions.busy} error={permissions.error} />
-        {linkedPolicy && resultReturnPath(params.get('returnTo')) && (
-          <Link to={resultReturnPath(params.get('returnTo'))!}>
-            {l('返回来源', 'Return to source')}
-          </Link>
-        )}
-        {!linkedPolicy && params.get('tab') === 'events' && params.get('eventDevice') && (
-          <PolicyEvents
-            events={policyEvents}
-            devices={devices}
-            runtime={runtime}
-            event={null}
-            locale={locale}
-            canSubmit={canRead}
-          />
-        )}
+        {!selected &&
+          ((!linkedPolicy && params.get('tab') === 'events' && params.get('eventDevice')) ||
+            guard.locked) && (
+            <PolicyEvents
+              events={policyEvents}
+              devices={devices}
+              runtime={runtime}
+              event={null}
+              locale={locale}
+              canSubmit={canRead}
+            />
+          )}
         <Failure locale={locale} error={action.error} />
         <fieldset className="permission-panel" disabled={action.busy || guard.locked}>
           {canRead && (
@@ -368,9 +375,14 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
             if (!guard.locked && !action.busy) close()
           }}
         >
-          {selected && (
+          {selected && returnSource && (
+            <Button disabled={guard.locked || action.busy} onClick={close}>
+              {l('返回来源', 'Return to source')}
+            </Button>
+          )}
+          {selected && (guard.locked || selected.id === linkedPolicy) ? (
             <SecretTabs
-              key={selected.generation}
+              key={`${selected.id}/${selected.generation}`}
               uiLocale={locale}
               activeKey={params.get('tab') ?? 'definition'}
               onChange={(tab) => {
@@ -476,6 +488,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                       events={policyEvents}
                       devices={devices}
                       runtime={runtime}
+                      ownerPolicy={selected.id}
                       event={selected.baseline?.definition.customEvent ?? null}
                       locale={locale}
                       canSubmit={canRead}
@@ -484,6 +497,8 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                 },
               ]}
             />
+          ) : (
+            selected && <ReadState locale={locale} busy={action.busy} error={action.error} />
           )}
         </Modal>
       </div>

@@ -1,4 +1,4 @@
-import { auditHref, readAuditContext } from './audit-context'
+import { auditContextKeys, auditHref, readAuditContext } from './audit-context'
 // ref: remix-run/react-router packages/react-router/lib/router/utils.ts@react-router@7.9.6
 /** Only public locators on existing owner pages may be carried through result navigation. */
 export function resultReturnPath(value: string | null, expected?: string): string | null {
@@ -43,7 +43,7 @@ export function resultReturnPath(value: string | null, expected?: string): strin
         : path === '/operations'
           ? ['filter', 'cursor', 'operation', 'kind', 'policy', 'returnTo']
           : /^\/devices\/(endpoint|association)\/[^/]+$/.test(path)
-            ? ['tab', 'endpoint', 'retirement', 'returnTo']
+            ? ['tab', 'endpoint', 'retirement', 'returnTo', ...auditContextKeys]
             : []
     if (!fields.length || [...url.searchParams.keys()].some((key) => !fields.includes(key)))
       return null

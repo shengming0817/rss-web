@@ -1,7 +1,7 @@
 import { EntryCopies, type CopyEntry } from './EntryCopies'
 import type { Runtime } from './runtime'
 import { Button, Card, Descriptions } from 'antd'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { Policy, PolicyRow } from '@rss/mdm-policies'
 import type { Locale } from './i18n'
 import type { PoliciesUseCases } from './PolicyPreview'
@@ -60,7 +60,12 @@ export function PolicyNames({
     display = policy.definition.selfService?.presentation['displayName'],
     event = row?.customEvent ?? null
   const entries: CopyEntry[] = []
-  if (row?.toolName && row.versionId && row.revision && row.state !== 'archived') {
+  const eligible =
+    row?.state === 'enabled' &&
+    row.revision === policy.revision &&
+    policy.definition.selfService?.published === true &&
+    ['execution', 'software'].includes(policy.definition.action.kind)
+  if (eligible && row?.toolName && row.versionId && row.revision) {
     const exact = { version: row.versionId, revision: row.revision }
     entries.push(
       {
@@ -86,12 +91,13 @@ export function PolicyNames({
           selector: { kind: 'capability', selector: { kind: 'alias', alias: row.alias } },
         },
       })
-    if (event)
-      entries.push({
-        label: l('共享事件', 'Shared event'),
-        target: { selector: { kind: 'event', name: event } },
-      })
   }
+  if (event)
+    entries.push({
+      label: l('共享事件', 'Shared event'),
+      target: { selector: { kind: 'event', name: event } },
+    })
+
   return (
     <Card title={l('名称与入口', 'Names and entry points')}>
       <ReadState
@@ -125,6 +131,14 @@ export function PolicyNames({
               'A tool name locates one policy. An alias is unique within the tenant; an event may match several policies. Clear and save a field in Definition and publication to withdraw this policy’s alias or event association.',
             )}
           </p>
+          {!eligible && (
+            <p>
+              {l(
+                '仅同修订、已启用并发布的脚本或软件自助策略可复制 Agent 策略入口。',
+                'Agent policy links require the current revision of an enabled and published script or software policy.',
+              )}
+            </p>
+          )}
           <EntryCopies runtime={runtime} locale={locale} entries={entries} />
           {event && (
             <EventAssociations key={event} event={event} policies={policies} locale={locale} />
@@ -145,6 +159,7 @@ function EventAssociations({
   locale: Locale
 }) {
   const l = labels(locale),
+    location = useLocation(),
     [query, setQuery] = useState<Query>({ limit: 20 }),
     read = usePageRead(
       `event-associations/${event}/${query.cursor ?? ''}`,
@@ -189,7 +204,7 @@ function EventAssociations({
                 title: l('所属策略', 'Owning policy'),
                 render: (_, row) => (
                   <Link
-                    to={`/policies?${new URLSearchParams({ policy: row.id, tab: 'definition' })}`}
+                    to={`/policies?${new URLSearchParams({ policy: row.id, tab: 'definition', returnTo: location.pathname + location.search })}`}
                   >
                     {row.toolName ?? row.id}
                   </Link>

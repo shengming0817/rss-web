@@ -278,7 +278,15 @@ export function createExecutionAdapter(
                           : record(value.result)
                         : null,
                     userAction: 'userAction' in value ? nullable(value.userAction, text) : null,
-                    nodes: 'nodes' in value && Array.isArray(value.nodes) ? value.nodes : [],
+                    nodes:
+                      value.kind === 'software'
+                        ? value.nodes.map((node) => ({
+                            ...node,
+                            stepId: node.stepId
+                              .map((byte) => byte.toString(16).padStart(2, '0'))
+                              .join(''),
+                          }))
+                        : [],
                   }
           return detail
         },

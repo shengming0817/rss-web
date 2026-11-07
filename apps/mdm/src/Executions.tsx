@@ -96,11 +96,7 @@ function ExecutionFacts({
     const selector = { kind: 'task' as const, task: detail.id, attempt: detail.attempt }
     entries.push({ label: l('原任务', 'Original task'), target: { selector } })
     if ('nodes' in detail) {
-      const steps = new Set(
-        detail.nodes.flatMap((node) =>
-          typeof node['stepId'] === 'string' ? [node['stepId']] : [],
-        ),
-      )
+      const steps = new Set(detail.nodes.map((node) => node.stepId))
       for (const step of steps)
         entries.push({ label: `${l('步骤', 'Step')} ${step}`, target: { selector, step } })
     }
