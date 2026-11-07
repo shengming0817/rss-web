@@ -1,24 +1,31 @@
-import {
-  entryNodes,
-  entryUriBytes,
-  unaddressableAliases,
-  type EntryNamespace,
-  type EntrySelector,
-} from './agent-entry.generated'
+type EntryNamespace = {
+  readonly instance: string
+  readonly tenant: string
+  readonly device: string
+  readonly registration: string
+  readonly generation: number
+}
+
+type PolicyAddress =
+  | { readonly kind: 'id'; readonly id: string }
+  | { readonly kind: 'tool_name'; readonly name: string }
+  | { readonly kind: 'alias'; readonly alias: string }
 
 export type EntryTarget = {
-  readonly selector: Extract<
-    EntrySelector,
-    { kind: 'capability' | 'event' | 'batch' | 'task' | 'activity' | 'node' }
-  >
+  readonly selector:
+    | { readonly kind: 'capability'; readonly selector: PolicyAddress }
+    | { readonly kind: 'event'; readonly name: string }
+    | { readonly kind: 'batch' | 'activity' | 'node'; readonly id: string }
+    | { readonly kind: 'task'; readonly task: string; readonly attempt: string }
   readonly version?: string
   readonly revision?: number
   readonly step?: string
 }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const name = /^[a-z0-9._-]{1,64}$/
-export const addressableAlias = (alias: string) =>
-  name.test(alias) && !(unaddressableAliases as readonly string[]).includes(alias)
+const entryUriBytes = 4096
+// URL parsers remove whole dot segments, including percent-encoded dots.
+const nameSegment = (value: string) => (value === '.' || value === '..' ? `~${value}` : value)
 const bytes = new TextEncoder()
 const id = (value: string) =>
   typeof value === 'string' && uuid.test(value) && /[1-9a-f]/.test(value)
@@ -90,21 +97,20 @@ export function agentViewEntry(target: EntryTarget, ns: EntryNamespace) {
       } else if (address.kind === 'alias') {
         only(address, ['kind', 'alias'])
         kind = 'alias'
-        value = address.alias
-        if (!addressableAlias(value)) throw new Error('Unaddressable Agent alias')
+        if (!name.test(address.alias)) throw new Error('Invalid Agent alias')
+        value = nameSegment(address.alias)
       } else throw new Error('Invalid Agent capability')
       break
     }
     case 'event':
       only(selector, ['kind', 'name'])
-      value = selector.name
-      if (!name.test(value)) throw new Error('Invalid Agent event')
+      if (!name.test(selector.name)) throw new Error('Invalid Agent event')
+      value = nameSegment(selector.name)
       break
     case 'node':
       only(selector, ['kind', 'id'])
       value = selector.id
-      if (value !== 'tasks.management' || !entryNodes.includes(value))
-        throw new Error('Invalid enterprise page node')
+      if (value !== 'tasks.management') throw new Error('Invalid enterprise page node')
       break
     case 'batch':
       only(selector, ['kind', 'id'])

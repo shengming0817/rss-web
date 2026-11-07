@@ -1,4 +1,4 @@
-import { Button, Space } from 'antd'
+import { Alert, Button, Space } from 'antd'
 import { useRef, useState } from 'react'
 import type { Endpoint } from '@rss/mdm-devices'
 import type { Runtime } from './runtime'
@@ -7,20 +7,9 @@ import { Failure, ReadState, codeOf, readFailure, labels, useAction, usePageRead
 import { useAdministration } from './useAdministration'
 import { useProtectedDelivery } from './useProtectedDelivery'
 import { EndpointPicker } from './EndpointPicker'
-import { addressableAlias, agentViewEntry, type EntryTarget } from './agent-entry'
+import { agentViewEntry, type EntryTarget } from './agent-entry'
 
 export type CopyEntry = { readonly label: string; readonly target: EntryTarget }
-const desktopUnavailable = (entry: CopyEntry) =>
-  entry.target.selector.kind === 'event' || entry.target.step !== undefined
-function unaddressableAlias({ target: { selector } }: CopyEntry) {
-  return (
-    selector.kind === 'capability' &&
-    selector.selector.kind === 'alias' &&
-    !addressableAlias(selector.selector.alias)
-  )
-}
-const unavailable = (entry: CopyEntry) =>
-  desktopUnavailable(entry) || entry.target.selector.kind === 'batch' || unaddressableAlias(entry)
 type Registration = { readonly registrationId: string; readonly generation: number }
 function agentRegistration(endpoint: Endpoint | undefined, expected?: Registration) {
   const active = endpoint?.channels.filter(
@@ -52,13 +41,12 @@ export function EntryCopies({
     [open, setOpen] = useState(false),
     [chosen, setChosen] = useState<string>(),
     selected = device ?? chosen,
-    usable = entries.filter((entry) => !unavailable(entry)),
     { devices, binding } = useAdministration(runtime),
     delivery = useProtectedDelivery(undefined, open),
     read = usePageRead(
       `${binding}/agent-entry-device/${open}/${selected ?? ''}`,
       (signal) =>
-        open && selected && usable.length
+        open && selected && entries.length
           ? devices.endpoint(selected, signal)
           : Promise.resolve(undefined),
       { retryReadConflict: true },
@@ -68,10 +56,11 @@ export function EntryCopies({
     [copied, setCopied] = useState(''),
     context = JSON.stringify([selected, expected, entries]),
     latest = useRef(context),
-    stale = codeOf(copy.error) === 'registration_changed' || readFailure(copy.error) === 'denied'
+    copyError = codeOf(copy.error),
+    stale = copyError === 'registration_changed' || readFailure(copy.error) === 'denied'
   latest.current = context
   async function write(entry: CopyEntry, command: boolean) {
-    if (!selected || !current || unavailable(entry)) return
+    if (!selected || !current) return
     setCopied('')
     const epoch = delivery.capture()
     const stillCurrent = () =>
@@ -104,9 +93,9 @@ export function EntryCopies({
       const content = verify()
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'text/plain': content })])
-      } catch (error) {
+      } catch {
         await content
-        throw error
+        throw { cause: 'client', code: 'clipboard_unavailable' }
       }
     })
     if (result.ok && stillCurrent()) setCopied(entry.label)
@@ -129,35 +118,11 @@ export function EntryCopies({
         <>
           <p>
             {l(
-              '复制的链接只打开同一租户和注册下的查看入口。Agent 会重新核对身份和权限。',
-              'Copied links open a view for this tenant and registration. Agent checks identity and permission again.',
+              'Agent 会核对当前租户和注册，再打开查看入口。',
+              'Agent checks the current tenant and registration before opening the view.',
             )}
           </p>
-          {entries.some(desktopUnavailable) && (
-            <p>
-              {l(
-                '当前 Agent 桌面未接通事件或精确步骤定位；请在管理端查看。',
-                'The current Agent desktop cannot open events or exact steps. View them in the management console.',
-              )}
-            </p>
-          )}
-          {entries.some((entry) => entry.target.selector.kind === 'batch') && (
-            <p>
-              {l(
-                '当前 Agent 无法可靠查询此类活动批次；请在管理端查看。',
-                'The current Agent cannot reliably query these activity batches. View them in the management console.',
-              )}
-            </p>
-          )}
-          {entries.some(unaddressableAlias) && (
-            <p>
-              {l(
-                '当前别名无法生成 Agent 查看入口；请使用策略 ID、稳定工具名或更换别名。',
-                'This alias cannot form an Agent view address. Use the policy ID or stable tool name, or change the alias.',
-              )}
-            </p>
-          )}
-          {!device && usable.length > 0 && (
+          {!device && (
             <EndpointPicker
               devices={devices}
               locale={locale}
@@ -169,7 +134,17 @@ export function EntryCopies({
             />
           )}
           <ReadState locale={locale} busy={read.busy} error={read.error} onRetry={read.reload} />
-          <Failure locale={locale} error={copy.error} kind="read" />
+          {copyError === 'clipboard_unavailable' ? (
+            <Alert
+              type="error"
+              title={l(
+                '无法写入剪贴板，请检查浏览器权限。',
+                'Check browser clipboard permissions and try again.',
+              )}
+            />
+          ) : (
+            <Failure locale={locale} error={copy.error} kind="read" />
+          )}
           {stale && (
             <Button
               onClick={() => {
@@ -180,7 +155,7 @@ export function EntryCopies({
               {l('重新读取当前注册', 'Read current registration again')}
             </Button>
           )}
-          {usable.length > 0 && selected && !read.busy && !read.error && !current && (
+          {selected && !read.busy && !read.error && !current && (
             <p>
               {l(
                 '缺少匹配的有效 Agent 注册，无法复制此入口。',
@@ -190,18 +165,22 @@ export function EntryCopies({
           )}
           {current &&
             !stale &&
-            usable.map((entry) => (
-              <p key={entry.label}>
+            entries.map((entry) => (
+              <div key={entry.label}>
                 <Space wrap>
                   <span>{entry.label}</span>
                   <Button disabled={copy.busy} onClick={() => void write(entry, false)}>
                     {l('复制链接', 'Copy link')} · {entry.label}
                   </Button>
-                  <Button disabled={copy.busy} onClick={() => void write(entry, true)}>
+                  <Button
+                    title={l('适用于 macOS Shell 和 PowerShell', 'For macOS shells and PowerShell')}
+                    disabled={copy.busy}
+                    onClick={() => void write(entry, true)}
+                  >
                     {l('复制命令', 'Copy command')} · {entry.label}
                   </Button>
                 </Space>
-              </p>
+              </div>
             ))}
           {copied && (
             <p role="status">

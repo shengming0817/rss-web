@@ -70,6 +70,37 @@ try {
     assert.fail('bounded scope computation')
   }
   await run.login(p)
+  run.step('copy-original-agent-batch')
+  const agentEvent = await api(
+    'POST',
+    `/api/v1/devices/${f.agent}/policy-events`,
+    { operationId: randomUUID(), event: 'react.policy.entry-copy', source: { kind: 'human' } },
+    202,
+  )
+  await run.nav(
+    p,
+    `/policies?${new URLSearchParams({ tab: 'events', eventDevice: f.agent, batch: agentEvent.batchId })}`,
+    '策略与部署',
+  )
+  await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+  await button('显示 Agent 查看入口').click()
+  await button('复制命令 · 原事件批次').click()
+  await p.getByRole('status').filter({ hasText: '已复制 · 原事件批次' }).waitFor()
+  const copiedBatch = await p.evaluate(() => globalThis.navigator.clipboard.readText())
+  assert.ok(copiedBatch.startsWith("rssmdm open '"))
+  assert.ok(copiedBatch.endsWith("'"))
+  const batchUri = new URL(copiedBatch.slice("rssmdm open '".length, -1))
+  assert.equal(batchUri.pathname, `/v1/batch/${agentEvent.batchId}`)
+  assert.equal(batchUri.searchParams.get('device'), f.agent)
+  assert.equal(batchUri.searchParams.get('tenant'), f.tenant)
+  const registered = (await api('GET', `/api/v1/devices/${f.agent}`)).channels.find(
+    (channel) => channel.channel === 'agent' && channel.status === 'active',
+  )
+  assert.ok(registered)
+  assert.equal(batchUri.searchParams.get('instance'), f.instance)
+  assert.equal(batchUri.searchParams.get('registration'), registered.registrationId)
+  assert.equal(batchUri.searchParams.get('generation'), String(registered.generation))
+  checks.push('real-batch-copy-for-current-agent-registration')
   await run.nav(p, '/groups', '设备组')
   run.step('group-unsaved-readonly-sample')
   const beforeGroups = await api('GET', '/api/v1/groups?fields=id&limit=100')
@@ -633,11 +664,6 @@ try {
   await p.getByRole('link', { name: /返回来源 \/ 设备目录/ }).click()
   await p.waitForURL(originalBatchUrl)
   await p.getByText('批次成员与原操作进度', { exact: true }).waitFor()
-  await button('显示 Agent 查看入口').click()
-  await p
-    .getByText('当前 Agent 无法可靠查询此类活动批次；请在管理端查看。', { exact: true })
-    .waitFor()
-  assert.equal(await button('复制命令 · 原事件批次').count(), 0)
   assert.equal(run.count(p, 'POST', path), 1)
   checks.push('real-batch-member-opens-original-retirement-and-returns-without-replay')
 
