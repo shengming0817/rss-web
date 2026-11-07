@@ -719,6 +719,7 @@ it.each([false, true])(
   async (mismatch) => {
     const id = '11111111-1111-4111-8111-111111111111',
       policy = '22222222-2222-4222-8222-222222222222',
+      another = '33333333-3333-4333-8333-333333333333',
       path = `/operations?kind=action_run&operation=${id}&policy=${policy}&attempt=${mismatch ? policy : id}&registration=${id}&generation=1&version=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
       detail = vi.fn(async () => ({
         item: null,
@@ -758,7 +759,18 @@ it.each([false, true])(
               generation: 1,
             }),
             detail,
-            list: async () => ({ items: [], nextCursor: null }),
+            list: async () => ({
+              items: [
+                {
+                  id: another,
+                  kind: 'action_run',
+                  device: 'device-a',
+                  policy,
+                  status: 'succeeded',
+                },
+              ],
+              nextCursor: null,
+            }),
             statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
           },
         }),
@@ -776,6 +788,14 @@ it.each([false, true])(
       expect(host.textContent).toContain('原尝试详情不可用')
       expect(host.textContent).not.toContain('install-original')
       expect(host.textContent).not.toContain('显示 Agent 查看入口')
+      await act(async () => button(another).click())
+      await act(async () => button('读取详细结果与证据').click())
+      expect(detail).toHaveBeenLastCalledWith(
+        { kind: 'action_run', id: another, policy },
+        expect.any(AbortSignal),
+      )
+      expect(host.textContent).not.toContain('原尝试详情不可用')
+      expect(host.textContent).toContain('install-original')
       return
     }
     expect(host.textContent).toContain('原尝试的冻结节点')
@@ -784,12 +804,16 @@ it.each([false, true])(
   },
 )
 
-it('keeps a deep-linked retirement read-only when any affected endpoint lacks revocation authority', async () => {
+it('keeps a retirement read-only without every grant, and never treats a failed preflight as a write', async () => {
   const id = '11111111-1111-4111-8111-111111111111'
   const forceRetirement = vi.fn()
+  const effective = vi.fn(async () => {
+    throw decodeMdmError(503, { code: 'service_unavailable' })
+  })
   const runtime = {
     administration: () => ({
       binding: 'retirement',
+      authorization: { effective },
       devices: {
         retirement: async () => ({
           target: {
@@ -819,26 +843,43 @@ it('keeps a deep-linked retirement read-only when any affected endpoint lacks re
       },
     }),
   } as unknown as Runtime
-  await act(async () =>
-    root.render(
-      h(
-        MemoryRouter,
-        { initialEntries: [`/devices/endpoint/device-a?tab=retirement&retirement=${id}`] },
-        h(DeviceRetirement, {
-          runtime,
-          locale: 'zh',
-          reference: { kind: 'endpoint', id: 'device-a' },
-          grants: [
-            { operation: 'inventory_read', scope: { kind: 'all_devices' } },
-            { operation: 'device_unmanage', scope: { kind: 'device', id: 'device-a' } },
-          ],
-        }),
+  const mount = (scope: { kind: 'all_devices' } | { kind: 'device'; id: string }) =>
+    act(async () =>
+      root.render(
+        h(
+          MemoryRouter,
+          { initialEntries: [`/devices/endpoint/device-a?tab=retirement&retirement=${id}`] },
+          h(DeviceRetirement, {
+            runtime,
+            locale: 'zh',
+            reference: { kind: 'endpoint', id: 'device-a' },
+            grants: [
+              { operation: 'inventory_read', scope: { kind: 'all_devices' } },
+              { operation: 'device_unmanage', scope },
+            ],
+          }),
+        ),
       ),
-    ),
-  )
+    )
+  await mount({ kind: 'device', id: 'device-a' })
   expect(host.textContent).toContain('device-b')
   expect(host.textContent).not.toContain('请求强制撤销')
+  await mount({ kind: 'all_devices' })
+  const reason = host.querySelector<HTMLTextAreaElement>('textarea')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+      reason,
+      'retire',
+    )
+    reason.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => host.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  expect(button('请求强制撤销').disabled).toBe(false)
+  await act(async () => button('请求强制撤销').click())
+  expect(effective).toHaveBeenCalledOnce()
   expect(forceRetirement).not.toHaveBeenCalled()
+  expect(host.textContent).not.toContain('显式重提原撤销请求')
+  expect(host.querySelector<HTMLInputElement>('input[aria-label="退管标识"]')!.disabled).toBe(false)
 })
 
 it('retains an unknown recovery request while refreshing the containing result detail', async () => {

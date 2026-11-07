@@ -371,17 +371,22 @@ try {
       { kind: 'alias', alias: 'react.audit.renamed' },
       404,
     )
-    const archived = await api('DELETE', policyPath, {
-      operationId: randomUUID(),
-      expectedRevision: withdrawn.revision,
-    })
-    assert.equal(archived.state, 'archived')
+    await button('返回并重新读取策略').click()
     await run.nav(
       p,
       `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'names' })}`,
       '策略与部署',
     )
     await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
+    const archived = await api('DELETE', policyPath, {
+      operationId: randomUUID(),
+      expectedRevision: withdrawn.revision,
+    })
+    assert.equal(archived.state, 'archived')
+    await button('重新读取名称与入口').click()
+    await names
+      .getByText(`${archived.versionId} · r${archived.revision}`, { exact: true })
+      .waitFor()
     await names.getByText(resolved.capability.toolName, { exact: true }).waitFor()
     assert.equal(await button('显示 Agent 查看入口').count(), 0)
     checks.push('real-policy-owner-alias-duplicate-cas-rename-withdraw-and-unpublished-entry-gate')

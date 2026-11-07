@@ -35,7 +35,11 @@ export function PolicyNames({
       `policy-names/${policy.id}/${policy.revision}`,
       async (signal) => {
         const page = await policies.list(
-          { limit: 2, fields: nameFields, filter: `id=='${policy.id}';state=='${policy.state}'` },
+          {
+            limit: 2,
+            fields: nameFields,
+            filter: `id=='${policy.id}';state=in=(enabled,disabled,archived)`,
+          },
           signal,
         )
         const row = page.items[0]
@@ -99,7 +103,14 @@ export function PolicyNames({
     })
 
   return (
-    <Card title={l('名称与入口', 'Names and entry points')}>
+    <Card
+      title={l('名称与入口', 'Names and entry points')}
+      extra={
+        <Button disabled={identity.busy} onClick={identity.reload}>
+          {l('重新读取名称与入口', 'Read names and entry points again')}
+        </Button>
+      }
+    >
       <ReadState
         locale={locale}
         busy={identity.busy}

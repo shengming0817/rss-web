@@ -77,11 +77,22 @@ export function DeviceRetirement({
   }, [canForce])
   async function force(change: { id: string; operationId: string; reason: string }) {
     if (!canForce || change.id !== id) return
+    let dispatched = false
     const result = await action.run(async () => {
       if (!allowed((await authorization.effective()).grants))
         throw { cause: 'client', code: 'forbidden' }
+      dispatched = true
       return devices.forceRetirement(change.id, change.operationId, change.reason)
     })
+    // A failed authority read did not send a new revocation. If this was an
+    // explicit retry, keep any earlier unknown write and its original identity.
+    if (!dispatched) {
+      if (outcome !== 'unknown') {
+        setPending(null)
+        setApproved(false)
+      }
+      return
+    }
     setOutcome((previous) =>
       result.ok
         ? 'confirmed'

@@ -402,6 +402,7 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
                       next.set('kind', row.kind)
                       if (row.policy) next.set('policy', row.policy)
                       else next.delete('policy')
+                      for (const key of originalRunKeys) next.delete(key)
                       setParams(next)
                     }}
                   >
