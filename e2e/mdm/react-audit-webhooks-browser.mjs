@@ -287,6 +287,110 @@ try {
       'real-current-policy-id-alias-tool-name-and-shared-event-directory-navigation-without-history-rewrite',
     )
 
+    run.step('policy-entry-availability-and-authorized-alias-withdrawal')
+    const policyPath = '/api/v1/policies/' + policyIds[0]
+    await run.nav(
+      p,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'names' })}`,
+      '策略与部署',
+    )
+    const names = p.locator('.ant-modal:visible')
+    await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
+    const associations = names.getByRole('region', { name: '当前事件关联成员' })
+    await associations
+      .locator('tbody tr')
+      .filter({ hasText: resolved.capability.toolName })
+      .waitFor()
+    assert.equal(await associations.locator('tbody tr').count(), 2)
+    await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
+    await label('唯一别名').waitFor()
+    await names.getByRole('tab', { name: '名称与入口', exact: true }).click()
+    let releasePolicy
+    const heldPolicy = new Promise((done) => {
+        releasePolicy = done
+      }),
+      otherPolicyPath = '/api/v1/policies/' + policyIds[1]
+    await p.route('**' + otherPolicyPath, async (route) => {
+      if (route.request().method() === 'GET') await heldPolicy
+      await route.continue()
+    })
+    await associations
+      .locator('tbody tr')
+      .filter({ hasText: 'react.audit.1' })
+      .getByRole('link')
+      .click()
+    await p.waitForURL((url) => url.searchParams.get('policy') === policyIds[1])
+    assert.equal(await label('唯一别名').count(), 0)
+    releasePolicy()
+    await label('唯一别名').waitFor()
+    assert.equal(await label('唯一别名').inputValue(), 'react.audit.1')
+    await p.unroute('**' + otherPolicyPath)
+    await button('返回来源').click()
+    await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
+    await button('显示 Agent 查看入口').click()
+    await p
+      .getByText('当前 Agent 桌面未接通事件或精确步骤定位；请在管理端查看。', { exact: true })
+      .waitFor()
+    assert.equal(await button('复制链接 · 唯一别名').count(), 0)
+    assert.equal(await button('复制链接 · 共享事件').count(), 0)
+    await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
+    await label('唯一别名').fill('react.audit.1')
+    await label('确认范围、资源、调度与潜在影响').check()
+    await run.response(p, 'POST', policyPath, () => button('保存策略定义').click(), 409)
+    await p
+      .getByText('保存冲突。请重新读取策略修订；若别名被其他策略占用，请换用可用别名。', {
+        exact: true,
+      })
+      .waitFor()
+    await label('唯一别名').fill('react.audit.renamed')
+    await label('共享事件名').fill('')
+    await label('确认范围、资源、调度与潜在影响').check()
+    await run.response(p, 'POST', policyPath, () => button('保存策略定义').click())
+    await api('POST', '/api/v1/policies/resolve', { kind: 'alias', alias: 'react.audit.0' }, 404)
+    const renamed = await api('POST', '/api/v1/policies/resolve', {
+      kind: 'alias',
+      alias: 'react.audit.renamed',
+    })
+    assert.equal(renamed.policy.id, policyIds[0])
+    assert.equal(renamed.policy.definition.customEvent, null)
+    await button('返回并重新读取策略').click()
+    await run.nav(
+      p,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'definition' })}`,
+      '策略与部署',
+    )
+    await label('唯一别名').fill('')
+    await label('确认范围、资源、调度与潜在影响').check()
+    await run.response(p, 'POST', policyPath, () => button('保存策略定义').click())
+    const withdrawn = await api('GET', policyPath)
+    assert.equal(withdrawn.definition.alias, null)
+    assert.equal(withdrawn.definition.customEvent, null)
+    await api(
+      'POST',
+      '/api/v1/policies/resolve',
+      { kind: 'alias', alias: 'react.audit.renamed' },
+      404,
+    )
+    await button('返回并重新读取策略').click()
+    await run.nav(
+      p,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'names' })}`,
+      '策略与部署',
+    )
+    await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
+    const archived = await api('DELETE', policyPath, {
+      operationId: randomUUID(),
+      expectedRevision: withdrawn.revision,
+    })
+    assert.equal(archived.state, 'archived')
+    await button('重新读取名称与入口').click()
+    await names
+      .getByText(`${archived.versionId} · r${archived.revision}`, { exact: true })
+      .waitFor()
+    await names.getByText(resolved.capability.toolName, { exact: true }).waitFor()
+    assert.equal(await button('显示 Agent 查看入口').count(), 0)
+    checks.push('real-policy-owner-alias-duplicate-cas-rename-withdraw-and-unpublished-entry-gate')
+
     run.step('subscription-commit-response-loss-and-explicit-original-replay')
     await run.nav(p, '/webhooks', 'Webhook 集成')
     await button('新建 Webhook 订阅').click()
@@ -692,7 +796,13 @@ try {
       JSON.stringify({ journey: 'react-audit-webhooks', publicFailureScreenshot: directory }),
     )
   }
-  console.error(JSON.stringify({ journey: 'react-audit-webhooks', classification: error?.name }))
+  console.error(
+    JSON.stringify({
+      journey: 'react-audit-webhooks',
+      classification: error?.name,
+      location: error?.stack?.match(/react-audit-webhooks-browser\.mjs:\d+:\d+/)?.[0],
+    }),
+  )
 } finally {
   await run.finish(failure)
 }

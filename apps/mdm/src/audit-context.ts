@@ -4,11 +4,14 @@ import {
   type ActivityQuery,
   type AuditQuery,
 } from '@rss/mdm-audit'
+import { uuid } from '@rss/mdm-inventory'
 
 export type AuditView = 'audit' | 'timeline' | 'activities'
 export interface AuditContext extends AuditQuery, ActivityQuery {
   readonly view: AuditView
   readonly activity?: string | undefined
+  /** Web narrows the current server task page by this original coordinate. */
+  readonly attempt?: string | undefined
 }
 const auditFields = [
   'targetId',
@@ -38,8 +41,8 @@ const activityFields = [
   'limit',
   'cursor',
 ] as const
-const publicFields: readonly string[] = [
-  ...new Set([...auditFields, ...activityFields, 'view', 'activity']),
+export const auditContextKeys: readonly string[] = [
+  ...new Set([...auditFields, ...activityFields, 'view', 'activity', 'attempt']),
 ]
 function selected(context: AuditContext, fields: readonly string[]) {
   return Object.fromEntries(
@@ -54,6 +57,10 @@ export function factQuery(context: AuditContext): AuditQuery {
   return result
 }
 export function activityQuery(context: AuditContext): ActivityQuery {
+  if (context.view === 'activities' && context.attempt !== undefined) {
+    if (!context.task) throw new Error('Original attempt requires a task')
+    uuid(context.attempt)
+  }
   const result = selected(context, activityFields) as ActivityQuery
   validateActivityQuery(result)
   return result
@@ -64,7 +71,7 @@ export function readAuditContext(
   fallback: AuditView = 'audit',
 ): AuditContext {
   const values: Record<string, string | number> = { view: fallback }
-  for (const key of publicFields) {
+  for (const key of auditContextKeys) {
     const value = params.get(key)
     if (value === null || value === '') continue
     if (['from', 'until', 'limit'].includes(key)) {
@@ -77,6 +84,7 @@ export function readAuditContext(
   if (!['audit', 'timeline', 'activities'].includes(String(values['view'])))
     throw new Error('Invalid audit view')
   const context = values as unknown as AuditContext
+  if (context.attempt && context.view !== 'activities') throw new Error('Wrong attempt view')
   factQuery(context)
   activityQuery(context)
   return context
@@ -84,7 +92,7 @@ export function readAuditContext(
 export function auditHref(context: Partial<AuditContext> = {}): string {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(context))
-    if (publicFields.includes(key) && value !== undefined && value !== '')
+    if (auditContextKeys.includes(key) && value !== undefined && value !== '')
       query.set(key, String(value))
   const search = query.toString()
   return '/audit' + (search ? '?' + search : '')

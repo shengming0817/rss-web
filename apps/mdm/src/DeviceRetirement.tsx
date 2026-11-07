@@ -1,33 +1,41 @@
 import { usePendingSelection } from './SelectionGuard'
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Space } from 'antd'
 import type { DeviceRef } from '@rss/mdm-devices'
+import type { Grant } from '@rss/mdm-authorization'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { Failure, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { DataTable } from './DataTable'
 import { Status, timestamp } from './DevicePresentation'
+import { devicePermission } from './DeviceSecurity'
 export function DeviceRetirement({
   runtime,
   locale,
   reference,
+  grants,
 }: {
   runtime: Runtime
   locale: Locale
   reference: DeviceRef
+  grants: readonly Grant[]
 }) {
+  const [params, setParams] = useSearchParams()
+  const initial = params.get('retirement') ?? ''
   const l = labels(locale),
-    { devices, binding } = useAdministration(runtime),
+    { devices, binding, authorization } = useAdministration(runtime),
     action = useAction(),
-    [draft, setDraft] = useState(''),
-    [id, setId] = useState(''),
+    [draft, setDraft] = useState(initial),
     [reason, setReason] = useState(''),
     [approved, setApproved] = useState(false),
     [pending, setPending] = useState<{ id: string; operationId: string; reason: string } | null>(
       null,
     ),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
+    locked = pending !== null && (action.busy || outcome === 'unknown'),
+    id = locked ? pending.id : initial,
     read = useRead(`${binding}/retirement/${reference.kind}/${reference.id}/${id}`, async () => {
       if (!id) return null
       const value = await devices.retirement(id)
@@ -38,14 +46,53 @@ export function DeviceRetirement({
           value.target.members.some((m) => m.device === reference.id)
       if (!sameObject && !memberEndpoint) throw new Error('Wrong retirement target')
       return value
-    })
-  usePendingSelection(
-    action.busy || (pending !== null && !['confirmed', 'rejected'].includes(outcome)),
-  )
+    }),
+    channels = read.value?.channels ?? [],
+    allowed = (current: readonly Grant[]) =>
+      channels.length > 0 &&
+      channels.every(
+        (channel) =>
+          devicePermission(current, channel.device, 'inventory_read') &&
+          devicePermission(current, channel.device, 'device_unmanage'),
+      ),
+    canForce = allowed(grants)
+  usePendingSelection(locked || action.busy)
+  useEffect(() => {
+    if (locked && initial !== id) {
+      const next = new URLSearchParams(params)
+      next.set('retirement', id)
+      setParams(next, { replace: true })
+    }
+  }, [locked, initial, id, params, setParams])
+  useEffect(() => {
+    setDraft(id)
+    setApproved(false)
+    setReason('')
+    setPending(null)
+    setOutcome('none')
+    action.clear()
+  }, [id])
+  useEffect(() => {
+    if (!canForce) setApproved(false)
+  }, [canForce])
   async function force(change: { id: string; operationId: string; reason: string }) {
-    const result = await action.run(() =>
-      devices.forceRetirement(change.id, change.operationId, change.reason),
-    )
+    if (!canForce || change.id !== id) return
+    let dispatched = false
+    const result = await action.run(async () => {
+      if (!allowed((await authorization.effective()).grants))
+        throw { cause: 'client', code: 'forbidden' }
+      dispatched = true
+      return devices.forceRetirement(change.id, change.operationId, change.reason)
+    })
+    // A failed authority read did not send a new revocation. If this was an
+    // explicit retry, keep any earlier unknown write and its original identity.
+    if (!dispatched) {
+      if (outcome !== 'unknown') {
+        setPending(null)
+        setApproved(false)
+      }
+      return
+    }
     setOutcome((previous) =>
       result.ok
         ? 'confirmed'
@@ -67,7 +114,11 @@ export function DeviceRetirement({
         className="admin-toolbar"
         layout="inline"
         onFinish={() => {
-          setId(draft)
+          if (locked) return
+          const next = new URLSearchParams(params)
+          if (draft) next.set('retirement', draft)
+          else next.delete('retirement')
+          setParams(next)
           read.reload()
         }}
       >
@@ -111,36 +162,38 @@ export function DeviceRetirement({
               { title: l('受阻原因', 'Block reason'), dataIndex: 'reason' },
             ]}
           />
-          <div className="device-editor">
-            <Input.TextArea
-              aria-label={l('强制撤销理由', 'Force-revocation reason')}
-              value={reason}
-              maxLength={2048}
-              disabled={pending !== null || action.busy}
-              onChange={(event) => setReason(event.target.value)}
-            />
-            <Checkbox
-              checked={approved}
-              disabled={pending !== null || action.busy}
-              onChange={(event) => setApproved(event.target.checked)}
-            >
-              {l(
-                '理解此操作请求撤销注册，不证明设备已完成原生退管',
-                'I understand revocation does not prove native unenrollment completed',
-              )}
-            </Checkbox>
-            <Button
-              danger
-              disabled={!approved || !reason.trim() || pending !== null || action.busy}
-              onClick={() => {
-                const change = Object.freeze({ id, operationId: crypto.randomUUID(), reason })
-                setPending(change)
-                void force(change)
-              }}
-            >
-              {l('请求强制撤销', 'Request forced revocation')}
-            </Button>
-          </div>
+          {canForce && (
+            <div className="device-editor">
+              <Input.TextArea
+                aria-label={l('强制撤销理由', 'Force-revocation reason')}
+                value={reason}
+                maxLength={2048}
+                disabled={pending !== null || action.busy}
+                onChange={(event) => setReason(event.target.value)}
+              />
+              <Checkbox
+                checked={approved}
+                disabled={pending !== null || action.busy}
+                onChange={(event) => setApproved(event.target.checked)}
+              >
+                {l(
+                  '理解此操作请求撤销注册，不证明设备已完成原生退管',
+                  'I understand revocation does not prove native unenrollment completed',
+                )}
+              </Checkbox>
+              <Button
+                danger
+                disabled={!approved || !reason.trim() || pending !== null || action.busy}
+                onClick={() => {
+                  const change = Object.freeze({ id, operationId: crypto.randomUUID(), reason })
+                  setPending(change)
+                  void force(change)
+                }}
+              >
+                {l('请求强制撤销', 'Request forced revocation')}
+              </Button>
+            </div>
+          )}
         </>
       )}
       {outcome === 'confirmed' && (
@@ -170,7 +223,7 @@ export function DeviceRetirement({
                 {l('放弃已拒绝请求并重读', 'Discard rejected request and read again')}
               </Button>
             ) : (
-              <Button disabled={action.busy} onClick={() => void force(pending)}>
+              <Button disabled={action.busy || !canForce} onClick={() => void force(pending)}>
                 {l('显式重提原撤销请求', 'Resubmit original revocation request')}
               </Button>
             )}

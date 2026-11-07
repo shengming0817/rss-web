@@ -14,6 +14,7 @@ export interface AuditQuery extends WindowQuery {
 }
 export type TimelineQuery = Omit<AuditQuery, 'device'>
 export interface AuditFact {
+  readonly origin: 'request' | 'background' | null
   readonly source: string
   readonly eventId: string
   readonly position: number
@@ -35,6 +36,7 @@ export interface AuditFact {
   readonly executionState: string | null
   readonly effect: string
   readonly requestWriteOutcome: string | null
+  readonly requestReplayed: boolean
   readonly supported: boolean
 }
 export interface AuditPage extends Page<AuditFact> {

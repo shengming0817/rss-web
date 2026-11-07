@@ -510,6 +510,8 @@ try {
   await label('确认向此设备提交独立事件').check()
   await button('提交设备事件').click()
   await button('查询原事件批次').waitFor()
+  await p.goBack()
+  await p.waitForURL((url) => url.searchParams.get('eventDevice') === f.mdm)
   await button('查询原事件批次').click()
   await p.getByText('批次已受理；成员与实际操作可能仍待处理。', { exact: true }).waitFor()
   assert.equal(run.count(p, 'POST', path), 1)
@@ -609,6 +611,50 @@ try {
     'real-independent-event-response-loss-original-member-decision-version-operation-reference-and-deduplication',
   )
 
+  const acceptedMember = before.find((item) => item.policyId === policy.id),
+    retirement = acceptedMember.decision.operations[0].id,
+    originalBatchUrl = p.url()
+  const targetRetirement = await run.response(
+    p,
+    'GET',
+    `/api/v1/device-retirements/${retirement}`,
+    () => row.getByRole('link', { name: `retirement/${retirement}`, exact: true }).click(),
+  )
+  assert.equal((await targetRetirement.json()).id, retirement)
+  await p
+    .getByText(/创建时间/)
+    .first()
+    .waitFor()
+  await p.waitForURL(
+    (url) =>
+      url.pathname === `/devices/endpoint/${f.mdm}` &&
+      url.searchParams.get('retirement') === retirement,
+  )
+  await p.getByRole('link', { name: /返回来源 \/ 设备目录/ }).click()
+  await p.waitForURL(originalBatchUrl)
+  await p.getByText('批次成员与原操作进度', { exact: true }).waitFor()
+  await button('显示 Agent 查看入口').click()
+  await p
+    .getByText('当前 Agent 无法可靠查询此类活动批次；请在管理端查看。', { exact: true })
+    .waitFor()
+  assert.equal(await button('复制命令 · 原事件批次').count(), 0)
+  assert.equal(run.count(p, 'POST', path), 1)
+  checks.push('real-batch-member-opens-original-retirement-and-returns-without-replay')
+
+  await run.nav(
+    p,
+    `/policies?${new URLSearchParams({ tab: 'events', eventDevice: f.mdm, batch: originalAccepted.batchId, member: acceptedMember.id })}`,
+    '策略与部署',
+  )
+  const exactMember = p.getByRole('link', { name: `retirement/${retirement}`, exact: true })
+  await exactMember.waitFor()
+  assert.equal(await button('提交设备事件').isEnabled(), false)
+  await run.nav(
+    p,
+    new URL(originalBatchUrl).pathname + new URL(originalBatchUrl).search,
+    '策略与部署',
+  )
+  await p.getByRole('dialog').waitFor()
   const closeDialog = async () => {
     await p.locator('.ant-modal-close').filter({ visible: true }).click()
     await p.getByRole('dialog').waitFor({ state: 'hidden' })

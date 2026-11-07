@@ -393,6 +393,8 @@ describe('native public DA adapters', () => {
             executionState: null,
             effect: 'unverified',
             requestWriteOutcome: null,
+            requestReplayed: false,
+            origin: 'request',
             supported: true,
             recordedAt: 10,
             actor: 'user',

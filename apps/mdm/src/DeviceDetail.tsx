@@ -1,8 +1,9 @@
+import { EntryCopies } from './EntryCopies'
 import { TelemetryWorkspace } from './Telemetry'
 import { DeviceControl } from './DeviceControl'
-import { resultSourcePath } from './execution-context'
+import { eventBatchPath, resultReturnPath } from './execution-context'
 import { deviceExecutionsPath } from './Executions'
-import { DeviceSecurity, hasDeviceSecurity } from './DeviceSecurity'
+import { DeviceSecurity, devicePermission, hasDeviceSecurity } from './DeviceSecurity'
 import { SelectionGuard, useSelectionGuard, usePendingSelection } from './SelectionGuard'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Result, Select } from 'antd'
@@ -366,7 +367,7 @@ function Detail({
   }, [guard.locked, heldEndpoint, params, requested, setParams])
   return (
     <>
-      <Link to={resultSourcePath(params.get('returnTo')) ?? '/devices'}>
+      <Link to={resultReturnPath(params.get('returnTo')) ?? '/devices'}>
         ← {l('返回来源 / 设备目录', 'Return to source / devices')}
       </Link>
       <Heading
@@ -474,7 +475,11 @@ function Detail({
                           endpoint={mountedEndpoint}
                         />
                         <div>
-                          {has('operation_read') && (
+                          {devicePermission(
+                            permissions.value?.grants ?? [],
+                            mountedEndpoint.id,
+                            'operation_read',
+                          ) && (
                             <Link
                               to={deviceExecutionsPath(
                                 mountedEndpoint.id,
@@ -483,6 +488,36 @@ function Detail({
                             >
                               {l('查看设备执行', 'View device executions')}
                             </Link>
+                          )}
+                          {devicePermission(
+                            permissions.value?.grants ?? [],
+                            mountedEndpoint.id,
+                            'operation_read',
+                          ) && (
+                            <>
+                              <br />
+                              <Link
+                                to={eventBatchPath(
+                                  mountedEndpoint.id,
+                                  undefined,
+                                  undefined,
+                                  location.pathname + location.search,
+                                )}
+                              >
+                                {l('查看设备事件批次', 'View device event batches')}
+                              </Link>
+                              <EntryCopies
+                                runtime={runtime}
+                                locale={locale}
+                                device={mountedEndpoint.id}
+                                entries={[
+                                  {
+                                    label: l('设备管理活动', 'Device management activity'),
+                                    target: { selector: { kind: 'node', id: 'tasks.management' } },
+                                  },
+                                ]}
+                              />
+                            </>
                           )}
                           <br />
                           <Link to="/device-access">Device Access</Link>
@@ -621,7 +656,12 @@ function Detail({
                     key: 'retirement',
                     label: l('退管状态', 'Retirement'),
                     children: (
-                      <DeviceRetirement runtime={runtime} locale={locale} reference={reference} />
+                      <DeviceRetirement
+                        runtime={runtime}
+                        locale={locale}
+                        reference={reference}
+                        grants={permissions.value?.grants ?? []}
+                      />
                     ),
                   },
                   {

@@ -327,6 +327,25 @@ try {
       action: 'put',
       enabled: true,
       definition: {
+        ...(terminal === 'success'
+          ? {
+              alias: 'react.execution.preview',
+              selfService: {
+                access: { kind: 'device' },
+                published: true,
+                allowAi: false,
+                riskLevel: 1,
+                presentation: {
+                  displayName: 'Script preview',
+                  description: '',
+                  prerequisites: '',
+                  sideEffects: '',
+                  category: 'Support',
+                  keywords: [],
+                },
+              },
+            }
+          : {}),
         scope,
         action: {
           kind: 'execution',
@@ -409,6 +428,93 @@ try {
       .first()
       .waitFor()
     assert.equal(final.taskId, task.task)
+    if (terminal === 'success') {
+      await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+      await button('显示 Agent 查看入口').click()
+      await button('复制链接 · 原任务').waitFor()
+      await p.evaluate(() => {
+        const clipboard = globalThis.navigator.clipboard,
+          write = clipboard.write.bind(clipboard)
+        clipboard.write = (items) => {
+          globalThis.document.documentElement.dataset.entryCopyStarted = 'true'
+          return write(items)
+        }
+      })
+      let releaseCopy
+      const delayedCopy = new Promise((done) => {
+          releaseCopy = done
+        }),
+        registrationPath = `**${base}/devices/${final.device}`
+      await p.route(registrationPath, async (route) => {
+        if (route.request().method() === 'GET') await delayedCopy
+        await route.continue()
+      })
+      await button('复制链接 · 原任务').click()
+      try {
+        await p.waitForFunction(
+          () => globalThis.document.documentElement.dataset.entryCopyStarted === 'true',
+        )
+      } finally {
+        releaseCopy()
+      }
+      await p.getByRole('status').filter({ hasText: '已复制 · 原任务' }).waitFor()
+      await p.unroute(registrationPath)
+      const copied = new URL(await p.evaluate(() => globalThis.navigator.clipboard.readText()))
+      assert.equal(copied.pathname, `/v1/task/${task.task}`)
+      assert.equal(copied.searchParams.get('attempt'), final.attemptId)
+      assert.equal(copied.searchParams.get('registration'), final.registrationId)
+      await p.getByRole('link', { name: '查看此执行的管理活动', exact: true }).click()
+      await p.waitForURL(
+        (url) =>
+          url.pathname === '/audit' &&
+          url.searchParams.get('task') === task.task &&
+          url.searchParams.get('attempt') === final.attemptId,
+      )
+      const facts = await until(
+        () => api('GET', `${base}/devices/${final.device}/management-activities?task=${task.task}`),
+        (value) =>
+          value.items.some(
+            (fact) => fact.links.task === task.task && fact.links.attempt === final.attemptId,
+          ),
+      )
+      assert.ok(facts.items.every((fact) => fact.links.task === task.task))
+      await p.locator('.audit-page tbody tr').first().waitFor()
+      await run.nav(p, `/policies?${new URLSearchParams({ policy, tab: 'names' })}`, '策略与部署')
+      await p.getByText('稳定工具名（只读）', { exact: true }).waitFor()
+      await button('显示 Agent 查看入口').click()
+      await label('终端候选服务端筛选').fill(`id=='${final.device}'`)
+      await button('查询终端候选').click()
+      await p
+        .locator('.ant-modal:visible tbody tr')
+        .filter({ hasText: final.device })
+        .getByRole('button', { name: '使用此终端', exact: true })
+        .click()
+      await button('复制链接 · 唯一别名').click()
+      await p.getByRole('status').filter({ hasText: '已复制 · 唯一别名' }).waitFor()
+      const aliasUri = await p.evaluate(() => globalThis.navigator.clipboard.readText()),
+        alias = new URL(aliasUri),
+        resolved = await api('POST', `${base}/policies/resolve`, {
+          kind: 'alias',
+          alias: 'react.execution.preview',
+        })
+      assert.equal(alias.pathname, '/v1/alias/react.execution.preview')
+      assert.equal(resolved.policy.id, policy)
+      assert.deepEqual(Object.fromEntries(alias.searchParams), {
+        device: final.device,
+        generation: String(final.generation),
+        instance: resolved.capability.instance,
+        registration: final.registrationId,
+        revision: String(resolved.capability.revision),
+        tenant: f.tenant,
+        version: resolved.capability.version,
+      })
+      await button('复制命令 · 唯一别名').click()
+      await p.waitForFunction(
+        async (expected) => (await globalThis.navigator.clipboard.readText()) === expected,
+        `rssmdm open '${aliasUri}'`,
+      )
+      checks.push('real-task-copy-current-attempt-registration-and-audit-navigation')
+    }
     await mutate('policies', policy, { action: 'disable' }, 1)
     checks.push(`real-agent-script-${terminal}-policy-assignment-run-and-original-attempt`)
   }

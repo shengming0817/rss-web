@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Collapse, Modal, Segmented, Space, Tag } from 'antd'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type { Policy, PolicyRow } from '@rss/mdm-policies'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
@@ -8,11 +8,9 @@ import {
   CursorControls,
   DirectoryControls,
   directoryQuery,
-  Failure,
   Heading,
   labels,
   ReadState,
-  useAction,
   useRead,
   usePageRead,
   type Query,
@@ -22,6 +20,8 @@ import { SelectionGuard, usePendingSelection, useSelectionGuard } from './Select
 import { SecretTabs } from './SecretTabs'
 import { PolicyEditor } from './PolicyEditor'
 import { PolicyAssignments, PolicyRollout, PolicyRuns } from './PolicyProgress'
+import { resultReturnPath } from './execution-context'
+import { PolicyNames } from './PolicyNames'
 import { PolicyEvents } from './PolicyEvents'
 import { policyActionLabel } from './PolicyActionEditor'
 
@@ -51,6 +51,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           (grant.scope.kind === 'tenant' || (allDevices && grant.scope.kind === 'all_devices')),
       ) ?? false,
     [params, setParams] = useSearchParams(),
+    navigate = useNavigate(),
     pageLimit = Number(params.get('limit') ?? 20),
     query: Query = {
       limit:
@@ -67,7 +68,6 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
       .filter(Boolean)
       .map((part) => `(${part})`)
       .join(';'),
-    action = useAction(),
     guard = useSelectionGuard(),
     read = usePageRead(
       `${binding}/policy-directory/${state}/${JSON.stringify(query)}/${has('policy_read')}`,
@@ -84,32 +84,30 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
             )
           : Promise.resolve(null),
     ),
-    [selected, setSelected] = useState<{
-      id: string
-      baseline: Policy | null
-      generation: number
-    } | null>(null),
-    [generation, setGeneration] = useState(0)
-  usePendingSelection(action.busy || guard.locked)
+    [selected, setSelected] = useState<{ id: string; baseline: Policy | null } | null>(null)
+  usePendingSelection(guard.locked)
   const linkedPolicy = params.get('policy'),
     canRead = has('policy_read'),
     canInventory = has('inventory_read', true),
-    canOperations = has('operation_read', true)
+    canOperations = has('operation_read', true),
+    returnSource = resultReturnPath(params.get('returnTo')),
+    policyTarget =
+      params.has('tab') && canRead && !guard.locked && selected?.id !== linkedPolicy
+        ? linkedPolicy
+        : null,
+    detail = usePageRead(
+      `${binding}/policy-detail/${policyTarget ?? ''}`,
+      (signal) => (policyTarget ? policies.read(policyTarget, signal) : Promise.resolve(null)),
+      { retryReadConflict: true },
+    ),
+    dialogOpen = selected !== null || policyTarget !== null
   useEffect(() => {
-    if (!linkedPolicy || !params.has('tab') || !canRead || selected?.id === linkedPolicy) return
-    let current = true
-    void action
-      .run(() => policies.read(linkedPolicy))
-      .then((result) => {
-        if (current && result.ok) {
-          setGeneration((value) => value + 1)
-          setSelected({ id: linkedPolicy, baseline: result.value, generation: 0 })
-        }
-      })
-    return () => {
-      current = false
-    }
-  }, [binding, linkedPolicy, canRead, selected?.id])
+    if (!linkedPolicy && !guard.locked) setSelected(null)
+  }, [linkedPolicy, guard.locked])
+  useEffect(() => {
+    if (detail.value && detail.value.id === policyTarget)
+      setSelected({ id: policyTarget, baseline: detail.value })
+  }, [detail.value, policyTarget])
   function setQuery(next: Query) {
     const value = new URLSearchParams(params)
     for (const key of ['limit', 'filter', 'cursor', 'sort', 'field']) value.delete(key)
@@ -120,23 +118,34 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     next.fields?.forEach((item) => value.append('field', item))
     setParams(value, { replace: true })
   }
-  async function open(id: string) {
-    const result = await action.run(() => policies.read(id))
-    if (result.ok) {
-      setGeneration((value) => value + 1)
-      setSelected({ id, baseline: result.value, generation: generation + 1 })
-      const next = new URLSearchParams(params)
-      next.set('policy', id)
-      next.set('tab', 'definition')
-      next.delete('assignmentCursor')
-      next.delete('runCursor')
-      setParams(next, { replace: true })
-    }
+  function open(id: string) {
+    const next = new URLSearchParams(params)
+    next.set('policy', id)
+    next.set('tab', 'definition')
+    next.delete('assignmentCursor')
+    next.delete('runCursor')
+    setParams(next, { replace: true })
   }
   function close() {
-    setSelected(null)
+    if (returnSource) {
+      if (new URLSearchParams(returnSource.split('?')[1]).get('policy') === selected?.id)
+        setSelected(null)
+      navigate(returnSource)
+      return
+    }
     const next = new URLSearchParams(params)
-    for (const key of ['policy', 'tab', 'assignmentCursor', 'runCursor']) next.delete(key)
+    for (const key of [
+      'policy',
+      'tab',
+      'assignmentCursor',
+      'runCursor',
+      'eventDevice',
+      'batch',
+      'member',
+      'batchCursor',
+      'memberCursor',
+    ])
+      next.delete(key)
     setParams(next, { replace: true })
     read.reload()
   }
@@ -155,17 +164,11 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
               {has('policy_write') && (
                 <Button
                   type="primary"
-                  disabled={action.busy || guard.locked}
+                  disabled={guard.locked}
                   onClick={() => {
-                    setGeneration((value) => value + 1)
                     const id = crypto.randomUUID()
-                    setSelected({ id, baseline: null, generation: generation + 1 })
-                    const next = new URLSearchParams(params)
-                    next.set('policy', id)
-                    next.set('tab', 'definition')
-                    next.delete('assignmentCursor')
-                    next.delete('runCursor')
-                    setParams(next, { replace: true })
+                    setSelected({ id, baseline: null })
+                    open(id)
                   }}
                 >
                   {l('新建部署', 'New deployment')}
@@ -184,8 +187,19 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           />
         )}
         <ReadState locale={locale} busy={permissions.busy} error={permissions.error} />
-        <Failure locale={locale} error={action.error} />
-        <fieldset className="permission-panel" disabled={action.busy || guard.locked}>
+        {!selected &&
+          ((!linkedPolicy && params.get('tab') === 'events' && params.get('eventDevice')) ||
+            guard.locked) && (
+            <PolicyEvents
+              events={policyEvents}
+              devices={devices}
+              runtime={runtime}
+              event={null}
+              locale={locale}
+              canSubmit={canRead}
+            />
+          )}
+        <fieldset className="permission-panel" disabled={guard.locked}>
           {canRead && (
             <>
               <div className="policy-toolbar">
@@ -225,8 +239,8 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                   },
                 ]}
               />
-              {params.get('policy') && !selected && (
-                <Button onClick={() => void open(params.get('policy')!)}>
+              {linkedPolicy && !dialogOpen && (
+                <Button onClick={() => open(linkedPolicy)}>
                   {l('打开定位策略', 'Open linked policy')}
                 </Button>
               )}
@@ -252,12 +266,8 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                           </svg>
                         </span>
                         <div className="policy-card-main">
-                          <Button
-                            type="link"
-                            className="policy-title"
-                            onClick={() => void open(row.id)}
-                          >
-                            {row.alias ?? row.toolName ?? row.id}
+                          <Button type="link" className="policy-title" onClick={() => open(row.id)}>
+                            {row.toolName ?? row.id}
                           </Button>
                           <div className="policy-meta">
                             <span>{row.action ? policyActionLabel(row.action, locale) : '—'}</span>
@@ -265,6 +275,11 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                               <Link to={`/scopes?scope=${encodeURIComponent(row.scope)}`}>
                                 {l('范围', 'Scope')} · {row.scope}
                               </Link>
+                            )}
+                            {row.alias && (
+                              <Tag>
+                                {l('唯一别名', 'Unique alias')} · <code>{row.alias}</code>
+                              </Tag>
                             )}
                             {row.customEvent && (
                               <span>
@@ -290,7 +305,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                         </Tag>
                         <Button
                           aria-label={l('查看策略', 'View policy') + ' ' + (row.alias ?? row.id)}
-                          onClick={() => void open(row.id)}
+                          onClick={() => open(row.id)}
                         >
                           →
                         </Button>
@@ -310,27 +325,32 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           )}
         </fieldset>
         <Modal
-          rootClassName={`policy-dialog ${selected ? 'mdm-overlay-open' : ''}`}
+          rootClassName={`policy-dialog ${dialogOpen ? 'mdm-overlay-open' : ''}`}
           getContainer={false}
           destroyOnHidden
-          open={selected !== null}
+          open={dialogOpen}
           title={
-            selected?.baseline
-              ? l('部署详情', 'Deployment details')
-              : l('新建部署', 'New deployment')
+            selected?.baseline === null && selected.id === linkedPolicy
+              ? l('新建部署', 'New deployment')
+              : l('部署详情', 'Deployment details')
           }
           width={880}
           footer={null}
-          closable={!guard.locked && !action.busy}
-          keyboard={!guard.locked && !action.busy}
-          maskClosable={!guard.locked && !action.busy}
+          closable={!guard.locked}
+          keyboard={!guard.locked}
+          maskClosable={!guard.locked}
           onCancel={() => {
-            if (!guard.locked && !action.busy) close()
+            if (!guard.locked) close()
           }}
         >
-          {selected && (
+          {returnSource && (
+            <Button disabled={guard.locked} onClick={close}>
+              {l('返回来源', 'Return to source')}
+            </Button>
+          )}
+          {selected && (guard.locked || selected.id === linkedPolicy) ? (
             <SecretTabs
-              key={selected.generation}
+              key={selected.id}
               uiLocale={locale}
               activeKey={params.get('tab') ?? 'definition'}
               onChange={(tab) => {
@@ -350,6 +370,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                     ]
                   : []),
                 ...(canRead ? ['events'] : []),
+                ...(canRead && selected.baseline ? ['names'] : []),
               ]}
               items={[
                 {
@@ -373,6 +394,19 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                 },
                 ...(selected.baseline
                   ? [
+                      {
+                        key: 'names',
+                        label: l('名称与入口', 'Names and entry points'),
+                        children: (
+                          <PolicyNames
+                            key={selected.id}
+                            policies={policies}
+                            policy={selected.baseline}
+                            locale={locale}
+                            runtime={runtime}
+                          />
+                        ),
+                      },
                       {
                         key: 'assignments',
                         label: l('设备分配', 'Device assignments'),
@@ -421,6 +455,8 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                     <PolicyEvents
                       events={policyEvents}
                       devices={devices}
+                      runtime={runtime}
+                      ownerPolicy={selected.id}
                       event={selected.baseline?.definition.customEvent ?? null}
                       locale={locale}
                       canSubmit={canRead}
@@ -429,6 +465,15 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                 },
               ]}
             />
+          ) : (
+            policyTarget && (
+              <ReadState
+                locale={locale}
+                busy={detail.busy}
+                error={detail.error}
+                onRetry={detail.reload}
+              />
+            )
           )}
         </Modal>
       </div>

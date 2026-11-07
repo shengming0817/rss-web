@@ -11,7 +11,7 @@ import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import type { ResourcesUseCases } from './ResourceCommand'
 import type { ScopesUseCases } from './ScopeResults'
-import { Failure, isUnknown, labels, useAction, validateInput } from './AdminUi'
+import { codeOf, Failure, isUnknown, labels, useAction, validateInput } from './AdminUi'
 import { usePendingSelection } from './SelectionGuard'
 import { BooleanField } from './AuthorFields'
 import { ScopePicker } from './ScopePicker'
@@ -173,6 +173,16 @@ export function PolicyEditor({
         </dl>
       )}
       <Failure locale={locale} error={action.error} />
+      {outcome === 'rejected' &&
+        ['conflict', 'revision_conflict', 'operation_conflict'].includes(codeOf(action.error)) && (
+          <Alert
+            type="warning"
+            title={l(
+              '保存冲突。请重新读取策略修订；若别名被其他策略占用，请换用可用别名。',
+              'Save conflict. Read the current policy revision; choose another alias if a different policy owns it.',
+            )}
+          />
+        )}
       {pending && (
         <p>
           {l('原操作', 'Original operation')} ·{' '}
@@ -257,6 +267,17 @@ export function PolicyEditor({
             {(['alias', 'customEvent'] as const).map((key) => (
               <Form.Item
                 key={key}
+                extra={
+                  key === 'alias'
+                    ? l(
+                        '租户内唯一，清空后保存可撤回；不会修改显示名。',
+                        'Unique in this tenant. Clear and save to withdraw it; the display name stays separate.',
+                      )
+                    : l(
+                        '可与多条策略共享；清空后保存仅移除此策略的关联。',
+                        'May be shared by several policies. Clear and save to remove only this policy’s association.',
+                      )
+                }
                 label={
                   key === 'alias'
                     ? l('唯一别名', 'Unique alias')

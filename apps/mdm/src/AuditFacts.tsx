@@ -1,9 +1,11 @@
 import { Alert, Descriptions, Space } from 'antd'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { ActivityLinks, AuditFact, ManagementActivity } from '@rss/mdm-audit'
 import type { Locale } from './i18n'
 import { labels } from './AdminUi'
 import { Status, timestamp } from './DevicePresentation'
+import { executionPath } from './Executions'
+import { eventBatchPath, retirementPath } from './execution-context'
 import { auditHref, type AuditContext } from './audit-context'
 
 function Coordinates({ links, locale }: { links: ActivityLinks; locale: Locale }) {
@@ -62,6 +64,15 @@ export function AuditFactView({
       <Descriptions column={1} size="small">
         <Descriptions.Item label={l('行为与来源', 'Action and source')}>
           {fact.action} · {fact.source}
+        </Descriptions.Item>
+        <Descriptions.Item label={l('原始入口', 'Original ingress')}>
+          {fact.origin === 'request'
+            ? l('HTTP 请求', 'HTTP request')
+            : fact.origin === 'background'
+              ? l('后台处理', 'Background')
+              : l('没有事实', 'Unavailable')}
+          {fact.requestReplayed &&
+            ` · ${l('服务端重用原请求', 'Server replay of original request')}`}
         </Descriptions.Item>
         <Descriptions.Item label={l('主体', 'Actor')}>
           {fact.actorKind} · {fact.actor}
@@ -166,7 +177,17 @@ export function ActivityFactView({
   context?: AuditContext
 }) {
   const l = labels(locale),
+    location = useLocation(),
+    source = location.pathname + location.search,
+    targetDevice = fact.target?.device ?? device,
     window = { from: context?.from, until: context?.until, limit: context?.limit },
+    original = {
+      ...(fact.links.attempt ? { attempt: fact.links.attempt } : {}),
+      ...(fact.links.version ? { version: fact.links.version } : {}),
+      ...(fact.target
+        ? { registration: fact.target.registration, generation: String(fact.target.generation) }
+        : {}),
+    },
     dimensions = [
       [l('投递证据', 'Delivery evidence'), fact.delivery],
       [l('执行事实', 'Execution fact'), fact.execution],
@@ -221,11 +242,70 @@ export function ActivityFactView({
             {l('原生操作审计', 'Native operation audit')}
           </Link>
         )}
+        {fact.links.policy && (
+          <Link
+            to={`/policies?${new URLSearchParams({ policy: fact.links.policy, tab: 'definition', returnTo: source })}`}
+          >
+            {l('查看所属策略', 'View owning policy')}
+          </Link>
+        )}
+        {fact.links.batch && (
+          <Link
+            to={eventBatchPath(
+              targetDevice,
+              fact.links.batch,
+              fact.links.member ?? undefined,
+              source,
+            )}
+          >
+            {l('查看原事件批次', 'View original event batch')}
+          </Link>
+        )}
+        {fact.links.task && (
+          <Link
+            to={executionPath(
+              'action_run',
+              fact.links.task,
+              fact.links.policy ?? undefined,
+              source,
+              original,
+            )}
+          >
+            {l('查看原任务执行', 'View original task run')}
+          </Link>
+        )}
+        {['configuration', 'execution'].includes(fact.kind) && fact.links.operation && (
+          <Link to={executionPath('command', fact.links.operation, undefined, source)}>
+            {fact.kind === 'configuration'
+              ? l('查看原配置命令', 'View original configuration command')
+              : l('查看原生命令', 'View original native command')}
+          </Link>
+        )}
         {fact.links.retirement && (
-          <Link to={`/devices/endpoint/${encodeURIComponent(device)}`}>
+          <Link to={retirementPath(targetDevice, fact.links.retirement, source)}>
             {l('设备退管入口', 'Device retirement')}
           </Link>
         )}
+        {fact.links.operations.map((reference) => (
+          <Link
+            key={`${reference.kind}/${reference.id}`}
+            to={
+              reference.kind === 'retirement'
+                ? retirementPath(targetDevice, reference.id, source)
+                : executionPath(
+                    reference.kind === 'run' ? 'action_run' : 'command',
+                    reference.id,
+                    reference.kind === 'run' ? (fact.links.policy ?? undefined) : undefined,
+                    source,
+                    reference.kind === 'run' && reference.id === fact.links.task
+                      ? original
+                      : undefined,
+                  )
+            }
+          >
+            {l('关联操作', 'Related operation')} · {reference.id}
+          </Link>
+        ))}
       </Space>
       <Coordinates links={fact.links} locale={locale} />
     </>

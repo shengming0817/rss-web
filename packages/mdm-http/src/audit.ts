@@ -25,6 +25,7 @@ function fact(value: unknown): AuditFact {
   if (!schema.getApiV1AuditEventsResponse.validateFactView(value))
     throw new Error('Invalid safe audit fact')
   return {
+    origin: value.origin ?? null,
     source: text(value.source),
     eventId: text(value.eventId),
     position: count(value.position),
@@ -46,6 +47,7 @@ function fact(value: unknown): AuditFact {
     executionState: nullable(value.executionState, text),
     effect: text(value.effect),
     requestWriteOutcome: nullable(value.requestWriteOutcome, text),
+    requestReplayed: value.requestReplayed,
     supported: boolean(value.supported),
   }
 }

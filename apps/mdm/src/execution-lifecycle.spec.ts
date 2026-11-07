@@ -9,13 +9,14 @@ import type { ControlIntent, ControlRecovery } from '@rss/mdm-execution'
 import type { ViewEndpoint } from '@rss/mdm-devices'
 import { DeviceDetail } from './DeviceDetail'
 import { DeviceControl } from './DeviceControl'
+import { DeviceRetirement } from './DeviceRetirement'
 import { ControlRecoveryPanel } from './ControlRecovery'
 import { isUnknown } from './AdminUi'
 import { decodeMdmError } from '@rss/api/mdm'
 import { EnterpriseEditor } from './EnterpriseEditor'
 import { BindingEditor } from './BindingEditor'
 import { Policies } from './Policies'
-import { resultReturnPath, resultSourcePath } from './execution-context'
+import { resultReturnPath } from './execution-context'
 import { Executions, policyReturnPath } from './Executions'
 import type { EnterpriseConfiguration } from '@rss/mdm-device-access'
 vi.mock('./useOperationAuthorization', () => ({
@@ -710,66 +711,175 @@ it('rejects malformed source locators without crashing a result page', () => {
     '//evil.test/policies',
     '/policies#fragment',
   ])
-    expect(resultSourcePath(value)).toBeNull()
+    expect(resultReturnPath(value)).toBeNull()
 })
 
-it('renders the original attempt nodes and carries the complete execution context to its device', async () => {
-  const id = '11111111-1111-4111-8111-111111111111',
-    policy = '22222222-2222-4222-8222-222222222222',
-    path = `/operations?kind=action_run&operation=${id}&policy=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
-    detail = vi.fn(async () => ({
-      item: null,
-      policy,
-      detail: {
-        kind: 'run',
-        owner: 'software',
-        id,
-        device: 'device-a',
-        versionId: policy,
-        occurrence: null,
-        availableAt: 1,
-        deadline: 2,
-        state: { execution: 'succeeded', cancellation: 'none', startedAt: 1 },
-        delivery: 'received',
-        effect: 'unknown',
-        authorization: null,
-        result: null,
-        attempt: id,
-        nodes: [{ stepId: 'install-original', definition: { id: 'package', version: 'v1' } }],
-        userAction: null,
-      },
-    })),
-    runtime = {
-      administration: () => ({
-        binding: 'nodes',
-        authorization: { effective: async () => ({ grants: [] }) },
-        execution: {
-          summary: async () => ({
-            id,
-            device: 'device-a',
-            policy,
-            status: 'succeeded',
-            registrationId: id,
-            generation: 1,
-          }),
-          detail,
-          list: async () => ({ items: [], nextCursor: null }),
-          statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+it.each([false, true])(
+  'renders original attempt evidence only if the coordinates match (%s mismatch)',
+  async (mismatch) => {
+    const id = '11111111-1111-4111-8111-111111111111',
+      policy = '22222222-2222-4222-8222-222222222222',
+      another = '33333333-3333-4333-8333-333333333333',
+      path = `/operations?kind=action_run&operation=${id}&policy=${policy}&attempt=${mismatch ? policy : id}&registration=${id}&generation=1&version=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
+      detail = vi.fn(async () => ({
+        item: null,
+        policy,
+        detail: {
+          kind: 'run',
+          owner: 'software',
+          id,
+          device: 'device-a',
+          versionId: policy,
+          occurrence: null,
+          availableAt: 1,
+          deadline: 2,
+          state: { execution: 'succeeded', cancellation: 'none', startedAt: 1 },
+          delivery: 'received',
+          effect: 'unknown',
+          authorization: null,
+          result: null,
+          attempt: id,
+          registrationId: id,
+          generation: 1,
+          nodes: [{ stepId: 'install-original', definition: { id: 'package', version: 'v1' } }],
+          userAction: null,
         },
-      }),
-    } as unknown as Runtime
-  await act(async () =>
-    root.render(
-      h(MemoryRouter, { initialEntries: [path] }, h(Executions, { runtime, locale: 'zh' })),
-    ),
-  )
-  const link = host.querySelector<HTMLAnchorElement>('a[href^="/devices/endpoint/device-a"]')!
-  expect(new URL(link.href).searchParams.get('returnTo')).toBe(path)
-  expect(detail).not.toHaveBeenCalled()
-  await act(async () => button('读取详细结果与证据').click())
-  expect(host.textContent).toContain('原尝试的冻结节点')
-  expect(host.textContent).toContain('install-original')
-  expect(host.textContent).toContain('v1')
+      })),
+      runtime = {
+        administration: () => ({
+          binding: 'nodes',
+          authorization: { effective: async () => ({ grants: [] }) },
+          execution: {
+            summary: async () => ({
+              id,
+              device: 'device-a',
+              policy,
+              status: 'succeeded',
+              registrationId: id,
+              generation: 1,
+            }),
+            detail,
+            list: async () => ({
+              items: [
+                {
+                  id: another,
+                  kind: 'action_run',
+                  device: 'device-a',
+                  policy,
+                  status: 'succeeded',
+                },
+              ],
+              nextCursor: null,
+            }),
+            statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+          },
+        }),
+      } as unknown as Runtime
+    await act(async () =>
+      root.render(
+        h(MemoryRouter, { initialEntries: [path] }, h(Executions, { runtime, locale: 'zh' })),
+      ),
+    )
+    const link = host.querySelector<HTMLAnchorElement>('a[href^="/devices/endpoint/device-a"]')!
+    expect(new URL(link.href).searchParams.get('returnTo')).toBe(path)
+    expect(detail).not.toHaveBeenCalled()
+    await act(async () => button('读取详细结果与证据').click())
+    if (mismatch) {
+      expect(host.textContent).toContain('原尝试详情不可用')
+      expect(host.textContent).not.toContain('install-original')
+      expect(host.textContent).not.toContain('显示 Agent 查看入口')
+      await act(async () => button(another).click())
+      await act(async () => button('读取详细结果与证据').click())
+      expect(detail).toHaveBeenLastCalledWith(
+        { kind: 'action_run', id: another, policy },
+        expect.any(AbortSignal),
+      )
+      expect(host.textContent).not.toContain('原尝试详情不可用')
+      expect(host.textContent).toContain('install-original')
+      return
+    }
+    expect(host.textContent).toContain('原尝试的冻结节点')
+    expect(host.textContent).toContain('install-original')
+    expect(host.textContent).toContain('v1')
+  },
+)
+
+it('keeps a retirement read-only without every grant, and never treats a failed preflight as a write', async () => {
+  const id = '11111111-1111-4111-8111-111111111111'
+  const forceRetirement = vi.fn()
+  const effective = vi.fn(async () => {
+    throw decodeMdmError(503, { code: 'service_unavailable' })
+  })
+  const runtime = {
+    administration: () => ({
+      binding: 'retirement',
+      authorization: { effective },
+      devices: {
+        retirement: async () => ({
+          target: {
+            object: { kind: 'endpoint', id: 'device-a' },
+            members: [{ device: 'device-a' }, { device: 'device-b' }],
+          },
+          createdAt: 20,
+          forcedAt: null,
+          channels: [
+            {
+              device: 'device-a',
+              channel: 'mdm',
+              registration: id,
+              generation: 1,
+              stage: 'queued',
+            },
+            {
+              device: 'device-b',
+              channel: 'agent',
+              registration: id,
+              generation: 1,
+              stage: 'queued',
+            },
+          ],
+        }),
+        forceRetirement,
+      },
+    }),
+  } as unknown as Runtime
+  const mount = (scope: { kind: 'all_devices' } | { kind: 'device'; id: string }) =>
+    act(async () =>
+      root.render(
+        h(
+          MemoryRouter,
+          { initialEntries: [`/devices/endpoint/device-a?tab=retirement&retirement=${id}`] },
+          h(DeviceRetirement, {
+            runtime,
+            locale: 'zh',
+            reference: { kind: 'endpoint', id: 'device-a' },
+            grants: [
+              { operation: 'inventory_read', scope: { kind: 'all_devices' } },
+              { operation: 'device_unmanage', scope },
+            ],
+          }),
+        ),
+      ),
+    )
+  await mount({ kind: 'device', id: 'device-a' })
+  expect(host.textContent).toContain('device-b')
+  expect(host.textContent).not.toContain('请求强制撤销')
+  await mount({ kind: 'all_devices' })
+  const reason = host.querySelector<HTMLTextAreaElement>('textarea')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+      reason,
+      'retire',
+    )
+    reason.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => host.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  expect(button('请求强制撤销').disabled).toBe(false)
+  await act(async () => button('请求强制撤销').click())
+  expect(effective).toHaveBeenCalledOnce()
+  expect(forceRetirement).not.toHaveBeenCalled()
+  expect(host.textContent).not.toContain('显式重提原撤销请求')
+  expect(host.querySelector<HTMLInputElement>('input[aria-label="退管标识"]')!.disabled).toBe(false)
 })
 
 it('retains an unknown recovery request while refreshing the containing result detail', async () => {
@@ -1018,4 +1128,77 @@ it('uses URL endpoint selection for back and forward while retaining an unknown 
   expect(current()).toContain('device-b')
   expect(host.querySelector('[data-location]')!.textContent).toContain('endpoint=device-b')
   expect(create).toHaveBeenCalledOnce()
+})
+
+it('opens the exact linked event batch and member read-only until the user verifies a target', async () => {
+  const { PolicyEvents } = await import('./PolicyEvents'),
+    id = '11111111-1111-4111-8111-111111111111',
+    member = '22222222-2222-4222-8222-222222222222',
+    operation = '33333333-3333-4333-8333-333333333333',
+    batch = vi.fn(async () => ({
+      id,
+      event: 'shared.event',
+      operationId: operation,
+      members: 1,
+      admission: { accepted: 1 },
+      request: { source: { kind: 'human' } },
+      deadline: 2,
+      processingFailure: null,
+    })),
+    members = vi.fn(async () => ({
+      items: [
+        {
+          id: member,
+          policyId: id,
+          versionId: id,
+          revision: 1,
+          state: 'accepted',
+          decision: { state: 'accepted' },
+          operations: [{ reference: { kind: 'native', id: operation }, state: 'queued' }],
+        },
+      ],
+      nextCursor: null,
+    })),
+    submit = vi.fn(),
+    admin = {
+      binding: 'event-link',
+      devices: { endpoints: async () => ({ items: [], nextCursor: null }) },
+      policyEvents: {
+        batch,
+        members,
+        submit,
+        batches: async () => ({ items: [], nextCursor: null }),
+      },
+    } as unknown as ReturnType<Runtime['administration']>,
+    runtime = { administration: () => admin } as Runtime
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        {
+          initialEntries: [
+            `/policies?tab=events&eventDevice=device-a&batch=${id}&member=${member}`,
+          ],
+        },
+        h(PolicyEvents, {
+          runtime,
+          events: admin.policyEvents,
+          devices: admin.devices,
+          event: null,
+          locale: 'zh',
+          canSubmit: true,
+        }),
+      ),
+    ),
+  )
+  expect(batch.mock.calls[0]).toEqual(['device-a', id, expect.any(AbortSignal)])
+  expect(members.mock.calls[0]).toEqual([
+    'device-a',
+    id,
+    { limit: 1, filter: `id=='${member}'` },
+    expect.any(AbortSignal),
+  ])
+  expect(host.querySelector(`a[href*="operation=${operation}"]`)?.textContent).toContain(operation)
+  expect(button('提交设备事件').matches(':disabled')).toBe(true)
+  expect(submit).not.toHaveBeenCalled()
 })

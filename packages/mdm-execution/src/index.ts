@@ -97,7 +97,7 @@ export type RunDetail = RunIdentity &
         readonly owner: 'software' | 'access' | 'credential' | 'enrollment' | 'execution'
         readonly result: EvidenceDocument | string | null
         readonly userAction: string | null
-        readonly nodes: readonly EvidenceDocument[]
+        readonly nodes: readonly (EvidenceDocument & { readonly stepId: string })[]
       }
   )
 export type ExecutionDetail = CommandDetail | RunDetail

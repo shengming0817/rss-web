@@ -1,3 +1,4 @@
+import { EntryCopies, type CopyEntry } from './EntryCopies'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Select, Space } from 'antd'
 import { useSearchParams } from 'react-router-dom'
@@ -57,6 +58,7 @@ type Draft = {
   request?: string | undefined
   batch?: string | undefined
   task?: string | undefined
+  attempt?: string | undefined
   operation?: string | undefined
   related?: string | undefined
 }
@@ -102,6 +104,7 @@ function ActivityRows({
   )
 }
 function ActivityDetail({
+  runtime,
   audit,
   binding,
   device,
@@ -112,6 +115,7 @@ function ActivityDetail({
   onOpen,
   onDenied,
 }: {
+  runtime: Runtime
   audit: AuditUseCases
   binding: string
   device: string
@@ -139,6 +143,25 @@ function ActivityDetail({
   useEffect(() => {
     if (denied) onDenied()
   }, [denied])
+  const fact = read.value?.activity,
+    mismatch =
+      context.attempt &&
+      fact &&
+      (fact.links.task !== context.task || fact.links.attempt !== context.attempt),
+    entries: CopyEntry[] = fact
+      ? [
+          {
+            label: l('原管理活动', 'Original management activity'),
+            target: { selector: { kind: 'activity', id: fact.id } },
+          },
+        ]
+      : []
+  if (fact?.target && fact.links.task && fact.links.attempt) {
+    const selector = { kind: 'task' as const, task: fact.links.task, attempt: fact.links.attempt }
+    entries.push({ label: l('原任务', 'Original task'), target: { selector } })
+    for (const step of new Set(fact.links.steps))
+      entries.push({ label: `${l('步骤', 'Step')} ${step}`, target: { selector, step } })
+  }
   return (
     <Card
       title={
@@ -162,13 +185,33 @@ function ActivityDetail({
     >
       <ReadState busy={read.busy} error={read.error} locale={locale} />
       <ReadState busy={!!cursor && related.busy} error={related.error} locale={locale} />
-      {read.value && !read.error && !related.error && !denied && (
+      {mismatch && (
+        <Alert
+          type="warning"
+          title={l(
+            '此活动不属于原尝试。',
+            'This activity does not belong to the original attempt.',
+          )}
+        />
+      )}
+      {read.value && !mismatch && !read.error && !related.error && !denied && (
         <>
           <ActivityFactView
             fact={read.value.activity}
             device={device}
             locale={locale}
             context={context}
+          />
+          <EntryCopies
+            runtime={runtime}
+            locale={locale}
+            entries={entries}
+            device={fact?.target?.device ?? device}
+            expected={
+              fact?.target
+                ? { registrationId: fact.target.registration, generation: fact.target.generation }
+                : undefined
+            }
           />
           <p className="subtitle">
             {l('详情观察时间', 'Detail observed as of')} · {timestamp(locale, read.value.asOf)}
@@ -336,13 +379,20 @@ export function AuditWorkspace({
     setSelected('')
     setInputError(null)
     const href = auditHref(next)
-    setParams(new URLSearchParams(href.split('?')[1] ?? ''))
+    const nextParams = new URLSearchParams(href.split('?')[1] ?? '')
+    if (fixedDevice)
+      for (const key of ['tab', 'endpoint', 'retirement', 'returnTo']) {
+        const value = params.get(key)
+        if (value !== null) nextParams.set(key, value)
+      }
+    setParams(nextParams)
   }
   function submit(value: Draft) {
     try {
       const raw: AuditContext = {
         ...value,
         view: value.view,
+        ...(value.view !== 'activities' ? { attempt: undefined } : {}),
         ...(fixedDevice ? { device: fixedDevice } : {}),
         from: recordedTime(value.from),
         until: recordedTime(value.until),
@@ -440,6 +490,13 @@ export function AuditWorkspace({
                     ['operation', l('原生 operation ID', 'Native operation ID')],
                     ['request', l('原请求 ID', 'Original request ID')],
                     ['task', l('任务 ID', 'Task ID')],
+                    [
+                      'attempt',
+                      l(
+                        '原尝试 ID（当前页内匹配）',
+                        'Original attempt ID (match within the current page)',
+                      ),
+                    ],
                     ['batch', l('批次 ID', 'Batch ID')],
                     ['source', l('来源', 'Source')],
                     ['kind', l('活动类别', 'Activity kind')],
@@ -600,7 +657,28 @@ export function AuditWorkspace({
                   {coverage.reasons.join(' · ')}
                 </p>
               ))}
-              <ActivityRows rows={activities.items} locale={locale} onOpen={open} />
+              {context.attempt && (
+                <p className="subtitle">
+                  {l(
+                    '仅显示本页匹配的原尝试事实。分页与覆盖仍对应服务端任务查询。',
+                    'Only facts for the original attempt on this page are shown. Pagination and coverage apply to the server task query.',
+                  )}{' '}
+                  <code>{context.attempt}</code>
+                </p>
+              )}
+              <ActivityRows
+                rows={
+                  context.attempt
+                    ? activities.items.filter(
+                        (fact) =>
+                          fact.links.task === context.task &&
+                          fact.links.attempt === context.attempt,
+                      )
+                    : activities.items
+                }
+                locale={locale}
+                onOpen={open}
+              />
               <p className="subtitle">
                 {l(
                   '固定历史快照，不提供浏览器增量同步。',
@@ -648,6 +726,7 @@ export function AuditWorkspace({
         context.device &&
         selectedActivity && (
           <ActivityDetail
+            runtime={runtime}
             key={`${binding}/${authority}/${context.device}/${selectedActivity}`}
             audit={audit}
             binding={`${binding}/${authority}`}
