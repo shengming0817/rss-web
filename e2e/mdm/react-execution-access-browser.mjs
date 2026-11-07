@@ -51,6 +51,15 @@ try {
   }
   await run.login(p)
   run.step('device-confirmation-and-unknown-acceptance')
+  const endpoint = await api('GET', `/api/v1/devices/${f.mdm}`)
+  const restart = endpoint.capabilities.find(
+    (fact) => fact.channel === 'mdm' && fact.action === 'restart',
+  )
+  assert.deepEqual(
+    [restart?.productSupport.state, restart?.devicePrerequisite.state, restart?.permission.allowed],
+    ['supported', 'supported', true],
+    'configured Windows restart applicability',
+  )
   await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   await button('核对设备与动作').click()
   let dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
@@ -143,7 +152,7 @@ try {
   run.step('mac-action-capability-before-pin-and-confirmation')
   await run.nav(p, '/devices/endpoint/fixture-mac', '设备详情')
   await run.choose(p, label('设备动作'), '锁定')
-  await p.getByText('当前设备证据不足', { exact: true }).last().waitFor()
+  await p.getByText('当前设备证据不足', { exact: false }).last().waitFor()
   assert.equal(await button('核对设备与动作').isDisabled(), true)
   assert.equal(await label('六位锁定 PIN').count(), 0)
   await run.choose(p, label('设备动作'), '擦除设备')

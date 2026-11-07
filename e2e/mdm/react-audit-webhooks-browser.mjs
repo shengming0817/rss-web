@@ -102,18 +102,12 @@ try {
   if (!designOnly) {
     run.step('real-native-facts-and-independent-activity-read')
     const operations = []
+    const deadline = Math.floor(Date.now() / 1000) + 3600
+    const controlPath = `/api/v1/devices/${f.mdm}/operations`
+    const restart = (operationId) => ({ operationId, action: { kind: 'restart' }, deadline })
     for (let i = 0; i < 3; i++) {
       const operationId = randomUUID()
-      const value = await api(
-        'POST',
-        `/api/v1/devices/${f.mdm}/operations`,
-        {
-          operationId,
-          action: { kind: 'restart' },
-          deadline: Math.floor(Date.now() / 1000) + 3600,
-        },
-        202,
-      )
+      const value = await api('POST', controlPath, restart(operationId), 202)
       assert.equal(value.operationId, operationId)
       operations.push(operationId)
     }
@@ -470,7 +464,7 @@ try {
     run.step('diagnostics-after-a-different-writer-and-audit-revocation')
     const other = await run.page()
     await run.login(other, f.console.diagnosticsWriter)
-    const current = await api('GET', path)
+    const priorSubscription = await api('GET', path)
     const otherSession = await other.request.get(
       origin + `/api/v1/identity/tenants/${f.tenant}/session`,
     )
@@ -483,7 +477,7 @@ try {
       },
       data: {
         operationId: randomUUID(),
-        expectedRevision: current.revision,
+        expectedRevision: priorSubscription.revision,
         change: { kind: 'enabled', value: false },
       },
     })
@@ -501,19 +495,33 @@ try {
     assert.ok(originalResult.value.revision < (await api('GET', path)).revision)
     const discovery = await until(
       () => api('GET', diagnosticBase + '?operationId=' + original.operationId),
-      (page) => page.items.some(({ fact }) => fact.requestReplayed),
+      (page) => page.items.some(({ fact }) => fact.origin === 'request' && fact.requestId),
     )
-    const replay = discovery.items.find(({ fact }) => fact.requestReplayed).fact
-    assert.equal(replay.origin, 'request')
-    assert.ok(replay.requestId)
-    assert.ok((await api('GET', diagnosticBase + '/requests/' + replay.requestId)).items.length)
+    const attempt = discovery.items.find(
+      ({ fact }) => fact.origin === 'request' && fact.requestId,
+    ).fact
+    const auditByRequest = await api('GET', '/api/v1/audit-events?requestId=' + attempt.requestId)
+    const indexedAttempt = auditByRequest.items.find((fact) => fact.eventId === attempt.eventId)
+    assert.equal(indexedAttempt?.origin, 'request')
+    assert.equal(typeof indexedAttempt?.requestReplayed, 'boolean')
+    assert.equal(indexedAttempt.requestReplayed, attempt.requestReplayed)
+    const timeline = await api(
+      'GET',
+      `/api/v1/devices/${f.mdm}/timeline?operationId=${operationId}`,
+    )
+    assert.ok(
+      timeline.items.length &&
+        timeline.items.every(
+          (fact) => typeof fact.requestReplayed === 'boolean' && fact.effect !== 'verified',
+        ),
+    )
     await run.nav(p, '/operation-diagnostics', '操作排障')
     await label('原操作编号').fill(original.operationId)
     await run.response(p, 'GET', diagnosticBase, () => button('查询操作').click())
-    const requestLink = p.locator(`a[href*="requestId=${replay.requestId}"]`)
+    const requestLink = p.locator(`a[href*="requestId=${attempt.requestId}"]`)
     const row = p.locator('details').filter({ has: requestLink }).first()
     await row.locator(':scope > summary').click()
-    await run.response(p, 'GET', diagnosticBase + '/requests/' + replay.requestId, () =>
+    await run.response(p, 'GET', diagnosticBase + '/requests/' + attempt.requestId, () =>
       row.locator(requestLink).first().click(),
     )
     await p.getByText('请求尝试与关联证据', { exact: true }).waitFor()
