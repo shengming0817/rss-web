@@ -244,51 +244,61 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
     }
   }
   return {
-    endpoints: (query) =>
+    endpoints: (query, signal) =>
       api.getApiV1Devices(
         transport,
-        { query: directory(query, 'id', 1000) },
+        { signal, query: directory(query, 'id', 1000) },
         (value) => projectedPage(value, endpointFields, query.fields, ['id']) as Page<EndpointRow>,
       ),
-    endpoint: (id) =>
-      api.getApiV1DevicesByDevice(transport, { pathParams: { device: identifier(id) } }, (value) =>
-        endpoint(value, id),
+    endpoint: (id, signal) =>
+      api.getApiV1DevicesByDevice(
+        transport,
+        { signal, pathParams: { device: identifier(id) } },
+        (value) => endpoint(value, id),
       ),
-    endpointStatistics: (filter) =>
-      api.getApiV1DevicesStatistics(transport, { query: queryParameters({ filter }) }, (value) => ({
-        statistics: {
-          total: count(value.statistics.total),
-          pending: count(value.statistics.pending),
-          active: count(value.statistics.active),
-          revoked: count(value.statistics.revoked),
-        },
-        asOf: integer(value.asOf),
-      })),
-    views: (query) =>
-      api.getApiV1DeviceViews(transport, { query: directory(query, 'key', 100) }, (value) => {
-        const page = projectedPage(
-          value,
-          {
-            key: text,
-            reference,
-            association: (v: unknown) => (v === null ? null : association(v)),
-            endpoints: (v: unknown) => {
-              if (!Array.isArray(v)) throw new Error('Invalid view endpoints')
-              return v.map((e) => viewEndpoint(e, tenant))
-            },
+    endpointStatistics: (filter, signal) =>
+      api.getApiV1DevicesStatistics(
+        transport,
+        { signal, query: queryParameters({ filter }) },
+        (value) => ({
+          statistics: {
+            total: count(value.statistics.total),
+            pending: count(value.statistics.pending),
+            active: count(value.statistics.active),
+            revoked: count(value.statistics.revoked),
           },
-          query.fields,
-          ['key'],
-        ) as Page<ViewRow>
-        for (const row of page.items)
-          if (row.reference && row.endpoints && row.association !== undefined) {
-            validateViewBinding(row.reference, row.association, row.endpoints)
-            if (row.key !== referenceKey(row.reference)) throw new Error('Wrong view key')
-          }
-        return page
-      }),
-    view: (ref) =>
-      api.getApiV1DeviceViewsByKindById(transport, { pathParams: { ...ref } }, (value) => {
+          asOf: integer(value.asOf),
+        }),
+      ),
+    views: (query, signal) =>
+      api.getApiV1DeviceViews(
+        transport,
+        { signal, query: directory(query, 'key', 100) },
+        (value) => {
+          const page = projectedPage(
+            value,
+            {
+              key: text,
+              reference,
+              association: (v: unknown) => (v === null ? null : association(v)),
+              endpoints: (v: unknown) => {
+                if (!Array.isArray(v)) throw new Error('Invalid view endpoints')
+                return v.map((e) => viewEndpoint(e, tenant))
+              },
+            },
+            query.fields,
+            ['key'],
+          ) as Page<ViewRow>
+          for (const row of page.items)
+            if (row.reference && row.endpoints && row.association !== undefined) {
+              validateViewBinding(row.reference, row.association, row.endpoints)
+              if (row.key !== referenceKey(row.reference)) throw new Error('Wrong view key')
+            }
+          return page
+        },
+      ),
+    view: (ref, signal) =>
+      api.getApiV1DeviceViewsByKindById(transport, { signal, pathParams: { ...ref } }, (value) => {
         const summary = viewSummary(value, tenant)
         if (referenceKey(summary.reference) !== referenceKey(ref))
           throw new Error('Wrong device view')
@@ -306,10 +316,10 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
           ),
         } satisfies DeviceView
       }),
-    viewStatistics: (filter) =>
+    viewStatistics: (filter, signal) =>
       api.getApiV1DeviceViewsStatistics(
         transport,
-        { query: queryParameters({ filter }) },
+        { signal, query: queryParameters({ filter }) },
         (value) => ({
           statistics: {
             endpointCount: count(value.statistics.endpointCount),
@@ -318,33 +328,41 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
           asOf: integer(value.asOf),
         }),
       ),
-    associations: (query) =>
-      api.getApiV1DeviceAssociations(transport, { query: directory(query, 'id', 100) }, (value) => {
-        const page = projectedPage(
-          value,
-          { id: uuid, version: positive, confirmedAt: integer, association },
-          query.fields,
-          ['id'],
-        ) as Page<AssociationRow>
-        for (const row of page.items)
-          if (
-            row.association &&
-            (row.association.id !== row.id ||
-              (row.version !== undefined && row.version !== row.association.version))
-          )
-            throw new Error('Wrong association row')
-        return page
-      }),
-    association: (id) =>
-      api.getApiV1DeviceAssociationsById(transport, { pathParams: { id: uuid(id) } }, (value) => {
-        const result = association(value)
-        if (result.id !== id) throw new Error('Wrong association')
-        return result
-      }),
-    changes: (query) =>
+    associations: (query, signal) =>
+      api.getApiV1DeviceAssociations(
+        transport,
+        { signal, query: directory(query, 'id', 100) },
+        (value) => {
+          const page = projectedPage(
+            value,
+            { id: uuid, version: positive, confirmedAt: integer, association },
+            query.fields,
+            ['id'],
+          ) as Page<AssociationRow>
+          for (const row of page.items)
+            if (
+              row.association &&
+              (row.association.id !== row.id ||
+                (row.version !== undefined && row.version !== row.association.version))
+            )
+              throw new Error('Wrong association row')
+          return page
+        },
+      ),
+    association: (id, signal) =>
+      api.getApiV1DeviceAssociationsById(
+        transport,
+        { signal, pathParams: { id: uuid(id) } },
+        (value) => {
+          const result = association(value)
+          if (result.id !== id) throw new Error('Wrong association')
+          return result
+        },
+      ),
+    changes: (query, signal) =>
       api.getApiV1DeviceAssociationsChanges(
         transport,
-        { query: windowParameters(query, 64) },
+        { signal, query: windowParameters(query, 64) },
         (value) => ({
           items: value.items.map((c) => ({
             association: association(c.association),
@@ -355,10 +373,11 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
           nextCursor: nextCursor(value.nextCursor),
         }),
       ),
-    candidates: (device, channel, query) =>
+    candidates: (device, channel, query, signal) =>
       api.getApiV1DevicesByDeviceAssociationCandidates(
         transport,
         {
+          signal,
           pathParams: { device: identifier(device) },
           query: { ...windowParameters(query, 100), channel },
         },

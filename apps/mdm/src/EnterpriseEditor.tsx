@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space, Switch } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
 import {
@@ -39,6 +39,7 @@ export function EnterpriseEditor({
   id: string | null
   onChanged(): void
 }) {
+  const formName = useId()
   const l = labels(locale),
     { deviceAccess, authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/enterprise-write`, authorization.effective),
@@ -46,8 +47,10 @@ export function EnterpriseEditor({
       permissions.value?.grants.some(
         (g) => g.operation === 'enterprise_applications_write' && g.scope.kind === 'tenant',
       ) ?? false,
-    read = useRead(`${binding}/enterprise-detail/${id}`, () =>
-      id ? deviceAccess.enterpriseDetail(id) : Promise.resolve(null),
+    read = useRead(
+      `${binding}/enterprise-detail/${id}`,
+      (signal) => (id ? deviceAccess.enterpriseDetail(id, signal) : Promise.resolve(null)),
+      { retryReadConflict: true },
     ),
     [form] = Form.useForm<Values>(),
     kind = Form.useWatch('kind', form) ?? 'relying_party',
@@ -156,6 +159,7 @@ export function EnterpriseEditor({
         locale={locale}
         busy={read.busy || permissions.busy}
         error={read.error ?? permissions.error}
+        onRetry={read.error ? read.reload : permissions.reload}
       />
       {id && (
         <p>
@@ -173,6 +177,7 @@ export function EnterpriseEditor({
         />
       )}
       <Form
+        name={formName}
         form={form}
         layout="vertical"
         disabled={!canWrite || !!pending || action.busy || (!!id && !read.value?.configuration)}

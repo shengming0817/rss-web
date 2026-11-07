@@ -11,6 +11,7 @@ import {
   isUnknown,
   labels,
   ReadState,
+  readFailure,
   useAction,
   useRead,
   type Query,
@@ -121,16 +122,20 @@ function FixedFacets({
   inventory,
   locale,
   task,
+  onRerun,
 }: {
   inventory: InventoryUseCases
   locale: Locale
   task: string
+  onRerun?: (() => void) | undefined
 }) {
   const l = labels(locale),
     [facet, setFacet] = useState<'os_versions' | 'channels' | 'asset_states'>('os_versions'),
     [query, setQuery] = useState<Query>({ limit: 20 }),
-    read = useRead(`${task}/facets/${facet}/${JSON.stringify(query)}`, () =>
-      inventory.facets(task, facet, query),
+    read = useRead(
+      `${task}/facets/${facet}/${JSON.stringify(query)}`,
+      (signal) => inventory.facets(task, facet, query, signal),
+      { retryReadConflict: false },
     )
   return (
     <Card size="small" title={l('固定结果分布', 'Fixed result facets')}>
@@ -148,7 +153,17 @@ function FixedFacets({
         }}
       />
       <Button onClick={read.reload}>{l('读取分布', 'Read facets')}</Button>
-      <ReadState locale={locale} busy={read.busy} error={read.error} />
+      <ReadState
+        locale={locale}
+        busy={read.busy}
+        error={read.error}
+        onRetry={read.reload}
+        onRestart={
+          readFailure(read.error) === 'result'
+            ? onRerun
+            : () => (query.cursor ? setQuery(firstPage(query)) : read.reload())
+        }
+      />
       {read.value && (
         <>
           <DataTable
@@ -169,9 +184,6 @@ function FixedFacets({
           />
         </>
       )}
-      {!!read.error && query.cursor && (
-        <Button onClick={() => setQuery(firstPage(query))}>{l('返回首页', 'First page')}</Button>
-      )}
     </Card>
   )
 }
@@ -179,21 +191,26 @@ export function FixedQueryResult({
   inventory,
   locale,
   task,
+  onRerun,
 }: {
   inventory: InventoryUseCases
   locale: Locale
   task: string
+  onRerun?: (() => void) | undefined
 }) {
   const l = labels(locale),
     [query, setQuery] = useState<Query>({ limit: 20 }),
     [columns, setColumns] = useState<readonly string[]>([]),
-    status = useRead(`query-status/${task}`, () => inventory.queryStatus(task)),
+    status = useRead(`query-status/${task}`, (signal) => inventory.queryStatus(task, signal), {
+      retryReadConflict: false,
+    }),
     results = useRead(
       `query-items/${task}/${status.value?.status ?? ''}/${JSON.stringify(query)}`,
-      () =>
+      (signal) =>
         status.value?.status === 'completed'
-          ? inventory.queryItems(task, query)
+          ? inventory.queryItems(task, query, signal)
           : Promise.resolve(null),
+      { retryReadConflict: false },
     )
   const available = [
       ...new Set((results.value?.items ?? []).flatMap((item) => Object.keys(item.fields))),
@@ -212,7 +229,13 @@ export function FixedQueryResult({
       >
         {l('读取查询进度与结果', 'Read query progress and results')}
       </Button>
-      <ReadState locale={locale} busy={status.busy} error={status.error} />
+      <ReadState
+        locale={locale}
+        busy={status.busy}
+        error={status.error}
+        onRetry={status.reload}
+        onRestart={onRerun}
+      />
       {status.value && (
         <>
           <p>
@@ -234,7 +257,17 @@ export function FixedQueryResult({
           </dl>
         </>
       )}
-      <ReadState locale={locale} busy={results.busy} error={results.error} />
+      <ReadState
+        locale={locale}
+        busy={results.busy}
+        error={results.error}
+        onRetry={results.reload}
+        onRestart={
+          readFailure(results.error) === 'result'
+            ? onRerun
+            : () => (query.cursor ? setQuery(firstPage(query)) : results.reload())
+        }
+      />
       {results.value && (
         <>
           <Alert
@@ -302,14 +335,18 @@ export function FixedQueryResult({
             query={query}
             onChange={setQuery}
           />
-          <FixedFacets inventory={inventory} locale={locale} task={task} />
+          <FixedFacets inventory={inventory} locale={locale} task={task} onRerun={onRerun} />
         </>
       )}
-      {!!results.error && query.cursor && (
-        <Button onClick={() => setQuery(firstPage(query))}>
-          {l('游标失效，返回首页', 'Cursor expired; return to first page')}
-        </Button>
-      )}
+      {!onRerun &&
+        [status.error, results.error].some((error) => readFailure(error) === 'result') && (
+          <p>
+            {l(
+              '请返回原查询定义，显式运行一次新查询。',
+              'Return to the original query definition and explicitly run a new query.',
+            )}
+          </p>
+        )}
     </Card>
   )
 }
@@ -431,7 +468,27 @@ export function QueryExecution({
               </Space>
             )}
           </div>
-          <FixedQueryResult key={task} inventory={inventory} locale={locale} task={task} />
+          <FixedQueryResult
+            key={task}
+            inventory={inventory}
+            locale={locale}
+            task={task}
+            onRerun={
+              outcome === 'accepted' && !action.busy
+                ? () => {
+                    const operationId = crypto.randomUUID()
+                    const next: Execution = freeze(
+                      pending.kind === 'query'
+                        ? { ...pending, operationId }
+                        : { ...pending, change: { ...pending.change, operationId } },
+                    )
+                    setPending(next)
+                    setOutcome('none')
+                    void submit(next)
+                  }
+                : undefined
+            }
+          />
         </>
       )}
     </>

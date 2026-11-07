@@ -42,10 +42,10 @@ export function createExecutionAdapter(
     }
   }
   return {
-    statistics: (filter) =>
+    statistics: (filter, signal) =>
       api.getApiV1OperationsStatistics(
         transport,
-        { query: queryParameters(filter ? { filter } : {}) },
+        { signal, query: queryParameters(filter ? { filter } : {}) },
         (value) => ({
           total: count(value.statistics.total),
           commands: count(value.statistics.commands),
@@ -127,10 +127,10 @@ export function createExecutionAdapter(
                 receivedAt: integer(value.received_at),
               },
       ),
-    list: (query) =>
+    list: (query, signal) =>
       api.getApiV1Operations(
         transport,
-        { query: queryParameters({ limit: 20, ...query, fields }) },
+        { signal, query: queryParameters({ limit: 20, ...query, fields }) },
         (value) => {
           const items: Execution[] = value.items.map((item) => ({
             id: uuid(item.id),
@@ -149,10 +149,10 @@ export function createExecutionAdapter(
           return { items, nextCursor: nextCursor(value.nextCursor) }
         },
       ),
-    command: (device, id) =>
+    command: (device, id, signal) =>
       api.getApiV1DevicesByDeviceOperationsById(
         transport,
-        { pathParams: { device, id: uuid(id) } },
+        { signal, pathParams: { device, id: uuid(id) } },
         (value) => {
           if (
             !schema.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(value) ||
@@ -194,10 +194,10 @@ export function createExecutionAdapter(
           }
         },
       ),
-    run: (policy, id) =>
+    run: (policy, id, signal) =>
       api.getApiV1PoliciesByIdRunsByTask(
         transport,
-        { pathParams: { id: uuid(policy), task: uuid(id) } },
+        { signal, pathParams: { id: uuid(policy), task: uuid(id) } },
         (value) => {
           if (
             !schema.getApiV1PoliciesByIdRunsByTaskResponse.validateRoot(value) ||

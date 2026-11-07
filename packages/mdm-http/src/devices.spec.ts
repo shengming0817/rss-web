@@ -9,20 +9,25 @@ function fixture(value: unknown) {
 }
 it('preserves a projected endpoint row and sends formal server query controls', async () => {
   const f = fixture({ items: [{ id: 'endpoint-a', status: 'active' }], nextCursor: null }),
-    client = createDevicesAdapter(f.transport, tenant)
+    client = createDevicesAdapter(f.transport, tenant),
+    signal = new AbortController().signal
   expect(
     (
-      await client.endpoints({
-        fields: ['id', 'status'],
-        filter: "status=='active'",
-        sort: ['-id'],
-        limit: 3,
-      })
+      await client.endpoints(
+        {
+          fields: ['id', 'status'],
+          filter: "status=='active'",
+          sort: ['-id'],
+          limit: 3,
+        },
+        signal,
+      )
     ).items,
   ).toEqual([{ id: 'endpoint-a', status: 'active' }])
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       path: '/api/v1/devices',
+      signal,
       query: { fields: 'id,status', filter: "status=='active'", sort: '-id', limit: 3 },
     }),
   )

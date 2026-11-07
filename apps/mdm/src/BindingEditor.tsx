@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
 import {
@@ -67,13 +67,17 @@ export function BindingEditor({
   isNew: boolean
   onChanged(): void
 }) {
+  const formName = useId()
   const l = labels(locale),
     { deviceAccess, authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/binding-write/${device}`, authorization.effective),
     permitted = devicePermission(permissions.value?.grants ?? [], device, 'account_write'),
     [known, setKnown] = useState(!isNew),
-    read = useRead(`${binding}/binding-detail/${device}/${id}/${known}/${permitted}`, () =>
-      known && permitted ? deviceAccess.binding(device, id) : Promise.resolve(null),
+    read = useRead(
+      `${binding}/binding-detail/${device}/${id}/${known}/${permitted}`,
+      (signal) =>
+        known && permitted ? deviceAccess.binding(device, id, signal) : Promise.resolve(null),
+      { retryReadConflict: true },
     ),
     [form] = Form.useForm<Values>(),
     kind = Form.useWatch('kind', form) ?? 'put',
@@ -211,6 +215,7 @@ export function BindingEditor({
         locale={locale}
         busy={read.busy || permissions.busy}
         error={read.error ?? permissions.error}
+        onRetry={read.error ? read.reload : permissions.reload}
       />
       {read.value && (
         <dl className="device-facts">
@@ -237,6 +242,7 @@ export function BindingEditor({
         </dl>
       )}
       <Form
+        name={formName}
         form={form}
         layout="vertical"
         disabled={!permitted || !!pending || action.busy || read.busy || permissions.busy}

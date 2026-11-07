@@ -10,6 +10,7 @@ export default defineConfig({
           include: [
             '*.spec.ts',
             'apps/mdm/src/lifecycle.spec.ts',
+            'apps/mdm/src/read-lifecycle.spec.ts',
             'apps/mdm/src/telemetry-lifecycle.spec.ts',
             'apps/mdm/src/setup-lifecycle.spec.ts',
             'apps/mdm/src/execution-lifecycle.spec.ts',

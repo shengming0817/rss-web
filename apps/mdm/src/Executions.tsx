@@ -46,7 +46,8 @@ function ExecutionFacts({
     { execution, binding } = useAdministration(runtime),
     read = usePageRead(
       `${binding}/execution/${reference.kind}/${reference.id}/${reference.policy ?? ''}`,
-      () => execution.detail(reference),
+      (signal) => execution.detail(reference, signal),
+      { retryReadConflict: true },
     )
   const [recovery, setRecovery] = useState<Parameters<typeof ControlRecoveryPanel>[0] | null>(null)
   useEffect(() => {
@@ -76,7 +77,13 @@ function ExecutionFacts({
   }, [read.value, runtime, locale])
   return (
     <Card title={l('原操作与结果', 'Original operation and result')}>
-      <ReadState locale={locale} busy={read.busy} error={read.error} empty={read.value === null} />
+      <ReadState
+        locale={locale}
+        busy={read.busy}
+        error={read.error}
+        empty={read.value === null}
+        onRetry={read.reload}
+      />
       <Button onClick={read.reload}>{l('重新查询原操作', 'Read original operation again')}</Button>
       {read.value && (
         <>
@@ -190,11 +197,15 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
     cursor = params.get('cursor'),
     [draft, setDraft] = useState(filter),
     query: Query = { limit: 20, ...(filter ? { filter } : {}), ...(cursor ? { cursor } : {}) },
-    read = usePageRead(`${binding}/executions/${JSON.stringify(query)}`, () =>
-      execution.list(query),
+    read = usePageRead(
+      `${binding}/executions/${JSON.stringify(query)}`,
+      (signal) => execution.list(query, signal),
+      { retryReadConflict: !query.cursor },
     ),
-    statistics = usePageRead(`${binding}/execution-statistics/${filter}`, () =>
-      execution.statistics(filter || undefined),
+    statistics = usePageRead(
+      `${binding}/execution-statistics/${filter}`,
+      (signal) => execution.statistics(filter || undefined, signal),
+      { retryReadConflict: true },
     ),
     operation = params.get('operation'),
     kind = params.get('kind'),
@@ -230,7 +241,12 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
           'The directory includes scripts and collections. Observe current eligibility separately from historical results; an earliest allowed start is not a device execution promise.',
         )}
       </p>
-      <ReadState locale={locale} busy={statistics.busy} error={statistics.error} />
+      <ReadState
+        locale={locale}
+        busy={statistics.busy}
+        error={statistics.error}
+        onRetry={statistics.reload}
+      />
       {statistics.value && (
         <>
           <div className="execution-metrics">
@@ -279,6 +295,14 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
         busy={read.busy}
         error={read.error}
         empty={read.value?.items.length === 0}
+        onRetry={read.reload}
+        onRestart={() => {
+          if (query.cursor) {
+            const next = new URLSearchParams(params)
+            next.delete('cursor')
+            setParams(next)
+          } else read.reload()
+        }}
       />
       {read.value && (
         <>

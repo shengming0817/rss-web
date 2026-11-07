@@ -50,10 +50,14 @@ function fixture(rows: readonly Execution[] = [item]) {
 }
 it('keeps an applied command with unknown effect distinct and resolves detail by the exact directory identity', async () => {
   const f = fixture(),
-    result = await f.core.detail({ kind: 'command', id })
+    signal = new AbortController().signal,
+    result = await f.core.detail({ kind: 'command', id }, signal)
   expect(result?.detail.effect).toBe('unknown')
-  expect(f.port.command).toHaveBeenCalledWith('device', id)
-  expect(f.port.list).toHaveBeenCalledWith({ filter: `id=='${id}';kind=='command'`, limit: 2 })
+  expect(f.port.command).toHaveBeenCalledWith('device', id, signal)
+  expect(f.port.list).toHaveBeenCalledWith(
+    { filter: `id=='${id}';kind=='command'`, limit: 2 },
+    signal,
+  )
 })
 it('rejects wrong targets, ambiguous identities and malformed IDs before detail transport', async () => {
   const f = fixture([{ ...item, device: 'another' }])

@@ -4,6 +4,7 @@ import { Alert, Button, Checkbox, Space } from 'antd'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import {
+  firstPage,
   CursorControls,
   DirectoryControls,
   Failure,
@@ -36,19 +37,23 @@ export function DeviceRegistration({
     [approved, setApproved] = useState(false),
     [pending, setPending] = useState<{ registration: string; operationId: string } | null>(null),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
-    read = useRead(`${binding}/device-registrations/${device}/${JSON.stringify(query)}`, () =>
-      enrollment.registrations(
-        device,
-        directoryQuery(query, [
-          'registrationId',
-          'enrollmentId',
-          'certificateGrantId',
-          'userContextId',
-          'source',
-          'generation',
-          'status',
-        ] as const),
-      ),
+    read = useRead(
+      `${binding}/device-registrations/${device}/${JSON.stringify(query)}`,
+      (signal) =>
+        enrollment.registrations(
+          device,
+          directoryQuery(query, [
+            'registrationId',
+            'enrollmentId',
+            'certificateGrantId',
+            'userContextId',
+            'source',
+            'generation',
+            'status',
+          ] as const),
+          signal,
+        ),
+      { retryReadConflict: !query.cursor },
     )
   usePendingSelection(
     action.busy || (pending !== null && !['confirmed', 'rejected'].includes(outcome)),
@@ -92,7 +97,13 @@ export function DeviceRegistration({
         required="registrationId"
         maximum={1000}
       />
-      <ReadState busy={read.busy} error={read.error} locale={locale} />
+      <ReadState
+        busy={read.busy}
+        error={read.error}
+        locale={locale}
+        onRetry={read.reload}
+        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
+      />
       <Failure error={action.error} locale={locale} />
       {read.value && (
         <>

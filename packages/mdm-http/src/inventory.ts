@@ -236,30 +236,34 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
         (value) => accepted(value, operationId),
       ),
-    queryStatus: (id) =>
-      api.getApiV1DeviceQueriesById(transport, { pathParams: { id: uuid(id) } }, (value) => {
-        const result = asset(value, tenant, 'query_status')
-        if (
-          result.task !== id ||
-          (result.resultUrl !== null &&
-            result.resultUrl !== api.getApiV1DeviceQueriesByIdItems.url({ id }))
-        )
-          throw new Error('Wrong fixed query coordinates')
-        return {
-          ...result,
-          status: enumeration(result.status, [
-            'pending',
-            'running',
-            'completed',
-            'failed',
-          ] as const),
-          summary: summary(result.summary),
-        }
-      }),
-    queryItems: (id, query = {}) =>
+    queryStatus: (id, signal) =>
+      api.getApiV1DeviceQueriesById(
+        transport,
+        { signal, pathParams: { id: uuid(id) } },
+        (value) => {
+          const result = asset(value, tenant, 'query_status')
+          if (
+            result.task !== id ||
+            (result.resultUrl !== null &&
+              result.resultUrl !== api.getApiV1DeviceQueriesByIdItems.url({ id }))
+          )
+            throw new Error('Wrong fixed query coordinates')
+          return {
+            ...result,
+            status: enumeration(result.status, [
+              'pending',
+              'running',
+              'completed',
+              'failed',
+            ] as const),
+            summary: summary(result.summary),
+          }
+        },
+      ),
+    queryItems: (id, query = {}, signal) =>
       api.getApiV1DeviceQueriesByIdItems(
         transport,
-        { pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        { signal, pathParams: { id: uuid(id) }, query: windowQuery(query) },
         (value) => {
           const result = asset(value, tenant, 'page')
           if (result.snapshot !== id) throw new Error('Wrong fixed query snapshot')
@@ -273,10 +277,10 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
           }
         },
       ),
-    facets: (id, facet, query = {}) =>
+    facets: (id, facet, query = {}, signal) =>
       api.getApiV1DeviceQueriesByIdFacetsByFacet(
         transport,
-        { pathParams: { id: uuid(id), facet }, query: windowQuery(query) },
+        { signal, pathParams: { id: uuid(id), facet }, query: windowQuery(query) },
         (value) => {
           const result = asset(value, tenant, 'facets')
           if (result.task !== id || result.facet !== facet)
@@ -358,70 +362,75 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
           }
         },
       ),
-    view: (reference) =>
-      api.getApiV1DeviceViewsByKindById(transport, { pathParams: { ...reference } }, (value) => {
-        const identity = viewSummary(value, tenant)
-        if (referenceKey(identity.reference) !== referenceKey(reference))
-          throw new Error('Wrong asset view')
-        const endpoint = (id: string) => {
-          if (!identity.endpoints.some((item) => item.id === id))
-            throw new Error('Wrong asset source endpoint')
-          return id
-        }
-        return {
-          ...identity,
-          fields: Object.fromEntries(
-            Object.entries(value.fields).map(([key, field]) => {
-              if (field.field !== key) throw new Error('Wrong view field')
-              return [
+    view: (reference, signal) =>
+      api.getApiV1DeviceViewsByKindById(
+        transport,
+        { signal, pathParams: { ...reference } },
+        (value) => {
+          const identity = viewSummary(value, tenant)
+          if (referenceKey(identity.reference) !== referenceKey(reference))
+            throw new Error('Wrong asset view')
+          const endpoint = (id: string) => {
+            if (!identity.endpoints.some((item) => item.id === id))
+              throw new Error('Wrong asset source endpoint')
+            return id
+          }
+          return {
+            ...identity,
+            fields: Object.fromEntries(
+              Object.entries(value.fields).map(([key, field]) => {
+                if (field.field !== key) throw new Error('Wrong view field')
+                return [
+                  key,
+                  {
+                    field: key,
+                    state: state(field.state),
+                    sources: field.sources.map((source) => ({
+                      endpoint: endpoint(source.endpoint),
+                      fact: sourceFact(source.fact),
+                    })),
+                  },
+                ]
+              }),
+            ),
+            lists: Object.fromEntries(
+              Object.entries(value.lists).map(([key, field]) => [
                 key,
                 {
-                  field: key,
-                  state: state(field.state),
+                  state: viewListState(field.state),
+                  itemKey: field.itemKey,
                   sources: field.sources.map((source) => ({
+                    ...source,
                     endpoint: endpoint(source.endpoint),
-                    fact: sourceFact(source.fact),
+                    state: viewListState(source.state),
+                    evidence: evidence(source.evidence),
+                    lastKnown:
+                      source.lastKnown === null
+                        ? null
+                        : {
+                            state: viewListState(source.lastKnown.state),
+                            evidence: evidence(source.lastKnown.evidence),
+                          },
                   })),
                 },
-              ]
-            }),
-          ),
-          lists: Object.fromEntries(
-            Object.entries(value.lists).map(([key, field]) => [
-              key,
-              {
-                state: viewListState(field.state),
-                itemKey: field.itemKey,
-                sources: field.sources.map((source) => ({
-                  ...source,
-                  endpoint: endpoint(source.endpoint),
-                  state: viewListState(source.state),
-                  evidence: evidence(source.evidence),
-                  lastKnown:
-                    source.lastKnown === null
-                      ? null
-                      : {
-                          state: viewListState(source.lastKnown.state),
-                          evidence: evidence(source.lastKnown.evidence),
-                        },
-                })),
-              },
-            ]),
-          ),
-          inventorySources: value.inventorySources.map((source) => ({
-            endpoint: endpoint(source.endpoint),
-            quality: source.quality.map(qualityRun),
-            revisions: Object.fromEntries(
-              Object.entries(source.revisions).map(([key, revision]) => [key, count(revision)]),
+              ]),
             ),
-          })),
-        }
-      }),
-    list: (query) =>
+            inventorySources: value.inventorySources.map((source) => ({
+              endpoint: endpoint(source.endpoint),
+              quality: source.quality.map(qualityRun),
+              revisions: Object.fromEntries(
+                Object.entries(source.revisions).map(([key, revision]) => [key, count(revision)]),
+              ),
+            })),
+          }
+        },
+      ),
+    list: (query, signal) =>
       query.reference.kind === 'association'
         ? api.getApiV1DeviceViewsByKindByIdInventoryListsByField(
             transport,
             {
+              signal,
               pathParams: { ...query.reference, field: query.field },
               query: { cursor: query.cursor, limit: query.limit ?? 50 },
             },
@@ -448,6 +457,7 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         : api.postApiV1DevicesByIdInventoryListsByField(
             transport,
             {
+              signal,
               pathParams: { id: query.endpoint, field: query.field },
               body: {
                 scope: requestInput(

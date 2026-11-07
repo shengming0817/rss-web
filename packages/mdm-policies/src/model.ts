@@ -226,7 +226,7 @@ export interface PoliciesPort {
     query: WindowQuery,
   ): Promise<PolicyPreview>
   assignments(id: string, query: WindowQuery): Promise<Page<Assignment>>
-  runs(id: string, query: WindowQuery): Promise<Page<PolicyRun>>
+  runs(id: string, query: WindowQuery, signal?: AbortSignal): Promise<Page<PolicyRun>>
   rollout(id: string): Promise<RolloutProgress>
 }
 export interface Qualification {

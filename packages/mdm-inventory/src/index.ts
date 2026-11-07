@@ -81,13 +81,13 @@ export function createInventory(port: InventoryPort) {
       if (result.task !== operationId) throw new Error('Wrong query receipt')
       return result
     },
-    async queryStatus(task: string) {
-      const result = await port.queryStatus(uuid(task))
+    async queryStatus(task: string, signal?: AbortSignal) {
+      const result = await port.queryStatus(uuid(task), signal)
       if (result.task !== task) throw new Error('Wrong query status')
       return result
     },
-    async queryItems(task: string, query: WindowQuery = {}) {
-      const result = await port.queryItems(uuid(task), query)
+    async queryItems(task: string, query: WindowQuery = {}, signal?: AbortSignal) {
+      const result = await port.queryItems(uuid(task), query, signal)
       if (result.snapshot !== task) throw new Error('Wrong fixed result')
       return result
     },
@@ -95,7 +95,8 @@ export function createInventory(port: InventoryPort) {
       task: string,
       facet: 'os_versions' | 'channels' | 'asset_states',
       query: WindowQuery = {},
-    ) => port.facets(uuid(task), facet, query),
+      signal?: AbortSignal,
+    ) => port.facets(uuid(task), facet, query, signal),
     savedQueries: (query: DirectoryQuery<keyof SavedQueryRow> = {}) => port.savedQueries(query),
     savedQuery: (id: string) => port.savedQuery(uuid(id)),
     async putSavedQuery(id: string, change: Operation<SavedQueryChange>) {
@@ -125,12 +126,12 @@ export function createInventory(port: InventoryPort) {
     },
     inventory: (device: string, scope: CollectionScope = { kind: 'device' }) =>
       port.inventory(identifier(device), scope),
-    view: (target: DeviceRef) => {
+    view: (target: DeviceRef, signal?: AbortSignal) => {
       reference(target)
-      return port.view(target)
+      return port.view(target, signal)
     },
     scopes: (device: string, query: WindowQuery = {}) => port.scopes(identifier(device), query),
-    list: (query: ListRead) => {
+    list: (query: ListRead, signal?: AbortSignal) => {
       reference(query.reference)
       identifier(query.endpoint)
       fieldKey(query.field)
@@ -140,7 +141,7 @@ export function createInventory(port: InventoryPort) {
         throw new Error('Invalid page size')
       if (query.reference.kind === 'endpoint' && query.reference.id !== query.endpoint)
         throw new Error('Wrong list endpoint')
-      return port.list(freeze({ ...query, limit }))
+      return port.list(freeze({ ...query, limit }), signal)
     },
     collection: (device: string, run: string, namespace: CollectionScope = { kind: 'device' }) =>
       port.collection(identifier(device), uuid(run), namespace),

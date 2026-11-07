@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { webcrypto } from 'node:crypto'
-import { act, createElement as h } from 'react'
+import { act, createElement as h, Fragment } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -12,6 +12,7 @@ import { ControlRecoveryPanel } from './ControlRecovery'
 import { isUnknown } from './AdminUi'
 import { decodeMdmError } from '@rss/api/mdm'
 import { EnterpriseEditor } from './EnterpriseEditor'
+import { BindingEditor } from './BindingEditor'
 import { Policies } from './Policies'
 import { Executions, policyReturnPath } from './Executions'
 import type { EnterpriseConfiguration } from '@rss/mdm-device-access'
@@ -440,7 +441,11 @@ it.each(['runs', 'assignments'])(
       }),
     )
     if (tab === 'runs')
-      expect(runs.mock.lastCall).toEqual([policy, { limit: 20, cursor: 'run-page-2' }])
+      expect(runs.mock.lastCall).toEqual([
+        policy,
+        { limit: 20, cursor: 'run-page-2' },
+        expect.any(AbortSignal),
+      ])
     else
       expect(assignments.mock.lastCall).toEqual([
         policy,
@@ -459,4 +464,91 @@ it('never applies a policy return locator to another policy or an external host'
     '/policies/other?policy=a',
   ])
     expect(policyReturnPath('a', value)).toBe('/policies?policy=a')
+})
+
+it.each(['binding', 'enterprise'])(
+  'retries the failed %s permission read without issuing a write',
+  async (kind) => {
+    const effective = vi
+      .fn()
+      .mockRejectedValueOnce(decodeMdmError(503, { code: 'unavailable' }))
+      .mockResolvedValue({ grants: [] })
+    const runtime = {
+      host: { serviceId: '22222222-2222-4222-8222-222222222222' },
+      administration: () => ({
+        binding: 'permission-retry',
+        authorization: { effective },
+        deviceAccess: {},
+      }),
+    } as unknown as Runtime
+    await act(async () =>
+      root.render(
+        kind === 'binding'
+          ? h(BindingEditor, {
+              runtime,
+              locale: 'zh',
+              device: 'device',
+              id: '11111111-1111-4111-8111-111111111111',
+              isNew: true,
+              onChanged() {},
+            })
+          : h(EnterpriseEditor, { runtime, locale: 'zh', id: null, onChanged() {} }),
+      ),
+    )
+    expect(effective).toHaveBeenCalledTimes(1)
+    await act(async () => button('重新读取').click())
+    expect(effective).toHaveBeenCalledTimes(2)
+    expect(host.querySelector('[role=alert]')).toBeNull()
+  },
+)
+
+it('binds labels to their own controls when binding and enterprise editors share the page', async () => {
+  const runtime = {
+    host: { serviceId: '22222222-2222-4222-8222-222222222222' },
+    administration: () => ({
+      binding: 'both-editors',
+      deviceAccess: {},
+      authorization: {
+        effective: async () => ({
+          grants: [
+            { operation: 'account_write', scope: { kind: 'all_devices' } },
+            { operation: 'enterprise_applications_write', scope: { kind: 'tenant' } },
+          ],
+        }),
+      },
+    }),
+  } as unknown as Runtime
+  await act(async () =>
+    root.render(
+      h(
+        Fragment,
+        null,
+        h(BindingEditor, {
+          runtime,
+          locale: 'zh',
+          device: 'device',
+          id: '11111111-1111-4111-8111-111111111111',
+          isNew: true,
+          onChanged() {},
+        }),
+        h(EnterpriseEditor, { runtime, locale: 'zh', id: null, onChanged() {} }),
+      ),
+    ),
+  )
+  const labels = [...host.querySelectorAll('label')].filter((node) =>
+    ['绑定动作', '配置类型'].includes(node.textContent ?? ''),
+  )
+  expect(labels).toHaveLength(2)
+  const controls = labels.map((label) => document.getElementById(label.htmlFor))
+  expect(controls.every(Boolean)).toBe(true)
+  expect(controls[0]).not.toBe(controls[1])
+  await act(async () => controls[1]!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+  const option = [...document.querySelectorAll<HTMLElement>('.ant-select-item-option')].find(
+    (node) => node.textContent === '账户主体映射',
+  )
+  expect(option).toBeDefined()
+  await act(async () => option!.click())
+  expect(
+    [...host.querySelectorAll('label')].some((label) => label.textContent === 'Provider UUID'),
+  ).toBe(true)
 })

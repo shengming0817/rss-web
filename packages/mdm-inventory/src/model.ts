@@ -470,19 +470,20 @@ export interface InventoryPort {
     change: Operation<{ readonly groups: readonly DisplayGroup[] }>,
   ): Promise<{ readonly revision: number }>
   query(operationId: string, definition: QueryDefinition): Promise<QueryAccepted>
-  queryStatus(task: string): Promise<QueryStatus>
-  queryItems(task: string, query: WindowQuery): Promise<FixedResult>
+  queryStatus(task: string, signal?: AbortSignal): Promise<QueryStatus>
+  queryItems(task: string, query: WindowQuery, signal?: AbortSignal): Promise<FixedResult>
   facets(
     task: string,
     facet: 'os_versions' | 'channels' | 'asset_states',
     query: WindowQuery,
+    signal?: AbortSignal,
   ): Promise<Page<{ readonly label: string; readonly total: number }>>
   savedQueries(query: DirectoryQuery<keyof SavedQueryRow>): Promise<Page<SavedQueryRow>>
   savedQuery(id: string): Promise<SavedQuery>
   putSavedQuery(id: string, change: Operation<SavedQueryChange>): Promise<SavedQuery>
   executeSavedQuery(id: string, change: Operation<Record<string, never>>): Promise<QueryAccepted>
   inventory(device: string, scope: CollectionScope): Promise<InventoryView>
-  view(reference: DeviceRef): Promise<AssetView>
+  view(reference: DeviceRef, signal?: AbortSignal): Promise<AssetView>
   scopes(
     device: string,
     query: WindowQuery,
@@ -492,7 +493,7 @@ export interface InventoryPort {
       readonly assetCut: AssetCut
     }
   >
-  list(query: ListRead): Promise<ListItems>
+  list(query: ListRead, signal?: AbortSignal): Promise<ListItems>
   collection(device: string, run: string, scope: CollectionScope): Promise<CollectionRun>
   collectionItems(
     device: string,

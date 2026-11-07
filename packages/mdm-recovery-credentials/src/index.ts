@@ -61,17 +61,17 @@ function disclosure(result: Disclosure, target: MaterialRef): Disclosure {
 }
 /** Credential acceptance and device observation remain separate from escrow and verification. */
 export function createRecoveryCredentials(port: RecoveryCredentialsPort) {
-  async function exact(target: MaterialRef): Promise<Material> {
+  async function exact(target: MaterialRef, signal?: AbortSignal): Promise<Material> {
     validateReference(target)
-    const value = await port.material(target)
+    const value = await port.material(target, signal)
     validateMaterial(value, target)
     return value
   }
   return Object.freeze({
-    list: (device: string, query: DirectoryQuery<keyof Material> = {}) => {
+    list: (device: string, query: DirectoryQuery<keyof Material> = {}, signal?: AbortSignal) => {
       if (query.fields && (!query.fields.includes('id') || !query.fields.includes('version')))
         throw new Error('Material projections require exact identity')
-      return port.list(identifier(device, 256), query)
+      return port.list(identifier(device, 256), query, signal)
     },
     material: exact,
     async configuration(device: string, registration: Registration | null = null) {

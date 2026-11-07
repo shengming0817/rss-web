@@ -455,12 +455,13 @@ export function createEnrollmentAdapter(
             4 * 1024 * 1024,
           ),
       ),
-    registrations: (device, query) => {
+    registrations: (device, query, signal) => {
       if (query.fields && !query.fields.includes('registrationId'))
         throw new Error('Registration identity required')
       return api.getApiV1DevicesByDeviceRegistrations(
         transport,
         {
+          signal,
           pathParams: { device: identifier(device) },
           query: queryParameters({ limit: 20, ...query }),
         },

@@ -43,10 +43,11 @@ export function AssociationEditor({
     [outcome, setOutcome] = useState<'none' | 'unknown' | 'rejected' | 'confirmed'>('none')
   const candidates = useRead(
     `${binding}/candidates/${endpoint.id}/${channel}/${cursor ?? ''}/${open}`,
-    () =>
+    (signal) =>
       open
-        ? devices.candidates(endpoint.id, channel, cursor ? { cursor } : {})
+        ? devices.candidates(endpoint.id, channel, cursor ? { cursor } : {}, signal)
         : Promise.resolve(null),
+    { retryReadConflict: !cursor },
   )
   const locked = sent && outcome !== 'rejected' && outcome !== 'confirmed'
   usePendingSelection(action.busy || locked)
@@ -131,7 +132,13 @@ export function AssociationEditor({
               }}
             />
           </Form.Item>
-          <ReadState busy={candidates.busy} error={candidates.error} locale={locale} />
+          <ReadState
+            busy={candidates.busy}
+            error={candidates.error}
+            locale={locale}
+            onRetry={candidates.reload}
+            onRestart={() => (cursor ? setCursor(undefined) : candidates.reload())}
+          />
           <Form.Item label={l('对侧通道候选终端', 'Candidate on the other channel')}>
             <Select
               aria-label={l('对侧通道候选终端', 'Candidate on the other channel')}

@@ -39,20 +39,28 @@ import {
 export function createDevices(port: DevicesPort, tenant: string) {
   uuid(tenant)
   return Object.freeze({
-    endpoints: (query: DirectoryQuery<keyof Endpoint> = {}) => port.endpoints(query),
-    endpoint: (id: string) => port.endpoint(deviceId(id)),
-    endpointStatistics: (filter?: string) => port.endpointStatistics(filter),
-    views: (query: DirectoryQuery<keyof ViewRow> = {}) => port.views(query),
-    view: (reference: DeviceRef) => {
+    endpoints: (query: DirectoryQuery<keyof Endpoint> = {}, signal?: AbortSignal) =>
+      port.endpoints(query, signal),
+    endpoint: (id: string, signal?: AbortSignal) => port.endpoint(deviceId(id), signal),
+    endpointStatistics: (filter?: string, signal?: AbortSignal) =>
+      port.endpointStatistics(filter, signal),
+    views: (query: DirectoryQuery<keyof ViewRow> = {}, signal?: AbortSignal) =>
+      port.views(query, signal),
+    view: (reference: DeviceRef, signal?: AbortSignal) => {
       referenceKey(reference)
-      return port.view(reference)
+      return port.view(reference, signal)
     },
-    viewStatistics: (filter?: string) => port.viewStatistics(filter),
-    associations: (query: DirectoryQuery<keyof AssociationRow> = {}) => port.associations(query),
-    association: (id: string) => port.association(uuid(id)),
-    changes: (query: WindowQuery = {}) => port.changes(query),
-    candidates: (device: string, channel: 'mdm' | 'agent', query: WindowQuery = {}) =>
-      port.candidates(deviceId(device), channel, query),
+    viewStatistics: (filter?: string, signal?: AbortSignal) => port.viewStatistics(filter, signal),
+    associations: (query: DirectoryQuery<keyof AssociationRow> = {}, signal?: AbortSignal) =>
+      port.associations(query, signal),
+    association: (id: string, signal?: AbortSignal) => port.association(uuid(id), signal),
+    changes: (query: WindowQuery = {}, signal?: AbortSignal) => port.changes(query, signal),
+    candidates: (
+      device: string,
+      channel: 'mdm' | 'agent',
+      query: WindowQuery = {},
+      signal?: AbortSignal,
+    ) => port.candidates(deviceId(device), channel, query, signal),
     async prepareConfirmation(
       operationId: string,
       mdmId: string,

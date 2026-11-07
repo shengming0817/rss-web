@@ -30,8 +30,11 @@ export function EndpointPicker({
     action = useAction(),
     [filter, setFilter] = useState(''),
     [query, setQuery] = useState<Query>({ limit: 10 }),
-    read = useRead(`endpoint-picker/${JSON.stringify(query)}`, () =>
-      devices.endpoints({ ...query, fields: ['id', 'status', 'primaryMdmRegistration'] }),
+    read = useRead(
+      `endpoint-picker/${JSON.stringify(query)}`,
+      (signal) =>
+        devices.endpoints({ ...query, fields: ['id', 'status', 'primaryMdmRegistration'] }, signal),
+      { retryReadConflict: !query.cursor },
     )
   usePendingSelection(action.busy)
   return (
@@ -49,7 +52,13 @@ export function EndpointPicker({
           {l('查询终端候选', 'Find endpoint candidates')}
         </Button>
       </Space>
-      <ReadState locale={locale} busy={read.busy} error={read.error} />
+      <ReadState
+        locale={locale}
+        busy={read.busy}
+        error={read.error}
+        onRetry={read.reload}
+        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
+      />
       <Failure locale={locale} error={action.error} kind="read" />
       {read.value && (
         <>

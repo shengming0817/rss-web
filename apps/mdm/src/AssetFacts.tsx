@@ -185,12 +185,18 @@ function ListContents({
 }) {
   const l = labels(locale),
     [query, setQuery] = useState<Query>({ limit: 50 }),
-    read = useRead(`inventory-list/${JSON.stringify(initial)}/${JSON.stringify(query)}`, () =>
-      inventory.list({
-        ...initial,
-        cursor: query.cursor ?? initial.cursor,
-        limit: query.limit ?? 50,
-      }),
+    read = useRead(
+      `inventory-list/${JSON.stringify(initial)}/${JSON.stringify(query)}`,
+      (signal) =>
+        inventory.list(
+          {
+            ...initial,
+            cursor: query.cursor ?? initial.cursor,
+            limit: query.limit ?? 50,
+          },
+          signal,
+        ),
+      { retryReadConflict: false },
     )
   return (
     <Card
@@ -209,7 +215,13 @@ function ListContents({
           }}
         />
       </Form.Item>
-      <ReadState locale={locale} busy={read.busy} error={read.error} />
+      <ReadState
+        locale={locale}
+        busy={read.busy}
+        error={read.error}
+        onRetry={read.reload}
+        onRestart={refresh}
+      />
       {read.value && (
         <>
           <p className="subtitle">
@@ -424,7 +436,11 @@ export function AssetFacts({
   const l = labels(locale),
     guard = useSelectionGuard(),
     layout = useRead('asset-layout', inventory.layout),
-    view = useRead(`asset-view/${reference.kind}/${reference.id}`, () => inventory.view(reference)),
+    view = useRead(
+      `asset-view/${reference.kind}/${reference.id}`,
+      (signal) => inventory.view(reference, signal),
+      { retryReadConflict: true },
+    ),
     [namespace, setNamespace] = useState<CollectionScope>({ kind: 'device' }),
     [scopeQuery, setScopeQuery] = useState<Query>({ limit: 20 }),
     scopes = useRead(`asset-scopes/${endpoint}/${JSON.stringify(scopeQuery)}`, () =>
@@ -451,7 +467,7 @@ export function AssetFacts({
     <SelectionGuard.Provider value={guard.register}>
       <Card title={l('实时资产事实', 'Live asset facts')}>
         <Button onClick={refresh}>{l('读取最新资产事实', 'Read latest asset facts')}</Button>
-        <ReadState locale={locale} busy={view.busy} error={view.error} />
+        <ReadState locale={locale} busy={view.busy} error={view.error} onRetry={view.reload} />
         {view.value && (
           <>
             <p className="subtitle">

@@ -4,7 +4,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import type { Policy } from '@rss/mdm-policies'
 import type { PoliciesUseCases } from './PolicyPreview'
 import type { Locale } from './i18n'
-import { CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'
+import { firstPage, CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'
 import { Status, statusText, timestamp } from './DevicePresentation'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
@@ -228,8 +228,10 @@ export function PolicyRuns({
       limit: 20,
       ...(params.get('runCursor') ? { cursor: params.get('runCursor')! } : {}),
     },
-    read = usePageRead(`policy-runs/${policy.id}/${JSON.stringify(query)}`, () =>
-      policies.runs(policy.id, query),
+    read = usePageRead(
+      `policy-runs/${policy.id}/${JSON.stringify(query)}`,
+      (signal) => policies.runs(policy.id, query, signal),
+      { retryReadConflict: !query.cursor },
     )
   function setQuery(next: Query) {
     const value = new URLSearchParams(params)
@@ -245,6 +247,8 @@ export function PolicyRuns({
         busy={read.busy}
         error={read.error}
         empty={read.value?.items.length === 0}
+        onRetry={read.reload}
+        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
       />
       {read.value && (
         <>

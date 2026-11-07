@@ -14,12 +14,14 @@ import {
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import {
+  firstPage,
   type Query,
   DirectoryControls,
   Failure,
   isUnknown,
   labels,
   ReadState,
+  readFailure,
   useAction,
   useRead,
 } from './AdminUi'
@@ -56,16 +58,21 @@ export function RecoveryCredentials({
     canOperate = has('security_operate'),
     list = useRead(
       `${binding}/recovery-materials/${endpoint.id}/${canRead}/${JSON.stringify(query)}`,
-      () => (canRead ? credentials.list(endpoint.id, query) : Promise.resolve(null)),
+      (signal) => (canRead ? credentials.list(endpoint.id, query, signal) : Promise.resolve(null)),
+      { retryReadConflict: !query.cursor },
     ),
     detail = useRead(
       `${binding}/recovery-material/${selected?.id ?? ''}/${selected?.version ?? ''}/${canRead}`,
-      () => (canRead && selected ? credentials.material(selected) : Promise.resolve(null)),
+      (signal) =>
+        canRead && selected ? credentials.material(selected, signal) : Promise.resolve(null),
+      { retryReadConflict: true },
     )
   usePendingSelection(guard.locked)
   useEffect(() => {
-    if (!guard.locked) setHeld(detail.value ?? null)
-  }, [detail.value, guard.locked])
+    if (!guard.locked)
+      setHeld(readFailure(list.error) === 'denied' || !canRead ? null : (detail.value ?? null))
+  }, [detail.value, guard.locked, list.error, detail.error, canRead])
+  const visible = canRead && !!list.value && !!detail.value
   const current =
     selected && held && held.id === selected.id && held.version === selected.version ? held : null
   return (
@@ -123,6 +130,8 @@ export function RecoveryCredentials({
               error={list.error}
               empty={list.value?.items.length === 0}
               locale={locale}
+              onRetry={list.reload}
+              onRestart={() => (query.cursor ? setQuery(firstPage(query)) : list.reload())}
             />
             {list.value && (
               <>
@@ -190,23 +199,26 @@ export function RecoveryCredentials({
           </Card>
         </fieldset>
       </SecretPanel>
-      {selected && <ReadState busy={detail.busy} error={detail.error} locale={locale} />}
+      {selected && (
+        <ReadState
+          busy={detail.busy}
+          error={detail.error}
+          locale={locale}
+          onRetry={detail.reload}
+        />
+      )}
       {current && (
-        <SecretPanel active={canRead && !detail.error && !detail.busy}>
-          <fieldset
-            className="permission-panel"
-            hidden={!canRead || !!detail.error || detail.busy}
-            disabled={!canRead || !!detail.error || detail.busy}
-          >
+        <SecretPanel active={visible}>
+          <fieldset className="permission-panel" hidden={!visible} disabled={!visible}>
             <MaterialDetail
               key={`${current.binding.device}/${current.id}/${current.version}`}
               runtime={runtime}
               credentials={credentials}
               value={current}
               locale={locale}
-              canDisclose={canDisclose}
-              canRead={canRead}
-              canRevoke={has(revokePermission(current.binding.subject))}
+              canDisclose={visible && canDisclose}
+              canRead={visible}
+              canRevoke={visible && has(revokePermission(current.binding.subject))}
               onRefresh={() => {
                 detail.reload()
                 list.reload()
@@ -241,7 +253,7 @@ export function RecoveryCredentials({
           <NativeCredentialOperation
             credentials={credentials}
             endpoint={endpoint}
-            selected={current}
+            selected={visible ? current : null}
             locale={locale}
             canOperate={canOperate}
             canConfigure={has('configuration_write')}

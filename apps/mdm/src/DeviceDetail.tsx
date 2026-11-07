@@ -199,7 +199,11 @@ function EndpointFacts({
 }) {
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
-    read = useRead(`${binding}/endpoint-detail/${endpoint.id}`, () => devices.endpoint(endpoint.id))
+    read = useRead(
+      `${binding}/endpoint-detail/${endpoint.id}`,
+      (signal) => devices.endpoint(endpoint.id, signal),
+      { retryReadConflict: true },
+    )
   return (
     <>
       <Card title={l('终端摘要', 'Endpoint summary')}>
@@ -283,7 +287,7 @@ function EndpointFacts({
         ))}
       </Card>
       <Card title={l('当前能力事实', 'Current capability facts')}>
-        <ReadState busy={read.busy} error={read.error} locale={locale} />
+        <ReadState busy={read.busy} error={read.error} locale={locale} onRetry={read.reload} />
         {read.value && (
           <DataTable
             locale={locale}
@@ -330,16 +334,18 @@ function Detail({
     [selected, setSelected] = useState(''),
     [snapshot, setSnapshot] = useState<DeviceView>(),
     [heldEndpoint, setHeldEndpoint] = useState<ViewEndpoint>(),
-    read = useRead(`${binding}/device-view/${reference.kind}/${reference.id}`, () =>
-      devices.view(reference),
+    read = useRead(
+      `${binding}/device-view/${reference.kind}/${reference.id}`,
+      (signal) => devices.view(reference, signal),
+      { retryReadConflict: true },
     )
   useEffect(() => {
     if (read.value) setSnapshot(read.value)
   }, [read.value])
-  // Old facts are hidden on a failed read. Retain operation owners until the same bound
-  // endpoint is observed again; a changed tenant/principal/session remounts this subtree.
+  // Retain operation owners while loading or denied, but display facts only from a
+  // successful current read; a changed tenant/principal/session remounts this subtree.
   const retained = read.value ?? snapshot,
-    view = read.error ? undefined : retained,
+    view = read.value,
     endpoint = selected ? view?.endpoints.find((e) => e.id === selected) : view?.endpoints[0],
     mountedEndpoint = endpoint ?? heldEndpoint
   useEffect(() => {
@@ -360,7 +366,7 @@ function Detail({
           </Button>
         }
       />
-      <ReadState busy={read.busy} error={read.error} locale={locale} />
+      <ReadState busy={read.busy} error={read.error} locale={locale} onRetry={read.reload} />
       <Button onClick={permissions.reload}>
         {l('读取设备资产与合规权限', 'Read device inventory and compliance permissions')}
       </Button>
