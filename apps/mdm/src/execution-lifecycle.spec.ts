@@ -887,6 +887,61 @@ it.each(['//[', '//%'])(
   },
 )
 
+it('keeps the default endpoint location during a delayed control preflight', async () => {
+  const view = { association: null, endpoints: [endpoint], fields: {} }
+  let release!: (value: typeof view) => void
+  const preflight = new Promise<typeof view>((resolve) => {
+    release = resolve
+  })
+  const read = vi.fn().mockResolvedValue(view).mockReturnValueOnce(Promise.resolve(view))
+  const runtime = {
+    administration: () => ({
+      binding: 'default-endpoint',
+      authorization: {
+        effective: async () => ({
+          grants: [{ operation: 'device_control', scope: { kind: 'all_devices' } }],
+        }),
+      },
+      devices: {
+        view: read,
+        endpoint: async () => ({ ...endpoint, capabilities: [] }),
+      },
+      execution: {},
+      connections: { agent: {} },
+    }),
+  } as unknown as Runtime
+  function Location() {
+    const location = useLocation()
+    return h('output', { 'data-location': true }, location.key + location.search)
+  }
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        { initialEntries: [`/devices/endpoint/${endpoint.id}`] },
+        h(Location),
+        h(
+          Routes,
+          null,
+          h(Route, {
+            path: '/devices/:kind/:id',
+            element: h(DeviceDetail, { runtime, locale: 'zh' }),
+          }),
+        ),
+      ),
+    ),
+  )
+  const location = () => host.querySelector('[data-location]')!.textContent
+  const before = location()
+  read.mockReturnValueOnce(preflight)
+  await act(async () => button('核对设备与动作').click())
+  expect(read).toHaveBeenLastCalledWith({ kind: 'endpoint', id: endpoint.id })
+  expect(location()).toBe(before)
+  await act(async () => release(view))
+  expect(document.querySelector('[role=dialog]')).not.toBeNull()
+  expect(location()).toBe(before)
+})
+
 it('uses URL endpoint selection for back and forward while retaining an unknown operation target', async () => {
   const association = '33333333-3333-4333-8333-333333333333',
     endpoints = [

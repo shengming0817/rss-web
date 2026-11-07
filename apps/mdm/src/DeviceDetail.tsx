@@ -348,8 +348,9 @@ function Detail({
   // successful current read; a changed tenant/principal/session remounts this subtree.
   const retained = read.value ?? snapshot,
     view = read.value,
-    selected = guard.locked && heldEndpoint ? heldEndpoint.id : (params.get('endpoint') ?? ''),
-    endpoint = selected ? view?.endpoints.find((e) => e.id === selected) : view?.endpoints[0],
+    requested = params.get('endpoint') || retained?.endpoints[0]?.id,
+    selected = guard.locked && heldEndpoint ? heldEndpoint.id : requested,
+    endpoint = view?.endpoints.find((e) => e.id === selected),
     mountedEndpoint = endpoint ?? heldEndpoint
   useEffect(() => {
     if (endpoint) {
@@ -357,12 +358,12 @@ function Detail({
     }
   }, [endpoint])
   useEffect(() => {
-    if (guard.locked && heldEndpoint && params.get('endpoint') !== heldEndpoint.id) {
+    if (guard.locked && heldEndpoint && requested !== heldEndpoint.id) {
       const next = new URLSearchParams(params)
       next.set('endpoint', heldEndpoint.id)
       setParams(next, { replace: true })
     }
-  }, [guard.locked, heldEndpoint, params, setParams])
+  }, [guard.locked, heldEndpoint, params, requested, setParams])
   return (
     <>
       <Link to={resultSourcePath(params.get('returnTo')) ?? '/devices'}>
