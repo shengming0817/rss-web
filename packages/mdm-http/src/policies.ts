@@ -97,10 +97,10 @@ function policyRun(item: api.getApiV1PoliciesByIdRunsContract.Output['items'][nu
 }
 export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
   return {
-    list: (query = {}) =>
+    list: (query = {}, signal) =>
       api.getApiV1Policies(
         transport,
-        { query: queryParameters({ limit: 20, ...query }) },
+        { signal, query: queryParameters({ limit: 20, ...query }) },
         (value) => {
           if (query.fields && !query.fields.includes('id'))
             throw new Error('Policy identity required')

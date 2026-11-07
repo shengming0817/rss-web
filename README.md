@@ -36,6 +36,10 @@ Webhook 材料写入要求最近 300 秒认证，本地密码账户可在原材�
 
 新 React `/scopes` 与 `/policies` 提供范围定义、服务端计算结果、精确 Resource/Scope 绑定、策略配置、自助发布、分配资格、独立设备事件及软件灰度。保存 Scope 会排队计算；Policy 资格预览不保存策略、不创建运行。配置修订、执行版本、成员受理、投递与设备效果分别展示。保存响应丢失时提示结果未知，保留原操作标识且不自动重放；管理员可刷新查看当前配置。事件继续只查询原批次。Scope 保存前可按 Agent/MDM 通道预览当前草稿的匹配样例，扫描未完成或存在未知时不会把空样例说成空范围；独立重算使用已保存定义且不递增定义修订。Group/Scope/字段/资源版本提供直接引用摘要，Group 的递归影响单独查询；空摘要不构成删除或归档许可。
 
+Policy 的“名称与入口”区分显示名称、稳定工具名、唯一别名和共享事件；清空字段并保存撤回该策略的关联，历史批次成员保持原版本。选择已核对的 Agent 终端后可复制查看链接或等价 `rssmdm open` 命令；任务步骤只在原 attempt 与注册代次匹配时提供复制。命令不承载参数、凭据或批准。批次成员可进入原执行、Policy 与活动审计，各页仍按原权限读取。
+
+Web 固定使用 `contracts/agent-entry/` 中的现有 Agent Rust 契约与规范向量。普通安装与构建不读取 Agent checkout；`MDM_AGENT_ENTRY_SOURCE=/absolute/rss-mdm-agent pnpm test:agent-entry:rust` 使用固定 revision 的原 Rust 编解码器复核。升级 pin 后以同一变量运行 `node scripts/agent-entry-contract.mjs --refresh`。
+
 对应真实 HTTPS Chromium 入口为 `MDM_REACT_POLICY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-policy-browser`，复用设备隔离 fixture、构建租约和独立清理；覆盖范围定义、Policy 管理、原事件身份恢复与公开响应式页面。该入口只证明真实 HTTP/界面接缝，不能代替 Windows/macOS 设备效果验收。
 
 新 React `/telemetry` 可直接定位终端，设备详情的“遥测与采集”复用同一工作区。历史与 latest 查询保留注册、来源、epoch、字段版本和维度；选择实际观察序列后查询服务端聚合。接收健康和设备自报缺口分别读取，空缺口不代表完整覆盖。配置预览读取绑定的精确 Resource 版本与当前 Policy，采样定义在资源库维护，分配在策略维护；刷新只读数据。浏览器拒绝无法精确表示的整数，避免展示舍入结果。

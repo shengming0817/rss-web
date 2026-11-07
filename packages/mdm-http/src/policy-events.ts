@@ -141,26 +141,31 @@ export function createPolicyEventsAdapter(transport: HttpTransport): PolicyEvent
           }
         },
       ),
-    batches: (device, query = {}) =>
+    batches: (device, query = {}, signal) =>
       api.getApiV1DevicesByDevicePolicyEventBatches(
         transport,
-        { pathParams: { device: text(device) }, query: queryParameters({ limit: 20, ...query }) },
+        {
+          signal,
+          pathParams: { device: text(device) },
+          query: queryParameters({ limit: 20, ...query }),
+        },
         (value) => ({ items: value.items.map(batch), nextCursor: nextCursor(value.nextCursor) }),
       ),
-    batch: (device, id) =>
+    batch: (device, id, signal) =>
       api.getApiV1DevicesByDevicePolicyEventBatchesByBatch(
         transport,
-        { pathParams: { device: text(device), batch: uuid(id) } },
+        { signal, pathParams: { device: text(device), batch: uuid(id) } },
         (value) => {
           const result = batch(value)
           if (result.id !== id) throw new Error('Wrong batch identity')
           return result
         },
       ),
-    members: (device, id, query = {}) =>
+    members: (device, id, query = {}, signal) =>
       api.getApiV1DevicesByDevicePolicyEventBatchesByBatchMembers(
         transport,
         {
+          signal,
           pathParams: { device: text(device), batch: uuid(id) },
           query: queryParameters({ limit: 20, ...query }),
         },

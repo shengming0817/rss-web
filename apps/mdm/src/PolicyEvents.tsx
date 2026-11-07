@@ -1,11 +1,18 @@
-import { useState } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import type { Runtime } from './runtime'
+import { EntryCopies } from './EntryCopies'
+import { auditHref } from './audit-context'
+import { retirementPath, resultReturnPath } from './execution-context'
+import { executionPath } from './Executions'
+import { useState, useEffect } from 'react'
 import { Alert, Button, Card, Checkbox, Input, Space } from 'antd'
-import { freeze } from '@rss/mdm-inventory'
+import { freeze, uuid } from '@rss/mdm-inventory'
 import { validateEventRequest, type createPolicyEvents, type EventRequest } from '@rss/mdm-policies'
 import type { DevicesUseCases } from './EndpointPicker'
 import type { Locale } from './i18n'
 import {
   CursorControls,
+  firstPage,
   Failure,
   isUnknown,
   labels,
@@ -23,23 +30,45 @@ type EventsUseCases = ReturnType<typeof createPolicyEvents>
 export function PolicyEvents({
   events,
   devices,
+  runtime,
   event,
   locale,
   canSubmit,
 }: {
   events: EventsUseCases
   devices: DevicesUseCases
+  runtime: Runtime
   event: string | null
   locale: Locale
   canSubmit: boolean
 }) {
   const l = labels(locale),
-    [device, setDevice] = useState<string | null>(null),
-    guard = useSelectionGuard()
+    [params, setParams] = useSearchParams(),
+    [verified, setVerified] = useState<string | null>(null),
+    guard = useSelectionGuard(),
+    device = guard.locked && verified ? verified : params.get('eventDevice'),
+    source = resultReturnPath(params.get('returnTo'))
   usePendingSelection(guard.locked)
+  useEffect(() => {
+    if (guard.locked && verified && params.get('eventDevice') !== verified) {
+      const next = new URLSearchParams(params)
+      next.set('eventDevice', verified)
+      for (const key of ['batch', 'member', 'batchCursor', 'memberCursor']) next.delete(key)
+      setParams(next, { replace: true })
+    }
+  }, [guard.locked, verified, params, setParams])
+  function select(id: string) {
+    const next = new URLSearchParams(params)
+    next.set('eventDevice', id)
+    for (const key of ['batch', 'member', 'batchCursor', 'memberCursor']) next.delete(key)
+    setVerified(id)
+    setParams(next)
+  }
+
   return (
     <SelectionGuard.Provider value={guard.register}>
       <Card title={l('独立设备事件', 'Independent device events')}>
+        {source && <Link to={source}>{l('返回来源', 'Return to source')}</Link>}
         <p className="subtitle">
           {l(
             '事件面向一个已核对终端，可匹配多个策略；批次接受、成员决定和设备执行分别读取。',
@@ -47,16 +76,17 @@ export function PolicyEvents({
           )}
         </p>
         <fieldset className="permission-panel" disabled={guard.locked}>
-          <EndpointPicker devices={devices} locale={locale} onChange={setDevice} />
+          <EndpointPicker devices={devices} locale={locale} onChange={select} />
         </fieldset>
         {device && (
           <DeviceEvents
             key={device}
             events={events}
+            runtime={runtime}
             device={device}
             initialEvent={event ?? ''}
             locale={locale}
-            canSubmit={canSubmit}
+            canSubmit={canSubmit && device === verified}
           />
         )}
       </Card>
@@ -65,12 +95,14 @@ export function PolicyEvents({
 }
 function DeviceEvents({
   events,
+  runtime,
   device,
   initialEvent,
   locale,
   canSubmit,
 }: {
   events: EventsUseCases
+  runtime: Runtime
   device: string
   initialEvent: string
   locale: Locale
@@ -82,13 +114,32 @@ function DeviceEvents({
     [approved, setApproved] = useState(false),
     [pending, setPending] = useState<EventRequest | null>(null),
     [outcome, setOutcome] = useState<'none' | 'accepted' | 'unknown' | 'rejected'>('none'),
-    [selected, setSelected] = useState<string | null>(null),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
-    read = usePageRead(`policy-event-batches/${device}/${JSON.stringify(query)}`, () =>
-      events.batches(device, { limit: query.limit, cursor: query.cursor }),
+    [params, setParams] = useSearchParams(),
+    selected = params.get('batch'),
+    cursor = params.get('batchCursor'),
+    query = { limit: 20, ...(cursor ? { cursor } : {}) },
+    read = usePageRead(
+      `policy-event-batches/${device}/${JSON.stringify(query)}`,
+      (signal) => events.batches(device, query, signal),
+      { retryReadConflict: !query.cursor },
     ),
     locked = action.busy || outcome === 'unknown'
   usePendingSelection(locked)
+  function setSelected(id: string) {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous)
+      next.set('batch', id)
+      next.delete('member')
+      next.delete('memberCursor')
+      return next
+    })
+  }
+  function setQuery(next: Query) {
+    const value = new URLSearchParams(params)
+    if (next.cursor) value.set('batchCursor', next.cursor)
+    else value.delete('batchCursor')
+    setParams(value)
+  }
   async function submit() {
     const request = freeze({
       operationId: crypto.randomUUID(),
@@ -187,7 +238,13 @@ function DeviceEvents({
         </Button>
       )}
       <Button onClick={read.reload}>{l('读取设备事件批次', 'Read device event batches')}</Button>
-      <ReadState locale={locale} busy={read.busy} error={read.error} />
+      <ReadState
+        locale={locale}
+        busy={read.busy}
+        error={read.error}
+        onRetry={read.reload}
+        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
+      />
       {read.value && (
         <>
           <DataTable
@@ -228,6 +285,7 @@ function DeviceEvents({
         <EventMembers
           key={selected}
           events={events}
+          runtime={runtime}
           device={device}
           batch={selected}
           locale={locale}
@@ -238,21 +296,55 @@ function DeviceEvents({
 }
 function EventMembers({
   events,
+  runtime,
   device,
   batch,
   locale,
 }: {
   events: EventsUseCases
+  runtime: Runtime
   device: string
   batch: string
   locale: Locale
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
-    detail = usePageRead(`policy-event/${device}/${batch}`, () => events.batch(device, batch)),
-    read = usePageRead(`policy-event-members/${device}/${batch}/${JSON.stringify(query)}`, () =>
-      events.members(device, batch, { limit: query.limit, cursor: query.cursor }),
+    location = useLocation(),
+    [params, setParams] = useSearchParams(),
+    source = location.pathname + location.search,
+    member = params.get('member'),
+    cursor = params.get('memberCursor'),
+    query = { limit: 20, ...(cursor ? { cursor } : {}) },
+    detail = usePageRead(
+      `policy-event/${device}/${batch}`,
+      (signal) => events.batch(device, batch, signal),
+      { retryReadConflict: true },
+    ),
+    read = usePageRead(
+      `policy-event-members/${device}/${batch}/${JSON.stringify(query)}/${member ?? ''}`,
+      async (signal) => {
+        const page = await events.members(
+          device,
+          batch,
+          member ? { limit: 1, filter: `id=='${uuid(member)}'` } : query,
+          signal,
+        )
+        if (
+          member &&
+          (page.nextCursor ||
+            page.items.length > 1 ||
+            page.items.some((item) => item.id !== member))
+        )
+          throw new Error('Wrong event member identity')
+        return page
+      },
+      { retryReadConflict: !query.cursor },
     )
+  function setQuery(next: Query) {
+    const value = new URLSearchParams(params)
+    if (next.cursor) value.set('memberCursor', next.cursor)
+    else value.delete('memberCursor')
+    setParams(value)
+  }
   return (
     <Card title={l('批次成员与原操作进度', 'Batch members and original operation progress')}>
       <p>
@@ -270,14 +362,53 @@ function EventMembers({
         locale={locale}
         busy={detail.busy || read.busy}
         error={detail.error ?? read.error}
+        empty={read.value?.items.length === 0}
+        onRetry={() => {
+          detail.reload()
+          read.reload()
+        }}
+        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
       />
-      {detail.value && (
-        <p>
-          {detail.value.event} · {l('截止时间（UTC 秒）', 'Deadline (UTC seconds)')}{' '}
-          {detail.value.deadline} · {detail.value.processingFailure ?? '—'}
-        </p>
+      {member && (
+        <Button
+          onClick={() => {
+            const next = new URLSearchParams(params)
+            next.delete('member')
+            next.delete('memberCursor')
+            setParams(next)
+          }}
+        >
+          {l('查看全部成员', 'View all members')}
+        </Button>
       )}
-      {read.value && (
+      {detail.value && !read.error && (
+        <>
+          <p>
+            {detail.value.event} · {l('来源', 'Source')}: {detail.value.request.source.kind} ·{' '}
+            {l('截止时间（UTC 秒）', 'Deadline (UTC seconds)')} {detail.value.deadline} ·{' '}
+            {detail.value.processingFailure ?? '—'}
+          </p>
+          <Link to={auditHref({ view: 'activities', device, batch })}>
+            {l('查看批次管理活动', 'View batch management activity')}
+          </Link>
+          <EntryCopies
+            runtime={runtime}
+            locale={locale}
+            device={device}
+            entries={[
+              {
+                label: l('原事件批次', 'Original event batch'),
+                target: { selector: { kind: 'batch', id: batch } },
+              },
+              {
+                label: l('共享事件', 'Shared event'),
+                target: { selector: { kind: 'event', name: detail.value.event } },
+              },
+            ]}
+          />
+        </>
+      )}
+      {detail.value && read.value && (
         <>
           <DataTable
             locale={locale}
@@ -286,7 +417,16 @@ function EventMembers({
             columns={[
               {
                 title: l('策略 / 执行版本', 'Policy / execution version'),
-                render: (_, row) => `${row.policyId} / ${row.versionId} · r${row.revision}`,
+                render: (_, row) => (
+                  <>
+                    <Link
+                      to={`/policies?${new URLSearchParams({ policy: row.policyId, tab: 'definition', returnTo: source })}`}
+                    >
+                      {row.policyId}
+                    </Link>{' '}
+                    / {row.versionId} · r{row.revision}
+                  </>
+                ),
               },
               {
                 title: l('成员决定', 'Member decision'),
@@ -300,9 +440,20 @@ function EventMembers({
                     ? '—'
                     : row.operations.map((operation) => (
                         <p key={`${operation.reference.kind}/${operation.reference.id}`}>
-                          <code>
+                          <Link
+                            to={
+                              operation.reference.kind === 'retirement'
+                                ? retirementPath(device, operation.reference.id, source)
+                                : executionPath(
+                                    operation.reference.kind === 'run' ? 'action_run' : 'command',
+                                    operation.reference.id,
+                                    operation.reference.kind === 'run' ? row.policyId : undefined,
+                                    source,
+                                  )
+                            }
+                          >
                             {operation.reference.kind}/{operation.reference.id}
-                          </code>{' '}
+                          </Link>{' '}
                           ·{' '}
                           {typeof operation.state === 'string'
                             ? operation.state

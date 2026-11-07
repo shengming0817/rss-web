@@ -1,3 +1,4 @@
+import { EntryCopies, type CopyEntry } from './EntryCopies'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Select, Space } from 'antd'
 import { useSearchParams } from 'react-router-dom'
@@ -102,6 +103,7 @@ function ActivityRows({
   )
 }
 function ActivityDetail({
+  runtime,
   audit,
   binding,
   device,
@@ -112,6 +114,7 @@ function ActivityDetail({
   onOpen,
   onDenied,
 }: {
+  runtime: Runtime
   audit: AuditUseCases
   binding: string
   device: string
@@ -139,6 +142,21 @@ function ActivityDetail({
   useEffect(() => {
     if (denied) onDenied()
   }, [denied])
+  const fact = read.value?.activity,
+    entries: CopyEntry[] = fact
+      ? [
+          {
+            label: l('原管理活动', 'Original management activity'),
+            target: { selector: { kind: 'activity', id: fact.id } },
+          },
+        ]
+      : []
+  if (fact?.target && fact.links.task && fact.links.attempt) {
+    const selector = { kind: 'task' as const, task: fact.links.task, attempt: fact.links.attempt }
+    entries.push({ label: l('原任务', 'Original task'), target: { selector } })
+    for (const step of new Set(fact.links.steps))
+      entries.push({ label: `${l('步骤', 'Step')} ${step}`, target: { selector, step } })
+  }
   return (
     <Card
       title={
@@ -169,6 +187,17 @@ function ActivityDetail({
             device={device}
             locale={locale}
             context={context}
+          />
+          <EntryCopies
+            runtime={runtime}
+            locale={locale}
+            entries={entries}
+            device={fact?.target?.device ?? device}
+            expected={
+              fact?.target
+                ? { registrationId: fact.target.registration, generation: fact.target.generation }
+                : undefined
+            }
           />
           <p className="subtitle">
             {l('详情观察时间', 'Detail observed as of')} · {timestamp(locale, read.value.asOf)}
@@ -648,6 +677,7 @@ export function AuditWorkspace({
         context.device &&
         selectedActivity && (
           <ActivityDetail
+            runtime={runtime}
             key={`${binding}/${authority}/${context.device}/${selectedActivity}`}
             audit={audit}
             binding={`${binding}/${authority}`}

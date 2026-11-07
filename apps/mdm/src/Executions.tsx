@@ -10,8 +10,10 @@ import { CursorControls, Heading, labels, ReadState, usePageRead, type Query } f
 import { useAdministration } from './useAdministration'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
+import { EntryCopies, type CopyEntry } from './EntryCopies'
+import { auditHref } from './audit-context'
 import { ExecutionEvidence } from './ExecutionEvidence'
-import { resultReturnPath, resultSourcePath } from './execution-context'
+import { resultReturnPath } from './execution-context'
 import { timestamp, Status } from './DevicePresentation'
 export function executionPath(
   kind: 'command' | 'action_run',
@@ -84,6 +86,25 @@ function ExecutionFacts({
       })
     else setRecovery(null)
   }, [detail, item, runtime, locale])
+  const entries: CopyEntry[] = []
+  if (
+    detail?.kind === 'run' &&
+    detail.attempt &&
+    detail.registrationId &&
+    detail.generation !== null
+  ) {
+    const selector = { kind: 'task' as const, task: detail.id, attempt: detail.attempt }
+    entries.push({ label: l('原任务', 'Original task'), target: { selector } })
+    if ('nodes' in detail) {
+      const steps = new Set(
+        detail.nodes.flatMap((node) =>
+          typeof node['stepId'] === 'string' ? [node['stepId']] : [],
+        ),
+      )
+      for (const step of steps)
+        entries.push({ label: `${l('步骤', 'Step')} ${step}`, target: { selector, step } })
+    }
+  }
   return (
     <Card title={l('原操作与结果', 'Original operation and result')}>
       <ReadState
@@ -161,7 +182,29 @@ function ExecutionFacts({
           onRetry={read.reload}
         />
       )}
+      {device && (
+        <Link
+          to={auditHref({
+            view: 'activities',
+            device,
+            ...(reference.kind === 'command'
+              ? { operation: reference.id }
+              : { task: reference.id }),
+          })}
+        >
+          {l('查看此执行的管理活动', 'View management activity for this execution')}
+        </Link>
+      )}
       {detail && <ExecutionEvidence detail={detail} locale={locale} />}
+      {detail?.kind === 'run' && detail.registrationId && detail.generation !== null && (
+        <EntryCopies
+          runtime={runtime}
+          locale={locale}
+          entries={entries}
+          device={detail.device}
+          expected={{ registrationId: detail.registrationId, generation: detail.generation }}
+        />
+      )}
       <Alert
         type="info"
         showIcon
@@ -229,8 +272,8 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
           'Locate delivery, execution and effect facts by device, policy or original operation.',
         )}
       />
-      {resultSourcePath(params.get('returnTo')) && (
-        <Link to={resultSourcePath(params.get('returnTo'))!}>
+      {resultReturnPath(params.get('returnTo')) && (
+        <Link to={resultReturnPath(params.get('returnTo'))!}>
           {l('返回来源', 'Return to source')}
         </Link>
       )}

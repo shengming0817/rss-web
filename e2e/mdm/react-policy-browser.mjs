@@ -609,6 +609,21 @@ try {
     'real-independent-event-response-loss-original-member-decision-version-operation-reference-and-deduplication',
   )
 
+  const acceptedMember = before.find((item) => item.policyId === policy.id),
+    retirement = acceptedMember.decision.operations[0].id,
+    originalBatchUrl = p.url()
+  await row.getByRole('link', { name: `retirement/${retirement}`, exact: true }).click()
+  await p.waitForURL(
+    (url) =>
+      url.pathname === `/devices/endpoint/${f.mdm}` &&
+      url.searchParams.get('retirement') === retirement,
+  )
+  await p.getByRole('link', { name: /返回来源 \/ 设备目录/ }).click()
+  await p.waitForURL(originalBatchUrl)
+  await p.getByText('批次成员与原操作进度', { exact: true }).waitFor()
+  assert.equal(run.count(p, 'POST', path), 1)
+  checks.push('real-batch-member-opens-original-retirement-and-returns-without-replay')
+
   const closeDialog = async () => {
     await p.locator('.ant-modal-close').filter({ visible: true }).click()
     await p.getByRole('dialog').waitFor({ state: 'hidden' })

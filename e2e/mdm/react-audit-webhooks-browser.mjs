@@ -287,6 +287,93 @@ try {
       'real-current-policy-id-alias-tool-name-and-shared-event-directory-navigation-without-history-rewrite',
     )
 
+    run.step('policy-entry-clipboard-and-authorized-alias-withdrawal')
+    const policyPath = '/api/v1/policies/' + policyIds[0]
+    await run.nav(
+      p,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'names' })}`,
+      '策略与部署',
+    )
+    const names = p.locator('.ant-modal:visible')
+    await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
+    const associations = names.getByRole('region', { name: '当前事件关联成员' })
+    await associations
+      .locator('tbody tr')
+      .filter({ hasText: resolved.capability.toolName })
+      .waitFor()
+    assert.equal(await associations.locator('tbody tr').count(), 2)
+    await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+    await button('显示 Agent 查看入口').click()
+    await names
+      .locator('tbody tr')
+      .filter({ hasText: f.agent })
+      .getByRole('button', { name: '使用此终端', exact: true })
+      .click()
+    await button('复制链接 · 唯一别名').click()
+    await p.getByRole('status').filter({ hasText: '已复制 · 唯一别名' }).waitFor()
+    const copied = await p.evaluate(() => navigator.clipboard.readText()),
+      uri = new URL(copied),
+      endpoint = await api('GET', '/api/v1/devices/' + encodeURIComponent(f.agent)),
+      registration = endpoint.channels.find(
+        (channel) => channel.channel === 'agent' && channel.status === 'active',
+      )
+    assert.equal(uri.protocol, 'rssmdm:')
+    assert.equal(uri.hostname, 'view')
+    assert.equal(uri.pathname, '/v1/alias/react.audit.0')
+    assert.deepEqual(Object.fromEntries(uri.searchParams), {
+      device: f.agent,
+      generation: String(registration.generation),
+      instance: resolved.capability.instance,
+      registration: registration.registrationId,
+      revision: String(resolved.capability.revision),
+      tenant: f.tenant,
+      version: resolved.capability.version,
+    })
+    await button('复制命令 · 唯一别名').click()
+    await p.waitForFunction(
+      async (expected) => (await navigator.clipboard.readText()) === expected,
+      `rssmdm open '${copied}'`,
+    )
+    await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
+    await label('唯一别名').fill('react.audit.1')
+    await label('确认范围、资源、调度与潜在影响').check()
+    await run.response(p, 'POST', policyPath, () => button('保存策略定义').click(), 409)
+    await p
+      .getByText('保存冲突。请重新读取策略修订；若别名被其他策略占用，请换用可用别名。', {
+        exact: true,
+      })
+      .waitFor()
+    await label('唯一别名').fill('react.audit.renamed')
+    await label('共享事件名').fill('')
+    await label('确认范围、资源、调度与潜在影响').check()
+    await run.response(p, 'POST', policyPath, () => button('保存策略定义').click())
+    await api('POST', '/api/v1/policies/resolve', { kind: 'alias', alias: 'react.audit.0' }, 404)
+    const renamed = await api('POST', '/api/v1/policies/resolve', {
+      kind: 'alias',
+      alias: 'react.audit.renamed',
+    })
+    assert.equal(renamed.policy.id, policyIds[0])
+    assert.equal(renamed.policy.definition.customEvent, null)
+    await button('返回并重新读取策略').click()
+    await run.nav(
+      p,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'definition' })}`,
+      '策略与部署',
+    )
+    await label('唯一别名').fill('')
+    await label('确认范围、资源、调度与潜在影响').check()
+    await run.response(p, 'POST', policyPath, () => button('保存策略定义').click())
+    const withdrawn = await api('GET', policyPath)
+    assert.equal(withdrawn.definition.alias, null)
+    assert.equal(withdrawn.definition.customEvent, null)
+    await api(
+      'POST',
+      '/api/v1/policies/resolve',
+      { kind: 'alias', alias: 'react.audit.renamed' },
+      404,
+    )
+    checks.push('real-policy-owner-alias-duplicate-cas-rename-withdraw-and-canonical-clipboard')
+
     run.step('subscription-commit-response-loss-and-explicit-original-replay')
     await run.nav(p, '/webhooks', 'Webhook 集成')
     await button('新建 Webhook 订阅').click()

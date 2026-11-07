@@ -409,6 +409,21 @@ try {
       .first()
       .waitFor()
     assert.equal(final.taskId, task.task)
+    if (terminal === 'success') {
+      await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+      await button('显示 Agent 查看入口').click()
+      await button('复制链接 · 原任务').click()
+      await p.getByRole('status').filter({ hasText: '已复制 · 原任务' }).waitFor()
+      const copied = new URL(await p.evaluate(() => navigator.clipboard.readText()))
+      assert.equal(copied.pathname, `/v1/task/${task.task}`)
+      assert.equal(copied.searchParams.get('attempt'), final.attemptId)
+      assert.equal(copied.searchParams.get('registration'), final.registrationId)
+      await p.getByRole('link', { name: '查看此执行的管理活动', exact: true }).click()
+      await p.waitForURL(
+        (url) => url.pathname === '/audit' && url.searchParams.get('task') === task.task,
+      )
+      checks.push('real-task-copy-current-attempt-registration-and-audit-navigation')
+    }
     await mutate('policies', policy, { action: 'disable' }, 1)
     checks.push(`real-agent-script-${terminal}-policy-assignment-run-and-original-attempt`)
   }

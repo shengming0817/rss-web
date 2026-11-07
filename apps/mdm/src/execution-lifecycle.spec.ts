@@ -15,7 +15,7 @@ import { decodeMdmError } from '@rss/api/mdm'
 import { EnterpriseEditor } from './EnterpriseEditor'
 import { BindingEditor } from './BindingEditor'
 import { Policies } from './Policies'
-import { resultReturnPath, resultSourcePath } from './execution-context'
+import { resultReturnPath } from './execution-context'
 import { Executions, policyReturnPath } from './Executions'
 import type { EnterpriseConfiguration } from '@rss/mdm-device-access'
 vi.mock('./useOperationAuthorization', () => ({
@@ -710,7 +710,7 @@ it('rejects malformed source locators without crashing a result page', () => {
     '//evil.test/policies',
     '/policies#fragment',
   ])
-    expect(resultSourcePath(value)).toBeNull()
+    expect(resultReturnPath(value)).toBeNull()
 })
 
 it('renders the original attempt nodes and carries the complete execution context to its device', async () => {
@@ -963,4 +963,74 @@ it('uses URL endpoint selection for back and forward while retaining an unknown 
   expect(current()).toContain('device-b')
   expect(host.querySelector('[data-location]')!.textContent).toContain('endpoint=device-b')
   expect(create).toHaveBeenCalledOnce()
+})
+
+it('opens the exact linked event batch and member read-only until the user verifies a target', async () => {
+  const { PolicyEvents } = await import('./PolicyEvents'),
+    id = '11111111-1111-4111-8111-111111111111',
+    member = '22222222-2222-4222-8222-222222222222',
+    operation = '33333333-3333-4333-8333-333333333333',
+    batch = vi.fn(async () => ({
+      id,
+      event: 'shared.event',
+      request: { source: { kind: 'human' } },
+      deadline: 2,
+      processingFailure: null,
+    })),
+    members = vi.fn(async () => ({
+      items: [
+        {
+          id: member,
+          policyId: id,
+          versionId: id,
+          revision: 1,
+          state: 'accepted',
+          decision: { state: 'accepted' },
+          operations: [{ reference: { kind: 'native', id: operation }, state: 'queued' }],
+        },
+      ],
+      nextCursor: null,
+    })),
+    submit = vi.fn(),
+    admin = {
+      binding: 'event-link',
+      devices: { endpoints: async () => ({ items: [], nextCursor: null }) },
+      policyEvents: {
+        batch,
+        members,
+        submit,
+        batches: async () => ({ items: [], nextCursor: null }),
+      },
+    } as unknown as ReturnType<Runtime['administration']>,
+    runtime = { administration: () => admin } as Runtime
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        {
+          initialEntries: [
+            `/policies?tab=events&eventDevice=device-a&batch=${id}&member=${member}`,
+          ],
+        },
+        h(PolicyEvents, {
+          runtime,
+          events: admin.policyEvents,
+          devices: admin.devices,
+          event: null,
+          locale: 'zh',
+          canSubmit: true,
+        }),
+      ),
+    ),
+  )
+  expect(batch.mock.calls[0]).toEqual(['device-a', id, expect.any(AbortSignal)])
+  expect(members.mock.calls[0]).toEqual([
+    'device-a',
+    id,
+    { limit: 1, filter: `id=='${member}'` },
+    expect.any(AbortSignal),
+  ])
+  expect(host.querySelector(`a[href*="operation=${operation}"]`)?.textContent).toContain(operation)
+  expect(button('提交设备事件').matches(':disabled')).toBe(true)
+  expect(submit).not.toHaveBeenCalled()
 })

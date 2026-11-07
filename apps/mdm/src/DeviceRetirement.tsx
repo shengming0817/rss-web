@@ -1,4 +1,5 @@
 import { usePendingSelection } from './SelectionGuard'
+import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Space } from 'antd'
 import type { DeviceRef } from '@rss/mdm-devices'
@@ -17,11 +18,13 @@ export function DeviceRetirement({
   locale: Locale
   reference: DeviceRef
 }) {
+  const [params] = useSearchParams()
+  const initial = params.get('retirement') ?? ''
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
     action = useAction(),
-    [draft, setDraft] = useState(''),
-    [id, setId] = useState(''),
+    [draft, setDraft] = useState(initial),
+    [id, setId] = useState(initial),
     [reason, setReason] = useState(''),
     [approved, setApproved] = useState(false),
     [pending, setPending] = useState<{ id: string; operationId: string; reason: string } | null>(

@@ -22,7 +22,8 @@ function identity(value: Policy, id: string): Policy {
 }
 export function createPolicies(port: PoliciesPort) {
   return Object.freeze({
-    list: (query: DirectoryQuery<keyof PolicyRow> = {}) => port.list(query),
+    list: (query: DirectoryQuery<keyof PolicyRow> = {}, signal?: AbortSignal) =>
+      port.list(query, signal),
     read: async (id: string) => identity(await port.read(uuid(id)), id),
     capabilities: () => port.capabilities(),
     async preview(
@@ -108,14 +109,18 @@ export function createPolicyEvents(port: PolicyEventsPort) {
         throw new Error('Wrong original event request')
       return value
     },
-    batches: (device: string, query: DirectoryQuery<keyof EventBatch> = {}) =>
-      port.batches(device, query),
-    async batch(device: string, id: string) {
-      const value = await port.batch(device, uuid(id))
+    batches: (device: string, query: DirectoryQuery<keyof EventBatch> = {}, signal?: AbortSignal) =>
+      port.batches(device, query, signal),
+    async batch(device: string, id: string, signal?: AbortSignal) {
+      const value = await port.batch(device, uuid(id), signal)
       if (value.id !== id) throw new Error('Wrong event batch')
       return value
     },
-    members: (device: string, batch: string, query: DirectoryQuery<keyof EventMember> = {}) =>
-      port.members(device, uuid(batch), query),
+    members: (
+      device: string,
+      batch: string,
+      query: DirectoryQuery<keyof EventMember> = {},
+      signal?: AbortSignal,
+    ) => port.members(device, uuid(batch), query, signal),
   })
 }

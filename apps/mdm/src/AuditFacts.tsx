@@ -1,9 +1,11 @@
 import { Alert, Descriptions, Space } from 'antd'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { ActivityLinks, AuditFact, ManagementActivity } from '@rss/mdm-audit'
 import type { Locale } from './i18n'
 import { labels } from './AdminUi'
 import { Status, timestamp } from './DevicePresentation'
+import { executionPath } from './Executions'
+import { eventBatchPath, retirementPath } from './execution-context'
 import { auditHref, type AuditContext } from './audit-context'
 
 function Coordinates({ links, locale }: { links: ActivityLinks; locale: Locale }) {
@@ -166,6 +168,9 @@ export function ActivityFactView({
   context?: AuditContext
 }) {
   const l = labels(locale),
+    location = useLocation(),
+    source = location.pathname + location.search,
+    targetDevice = fact.target?.device ?? device,
     window = { from: context?.from, until: context?.until, limit: context?.limit },
     dimensions = [
       [l('投递证据', 'Delivery evidence'), fact.delivery],
@@ -221,11 +226,64 @@ export function ActivityFactView({
             {l('原生操作审计', 'Native operation audit')}
           </Link>
         )}
+        {fact.links.policy && (
+          <Link
+            to={`/policies?${new URLSearchParams({ policy: fact.links.policy, tab: 'definition', returnTo: source })}`}
+          >
+            {l('查看所属策略', 'View owning policy')}
+          </Link>
+        )}
+        {fact.links.batch && (
+          <Link
+            to={eventBatchPath(
+              targetDevice,
+              fact.links.batch,
+              fact.links.member ?? undefined,
+              source,
+            )}
+          >
+            {l('查看原事件批次', 'View original event batch')}
+          </Link>
+        )}
+        {fact.links.task && (
+          <Link
+            to={executionPath(
+              'action_run',
+              fact.links.task,
+              fact.links.policy ?? undefined,
+              source,
+            )}
+          >
+            {l('查看原任务执行', 'View original task run')}
+          </Link>
+        )}
+        {fact.kind === 'configuration' && fact.links.operation && (
+          <Link to={executionPath('command', fact.links.operation, undefined, source)}>
+            {l('查看原配置命令', 'View original configuration command')}
+          </Link>
+        )}
         {fact.links.retirement && (
-          <Link to={`/devices/endpoint/${encodeURIComponent(device)}`}>
+          <Link to={retirementPath(targetDevice, fact.links.retirement, source)}>
             {l('设备退管入口', 'Device retirement')}
           </Link>
         )}
+        {fact.links.operations.map((reference) => (
+          <Link
+            key={`${reference.kind}/${reference.id}`}
+            to={
+              reference.kind === 'retirement'
+                ? retirementPath(targetDevice, reference.id, source)
+                : executionPath(
+                    reference.kind === 'run' ? 'action_run' : 'command',
+                    reference.id,
+                    reference.kind === 'run' ? (fact.links.policy ?? undefined) : undefined,
+                    source,
+                  )
+            }
+          >
+            {l('关联操作', 'Related operation')} · {reference.id}
+          </Link>
+        ))}
       </Space>
       <Coordinates links={fact.links} locale={locale} />
     </>

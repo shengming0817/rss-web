@@ -22,6 +22,8 @@ import { SelectionGuard, usePendingSelection, useSelectionGuard } from './Select
 import { SecretTabs } from './SecretTabs'
 import { PolicyEditor } from './PolicyEditor'
 import { PolicyAssignments, PolicyRollout, PolicyRuns } from './PolicyProgress'
+import { resultReturnPath } from './execution-context'
+import { PolicyNames } from './PolicyNames'
 import { PolicyEvents } from './PolicyEvents'
 import { policyActionLabel } from './PolicyActionEditor'
 
@@ -96,7 +98,14 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     canInventory = has('inventory_read', true),
     canOperations = has('operation_read', true)
   useEffect(() => {
-    if (!linkedPolicy || !params.has('tab') || !canRead || selected?.id === linkedPolicy) return
+    if (
+      !linkedPolicy ||
+      !params.has('tab') ||
+      !canRead ||
+      guard.locked ||
+      selected?.id === linkedPolicy
+    )
+      return
     let current = true
     void action
       .run(() => policies.read(linkedPolicy))
@@ -109,7 +118,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     return () => {
       current = false
     }
-  }, [binding, linkedPolicy, canRead, selected?.id])
+  }, [binding, linkedPolicy, canRead, guard.locked, selected?.id])
   function setQuery(next: Query) {
     const value = new URLSearchParams(params)
     for (const key of ['limit', 'filter', 'cursor', 'sort', 'field']) value.delete(key)
@@ -136,7 +145,18 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
   function close() {
     setSelected(null)
     const next = new URLSearchParams(params)
-    for (const key of ['policy', 'tab', 'assignmentCursor', 'runCursor']) next.delete(key)
+    for (const key of [
+      'policy',
+      'tab',
+      'assignmentCursor',
+      'runCursor',
+      'eventDevice',
+      'batch',
+      'member',
+      'batchCursor',
+      'memberCursor',
+    ])
+      next.delete(key)
     setParams(next, { replace: true })
     read.reload()
   }
@@ -184,6 +204,21 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           />
         )}
         <ReadState locale={locale} busy={permissions.busy} error={permissions.error} />
+        {linkedPolicy && resultReturnPath(params.get('returnTo')) && (
+          <Link to={resultReturnPath(params.get('returnTo'))!}>
+            {l('返回来源', 'Return to source')}
+          </Link>
+        )}
+        {!linkedPolicy && params.get('tab') === 'events' && params.get('eventDevice') && (
+          <PolicyEvents
+            events={policyEvents}
+            devices={devices}
+            runtime={runtime}
+            event={null}
+            locale={locale}
+            canSubmit={canRead}
+          />
+        )}
         <Failure locale={locale} error={action.error} />
         <fieldset className="permission-panel" disabled={action.busy || guard.locked}>
           {canRead && (
@@ -257,7 +292,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                             className="policy-title"
                             onClick={() => void open(row.id)}
                           >
-                            {row.alias ?? row.toolName ?? row.id}
+                            {row.toolName ?? row.id}
                           </Button>
                           <div className="policy-meta">
                             <span>{row.action ? policyActionLabel(row.action, locale) : '—'}</span>
@@ -265,6 +300,11 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                               <Link to={`/scopes?scope=${encodeURIComponent(row.scope)}`}>
                                 {l('范围', 'Scope')} · {row.scope}
                               </Link>
+                            )}
+                            {row.alias && (
+                              <Tag>
+                                {l('唯一别名', 'Unique alias')} · <code>{row.alias}</code>
+                              </Tag>
                             )}
                             {row.customEvent && (
                               <span>
@@ -350,6 +390,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                     ]
                   : []),
                 ...(canRead ? ['events'] : []),
+                ...(canRead && selected.baseline ? ['names'] : []),
               ]}
               items={[
                 {
@@ -373,6 +414,19 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                 },
                 ...(selected.baseline
                   ? [
+                      {
+                        key: 'names',
+                        label: l('名称与入口', 'Names and entry points'),
+                        children: (
+                          <PolicyNames
+                            key={selected.id}
+                            policies={policies}
+                            policy={selected.baseline}
+                            locale={locale}
+                            runtime={runtime}
+                          />
+                        ),
+                      },
                       {
                         key: 'assignments',
                         label: l('设备分配', 'Device assignments'),
@@ -421,6 +475,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                     <PolicyEvents
                       events={policyEvents}
                       devices={devices}
+                      runtime={runtime}
                       event={selected.baseline?.definition.customEvent ?? null}
                       locale={locale}
                       canSubmit={canRead}

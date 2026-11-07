@@ -203,7 +203,7 @@ export type PolicyChange =
   | { readonly action: 'put'; readonly definition: PolicyDefinition; readonly enabled: boolean }
   | { readonly action: 'enable' | 'disable' }
 export interface PoliciesPort {
-  list(query: DirectoryQuery<keyof PolicyRow>): Promise<Page<PolicyRow>>
+  list(query: DirectoryQuery<keyof PolicyRow>, signal?: AbortSignal): Promise<Page<PolicyRow>>
   read(id: string): Promise<Policy>
   change(id: string, change: Operation<PolicyChange>): Promise<Policy>
   archive(id: string, operationId: string, expectedRevision: number): Promise<Policy>
@@ -444,11 +444,16 @@ export interface EventMember {
 export interface PolicyEventsPort {
   lookupOriginal(device: string, operationId: string): Promise<Page<EventBatch>>
   submit(device: string, request: EventRequest): Promise<EventAccepted>
-  batches(device: string, query: DirectoryQuery<keyof EventBatch>): Promise<Page<EventBatch>>
-  batch(device: string, batch: string): Promise<EventBatch>
+  batches(
+    device: string,
+    query: DirectoryQuery<keyof EventBatch>,
+    signal?: AbortSignal,
+  ): Promise<Page<EventBatch>>
+  batch(device: string, batch: string, signal?: AbortSignal): Promise<EventBatch>
   members(
     device: string,
     batch: string,
     query: DirectoryQuery<keyof EventMember>,
+    signal?: AbortSignal,
   ): Promise<Page<EventMember>>
 }
