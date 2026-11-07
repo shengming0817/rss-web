@@ -936,6 +936,10 @@ html:has(.mdm-overlay-open) {
 .resource-detail code {
   overflow-wrap: anywhere;
 }
+.resource-material-select {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
 .software-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

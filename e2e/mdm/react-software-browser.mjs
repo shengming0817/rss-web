@@ -679,6 +679,7 @@ try {
   )
   assert.equal(new URL(p.url()).searchParams.get('filter'), disjunction)
   assert.equal(new URL(p.url()).searchParams.has('cursor'), false)
+  await run.response(p, 'GET', '/api/v1/resources', () => button('清除条件').click())
   const detailRequests = []
   const captureDetails = (request) => {
     if (
@@ -825,9 +826,22 @@ try {
     return {
       width: document.documentElement.scrollWidth,
       elements: [...document.querySelectorAll('main *')]
-        .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+        .filter((node) => {
+          if (node.getBoundingClientRect().right <= innerWidth + 1) return false
+          for (let parent = node.parentElement; parent; parent = parent.parentElement)
+            if (
+              parent.getBoundingClientRect().right <= innerWidth + 1 &&
+              getComputedStyle(parent).overflowX !== 'visible'
+            )
+              return false
+          return true
+        })
         .slice(0, 10)
-        .map((node) => node.tagName + '.' + [...node.classList].join('.')),
+        .map((node) => ({
+          tag: node.tagName + '.' + [...node.classList].join('.'),
+          parent: [...(node.parentElement?.classList ?? [])].join('.'),
+          right: Math.round(node.getBoundingClientRect().right),
+        })),
     }
   })
   if (overflow)
