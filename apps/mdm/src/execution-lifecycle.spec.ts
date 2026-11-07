@@ -14,6 +14,7 @@ import { decodeMdmError } from '@rss/api/mdm'
 import { EnterpriseEditor } from './EnterpriseEditor'
 import { BindingEditor } from './BindingEditor'
 import { Policies } from './Policies'
+import { resultReturnPath } from './execution-context'
 import { Executions, policyReturnPath } from './Executions'
 import type { EnterpriseConfiguration } from '@rss/mdm-device-access'
 vi.mock('./useOperationAuthorization', () => ({
@@ -283,6 +284,7 @@ it.each<EnterpriseConfiguration>([
         host: { serviceId: '22222222-2222-4222-8222-222222222222' },
         administration: () => ({
           binding: 'session-a',
+          devices: { views: async () => ({ items: [], nextCursor: null }) },
           authorization: {
             effective: async () => ({
               grants: [{ operation: 'enterprise_applications_write', scope: { kind: 'tenant' } }],
@@ -360,12 +362,12 @@ it.each(['runs', 'assignments'])(
         items: [
           {
             object: { kind: 'endpoint', id: 'device-a' },
-            qualification: { state: 'qualified' },
-            availability: 'available',
+            qualification: { state: 'eligible' },
+            availability: 'ready',
             sources: [],
             execution: {
-              kind: 'periodic',
-              latestRun: { taskId: run },
+              kind: 'recurring',
+              latestRun: { taskId: run, state: { execution: 'succeeded' } },
               currentRecord: { state: 'unknown' },
             },
           },
@@ -375,6 +377,7 @@ it.each(['runs', 'assignments'])(
       runtime = {
         administration: () => ({
           binding: 'session-a',
+          devices: { views: async () => ({ items: [], nextCursor: null }) },
           authorization: {
             effective: async () => ({
               grants: ['policy_read', 'operation_read', 'inventory_read'].map((operation) => ({
@@ -385,11 +388,19 @@ it.each(['runs', 'assignments'])(
           },
           policies: {
             list,
-            read: async () => ({ id: policy, definition: { action: { kind: 'script' } } }),
+            read: async () => ({ id: policy, definition: { action: { kind: 'execution' } } }),
             runs,
             assignments,
           },
           execution: {
+            summary: async () => ({
+              id: run,
+              device: 'device-a',
+              policy,
+              status: 'unknown',
+              registrationId: 'registration',
+              generation: 1,
+            }),
             list: async () => ({ items: [], nextCursor: null }),
             statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
             detail: async () => ({
@@ -450,6 +461,7 @@ it.each(['runs', 'assignments'])(
       expect(assignments.mock.lastCall).toEqual([
         policy,
         { limit: 20, cursor: 'assignment-page-2' },
+        expect.any(AbortSignal),
       ])
     expect(document.querySelector('[role=tab][aria-selected=true]')!.textContent).toContain(
       tab === 'runs' ? '执行事实' : '设备分配',
@@ -551,4 +563,140 @@ it('binds labels to their own controls when binding and enterprise editors share
   expect(
     [...host.querySelectorAll('label')].some((label) => label.textContent === 'Provider UUID'),
   ).toBe(true)
+})
+
+it('loads sensitive evidence explicitly and keeps the authorized summary when detail is denied', async () => {
+  const id = '11111111-1111-4111-8111-111111111111',
+    summary = vi.fn(async () => ({
+      id,
+      kind: 'command',
+      device: 'device-a',
+      registrationId: id,
+      generation: 3,
+      policy: null,
+      status: 'applied',
+    })),
+    detail = vi.fn(async () => {
+      throw decodeMdmError(403, { code: 'permission_denied' })
+    }),
+    create = vi.fn(),
+    runtime = {
+      administration: () => ({
+        binding: 'sensitive',
+        authorization: { effective: async () => ({ grants: [] }) },
+        execution: {
+          summary,
+          detail,
+          create,
+          list: async () => ({ items: [], nextCursor: null }),
+          statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+          trust: async () => ({ revision: 1, keys: [] }),
+        },
+      }),
+    } as unknown as Runtime
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        { initialEntries: [`/operations?kind=command&operation=${id}`] },
+        h(Executions, { runtime, locale: 'zh' }),
+      ),
+    ),
+  )
+  expect(host.textContent).toContain('目录状态')
+  expect(host.textContent).toContain('device-a')
+  expect(detail).not.toHaveBeenCalled()
+  await act(async () => button('读取详细结果与证据').click())
+  expect(detail).toHaveBeenCalledOnce()
+  expect(host.textContent).toContain('当前账户没有此操作权限')
+  expect(host.textContent).toContain('目录状态')
+  expect(create).not.toHaveBeenCalled()
+})
+
+it('shows historical success beside an absent current run and performs one bounded name lookup per page', async () => {
+  const { PolicyAssignments } = await import('./PolicyProgress'),
+    id = '11111111-1111-4111-8111-111111111111',
+    views = vi.fn(async () => ({
+      items: [
+        {
+          key: 'endpoint:device-a',
+          endpoints: [
+            {
+              id: 'device-a',
+              displayName: { kind: 'known', value: { kind: 'string', value: 'Lobby Mac' } },
+            },
+          ],
+        },
+      ],
+      nextCursor: null,
+    })),
+    assignments = vi.fn(async () => ({
+      items: [
+        {
+          object: { kind: 'endpoint', id: 'device-a' },
+          channel: 'agent',
+          qualification: { state: 'eligible' },
+          availability: 'ready',
+          reason: null,
+          target: null,
+          sources: [],
+          scopeResult: null,
+          taskAdmission: { state: 'waiting_check_in', nextAllowedStartAt: null },
+          execution: {
+            kind: 'recurring',
+            latestRun: { taskId: id, state: { execution: 'succeeded' } },
+            currentRecord: { state: 'absent' },
+          },
+        },
+      ],
+      nextCursor: null,
+    })),
+    admin = { policies: { assignments }, devices: { views } } as unknown as ReturnType<
+      Runtime['administration']
+    >,
+    policy = {
+      id,
+      versionId: id,
+      definition: { action: { kind: 'execution' } },
+    } as unknown as Parameters<typeof PolicyAssignments>[0]['policy']
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(PolicyAssignments, {
+          policies: admin.policies,
+          devices: admin.devices,
+          policy,
+          locale: 'zh',
+        }),
+      ),
+    ),
+  )
+  expect(host.textContent).toContain('Lobby Mac')
+  expect(host.textContent).toContain('成功')
+  expect(host.textContent).toContain('已核对，尚无运行')
+  expect(host.textContent).toContain('未知 / 等待事件')
+  expect(views).toHaveBeenCalledOnce()
+  expect(views.mock.calls[0]).toEqual([
+    { fields: ['key', 'reference', 'endpoints'], limit: 1, filter: "key=='endpoint:device-a'" },
+    expect.any(AbortSignal),
+  ])
+  expect(assignments.mock.calls[0]).toEqual([id, { limit: 20 }, expect.any(AbortSignal)])
+  await act(async () => button('读取分配').click())
+  expect(assignments).toHaveBeenCalledTimes(2)
+})
+
+it('accepts only public result return coordinates for the exact device page', () => {
+  expect(
+    resultReturnPath('/devices/endpoint/a?tab=history&endpoint=a', '/devices/endpoint/a'),
+  ).toBe('/devices/endpoint/a?tab=history&endpoint=a')
+  for (const value of [
+    '//evil.test/devices/endpoint/a',
+    '/devices/endpoint/b?tab=history',
+    '/devices/endpoint/a?secret=value',
+    '/devices/endpoint/a#secret',
+    '/devices/endpoint/a\\evil',
+  ])
+    expect(resultReturnPath(value, '/devices/endpoint/a')).toBeNull()
 })

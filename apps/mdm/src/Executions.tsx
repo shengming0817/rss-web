@@ -10,6 +10,8 @@ import { CursorControls, Heading, labels, ReadState, usePageRead, type Query } f
 import { useAdministration } from './useAdministration'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
+import { ExecutionEvidence } from './ExecutionEvidence'
+import { resultReturnPath, resultSourcePath } from './execution-context'
 import { timestamp, Status } from './DevicePresentation'
 export function executionPath(
   kind: 'command' | 'action_run',
@@ -21,16 +23,14 @@ export function executionPath(
 }
 /** Return context is a resource locator, never authority or a redirect to another host. */
 export function policyReturnPath(policy: string, returnTo: string | null) {
-  if (returnTo?.startsWith('/policies?')) {
-    const url = new URL(returnTo, 'https://mdm.invalid')
-    if (url.pathname === '/policies' && url.searchParams.get('policy') === policy)
-      return url.pathname + url.search
-  }
+  const path = resultReturnPath(returnTo, '/policies')
+  if (path && new URL(path, 'https://mdm.invalid').searchParams.get('policy') === policy)
+    return path
   return `/policies?${new URLSearchParams({ policy })}`
 }
-export function deviceExecutionsPath(device: string) {
+export function deviceExecutionsPath(device: string, returnTo?: string) {
   const literal = `'${device.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
-  return `/operations?${new URLSearchParams({ filter: `device==${literal}` })}`
+  return `/operations?${new URLSearchParams({ filter: `device==${literal}`, ...(returnTo ? { returnTo } : {}) })}`
 }
 function ExecutionFacts({
   runtime,
@@ -44,144 +44,127 @@ function ExecutionFacts({
   const l = labels(locale),
     [params] = useSearchParams(),
     { execution, binding } = useAdministration(runtime),
-    read = usePageRead(
-      `${binding}/execution/${reference.kind}/${reference.id}/${reference.policy ?? ''}`,
-      (signal) => execution.detail(reference, signal),
+    summary = usePageRead(
+      `${binding}/execution-summary/${reference.kind}/${reference.id}`,
+      (signal) => execution.summary(reference, signal),
       { retryReadConflict: true },
-    )
-  const [recovery, setRecovery] = useState<Parameters<typeof ControlRecoveryPanel>[0] | null>(null)
+    ),
+    [expanded, setExpanded] = useState(false),
+    read = usePageRead(
+      `${binding}/execution/${reference.kind}/${reference.id}/${reference.policy ?? ''}/${expanded}`,
+      (signal) => (expanded ? execution.detail(reference, signal) : Promise.resolve(null)),
+      { retryReadConflict: true },
+    ),
+    detail = read.value?.detail,
+    item = summary.value,
+    policy = read.value?.policy ?? item?.policy,
+    device = detail?.device ?? item?.device,
+    deviceHref = device ? devicePath('endpoint', device) : null,
+    returnDevice = deviceHref ? resultReturnPath(params.get('returnTo'), deviceHref) : null,
+    [recovery, setRecovery] = useState<Parameters<typeof ControlRecoveryPanel>[0] | null>(null)
   useEffect(() => {
-    const value = read.value
-    if (!value) return
-    if (
-      value.item?.origin === 'direct' &&
-      value.detail.owner === 'device' &&
-      value.detail.revision !== null
-    )
+    if (detail?.kind === 'command' && detail.owner === 'device' && item?.origin === 'direct')
       setRecovery({
         runtime,
         locale,
-        device: value.detail.device,
-        id: value.detail.id,
-        revision: value.detail.revision,
-        registration: value.item.registrationId,
-        generation: value.item.generation,
-        canReauthorize: value.detail.reauthorization?.state === 'available',
-        confirmationRequired: value.detail.reauthorization?.confirmationRequired ?? false,
+        device: detail.device,
+        id: detail.id,
+        revision: detail.revision,
+        registration: item.registrationId,
+        generation: item.generation,
+        canReauthorize: detail.reauthorization?.state === 'available',
+        confirmationRequired: detail.reauthorization?.confirmationRequired ?? false,
         terminal: ['applied', 'rejected', 'cancelled', 'timed_out', 'superseded'].includes(
-          value.detail.delivery,
+          detail.delivery,
         ),
         onRefresh: read.reload,
       })
     else setRecovery(null)
-  }, [read.value, runtime, locale])
+  }, [detail, item, runtime, locale])
   return (
     <Card title={l('原操作与结果', 'Original operation and result')}>
       <ReadState
         locale={locale}
-        busy={read.busy}
-        error={read.error}
-        empty={read.value === null}
-        onRetry={read.reload}
+        busy={summary.busy}
+        error={summary.error}
+        empty={item === null}
+        onRetry={summary.reload}
       />
-      <Button onClick={read.reload}>{l('重新查询原操作', 'Read original operation again')}</Button>
-      {read.value && (
-        <>
-          {read.value.detail.taskName && <h3>{read.value.detail.taskName}</h3>}
-          {read.value.detail.dispatchFailure && (
-            <Alert type="error" showIcon title={read.value.detail.dispatchFailure} />
-          )}
-          <dl className="device-facts">
-            <div>
-              <dt>{l('操作', 'Operation')}</dt>
-              <dd>{read.value.detail.id}</dd>
-            </div>
-            <div>
-              <dt>{l('设备', 'Device')}</dt>
-              <dd>
-                <Link to={devicePath('endpoint', read.value.detail.device)}>
-                  {read.value.detail.device}
-                </Link>
-              </dd>
-            </div>
-            <div>
-              <dt>{l('执行注册 / 代次', 'Execution registration / generation')}</dt>
-              <dd>
-                {read.value.detail.registrationId ?? read.value.item?.registrationId ?? '—'} @
-                {read.value.detail.generation ?? read.value.item?.generation ?? '—'}
-              </dd>
-            </div>
-            <div>
-              <dt>{l('原策略', 'Original policy')}</dt>
-              <dd>
-                {read.value.policy ? (
-                  <Link to={policyReturnPath(read.value.policy, params.get('returnTo'))}>
-                    {read.value.policy}
-                  </Link>
-                ) : (
-                  l('直接操作', 'Direct operation')
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>{l('投递 / 命令状态', 'Delivery / command state')}</dt>
-              <dd>
-                <Status locale={locale} value={read.value.detail.delivery} />
-              </dd>
-            </div>
-            <div>
-              <dt>{l('设备执行', 'Device execution')}</dt>
-              <dd>
-                {read.value.detail.execution ? (
-                  <Status locale={locale} value={read.value.detail.execution} />
-                ) : (
-                  l('无独立执行回执', 'No separate execution receipt')
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>{l('效果证据', 'Effect evidence')}</dt>
-              <dd>
-                {read.value.detail.effect ? (
-                  <Status locale={locale} value={read.value.detail.effect} />
-                ) : (
-                  l('未提供独立效果投影', 'No separate effect projection provided')
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>{l('取消', 'Cancellation')}</dt>
-              <dd>{read.value.detail.cancellation ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>{l('当前尝试', 'Current attempt')}</dt>
-              <dd>{read.value.detail.attempt ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>{l('执行授权 / 来源', 'Execution authorization / source')}</dt>
-              <dd>{read.value.detail.authorization ?? l('未提供', 'Not provided')}</dd>
-            </div>
-            <div>
-              <dt>{l('截止时间', 'Deadline')}</dt>
-              <dd>{timestamp(locale, read.value.detail.deadline)}</dd>
-            </div>
-          </dl>
-
-          <Alert
-            type="info"
-            showIcon
-            title={l(
-              '命令受理、投递、设备回执与实际效果分别观察。无回执保持未知。',
-              'Observe admission, delivery, device receipts and actual effects separately. Missing receipts remain unknown.',
-            )}
-          />
-        </>
+      <dl className="device-facts">
+        <div>
+          <dt>{l('操作', 'Operation')}</dt>
+          <dd>{reference.id}</dd>
+        </div>
+        {item && (
+          <div>
+            <dt>{l('目录状态', 'Directory state')}</dt>
+            <dd>
+              <Status locale={locale} value={item.status} />
+            </dd>
+          </div>
+        )}
+        {deviceHref && (
+          <div>
+            <dt>{l('设备', 'Device')}</dt>
+            <dd>
+              <Link to={returnDevice ?? deviceHref}>{device}</Link>
+            </dd>
+          </div>
+        )}
+        {policy && (
+          <div>
+            <dt>{l('原策略', 'Original policy')}</dt>
+            <dd>
+              <Link to={policyReturnPath(policy, params.get('returnTo'))}>{policy}</Link>
+            </dd>
+          </div>
+        )}
+        {item && (
+          <div>
+            <dt>{l('执行注册 / 代次', 'Execution registration / generation')}</dt>
+            <dd>
+              {item.registrationId} @{item.generation}
+            </dd>
+          </div>
+        )}
+      </dl>
+      <Button
+        onClick={() => {
+          if (expanded) read.reload()
+          else setExpanded(true)
+        }}
+      >
+        {l('读取详细结果与证据', 'Read detailed results and evidence')}
+      </Button>
+      <p className="subtitle">
+        {l(
+          '详细结果按原权限单独读取；目录可见不授予脚本输出或敏感资产权限。',
+          'Details require their original permissions; a visible directory grants no script-output or sensitive-inventory access.',
+        )}
+      </p>
+      {expanded && (
+        <ReadState
+          locale={locale}
+          busy={read.busy}
+          error={read.error}
+          empty={read.value === null}
+          onRetry={read.reload}
+        />
       )}
+      {detail && <ExecutionEvidence detail={detail} locale={locale} />}
+      <Alert
+        type="info"
+        showIcon
+        title={l(
+          '命令受理、投递、设备回执与实际效果分别观察。无回执保持未知。',
+          'Observe admission, delivery, device receipts and actual effects separately. Missing receipts remain unknown.',
+        )}
+      />
       {recovery && (
         <fieldset
           className="permission-panel"
-          hidden={read.busy || !!read.error}
-          disabled={read.busy || !!read.error}
+          hidden={read.busy || !!read.error || summary.busy || !!summary.error}
+          disabled={read.busy || !!read.error || summary.busy || !!summary.error}
         >
           <ControlRecoveryPanel {...recovery} />
         </fieldset>
@@ -189,6 +172,7 @@ function ExecutionFacts({
     </Card>
   )
 }
+
 export function Executions({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     { execution, binding } = useAdministration(runtime),
@@ -219,12 +203,11 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
         : null
   useEffect(() => setDraft(filter), [filter])
   function changeQuery(next: Query) {
-    setParams(
-      new URLSearchParams({
-        ...(next.filter ? { filter: next.filter } : {}),
-        ...(next.cursor ? { cursor: next.cursor } : {}),
-      }),
-    )
+    const nextParams = new URLSearchParams(params)
+    for (const name of ['filter', 'cursor']) nextParams.delete(name)
+    if (next.filter) nextParams.set('filter', next.filter)
+    if (next.cursor) nextParams.set('cursor', next.cursor)
+    setParams(nextParams)
   }
   return (
     <div className="execution-page">
@@ -235,6 +218,11 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
           'Locate delivery, execution and effect facts by device, policy or original operation.',
         )}
       />
+      {resultSourcePath(params.get('returnTo')) && (
+        <Link to={resultSourcePath(params.get('returnTo'))!}>
+          {l('返回来源', 'Return to source')}
+        </Link>
+      )}
       <p className="subtitle">
         {l(
           '目录包含脚本与采集；当前资格和最近结果分别观察，允许开始时间不是设备执行承诺。',

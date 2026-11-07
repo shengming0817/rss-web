@@ -55,9 +55,11 @@ it('preserves native effect waiting even when the command is applied and rejects
   }
   expect(await fixture(detail).adapter.command('pc', id)).toMatchObject({
     delivery: 'applied',
-    effect: 'waiting',
+    kind: 'command',
+    inputVersion: 'v1',
+    observation: detail.observation,
+    authorization: detail.authorization,
     registrationId: null,
-    execution: null,
   })
   await expect(
     fixture({ ...detail, commandId: registrationId }).adapter.command('pc', id),
@@ -78,7 +80,24 @@ it('reads script runs directly from the policy contract with exact task and poli
     resourceId: 'script',
     authorization: null,
     attemptId: id,
-    result: null,
+    result: {
+      collectedAt: 1,
+      receivedAt: 2,
+      exitCode: 17,
+      quality: 'failed',
+      schemaValid: false,
+      budgetValid: true,
+      output: { reason: 'exit' },
+      outputReference: null,
+      diagnostics: {
+        stdout: 'out',
+        stderr: 'failure',
+        durationMs: 1,
+        executedAt: 1,
+        failure: null,
+      },
+      trusted: false,
+    },
     state: {
       delivery: { kind: 'queued' },
       execution: 'unknown',
@@ -89,7 +108,11 @@ it('reads script runs directly from the policy contract with exact task and poli
   }
   expect(await fixture(run).adapter.run(registrationId, id)).toMatchObject({
     owner: 'script',
-    execution: 'unknown',
+    kind: 'run',
+    state: { execution: 'unknown' },
+    versionId: id,
+    occurrence: 'o',
+    result: run.result,
     effect: null,
     attempt: id,
   })
@@ -128,8 +151,9 @@ it('preserves DA result effects instead of mistaking the missing top-level field
     },
   }
   expect(await fixture(value).adapter.run(registrationId, id)).toMatchObject({
-    execution: 'succeeded',
+    state: { execution: 'succeeded' },
     effect: 'unknown',
+    result: value.result,
   })
 })
 

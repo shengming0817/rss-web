@@ -37,7 +37,8 @@ export function createPolicies(port: PoliciesPort) {
         throw new Error('Wrong preview scope result')
       return value
     },
-    assignments: (id: string, query: WindowQuery = {}) => port.assignments(uuid(id), query),
+    assignments: (id: string, query: WindowQuery = {}, signal?: AbortSignal) =>
+      port.assignments(uuid(id), query, signal),
     runs: (id: string, query: WindowQuery = {}, signal?: AbortSignal) =>
       port.runs(uuid(id), query, signal),
     async rollout(id: string) {

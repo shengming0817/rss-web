@@ -2,8 +2,8 @@ import * as api from '@rss/api/mdm-operations'
 import * as schema from '@rss/api/mdm-schemas'
 import { nextCursor, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import type { Execution, ExecutionPort, ExecutionDetail, Trust } from '@rss/mdm-execution'
-import { enumeration, nullable, positive, text, uuid, count } from './decode'
+import type { Execution, ExecutionPort, RunDetail, Trust } from '@rss/mdm-execution'
+import { enumeration, nullable, positive, text, uuid, count, record } from './decode'
 import { integer, requestInput } from './inventory-values'
 const fields = [
   'id',
@@ -168,10 +168,13 @@ export function createExecutionAdapter(
                 )
               : null
           return {
+            kind: 'command',
             id,
             revision: positive(value.revision),
-            taskName: text(value.task.name),
-            dispatchFailure: value.dispatchFailure?.reason ?? null,
+            task: value.task,
+            target: value.target,
+            inputVersion: text(value.inputVersion),
+            dispatchFailure: value.dispatchFailure,
             reauthorization: recovery
               ? {
                   state: recovery.state,
@@ -185,12 +188,9 @@ export function createExecutionAdapter(
             generation: null,
             owner: value.owner,
             delivery: text(value.commandStatus),
-            execution: null,
-            effect: value.observation.effect,
-            cancellation: null,
-            attempt: null,
+            observation: value.observation,
             deadline: integer(value.deadline),
-            authorization: value.authorization.state,
+            authorization: value.authorization,
           }
         },
       ),
@@ -219,34 +219,67 @@ export function createExecutionAdapter(
                   schema.getApiV1PoliciesByIdRunsByTaskResponse.validateTaskAuthorization,
                 )
               : null
-          const detail: ExecutionDetail = {
+          const common = {
+            kind: 'run' as const,
             id,
-            revision: null,
-            reauthorization: null,
-            taskName: null,
-            dispatchFailure: null,
+            policyId: uuid(value.policyId),
+            versionId:
+              'versionId' in value && typeof value.versionId === 'string'
+                ? uuid(value.versionId)
+                : null,
+            occurrence:
+              'occurrence' in value && typeof value.occurrence === 'string'
+                ? value.occurrence
+                : null,
+            availableAt: integer(value.availableAt),
             device: text(value.device),
             registrationId: uuid(value.registrationId),
             generation: positive(value.generation),
-            owner: value.kind,
+            state,
             delivery: state
               ? state.delivery.kind
               : text('delivery' in value ? value.delivery : undefined),
-            execution: state?.execution ?? null,
-            cancellation: state?.cancellation ?? null,
             effect:
               value.kind === 'access' && value.result
-                ? requestInput(
-                    value.result,
-                    schema.getApiV1PoliciesByIdRunsByTaskResponse.validateAccessResult,
-                  ).effect.state
+                ? value.result.effect.state
                 : 'effect' in value
                   ? nullable(value.effect, text)
                   : null,
             attempt: 'attemptId' in value ? nullable(value.attemptId, uuid) : null,
             deadline: integer(value.deadline),
-            authorization: authorization?.kind ?? null,
+            authorization,
           }
+          const detail: RunDetail =
+            value.kind === 'script'
+              ? {
+                  ...common,
+                  owner: 'script',
+                  resourceId: value.resourceId,
+                  result: value.result === null ? null : record(value.result),
+                }
+              : value.kind === 'collection'
+                ? {
+                    ...common,
+                    owner: 'collection',
+                    channel: value.channel,
+                    report: value.report === null ? null : record(value.report),
+                    result:
+                      value.channel === 'agent' && value.result !== null
+                        ? record(value.result)
+                        : null,
+                  }
+                : {
+                    ...common,
+                    owner: value.kind,
+                    result:
+                      'result' in value && value.result !== null
+                        ? typeof value.result === 'string'
+                          ? value.result
+                          : record(value.result)
+                        : null,
+                    userAction: 'userAction' in value ? nullable(value.userAction, text) : null,
+                    nodes: 'nodes' in value && Array.isArray(value.nodes) ? value.nodes : [],
+                  }
           return detail
         },
       ),

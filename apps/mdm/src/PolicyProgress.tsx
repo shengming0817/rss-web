@@ -1,3 +1,6 @@
+import { useDeviceNames } from './useDeviceNames'
+import type { DevicesUseCases } from './EndpointPicker'
+import { policyActionLabel } from './PolicyActionEditor'
 import { executionPath } from './Executions'
 import { Alert, Button, Card } from 'antd'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
@@ -11,10 +14,12 @@ import { devicePath } from './Devices'
 
 export function PolicyAssignments({
   policies,
+  devices,
   policy,
   locale,
 }: {
   policies: PoliciesUseCases
+  devices: DevicesUseCases
   policy: Policy
   locale: Locale
 }) {
@@ -25,9 +30,12 @@ export function PolicyAssignments({
       limit: 20,
       ...(params.get('assignmentCursor') ? { cursor: params.get('assignmentCursor')! } : {}),
     },
-    read = usePageRead(`policy-assignments/${policy.id}/${JSON.stringify(query)}`, () =>
-      policies.assignments(policy.id, query),
-    )
+    read = usePageRead(
+      `policy-assignments/${policy.id}/${JSON.stringify(query)}`,
+      (signal) => policies.assignments(policy.id, query, signal),
+      { retryReadConflict: !query.cursor },
+    ),
+    names = useDeviceNames(devices, read.value?.items.map((row) => row.object) ?? [])
   function setQuery(next: Query) {
     const value = new URLSearchParams(params)
     if (next.cursor) value.set('assignmentCursor', next.cursor)
@@ -45,7 +53,25 @@ export function PolicyAssignments({
         busy={read.busy}
         error={read.error}
         empty={read.value?.items.length === 0}
+        onRetry={read.reload}
+        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
       />
+      <ReadState locale={locale} busy={names.busy} error={names.error} onRetry={names.reload} />
+      <p>
+        {policyActionLabel(policy.definition.action.kind, locale)} · {policy.versionId}
+      </p>
+      {policy.definition.action.kind === 'configuration' && (
+        <p>
+          {l('当前配置资源 / 版本', 'Current configuration resource / version')}:{' '}
+          <Link
+            to={`/resources?${new URLSearchParams({ resource: policy.definition.action.resource.id, version: policy.definition.action.resource.version })}`}
+          >
+            {policy.definition.action.resource.id} / {policy.definition.action.resource.version}
+          </Link>
+          {' · '}
+          {l('退出方式', 'Exit behavior')}: {statusText(locale, policy.definition.action.exit)}
+        </p>
+      )}
       <p className="subtitle">
         {l(
           '此为当前服务端投影；配置保存、范围资格与已发生的设备操作分别观察。无操作 ID 不表示成功或失败。',
@@ -63,7 +89,11 @@ export function PolicyAssignments({
                 title: l('设备', 'Device'),
                 render: (_, row) => (
                   <>
-                    <Link to={devicePath(row.object.kind, row.object.id)}>{row.object.id}</Link>
+                    <Link
+                      to={`${devicePath(row.object.kind, row.object.id)}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`}
+                    >
+                      {names.value?.get(`${row.object.kind}:${row.object.id}`) ?? row.object.id}
+                    </Link>
                     <p className="subtitle">
                       {row.channel
                         ? statusText(locale, row.channel)
@@ -117,7 +147,16 @@ export function PolicyAssignments({
                       row.execution.operationIds.map((id) => (
                         <p key={id}>
                           <Link
-                            to={`/operations?${new URLSearchParams({ filter: `id=='${id}'`, returnTo: location.pathname + location.search })}`}
+                            to={
+                              policy.definition.action.kind === 'configuration'
+                                ? executionPath(
+                                    'command',
+                                    id,
+                                    undefined,
+                                    location.pathname + location.search,
+                                  )
+                                : `/operations?${new URLSearchParams({ filter: `id=='${id}'`, returnTo: location.pathname + location.search })}`
+                            }
                           >
                             {id}
                           </Link>
@@ -214,10 +253,12 @@ export function PolicyAssignments({
 }
 export function PolicyRuns({
   policies,
+  devices,
   policy,
   locale,
 }: {
   policies: PoliciesUseCases
+  devices: DevicesUseCases
   policy: Policy
   locale: Locale
 }) {
@@ -232,6 +273,10 @@ export function PolicyRuns({
       `policy-runs/${policy.id}/${JSON.stringify(query)}`,
       (signal) => policies.runs(policy.id, query, signal),
       { retryReadConflict: !query.cursor },
+    ),
+    names = useDeviceNames(
+      devices,
+      read.value?.items.map((row) => ({ kind: 'endpoint' as const, id: row.device })) ?? [],
     )
   function setQuery(next: Query) {
     const value = new URLSearchParams(params)
@@ -250,6 +295,7 @@ export function PolicyRuns({
         onRetry={read.reload}
         onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
       />
+      <ReadState locale={locale} busy={names.busy} error={names.error} onRetry={names.reload} />
       {read.value && (
         <>
           <DataTable
@@ -275,14 +321,22 @@ export function PolicyRuns({
               {
                 title: l('设备', 'Device'),
                 render: (_, row) => (
-                  <Link to={devicePath('endpoint', row.device)}>{row.device}</Link>
+                  <Link
+                    to={`${devicePath('endpoint', row.device)}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`}
+                  >
+                    {names.value?.get(`endpoint:${row.device}`) ?? row.device}
+                  </Link>
                 ),
               },
               {
                 title: l('投递', 'Delivery'),
                 render: (_, row) => row.state?.delivery.kind ?? row.nativeDelivery ?? '—',
               },
-              { title: l('执行', 'Execution'), render: (_, row) => row.state?.execution ?? '—' },
+              { title: l('原执行版本', 'Original execution version'), dataIndex: 'versionId' },
+              {
+                title: l('执行', 'Execution'),
+                render: (_, row) => (row.state ? statusText(locale, row.state.execution) : '—'),
+              },
               { title: l('效果', 'Effect'), render: (_, row) => row.effect ?? '—' },
               {
                 title: l('采集报告', 'Collection report'),
@@ -301,7 +355,8 @@ export function PolicyRuns({
               },
               {
                 title: l('可执行时间 / 截止时间（UTC 秒）', 'Available / deadline (UTC seconds)'),
-                render: (_, row) => `${row.availableAt} / ${row.deadline}`,
+                render: (_, row) =>
+                  `${timestamp(locale, row.availableAt)} / ${timestamp(locale, row.deadline)}`,
               },
             ]}
           />

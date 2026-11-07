@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { createExecution, type Execution, type ExecutionDetail, type ExecutionPort } from './index'
+import { createExecution, type Execution, type CommandDetail, type ExecutionPort } from './index'
 const id = '11111111-1111-4111-8111-111111111111',
   registrationId = '22222222-2222-4222-8222-222222222222'
 const item: Execution = {
@@ -14,23 +14,23 @@ const item: Execution = {
   deadline: 100,
   status: 'applied',
 }
-const detail: ExecutionDetail = {
+const detail: CommandDetail = {
+  kind: 'command',
   id,
   revision: 1,
   reauthorization: null,
-  taskName: null,
+  task: { name: 'sync', kind: 'sync_ml', platform: 'windows', objects: [] },
+  target: { kind: 'device' },
+  inputVersion: 'v1',
   dispatchFailure: null,
   device: 'device',
   registrationId: null,
   generation: null,
   owner: 'device',
   delivery: 'applied',
-  execution: null,
-  effect: 'unknown',
-  cancellation: null,
-  attempt: null,
+  observation: { protocol: 'syncml', effect: 'unknown' },
   deadline: 100,
-  authorization: 'authorized',
+  authorization: { state: 'authorized' },
 }
 function fixture(rows: readonly Execution[] = [item]) {
   const port: ExecutionPort = {
@@ -44,7 +44,7 @@ function fixture(rows: readonly Execution[] = [item]) {
     trustObservation: vi.fn(),
     list: vi.fn(async () => ({ items: rows, nextCursor: null })),
     command: vi.fn(async () => detail),
-    run: vi.fn(async () => detail),
+    run: vi.fn(),
   }
   return { port, core: createExecution(port) }
 }
@@ -52,7 +52,7 @@ it('keeps an applied command with unknown effect distinct and resolves detail by
   const f = fixture(),
     signal = new AbortController().signal,
     result = await f.core.detail({ kind: 'command', id }, signal)
-  expect(result?.detail.effect).toBe('unknown')
+  expect(result?.detail.kind === 'command' && result.detail.observation.effect).toBe('unknown')
   expect(f.port.command).toHaveBeenCalledWith('device', id, signal)
   expect(f.port.list).toHaveBeenCalledWith(
     { filter: `id=='${id}';kind=='command'`, limit: 2 },
