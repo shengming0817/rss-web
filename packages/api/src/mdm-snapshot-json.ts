@@ -26,6 +26,11 @@ const enum Frame {
 /** Reuse the lexer and validate containers without materializing nested JSON or recursing. */
 function span(text: string, path: readonly string[]): [number, number] {
   const scanner = scannerApi.createScanner(text),
+    whitespace = /[ \t\r\n]*/y,
+    // JSON rejects unescaped C0 control characters.
+    // eslint-disable-next-line no-control-regex
+    stringRun = /[^"\\\u0000-\u001f]*/y,
+    escape = /(?:["\\/bfnrt]|u[0-9a-fA-F]{4})/y,
     keys: (string | undefined)[] = []
   let stack = new Uint8Array(64),
     depth = 0,
@@ -33,11 +38,11 @@ function span(text: string, path: readonly string[]): [number, number] {
     start = -1,
     end = -1,
     selectedDepth = -1
-  function value(token: SyntaxKind) {
+  function value(token: SyntaxKind, offset: number) {
     const selected = depth === path.length && path.every((key, index) => key === keys[index])
     if (selected) {
       if (start >= 0) throw clientError()
-      start = scanner.getTokenOffset()
+      start = offset
     }
     if (token === Token.OpenBraceToken || token === Token.OpenBracketToken) {
       if (selected) selectedDepth = depth
@@ -61,9 +66,34 @@ function span(text: string, path: readonly string[]): [number, number] {
     }
   }
   for (;;) {
-    const token = scanner.scan()
-    if (scanner.getTokenError() !== ScanError.None) throw clientError()
-    if (token === Token.Trivia || token === Token.LineBreakTrivia) continue
+    whitespace.lastIndex = scanner.getPosition()
+    whitespace.test(text)
+    const offset = whitespace.lastIndex
+    scanner.setPosition(offset)
+    let token: SyntaxKind
+    if (text[offset] === '"') {
+      // The library materializes decoded strings and accumulates trivia. These
+      // runs can span most of the request, so advance over their offsets only.
+      let next = offset + 1
+      for (;;) {
+        stringRun.lastIndex = next
+        stringRun.test(text)
+        const stop = stringRun.lastIndex
+        if (text[stop] === '"') {
+          scanner.setPosition(stop + 1)
+          break
+        }
+        if (text[stop] !== '\\') throw clientError()
+        escape.lastIndex = stop + 1
+        if (!escape.test(text)) throw clientError()
+        next = escape.lastIndex
+      }
+      token = Token.StringLiteral
+    } else {
+      if (text[offset] === '/') throw clientError()
+      token = scanner.scan()
+      if (scanner.getTokenError() !== ScanError.None) throw clientError()
+    }
     if (token === Token.EOF) {
       if (!root || depth || start < 0 || end <= start) throw clientError()
       return [start, end]
@@ -71,7 +101,7 @@ function span(text: string, path: readonly string[]): [number, number] {
     if (!depth) {
       if (root) throw clientError()
       root = true
-      value(token)
+      value(token, offset)
       continue
     }
     const frame = stack[depth - 1]!
@@ -96,7 +126,15 @@ function span(text: string, path: readonly string[]): [number, number] {
       (frame === Frame.ObjectFirst || frame === Frame.ObjectKey) &&
       token === Token.StringLiteral
     ) {
-      if (depth <= path.length) keys[depth - 1] = scanner.getTokenValue()
+      if (depth <= path.length) {
+        const expected = path[depth - 1]!
+        const end = scanner.getPosition()
+        keys[depth - 1] =
+          end - offset <= expected.length * 6 + 2 &&
+          JSON.parse(text.slice(offset, end)) === expected
+            ? expected
+            : undefined
+      }
       stack[depth - 1] = Frame.ObjectColon
     } else if (
       frame === Frame.ObjectValue ||
@@ -104,7 +142,7 @@ function span(text: string, path: readonly string[]): [number, number] {
       frame === Frame.ArrayValue
     ) {
       stack[depth - 1] = frame === Frame.ObjectValue ? Frame.ObjectEnd : Frame.ArrayEnd
-      value(token)
+      value(token, offset)
     } else throw clientError()
   }
 }

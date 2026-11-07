@@ -199,8 +199,11 @@ export async function execute<T>(
   const rawSnapshot = options.contract?.rawSnapshot
   const snapshotLeaf =
     rawSnapshot === 'document' || rawSnapshot === 'data' ? rawSnapshot : undefined
-  // The stored value is bounded by the import request. The response adds only bounded metadata.
-  let maximumBytes: number | undefined = snapshotLeaf ? SNAPSHOT_JSON_BODY_LIMIT + 65536 : undefined
+  // Entry responses can repeat three 4096-byte strings at up to six JSON bytes per byte.
+  const snapshotEnvelopeBytes = snapshotLeaf === 'data' ? 3 * 4096 * 6 + 65536 : 65536
+  let maximumBytes: number | undefined = snapshotLeaf
+    ? SNAPSHOT_JSON_BODY_LIMIT + snapshotEnvelopeBytes
+    : undefined
   if (closedRange) {
     const start = Number(closedRange[1]),
       end = Number(closedRange[2])

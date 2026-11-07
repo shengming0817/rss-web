@@ -3,6 +3,7 @@ import { Alert, Button, Card, Select, Space, Tag } from 'antd'
 import { Link } from 'react-router-dom'
 import type { DeviceRef, Page, WindowQuery } from '@rss/mdm-devices'
 import {
+  dimensions,
   type Compliance,
   type Dimension,
   type SoftwareBucket,
@@ -45,6 +46,7 @@ function ResultPage<T, P extends Page<T>>({
   invalidate,
   children,
   onPage,
+  reopenedDimension = false,
 }: {
   title: string
   locale: Locale
@@ -52,10 +54,17 @@ function ResultPage<T, P extends Page<T>>({
   invalidate: () => void
   children: (page: P) => ReactNode
   onPage?: () => void
+  reopenedDimension?: boolean
 }) {
   const [query, setQuery] = useState<Query>(firstAssetPage),
     read = usePageRead(`software-result/${JSON.stringify(query)}`, (signal) => load(query, signal)),
     failure = readFailure(read.error),
+    unrequested =
+      reopenedDimension &&
+      read.error &&
+      typeof read.error === 'object' &&
+      'status' in read.error &&
+      read.error.status === 400,
     invalid =
       failure === 'result' ||
       failure === 'denied' ||
@@ -74,14 +83,24 @@ function ResultPage<T, P extends Page<T>>({
   }
   return (
     <Card size="small" title={title}>
-      <ReadState
-        locale={locale}
-        busy={read.busy}
-        error={read.error}
-        empty={read.value?.items.length === 0}
-        onRetry={read.reload}
-        onRestart={() => change(firstAssetPage)}
-      />
+      {unrequested ? (
+        <Alert
+          type="info"
+          title={labels(locale)(
+            '原任务未请求此分桶维度。',
+            'The original task did not request this breakdown dimension.',
+          )}
+        />
+      ) : (
+        <ReadState
+          locale={locale}
+          busy={read.busy}
+          error={read.error}
+          empty={read.value?.items.length === 0}
+          onRetry={read.reload}
+          onRestart={() => change(firstAssetPage)}
+        />
+      )}
       {read.value && (
         <>
           {children(read.value)}
@@ -281,7 +300,7 @@ function SoftwareBucketDetail({
     [object, setObject] = useState<DeviceRef | null>(null)
   return (
     <Card title={bucket.identity.name}>
-      {requestedDimensions?.length ? (
+      {(requestedDimensions ?? dimensions).length > 0 && (
         <label>
           {l('分桶维度', 'Breakdown dimension')}
           <Select
@@ -289,26 +308,28 @@ function SoftwareBucketDetail({
             value={dimension}
             onChange={setDimension}
             allowClear
-            options={requestedDimensions.map((value) => ({
+            options={(requestedDimensions ?? dimensions).map((value) => ({
               value,
               label: dimensionName(value, locale),
             }))}
           />
         </label>
-      ) : !requestedDimensions ? (
+      )}
+      {!requestedDimensions && (
         <p>
           {l(
-            '当前页面没有原任务的分桶维度。',
-            'The original breakdown dimensions are unavailable in this view.',
+            '可选择维度，服务端会核对原任务是否请求该维度。',
+            'Choose a dimension to check whether the original task requested it.',
           )}
         </p>
-      ) : null}
+      )}
       {dimension && (
         <ResultPage
           key={dimension}
           title={dimensionName(dimension, locale)}
           locale={locale}
           invalidate={invalidate}
+          reopenedDimension={!requestedDimensions}
           load={(page, signal) => assets.breakdowns(task, bucket.id, dimension, page, signal)}
         >
           {(page) => (

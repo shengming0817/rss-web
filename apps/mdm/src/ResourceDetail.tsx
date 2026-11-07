@@ -145,9 +145,9 @@ export function ResourceDetail({
                 {version.digest.map((value) => value.toString(16).padStart(2, '0')).join('')}
               </code>
             </p>
-            {catalog && (
+            {catalog && !blocked && (
               <Space wrap>
-                {catalog.canWritePolicy && selected && version.state === 'active' && (
+                {catalog.canWritePolicy && selected && version.state !== 'archived' && (
                   <Link to={policyLink(true)}>
                     {l('从此版本新建分配', 'Create assignment from this version')}
                   </Link>
@@ -228,7 +228,7 @@ export function ResourceDetail({
               id={resource.id}
               version={version.id}
               locale={locale}
-              historySource={catalog?.canReadRuns ? returnSource() : undefined}
+              historySource={catalog?.canReadRuns && !blocked ? returnSource() : undefined}
             />
             <Space wrap>
               {(['activate', 'deprecate', 'archive'] as const).map((action) => (

@@ -15,7 +15,7 @@ import {
 import { usePendingSelection } from './SelectionGuard'
 import { DataTable } from './DataTable'
 
-/** Select an authorized resource, then an immutable active version and exact variant. */
+/** Select an authorized resource, then an eligible fixed version and exact variant. */
 export function PolicyResourcePicker({
   resources,
   kind,
@@ -38,11 +38,19 @@ export function PolicyResourcePicker({
         kind,
       ),
     ),
-    fixed = selected?.versions.find((item) => item.id === version)
+    software = kind === 'software',
+    choices = selected?.versions.filter(({ state }) =>
+      software ? state !== 'archived' : state === 'active',
+    ),
+    fixed = choices?.find((item) => item.id === version)
   usePendingSelection(action.busy)
   return (
     <fieldset className="asset-editor-section">
-      <legend>{l('选择已启用资源', 'Choose an active resource')}</legend>
+      <legend>
+        {software
+          ? l('选择软件资源', 'Choose a software resource')
+          : l('选择已启用资源', 'Choose an active resource')}
+      </legend>
       <Button onClick={read.reload}>{l('读取资源目录', 'Read resource directory')}</Button>
       <ReadState locale={locale} busy={read.busy} error={read.error} />
       <Failure locale={locale} error={action.error} kind="read" />
@@ -65,14 +73,17 @@ export function PolicyResourcePicker({
                 title: l('选择', 'Choose'),
                 render: (_, row) => (
                   <Button
-                    disabled={action.busy || !row.activeVersion}
+                    disabled={action.busy || (!software && !row.activeVersion)}
                     onClick={() =>
                       void action
                         .run(() => resources.read(row.id))
                         .then((result) => {
                           if (result.ok && result.value.kind === kind) {
                             setSelected(result.value)
-                            setVersion(row.activeVersion ?? null)
+                            setVersion(
+                              result.value.versions.find(({ state }) => state === 'active')?.id ??
+                                null,
+                            )
                           }
                         })
                     }
@@ -97,17 +108,25 @@ export function PolicyResourcePicker({
           <p>
             <code>{selected.id}</code>
           </p>
-          <Form.Item label={l('精确启用版本', 'Exact active version')}>
+          <Form.Item
+            label={
+              software
+                ? l('资源固定版本', 'Fixed resource version')
+                : l('精确启用版本', 'Exact active version')
+            }
+          >
             <Select
-              aria-label={l('精确启用版本', 'Exact active version')}
+              aria-label={
+                software
+                  ? l('资源固定版本', 'Fixed resource version')
+                  : l('精确启用版本', 'Exact active version')
+              }
               value={version}
-              options={selected.versions
-                .filter((item) => item.state === 'active')
-                .map((item) => ({ value: item.id, label: item.id }))}
+              options={(choices ?? []).map((item) => ({ value: item.id, label: item.id }))}
               onChange={setVersion}
             />
           </Form.Item>
-          {fixed?.state === 'active' && (
+          {fixed && (
             <Space wrap>
               {fixed.variants
                 .filter((variant) => variant.declaration.kind === kind)

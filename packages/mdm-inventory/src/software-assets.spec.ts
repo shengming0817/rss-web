@@ -54,3 +54,16 @@ it('looks up the original operation and rejects an unrelated configuration recei
   expect(receipt).toHaveBeenCalledWith(operationId)
   expect(mutate).toHaveBeenCalledTimes(1)
 })
+
+it('reports local input rejection without invoking the mutation port', async () => {
+  const mutate = vi.fn<SoftwareAssetsPort['mutate']>()
+  const assets = createSoftwareAssets(port({ mutate }))
+  await expect(
+    assets.mutate({
+      kind: 'mapping',
+      id: 'invalid',
+      operation: { operationId, expectedRevision: 0, input: { action: 'delete' } },
+    }),
+  ).rejects.toMatchObject({ cause: 'client', code: 'invalid_input' })
+  expect(mutate).not.toHaveBeenCalled()
+})

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Button, Card, Form, Input, Space } from 'antd'
+import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Space } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
 import { formatFilter } from '@rss/api/mdm-filter'
 import type { Resource } from '@rss/mdm-resources'
@@ -12,6 +12,7 @@ import type {
 } from '@rss/mdm-software'
 import {
   CursorControls,
+  codeOf,
   Failure,
   isUnknown,
   labels,
@@ -26,6 +27,7 @@ import { ResourceVersionEditor } from './ResourceVersionEditor'
 import { ResourceCommandState, useResourceCommand, type ResourcesUseCases } from './ResourceCommand'
 import type { ContentUseCases } from './ContentUpload'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
+import { useProtectedDelivery } from './useProtectedDelivery'
 import type { Locale } from './i18n'
 
 type Snapshots = ReturnType<typeof createSoftwareSnapshots>
@@ -41,6 +43,42 @@ const entryFields = ['entryId', 'source', 'revision', 'packageId', 'name', 'vers
 const first = { limit: 20 }
 const digest = (bytes: readonly number[]) =>
   bytes.map((b) => b.toString(16).padStart(2, '0')).join('')
+
+function sourceIdentity(id: string) {
+  return {
+    filter: formatFilter({ kind: 'compare', field: 'source', operator: '==', values: [id] }),
+    fields: ['source', 'revision'] as const,
+    limit: 1,
+  }
+}
+
+function SnapshotRaw({ label, raw, name }: { label: string; raw: string; name: string }) {
+  const delivery = useProtectedDelivery()
+  return (
+    <>
+      <Input.TextArea aria-label={label} readOnly value={raw} rows={8} />
+      <Button
+        onClick={() =>
+          delivery.deliver(
+            {
+              bytes: new TextEncoder().encode(raw).buffer as ArrayBuffer,
+              contentType: 'application/json',
+              filename: name,
+            },
+            delivery.capture(),
+          )
+        }
+      >
+        {label} · JSON
+      </Button>
+      {delivery.download && (
+        <a href={delivery.download.url} download={delivery.download.filename}>
+          {delivery.download.filename}
+        </a>
+      )}
+    </>
+  )
+}
 
 export function SoftwareSnapshots({
   snapshots,
@@ -66,11 +104,13 @@ export function SoftwareSnapshots({
     [documentOpen, setDocumentOpen] = useState(false),
     [epoch, setEpoch] = useState(0),
     [newSource, setNewSource] = useState(''),
+    [expectedRevision, setExpectedRevision] = useState<number | null>(0),
     [document, setDocument] = useState(''),
     [fileIssue, setFileIssue] = useState<'size' | 'encoding' | null>(null),
     [extraction, setExtraction] = useState<SnapshotExtraction>({}),
     [pending, setPending] = useState<{ source: string; intent: SnapshotImport } | null>(null),
     [receipt, setReceipt] = useState<SnapshotReceipt | null>(null),
+    [receiptMissing, setReceiptMissing] = useState(false),
     selected = canRead ? source : null,
     sources = usePageRead(
       `${binding}/snapshot-sources/${canRead}/${epoch}/${JSON.stringify(sourcePage)}`,
@@ -88,10 +128,12 @@ export function SoftwareSnapshots({
           { ...entryPage, fields: entryFields },
           signal,
         )
-        if (
-          page.items.some((row) => row.source !== selected.id || row.revision !== selected.revision)
-        )
-          throw { cause: 'client', status: 409, code: 'configuration_changed' }
+        const matches = (row: { source?: string | undefined; revision?: number | undefined }) =>
+          row.source === selected.id && row.revision === selected.revision
+        const correct = page.items.length
+          ? page.items.every(matches)
+          : (await snapshots.sources(sourceIdentity(selected.id), signal)).items.some(matches)
+        if (!correct) throw { cause: 'client', status: 409, code: 'configuration_changed' }
         return page
       },
     ),
@@ -130,13 +172,7 @@ export function SoftwareSnapshots({
       return
     }
     const id = selected.id
-    const result = await action.run(() =>
-      snapshots.sources({
-        filter: formatFilter({ kind: 'compare', field: 'source', operator: '==', values: [id] }),
-        fields: ['source', 'revision'],
-        limit: 1,
-      }),
-    )
+    const result = await action.run(() => snapshots.sources(sourceIdentity(id)))
     if (!result.ok) return
     const row = result.value.items.find((item) => item.source === id)
     if (row?.revision !== undefined) select({ id, revision: row.revision })
@@ -145,12 +181,18 @@ export function SoftwareSnapshots({
   }
   function confirm(value: SnapshotReceipt) {
     setReceipt(value)
+    setReceiptMissing(false)
+    if (!canRead) {
+      setNewSource(value.source)
+      setExpectedRevision(value.revision)
+    }
     setPending(null)
     setDocument('')
     setExtraction({})
     refreshSources()
   }
   async function send(original: NonNullable<typeof pending>) {
+    setReceiptMissing(false)
     const result = await action.run(() => snapshots.replace(original.source, original.intent))
     if (result.ok) confirm(result.value)
     else if (!isUnknown(result.error) && !pending) setPending(null)
@@ -162,12 +204,23 @@ export function SoftwareSnapshots({
       snapshots.receipt(pending.source, pending.intent.operationId),
     )
     if (result.ok) confirm(result.value)
+    else if (
+      result.error &&
+      typeof result.error === 'object' &&
+      'status' in result.error &&
+      result.error.status === 404
+    ) {
+      action.clear()
+      setReceiptMissing(true)
+    }
   }
   return (
     <>
       {canRead && (
         <Card title={l('来源快照', 'Source snapshots')}>
-          <Button onClick={refreshSources}>{l('刷新来源', 'Refresh sources')}</Button>
+          <Button disabled={action.busy || pending !== null} onClick={refreshSources}>
+            {l('刷新来源', 'Refresh sources')}
+          </Button>
           <ReadState
             locale={locale}
             busy={sources.busy}
@@ -188,7 +241,7 @@ export function SoftwareSnapshots({
                     render: (_, row) => (
                       <Button
                         type="link"
-                        disabled={row.revision === undefined || pending !== null}
+                        disabled={row.revision === undefined || pending !== null || action.busy}
                         onClick={() => select({ id: row.source, revision: row.revision! })}
                       >
                         {row.source}
@@ -232,11 +285,11 @@ export function SoftwareSnapshots({
                       <p>
                         SHA-256 · <code>{digest(detail.value.documentSha256)}</code>
                       </p>
-                      <Input.TextArea
-                        aria-label={l('文档原文', 'Original document')}
-                        readOnly
-                        value={detail.value.document}
-                        rows={8}
+                      <SnapshotRaw
+                        key={detail.value.revision}
+                        label={l('文档原文', 'Original document')}
+                        raw={detail.value.document}
+                        name="snapshot.json"
                       />
                     </>
                   )}
@@ -257,6 +310,7 @@ export function SoftwareSnapshots({
                     rowKey="entryId"
                     dataSource={entries.value.items}
                     columns={[
+                      { title: l('记录标识', 'Entry ID'), dataIndex: 'entryId' },
                       { title: l('名称', 'Name'), dataIndex: 'name' },
                       { title: l('包标识', 'Package ID'), dataIndex: 'packageId' },
                       { title: l('软件版本', 'Software version'), dataIndex: 'version' },
@@ -296,11 +350,14 @@ export function SoftwareSnapshots({
               )}
               {rawEntry.value && (
                 <>
-                  <Input.TextArea
-                    aria-label={l('记录原文', 'Original entry')}
-                    readOnly
-                    value={rawEntry.value.data}
-                    rows={6}
+                  <p>
+                    <code>{rawEntry.value.entryId}</code>
+                  </p>
+                  <SnapshotRaw
+                    key={rawEntry.value.entryId}
+                    label={l('记录原文', 'Original entry')}
+                    raw={rawEntry.value.data}
+                    name="record.json"
                   />
                   {useEntry && (
                     <Button
@@ -327,13 +384,21 @@ export function SoftwareSnapshots({
             disabled={pending !== null || action.busy}
             onFinish={() => {
               const target = selected?.id ?? newSource.trim()
-              if (!target || !document) return
+              const revision = selected?.revision ?? (canRead ? 0 : expectedRevision)
+              if (
+                !target ||
+                !document ||
+                revision === null ||
+                !Number.isSafeInteger(revision) ||
+                revision < 0
+              )
+                return
               void send(
                 freeze({
                   source: target,
                   intent: {
                     operationId: crypto.randomUUID(),
-                    expectedRevision: selected?.revision ?? 0,
+                    expectedRevision: revision,
                     input: { document, extraction },
                   },
                 }),
@@ -345,11 +410,28 @@ export function SoftwareSnapshots({
                 {l('替换已选来源', 'Replace selected source')} · {selected.id} · {selected.revision}
               </p>
             ) : (
-              <Form.Item label={l('新来源标识', 'New source ID')}>
+              <Form.Item
+                label={canRead ? l('新来源标识', 'New source ID') : l('来源标识', 'Source ID')}
+              >
                 <Input
-                  aria-label={l('新来源标识', 'New source ID')}
+                  aria-label={
+                    canRead ? l('新来源标识', 'New source ID') : l('来源标识', 'Source ID')
+                  }
                   value={newSource}
                   onChange={(e) => setNewSource(e.target.value)}
+                />
+              </Form.Item>
+            )}
+            {!canRead && (
+              <Form.Item
+                label={l('已知来源修订（新建填 0）', 'Known source revision (0 for a new source)')}
+              >
+                <InputNumber
+                  aria-label={l('已知来源修订', 'Known source revision')}
+                  min={0}
+                  precision={0}
+                  value={expectedRevision}
+                  onChange={setExpectedRevision}
                 />
               </Form.Item>
             )}
@@ -400,6 +482,25 @@ export function SoftwareSnapshots({
               <Input.TextArea
                 aria-label={l('导入 JSON 原文', 'JSON to import')}
                 value={document}
+                onPaste={(event) => {
+                  const text = event.clipboardData.getData('text/plain')
+                  if (!text) return
+                  event.preventDefault()
+                  const { selectionStart, selectionEnd } = event.currentTarget
+                  // DOM textarea offsets count CRLF as a single character.
+                  const originalOffset = (offset: number) => {
+                    if (!document.includes('\r')) return offset
+                    let rawOffset = 0
+                    for (let index = 0; index < offset; index++, rawOffset++)
+                      if (document[rawOffset] === '\r' && document[rawOffset + 1] === '\n')
+                        rawOffset++
+                    return rawOffset
+                  }
+                  const from = originalOffset(selectionStart)
+                  const to = originalOffset(selectionEnd)
+                  setFileIssue(null)
+                  setDocument(document.slice(0, from) + text + document.slice(to))
+                }}
                 onChange={(e) => {
                   setFileIssue(null)
                   setDocument(e.target.value)
@@ -414,10 +515,19 @@ export function SoftwareSnapshots({
                   <Input
                     aria-label={key + ' JSON Pointer'}
                     value={extraction[key] ?? ''}
+                    disabled={extraction[key] === ''}
                     onChange={(e) =>
                       setExtraction({ ...extraction, [key]: e.target.value || null })
                     }
                   />
+                  <Checkbox
+                    checked={extraction[key] === ''}
+                    onChange={(e) =>
+                      setExtraction({ ...extraction, [key]: e.target.checked ? '' : null })
+                    }
+                  >
+                    {l('指向根值', 'Use the root value')}
+                  </Checkbox>
                 </Form.Item>
               ))}
             </details>
@@ -426,14 +536,32 @@ export function SoftwareSnapshots({
               htmlType="submit"
               disabled={!document || !(selected || newSource.trim())}
             >
-              {selected
+              {selected || (!canRead && Boolean(expectedRevision))
                 ? l('完整替换快照', 'Replace snapshot')
                 : l('导入新快照', 'Import snapshot')}
             </Button>
           </Form>
         </Card>
       )}
-      <Failure error={action.error} locale={locale} kind="write" />
+      {action.error &&
+      typeof action.error === 'object' &&
+      'status' in action.error &&
+      action.error.status === 413 ? (
+        <Alert
+          type="error"
+          title={l('完整 UTF-8 请求超过 64 MiB。', 'The complete UTF-8 request exceeds 64 MiB.')}
+        />
+      ) : ['invalid_input', 'INVALID_REQUEST', 'malformed'].includes(codeOf(action.error)) ? (
+        <Alert
+          type="error"
+          title={l(
+            '检查 JSON 语法、来源修订和 JSON Pointer。',
+            'Check the JSON syntax, source revision and JSON Pointers.',
+          )}
+        />
+      ) : (
+        <Failure error={action.error} locale={locale} kind="write" />
+      )}
       {receipt && (
         <p role="status">
           {l('原操作已确认', 'Original operation confirmed')} · {receipt.source} ·{' '}
@@ -447,6 +575,14 @@ export function SoftwareSnapshots({
           description={
             <Space wrap>
               <code>{pending.intent.operationId}</code>
+              {receiptMissing && (
+                <span>
+                  {l(
+                    '尚未读到原回执，提交结果仍待确认。',
+                    'The original receipt is unavailable. The outcome remains unconfirmed.',
+                  )}
+                </span>
+              )}
               {canRead && (
                 <Button disabled={action.busy} onClick={() => void recover()}>
                   {l('查询原回执', 'Read original receipt')}
@@ -461,6 +597,7 @@ export function SoftwareSnapshots({
                 disabled={action.busy}
                 onClick={() => {
                   setPending(null)
+                  setReceiptMissing(false)
                   setDocument('')
                   refreshSources()
                 }}
@@ -480,12 +617,14 @@ export function SnapshotDraft({
   resources,
   content,
   locale,
+  allowed,
   close,
 }: {
   seed: SnapshotEntry
   resources: ResourcesUseCases
   content: ContentUseCases
   locale: Locale
+  allowed: boolean
   close: () => void
 }) {
   const l = labels(locale),
@@ -495,10 +634,15 @@ export function SnapshotDraft({
     [query, setQuery] = useState<Query>(first),
     [id, setId] = useState(''),
     [target, setTarget] = useState<Resource | null>(null),
-    candidates = usePageRead(`snapshot-draft-resources/${JSON.stringify(query)}`, (signal) =>
-      resources.list({ ...query, fields: ['id', 'presentation'] }, 'software', signal),
+    candidates = usePageRead(
+      `snapshot-draft-resources/${allowed}/${Boolean(target)}/${JSON.stringify(query)}`,
+      (signal) =>
+        allowed && !target
+          ? resources.list({ ...query, fields: ['id', 'presentation'] }, 'software', signal)
+          : Promise.resolve(null),
     )
   async function open(resourceId: string) {
+    if (!allowed) return
     const result = await action.run(async () => {
       const value = await resources.read(resourceId)
       if (value.kind !== 'software') throw { cause: 'client', code: 'invalid_input' }
@@ -540,7 +684,7 @@ export function SnapshotDraft({
             content={content}
             resource={target}
             locale={locale}
-            canWrite
+            canWrite={allowed}
             blocked={false}
             snapshotSeed={seed}
           />
@@ -592,7 +736,9 @@ export function SnapshotDraft({
             )}
             <Form
               layout="inline"
-              onFinish={() => void command.submit(id, 0, { action: 'create', kind: 'software' })}
+              onFinish={() => {
+                if (allowed) void command.submit(id, 0, { action: 'create', kind: 'software' })
+              }}
             >
               <Form.Item label={l('新软件资源标识', 'New software resource ID')}>
                 <Input
@@ -605,7 +751,7 @@ export function SnapshotDraft({
                 {l('创建软件资源', 'Create software resource')}
               </Button>
             </Form>
-            <ResourceCommandState command={command} locale={locale} canWrite />
+            <ResourceCommandState command={command} locale={locale} canWrite={allowed} />
             {command.outcome === 'confirmed' && command.pending && (
               <Button onClick={() => void open(command.pending!.resource)}>
                 {l('编辑新资源版本', 'Edit new resource version')}

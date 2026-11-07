@@ -40,8 +40,19 @@ it('rejects incomplete JSON, trailing tokens, and duplicate raw response leaves'
     '{"a":1,}',
     '01',
     '1e-',
+    '"\\uXX00"',
+    '"unescaped\u0000"',
   ])
     expect(() => encodeSnapshotRequest({ input: { document } })).toThrow()
   expect(() => decodeSnapshotResponse('{"data":1,"data":2}', 'data', 200)).toThrow()
   expect(decodeSnapshotResponse('{"code":"forbidden"}', 'data', 403)).toEqual({ code: 'forbidden' })
+})
+
+it('preserves large trivia and escaped strings without decoding raw values', () => {
+  const document = '[' + ' '.repeat(8 * 1024 * 1024) + '"' + '\\n'.repeat(1024 * 1024) + '"]'
+  const encoded = encodeSnapshotRequest({ input: { document } })
+  expect(encoded).toBe('{"input":{"document":' + document + '}}')
+  expect(decodeSnapshotResponse('{"\\u0064ata":' + document + '}', 'data', 200)).toEqual({
+    data: document,
+  })
 })

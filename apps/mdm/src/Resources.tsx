@@ -140,7 +140,7 @@ export function ResourceDirectory({
       else setLocalQuery(next)
     },
     linkedId = catalog?.params.get('resource'),
-    detail = usePageRead(`resource-detail/${linkedId ?? ''}`, async (signal) => {
+    detail = useRead(`resource-detail/${linkedId ?? ''}`, async (signal) => {
       if (!linkedId) return null
       const resource = await resources.read(linkedId, signal)
       if (resource.kind !== fixedKind) throw { cause: 'client', code: 'invalid_input' }

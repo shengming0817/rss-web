@@ -209,11 +209,17 @@ export function createSoftwareAssets(port: SoftwareAssetsPort) {
       return result
     },
     async mutate(intent: SoftwareMutation) {
-      operation<unknown>(intent.operation)
-      if (intent.kind === 'query')
-        validateQuery({ ...intent.operation.input.devices, fields: [], sort: [] })
-      else uuid(intent.id)
-      return matchReceipt(intent, await port.mutate(freeze(intent)))
+      let original: SoftwareMutation
+      try {
+        operation<unknown>(intent.operation)
+        if (intent.kind === 'query')
+          validateQuery({ ...intent.operation.input.devices, fields: [], sort: [] })
+        else uuid(intent.id)
+        original = freeze(intent)
+      } catch {
+        throw { cause: 'client', code: 'invalid_input' }
+      }
+      return matchReceipt(original, await port.mutate(original))
     },
     async receipt(intent: SoftwareMutation) {
       const result = await port.receipt(uuid(intent.operation.operationId))

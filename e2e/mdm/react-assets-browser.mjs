@@ -1047,7 +1047,7 @@ try {
   await tab('映射规则')
   await assetButton('新建映射').click()
   await assetButton('选择标准软件').click()
-  await assetButton('Browser standard editor').click()
+  await assetButton('Browser standard editor · ' + standard).click()
   await run.choose(p, visibleLabel('平台'), 'macos')
   await visibleLabel('来源标识').fill('application')
   await visibleLabel('单条安装记录条件（RSQL）').fill("name=='Browser Editor';publisher=='Fixture'")
@@ -1089,6 +1089,8 @@ try {
       await api('GET', '/api/v1/software-asset-queries/' + task + '/software')
     ).asset.response.items.find((row) => row.identity.id === standard)
     assert.equal(bucket.devices, 1)
+    const renderedBucket = p.getByRole('row').filter({ hasText: 'Browser standard editor' })
+    await renderedBucket.getByRole('cell', { name: '1', exact: true }).first().waitFor()
     if (domain === 'associated_device') assert.equal(bucket.threshold, 2)
     else {
       assert.equal(bucket.thresholdState, 'reached')
@@ -1096,6 +1098,20 @@ try {
     }
     const base =
       '/api/v1/software-asset-queries/' + task + '/software/' + encodeURIComponent(bucket.id)
+    const evidencePattern = '**/evidence*'
+    if (domain === 'endpoint')
+      await intercept(evidencePattern, async (route) => {
+        const response = await route.fetch()
+        const result = await response.json()
+        const row = result.asset.response.items[0]
+        assert.equal(row.value.kind, 'object')
+        row.value.value.external_version = { kind: 'integer', value: 9007199254740992 }
+        const body = JSON.stringify(result).replace(
+          '"value":9007199254740992',
+          '"value":9007199254740993',
+        )
+        await route.fulfill({ response, body })
+      })
     const evidencePromise = p.waitForResponse(
       (response) =>
         new URL(response.url()).pathname.startsWith(base + '/devices/') &&
@@ -1108,6 +1124,14 @@ try {
       (await evidence.json()).asset.response.items.filter((row) => row.confirmed).length,
       3,
     )
+    await p.getByText('展开原始记录', { exact: true }).first().waitFor()
+    if (domain === 'endpoint') {
+      await p.unroute(evidencePattern)
+      await p.getByText('展开原始记录', { exact: true }).first().click()
+      await p.getByText('原始值超出浏览器精度，保留来源和证据坐标。', { exact: true }).waitFor()
+      await run.nav(p, '/inventory/software?task=' + task, '软件资产')
+      await assetButton('Browser standard editor').click()
+    }
     const breakdownResponse = await run.response(
       p,
       'GET',
@@ -1126,6 +1150,10 @@ try {
         ['3', 1],
       ],
     )
+    await p
+      .getByRole('row')
+      .filter({ hasText: /^3\s*1$/ })
+      .waitFor()
     const coverage = await run.response(
       p,
       'GET',
@@ -1137,6 +1165,7 @@ try {
     await run.response(p, 'POST', '/api/v1/software-asset-queries/' + task + '/release', () =>
       p.getByRole('button', { name: '确定', exact: true }).filter({ visible: true }).click(),
     )
+    await assetButton('Browser standard editor').waitFor({ state: 'hidden' })
   }
   assert.equal(
     (await api('GET', '/api/v1/standard-software/' + standard)).asset.response.record.definition

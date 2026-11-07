@@ -8,7 +8,7 @@ import { SoftwareSources } from './SoftwareSources'
 import { SoftwareImport } from './SoftwareImport'
 import { SoftwareAdmission } from './SoftwareAdmission'
 import { SoftwarePublications } from './SoftwarePublications'
-import { SecretTabs } from './SecretTabs'
+import { SecretPanel, SecretTabs } from './SecretTabs'
 import { useAdministration } from './useAdministration'
 import type { SnapshotEntry } from '@rss/mdm-software'
 import type { Runtime } from './runtime'
@@ -181,15 +181,24 @@ export function Software({ runtime, locale }: { runtime: Runtime; locale: Locale
           },
         ]}
       />
-      {snapshotSeed?.binding === binding && resourceRead && resourceWrite && (
-        <SnapshotDraft
-          key={binding}
-          seed={snapshotSeed.entry}
-          resources={resources}
-          content={content}
-          locale={locale}
-          close={() => setSnapshotSeed(null)}
-        />
+      {snapshotSeed?.binding === binding && (
+        <SecretPanel active={resourceRead && resourceWrite}>
+          <fieldset
+            className="permission-panel"
+            hidden={!resourceRead || !resourceWrite}
+            disabled={!resourceRead || !resourceWrite}
+          >
+            <SnapshotDraft
+              key={binding}
+              seed={snapshotSeed.entry}
+              resources={resources}
+              content={content}
+              locale={locale}
+              allowed={resourceRead && resourceWrite}
+              close={() => setSnapshotSeed(null)}
+            />
+          </fieldset>
+        </SecretPanel>
       )}
     </>
   )

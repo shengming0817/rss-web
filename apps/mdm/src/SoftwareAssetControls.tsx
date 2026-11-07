@@ -207,7 +207,13 @@ export function StandardPicker({
     [query, setQuery] = useState<Query>(firstAssetPage),
     read = usePageRead(`software-standard-picker/${open}/${JSON.stringify(query)}`, (signal) =>
       open ? assets.standards(query, signal) : Promise.resolve(null),
-    )
+    ),
+    expired =
+      query.cursor &&
+      read.error &&
+      typeof read.error === 'object' &&
+      'status' in read.error &&
+      read.error.status === 409
   return (
     <Space direction="vertical">
       {value.length > 0 && <code>{value.join(', ')}</code>}
@@ -223,9 +229,14 @@ export function StandardPicker({
             busy={read.busy}
             error={read.error}
             empty={read.value?.items.length === 0}
-            onRetry={read.reload}
+            onRetry={expired ? undefined : read.reload}
             onRestart={() => setQuery(firstAssetPage)}
           />
+          {expired && (
+            <Button onClick={() => setQuery(firstAssetPage)}>
+              {l('保留选择并返回首页', 'Keep selection and return to first page')}
+            </Button>
+          )}
           {read.value && (
             <>
               <Space wrap>
@@ -240,7 +251,7 @@ export function StandardPicker({
                         setOpen(false)
                       }}
                     >
-                      {row.definition?.name}
+                      {row.definition?.name} · {row.id}
                     </Button>
                   ))}
               </Space>

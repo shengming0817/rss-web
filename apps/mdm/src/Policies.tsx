@@ -138,7 +138,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
       if (!draftResource) return null
       const resource = await resources.read(draftResource, signal)
       const version = resource.versions.find(
-        (row) => row.id === softwareVersion && row.state === 'active',
+        (row) => row.id === softwareVersion && row.state !== 'archived',
       )
       const variant = version?.variants.find((row) => variantKey(row) === softwareVariant)
       if (
