@@ -118,8 +118,8 @@ export function EntryCopies({
         <>
           <p>
             {l(
-              'Agent 会核对当前租户和注册，并显示当前可见的记录。',
-              'Agent checks the current tenant and registration and displays the records it can read.',
+              'Agent 会核对当前租户和注册，再打开查看入口。',
+              'Agent checks the current tenant and registration before opening the view.',
             )}
           </p>
           {!device && (
@@ -172,7 +172,11 @@ export function EntryCopies({
                   <Button disabled={copy.busy} onClick={() => void write(entry, false)}>
                     {l('复制链接', 'Copy link')} · {entry.label}
                   </Button>
-                  <Button disabled={copy.busy} onClick={() => void write(entry, true)}>
+                  <Button
+                    title={l('适用于 macOS Shell 和 PowerShell', 'For macOS shells and PowerShell')}
+                    disabled={copy.busy}
+                    onClick={() => void write(entry, true)}
+                  >
                     {l('复制命令', 'Copy command')} · {entry.label}
                   </Button>
                 </Space>
