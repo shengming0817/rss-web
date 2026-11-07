@@ -24,7 +24,8 @@ export function createPolicies(port: PoliciesPort) {
   return Object.freeze({
     list: (query: DirectoryQuery<keyof PolicyRow> = {}, signal?: AbortSignal) =>
       port.list(query, signal),
-    read: async (id: string) => identity(await port.read(uuid(id)), id),
+    read: async (id: string, signal?: AbortSignal) =>
+      identity(await port.read(uuid(id), signal), id),
     capabilities: () => port.capabilities(),
     async preview(
       definition: PolicyDefinition,

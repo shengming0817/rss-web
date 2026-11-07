@@ -114,8 +114,8 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
           return page
         },
       ),
-    read: (id) =>
-      api.getApiV1PoliciesById(transport, { pathParams: { id: uuid(id) } }, (value) =>
+    read: (id, signal) =>
+      api.getApiV1PoliciesById(transport, { pathParams: { id: uuid(id) }, signal }, (value) =>
         policy(value, id),
       ),
     change: (id, change) =>

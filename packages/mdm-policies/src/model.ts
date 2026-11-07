@@ -204,7 +204,7 @@ export type PolicyChange =
   | { readonly action: 'enable' | 'disable' }
 export interface PoliciesPort {
   list(query: DirectoryQuery<keyof PolicyRow>, signal?: AbortSignal): Promise<Page<PolicyRow>>
-  read(id: string): Promise<Policy>
+  read(id: string, signal?: AbortSignal): Promise<Policy>
   change(id: string, change: Operation<PolicyChange>): Promise<Policy>
   archive(id: string, operationId: string, expectedRevision: number): Promise<Policy>
   rerun(
