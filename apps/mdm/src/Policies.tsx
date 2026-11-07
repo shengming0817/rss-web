@@ -127,36 +127,38 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
       id: string
       baseline: Policy | null
       initialAction?: PolicyDefinition['action']
+      source?: string
     } | null>(null),
     draftResource =
       fixedSoftware && softwareVariant && has('policy_write') && has('resource_read')
         ? softwareResource
         : null,
-    draft = usePageRead(
-      `${binding}/software-draft/${JSON.stringify([draftResource, softwareVersion, softwareVariant])}`,
-      async (signal) => {
-        if (!draftResource) return null
-        const resource = await resources.read(draftResource, signal)
-        const version = resource.versions.find(
-          (row) => row.id === softwareVersion && row.state === 'active',
-        )
-        const variant = version?.variants.find((row) => variantKey(row) === softwareVariant)
-        if (
-          resource.kind !== 'software' ||
-          !version ||
-          !variant ||
-          variant.declaration.kind !== 'software'
-        )
-          throw { cause: 'client', code: 'invalid_input' }
-        return { resource, version, variant }
-      },
-    )
+    draftSource = JSON.stringify([draftResource, softwareVersion, softwareVariant]),
+    draft = usePageRead(`${binding}/software-draft/${draftSource}`, async (signal) => {
+      if (!draftResource) return null
+      const resource = await resources.read(draftResource, signal)
+      const version = resource.versions.find(
+        (row) => row.id === softwareVersion && row.state === 'active',
+      )
+      const variant = version?.variants.find((row) => variantKey(row) === softwareVariant)
+      if (
+        resource.kind !== 'software' ||
+        !version ||
+        !variant ||
+        variant.declaration.kind !== 'software'
+      )
+        throw { cause: 'client', code: 'invalid_input' }
+      return { resource, version, variant }
+    })
   usePendingSelection(guard.locked)
   const linkedPolicy = params.get('policy'),
     canRead = has('policy_read'),
     canInventory = has('inventory_read', true),
     canOperations = has('operation_read', true),
     returnSource = resultReturnPath(params.get('returnTo')),
+    currentSelection = selected?.source
+      ? draftResource && selected.source === draftSource
+      : selected?.id === linkedPolicy,
     policyTarget =
       params.has('tab') &&
       !softwareVariant &&
@@ -182,19 +184,19 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
       },
       { retryReadConflict: true },
     ),
-    dialogOpen = selected !== null || policyTarget !== null
+    dialogOpen = Boolean(selected && (guard.locked || currentSelection)) || policyTarget !== null
   useEffect(() => {
-    if (!linkedPolicy && !guard.locked) setSelected(null)
-  }, [linkedPolicy, guard.locked])
+    if (!linkedPolicy && !softwareVariant && !guard.locked) setSelected(null)
+  }, [linkedPolicy, softwareVariant, guard.locked])
   useEffect(() => {
-    if (!draft.value || (linkedPolicy && selected?.id === linkedPolicy) || guard.locked) return
+    if (!draft.value || selected?.source === draftSource || guard.locked) return
     const { resource, version, variant } = draft.value
     const action = newPolicyAction('software', params.get('scope') ?? '')
     if (action.kind !== 'software') return
-    const id = linkedPolicy ?? crypto.randomUUID()
     setSelected({
-      id,
+      id: crypto.randomUUID(),
       baseline: null,
+      source: draftSource,
       initialAction: {
         ...action,
         resource: {
@@ -205,12 +207,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
         },
       },
     })
-    const next = new URLSearchParams(params)
-    next.set('policy', id)
-    next.set('tab', 'definition')
-    next.delete('softwareVariant')
-    setParams(next, { replace: true })
-  }, [draft.value, linkedPolicy, selected?.id, guard.locked, params, setParams])
+  }, [draft.value, draftSource, selected?.source, guard.locked, params])
   useEffect(() => {
     if (detail.value && detail.value.id === policyTarget)
       setSelected({ id: policyTarget, baseline: detail.value })
@@ -252,6 +249,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
       'member',
       'batchCursor',
       'memberCursor',
+      'softwareVariant',
     ])
       next.delete(key)
     setParams(next, { replace: true })
@@ -463,7 +461,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           destroyOnHidden
           open={dialogOpen}
           title={
-            selected?.baseline === null && selected.id === linkedPolicy
+            selected?.baseline === null && currentSelection
               ? l('新建部署', 'New deployment')
               : l('部署详情', 'Deployment details')
           }
@@ -476,12 +474,10 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
             if (!guard.locked) close()
           }}
         >
-          {returnSource && (
-            <Button disabled={guard.locked} onClick={() => navigate(returnSource)}>
-              {l('返回来源', 'Return to source')}
-            </Button>
+          {returnSource && !guard.locked && (
+            <Link to={returnSource}>{l('返回来源', 'Return to source')}</Link>
           )}
-          {selected && (guard.locked || selected.id === linkedPolicy) ? (
+          {selected && (guard.locked || currentSelection) ? (
             <SecretTabs
               key={selected.id}
               uiLocale={locale}

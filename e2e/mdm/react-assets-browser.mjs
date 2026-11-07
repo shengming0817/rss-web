@@ -891,7 +891,7 @@ try {
       assert.ok(index < 59, 'software collector scope publication deadline')
       await new Promise((done) => setTimeout(done, 250))
     }
-    await api(
+    const installed = await api(
       'POST',
       '/api/v1/policies/' + collectionPolicy,
       operation({
@@ -935,14 +935,40 @@ try {
       ],
       { encoding: 'utf8', timeout: 150000, stdio: ['ignore', 'pipe', 'pipe'] },
     )
-    assert.equal(collected.status, 0, 'real mTLS software collection')
-  }
-  for (let index = 0; index < 60; index++) {
-    const inventory = await api('GET', '/api/v1/devices/' + collector + '/inventory')
-    if (inventory.asset.device.lists['device.software.installations']?.state?.kind === 'known')
-      break
-    assert.ok(index < 59, 'software collection projection deadline')
-    await new Promise((done) => setTimeout(done, 250))
+    let classification = 'unclassified'
+    try {
+      const failure = JSON.parse(collected.stdout).classification
+      if (typeof failure === 'string' && /^[a-z0-9_-]{1,96}$/.test(failure))
+        classification = failure
+    } catch {
+      // The collector can time out before reporting a classification.
+    }
+    assert.equal(collected.status, 0, `real mTLS collection ${blueprint} (${classification})`)
+    const namespace =
+      action === 'software_assets_os'
+        ? { kind: 'device' }
+        : { kind: 'macos_applications', root: 'local', uid: null }
+    const inventoryPath =
+      '/api/v1/devices/' +
+      collector +
+      '/inventory?' +
+      new URLSearchParams({ scope: JSON.stringify(namespace) })
+    for (let index = 0; index < 60; index++) {
+      const inventory = await api('GET', inventoryPath)
+      const state =
+        action === 'software_assets_os'
+          ? inventory.asset.device.fields['device.os.name']
+          : inventory.asset.device.lists['device.software.installations']
+      const projection = state?.state?.kind ?? 'absent'
+      if (projection === 'known') break
+      assert.ok(index < 59, `software collection projection deadline (${blueprint}: ${projection})`)
+      await new Promise((done) => setTimeout(done, 250))
+    }
+    await api(
+      'POST',
+      '/api/v1/policies/' + collectionPolicy,
+      operation({ action: 'disable' }, installed.revision),
+    )
   }
 
   const overlappingGroups = [randomUUID(), randomUUID()]
@@ -1049,6 +1075,7 @@ try {
       202,
     )
     const task = (await accepted.json()).asset.task
+    assert.notEqual(task, accepted.request().postDataJSON().operationId)
     const state = await poll(
       '/api/v1/software-asset-queries/' + task,
       () => assetButton('读取任务状态').click(),
@@ -1109,6 +1136,17 @@ try {
     'medium',
   )
   checks.push('real-software-asset-standard-mapping-two-query-domains-coverage-and-release')
+  await p.getByRole('button', { name: 'English', exact: true }).press('Enter')
+  await p.getByRole('heading', { name: 'Software assets', exact: true }).waitFor()
+  await p.getByRole('group', { name: 'Device conditions', exact: true }).waitFor()
+  await p.setViewportSize({ width: 390, height: 844 })
+  assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await p.setViewportSize({ width: 1440, height: 960 })
+  await p.getByRole('button', { name: '中文', exact: true }).press('Enter')
+  await p.getByRole('heading', { name: '软件资产', exact: true }).waitFor()
+  await p.getByRole('button', { name: '切换亮暗主题', exact: true }).press('Enter')
+  await p.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
+  checks.push('software-asset-bilingual-keyboard-mobile-and-dark')
 
   const anonymous = await run.page()
   assert.equal((await anonymous.request.get(origin + '/api/v1/groups')).status(), 401)

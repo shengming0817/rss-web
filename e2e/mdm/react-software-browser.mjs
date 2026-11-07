@@ -686,7 +686,14 @@ try {
     .getByText(resource + ' @ resource-v1', { exact: true })
     .first()
     .waitFor()
-  await button('返回来源').click()
+  const draftReturn = p.getByRole('dialog').getByRole('link', { name: '返回来源', exact: true })
+  const sourceUrl = new URL(await draftReturn.getAttribute('href'), origin)
+  assert.equal(sourceUrl.pathname, '/software')
+  assert.equal(sourceUrl.searchParams.get('resource'), resource)
+  assert.equal(sourceUrl.searchParams.get('version'), 'resource-v1')
+  assert.ok(sourceUrl.searchParams.get('variant'))
+  await draftReturn.click()
+  await p.waitForURL(sourceUrl.href)
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).waitFor()
   await button('清除条件').click()
   await p.locator('.resource-toolbar summary').click()
@@ -741,6 +748,20 @@ try {
   await label('导入 JSON 原文').fill('{"id":"replaced"}')
   await run.response(p, 'POST', snapshotPath, () => button('完整替换快照').click())
   assert.equal(await label('实际软件版本').inputValue(), version)
+  const privateSource = 'browser-snapshot-private',
+    source = await api('POST', '/api/v1/software/sources/' + privateSource + '/revisions/1', {
+      operationId: randomUUID(),
+      expectedRevision: 0,
+      input: {
+        action: 'register',
+        definition: { id: privateSource, revision: '1', protocol: { kind: 'private' } },
+      },
+    })
+  await label('软件来源标识').fill(privateSource)
+  await label('软件来源精确版本').fill('1')
+  await label('软件来源快照 SHA-256').fill(Buffer.from(source.snapshot.sha256).toString('hex'))
+  await run.choose(p, label('来源证据类型'), 'private')
+  await run.choose(p, label('导出类型'), 'disabled')
   await label('新资源固定版本').fill('snapshot-copy')
   await button('准备完整资源版本').click()
   await run.response(p, 'POST', resourcePath(resource), () => button('声明此完整固定版本').click())
@@ -790,8 +811,13 @@ try {
     fullPage: true,
     animations: 'disabled',
   })
+  await button('English').press('Enter')
+  await p.getByRole('heading', { name: 'Software catalog', exact: true }).waitFor()
+  await p.getByRole('tab', { name: 'JSON source snapshots', exact: true }).press('Enter')
+  await p.getByRole('button', { name: 'Refresh sources', exact: true }).waitFor()
   console.log(JSON.stringify({ journey: 'react-software', screenshots }))
   checks.push('canonical-resource-software-card-desktop-mobile-dark-design')
+  checks.push('software-catalog-bilingual-keyboard')
 } catch (error) {
   failure = error
   if (diagnosticPage)
@@ -799,6 +825,8 @@ try {
       JSON.stringify({
         journey: 'react-software',
         failureLocation: error.stack?.match(/react-software-browser\.mjs:(\d+):(\d+)/)?.[0],
+        route: new URL(diagnosticPage.url()).pathname,
+        locatorKeys: [...new URL(diagnosticPage.url()).searchParams.keys()],
       }),
     )
 } finally {

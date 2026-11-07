@@ -175,13 +175,14 @@ function SoftwareAssetQuery({
     [tags, setTags] = useState<string[]>([]),
     [split, setSplit] = useState<Dimension[]>(['version', 'component']),
     [taskInput, setTaskInput] = useState(''),
-    [last, setLast] = useState<{ id: string; query: SoftwareQuery } | null>(null),
+    [last, setLast] = useState<{ task: string; dimensions: readonly Dimension[] } | null>(null),
     [invalidTask, setInvalidTask] = useState<string | null>(null),
     status = usePageRead(`software-asset-task/${canRead}/${task ?? ''}`, (signal) =>
       canRead && task ? assets.status(task, signal) : Promise.resolve(null),
     ),
-    command = useSoftwareAssetCommand(assets, (receipt) => {
-      if (receipt.kind === 'accepted') {
+    command = useSoftwareAssetCommand(assets, (receipt, original) => {
+      if (receipt.kind === 'accepted' && original.kind === 'query') {
+        setLast({ task: receipt.task, dimensions: original.operation.input.dimensions })
         setInvalidTask(null)
         setTask(receipt.task)
       }
@@ -208,9 +209,10 @@ function SoftwareAssetQuery({
       software: { standards, risks: risk, tags, filter: softwareFilter.trim() || null },
       dimensions: split,
     }
-    const operationId = crypto.randomUUID()
-    setLast({ id: operationId, query: input })
-    void command.submit({ kind: 'query', operation: { operationId, expectedRevision: 0, input } })
+    void command.submit({
+      kind: 'query',
+      operation: { operationId: crypto.randomUUID(), expectedRevision: 0, input },
+    })
   }
   return (
     <>
@@ -421,7 +423,7 @@ function SoftwareAssetQuery({
           task={status.value}
           locale={locale}
           invalidate={invalidate}
-          requestedDimensions={last?.id === task ? last.query.dimensions : undefined}
+          requestedDimensions={last?.task === task ? last.dimensions : undefined}
           openMapping={openMapping}
         />
       )}

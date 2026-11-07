@@ -104,12 +104,22 @@ def collect(fixture, action, resource, cycle):
                            environment=dict(edition=None, tools={}, nativeEngines={'macos.hardware':1,'macos.applications':1}), executionContext=agent['executionContext']))
         if response['task'] is not None:
             signed = response['task']
-            check(signed['payload']['kind'] == 'collection', 'collector-task-family')
-            task = signed['payload']['task']
-            break
+            payload = signed['payload']
+            task = payload['task']
+            check(task['deviceId'] == agent['runtime']['deviceId'], 'collector-task-device')
+            if payload['kind'] == 'collection' and task['resource']['id'] == resource:
+                break
+            check(action in {'software_assets', 'software_assets_os'}, 'collector-task-binding')
+            check(task['registrationId'] == agent['runtime']['registrationId'], 'collector-task-registration')
+            # This dedicated fixture can still receive earlier test offers. Close them
+            # without obtaining a start permit or performing a device effect.
+            for kind in ['received', 'cancelled']:
+                receipt = request('/api/v1/agent/runtime/tasks/'+task['taskId']+'/events',
+                                  dict(wireVersion=1, operationId=str(uuid.uuid4()), attemptId=task['attemptId'],
+                                       executionContext=agent['executionContext'], event=dict(kind=kind)))
+                check(receipt['accepted'], 'collector-terminal-'+kind)
         check(time.monotonic() < deadline, 'collector-due-deadline')
         time.sleep(1)
-    check(task['resource']['id'] == resource and task['deviceId'] == agent['runtime']['deviceId'], 'collector-task-binding')
     check(task['taskId'] not in [r['task'] for r in agent['runs']], 'collector-duplicate-run')
     path = '/api/v1/agent/runtime/tasks/'+task['taskId']+'/events'
     def event(value, operation=None):

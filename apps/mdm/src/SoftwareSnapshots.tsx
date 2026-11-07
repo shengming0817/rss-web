@@ -518,6 +518,12 @@ export function SnapshotDraft({
         <p>
           {seed.name} · {seed.packageId} · {seed.version}
         </p>
+        <p className="subtitle">
+          {l(
+            '记录提供包标识和版本。保存资源版本前，请配置已注册的私有软件来源、证据和安装材料。',
+            'The record supplies a package ID and version. Configure a registered private software source, provenance and installation materials before saving the Resource version.',
+          )}
+        </p>
         <Button
           disabled={command.outcome === 'unknown' || action.busy || guard.locked}
           onClick={close}

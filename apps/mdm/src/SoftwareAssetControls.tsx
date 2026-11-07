@@ -49,7 +49,7 @@ export function dimensionName(dimension: Dimension, locale: Locale) {
 
 export function useSoftwareAssetCommand(
   assets: SoftwareAssetsUseCases,
-  confirmed: (receipt: SoftwareReceipt) => void,
+  confirmed: (receipt: SoftwareReceipt, original: SoftwareMutation) => void,
 ) {
   const action = useAction(),
     [pending, setPending] = useState<SoftwareMutation | null>(null),
@@ -60,7 +60,7 @@ export function useSoftwareAssetCommand(
     if (result.ok) {
       setPending(null)
       setUnconfirmed(false)
-      confirmed(result.value)
+      confirmed(result.value, intent)
     } else if (isUnknown(result.error) || pending) setPending(intent)
   }
   return {
@@ -78,7 +78,7 @@ export function useSoftwareAssetCommand(
       if (result.value) {
         setPending(null)
         setUnconfirmed(false)
-        confirmed(result.value)
+        confirmed(result.value, pending)
       } else setUnconfirmed(true)
     },
     dismiss() {
