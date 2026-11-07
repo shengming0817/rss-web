@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react'
 import { Alert, Button, Card, Form, Input, Popconfirm, Select, Space, Tag } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
-import type {
-  AssetContext,
+import {
   dimensions,
   risks,
+  type AssetContext,
   type Dimension,
   type Risk,
   type SoftwareQuery,
