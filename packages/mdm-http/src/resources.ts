@@ -90,19 +90,22 @@ export function createResourcesAdapter(transport: HttpTransport): ResourcesPort 
       }
       return prepareVersionMaterials(draft)
     },
-    list: (query, kind, signal) =>
-      api.getApiV1Resources(
+    list: (query, kind, signal) => {
+      const projection = query.fields ?? (Object.keys(fields) as (keyof typeof fields)[])
+      return api.getApiV1Resources(
         transport,
         {
           signal,
           query: queryParameters({
             limit: 20,
             ...query,
+            fields: projection,
             ...(kind === undefined ? {} : { filter: allOf(`kind==${kind}`, query.filter) }),
           }),
         },
-        (value) => projectedPage(value, fields, query.fields, ['id']),
-      ),
+        (value) => projectedPage(value, fields, projection, ['id']),
+      )
+    },
     read: (id, signal) =>
       api.getApiV1ResourcesById(transport, { pathParams: { id }, signal }, (value) =>
         resourceRead(value, id),
