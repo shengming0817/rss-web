@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { it, expect } from 'vitest'
 import { createServer } from 'vite'
+import { once } from 'node:events'
 import { request } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { demoPlugin } from './plugin'
@@ -17,11 +18,15 @@ it('uses an actual bounded loopback HTTP session and refuses cross-origin reques
     appType: 'custom',
     optimizeDeps: { noDiscovery: true },
     plugins: [demoPlugin()],
-    server: { host: '127.0.0.1', port: 0, strictPort: true },
+    server: { hmr: false },
   })
   try {
-    await server.listen()
-    const port = (server.httpServer!.address() as AddressInfo).port
+    // Vite's listen() falls back to its default port for 0.
+    const httpServer = server.httpServer!
+    const listening = once(httpServer, 'listening')
+    httpServer.listen(0, '127.0.0.1')
+    await listening
+    const port = (httpServer.address() as AddressInfo).port
     const call = (
       path: string,
       method = 'GET',
