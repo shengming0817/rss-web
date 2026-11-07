@@ -3,7 +3,12 @@
 export function resultReturnPath(value: string | null, expected: string): string | null {
   if (!value || value.length > 16384 || !value.startsWith('/') || /[\\\p{Cc}]/u.test(value))
     return null
-  const url = new URL(value, 'https://mdm.invalid')
+  let url: URL
+  try {
+    url = new URL(value, 'https://mdm.invalid')
+  } catch {
+    return null
+  }
   if (url.origin !== 'https://mdm.invalid' || url.pathname !== expected || url.hash) return null
   const fields =
     expected === '/policies'
@@ -34,6 +39,7 @@ export function resultSourcePath(value: string | null): string | null {
     !value ||
     value.length > 16384 ||
     !value.startsWith('/') ||
+    value.startsWith('//') ||
     value.startsWith('//') ||
     /[\\\p{Cc}]/u.test(value)
   )

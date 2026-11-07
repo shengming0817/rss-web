@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Runtime } from './runtime'
 import type { ControlIntent, ControlRecovery } from '@rss/mdm-execution'
 import type { ViewEndpoint } from '@rss/mdm-devices'
+import { DeviceDetail } from './DeviceDetail'
 import { DeviceControl } from './DeviceControl'
 import { ControlRecoveryPanel } from './ControlRecovery'
 import { isUnknown } from './AdminUi'
@@ -843,4 +844,123 @@ it('retains an unknown recovery request while refreshing the containing result d
   expect(detail).toHaveBeenCalledTimes(2)
   await act(async () => button('显式重提同一恢复请求').click())
   expect(cancel.mock.calls[1]).toEqual(original)
+})
+
+it.each(['//[', '//%'])(
+  'keeps execution detail mounted with malformed return locator %s',
+  async (returnTo) => {
+    const id = '11111111-1111-4111-8111-111111111111',
+      runtime = {
+        administration: () => ({
+          binding: 'malformed',
+          authorization: { effective: async () => ({ grants: [] }) },
+          execution: {
+            summary: async () => ({
+              id,
+              device: 'device-a',
+              policy: id,
+              status: 'queued',
+              registrationId: id,
+              generation: 1,
+            }),
+            list: async () => ({ items: [], nextCursor: null }),
+            statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
+          },
+        }),
+      } as unknown as Runtime
+    expect(resultReturnPath(returnTo, '/policies')).toBeNull()
+    await act(async () =>
+      root.render(
+        h(
+          MemoryRouter,
+          {
+            initialEntries: [
+              `/operations?${new URLSearchParams({ kind: 'command', operation: id, returnTo })}`,
+            ],
+          },
+          h(Executions, { runtime, locale: 'zh' }),
+        ),
+      ),
+    )
+    expect(host.textContent).toContain('device-a')
+    expect(host.textContent).toContain('原操作与结果')
+  },
+)
+
+it('uses URL endpoint selection for back and forward while retaining an unknown operation target', async () => {
+  const association = '33333333-3333-4333-8333-333333333333',
+    endpoints = [
+      { ...endpoint, id: 'device-a' },
+      { ...endpoint, id: 'device-b' },
+    ],
+    create = vi.fn(async (_input: ControlIntent) => {
+      throw decodeMdmError(503, { code: 'service_unavailable' })
+    }),
+    runtime = {
+      administration: () => ({
+        binding: 'association',
+        authorization: {
+          effective: async () => ({
+            grants: [{ operation: 'device_control', scope: { kind: 'all_devices' } }],
+          }),
+        },
+        devices: {
+          view: async () => ({ association: null, endpoints, fields: {} }),
+          endpoint: async (id: string) => ({
+            ...endpoints.find((e) => e.id === id),
+            capabilities: [],
+          }),
+        },
+        execution: { create },
+        connections: { agent: {} },
+      }),
+    } as unknown as Runtime,
+    path = `/devices/association/${association}`
+  function History() {
+    const navigate = useNavigate(),
+      location = useLocation()
+    return h(
+      Fragment,
+      null,
+      h('output', { 'data-location': true }, location.pathname + location.search),
+      h('button', { onClick: () => navigate(-1) }, '后退终端'),
+      h('button', { onClick: () => navigate(1) }, '前进终端'),
+      h('button', { onClick: () => navigate(path + '?endpoint=device-a') }, '定位另一个终端'),
+    )
+  }
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        {
+          initialEntries: [path + '?endpoint=device-a', path + '?endpoint=device-b'],
+          initialIndex: 1,
+        },
+        h(History),
+        h(
+          Routes,
+          null,
+          h(Route, {
+            path: '/devices/:kind/:id',
+            element: h(DeviceDetail, { runtime, locale: 'zh' }),
+          }),
+        ),
+      ),
+    ),
+  )
+  const current = () => host.querySelector('.device-endpoint-select')?.textContent
+  expect(current()).toContain('device-b')
+  await act(async () => button('后退终端').click())
+  expect(current()).toContain('device-a')
+  await act(async () => button('前进终端').click())
+  expect(current()).toContain('device-b')
+  await act(async () => button('核对设备与动作').click())
+  const dialog = document.querySelector('[role=dialog]')!
+  await act(async () => dialog.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  await act(async () => button('确认提交此动作').click())
+  expect(create.mock.calls[0]![0].device).toBe('device-b')
+  await act(async () => button('定位另一个终端').click())
+  expect(current()).toContain('device-b')
+  expect(host.querySelector('[data-location]')!.textContent).toContain('endpoint=device-b')
+  expect(create).toHaveBeenCalledOnce()
 })

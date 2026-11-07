@@ -334,7 +334,6 @@ function Detail({
     permissions = useRead(`${binding}/device-asset-presentation`, authorization.effective),
     has = (operation: string) =>
       permissions.value?.grants.some((grant) => grant.operation === operation) ?? false,
-    [selected, setSelected] = useState(params.get('endpoint') ?? ''),
     [snapshot, setSnapshot] = useState<DeviceView>(),
     [heldEndpoint, setHeldEndpoint] = useState<ViewEndpoint>(),
     read = useRead(
@@ -349,14 +348,21 @@ function Detail({
   // successful current read; a changed tenant/principal/session remounts this subtree.
   const retained = read.value ?? snapshot,
     view = read.value,
+    selected = guard.locked && heldEndpoint ? heldEndpoint.id : (params.get('endpoint') ?? ''),
     endpoint = selected ? view?.endpoints.find((e) => e.id === selected) : view?.endpoints[0],
     mountedEndpoint = endpoint ?? heldEndpoint
   useEffect(() => {
     if (endpoint) {
       setHeldEndpoint(endpoint)
-      if (!selected) setSelected(endpoint.id)
     }
-  }, [endpoint, selected])
+  }, [endpoint])
+  useEffect(() => {
+    if (guard.locked && heldEndpoint && params.get('endpoint') !== heldEndpoint.id) {
+      const next = new URLSearchParams(params)
+      next.set('endpoint', heldEndpoint.id)
+      setParams(next, { replace: true })
+    }
+  }, [guard.locked, heldEndpoint, params, setParams])
   return (
     <>
       <Link to={resultSourcePath(params.get('returnTo')) ?? '/devices'}>
@@ -409,7 +415,6 @@ function Detail({
                 label: `${deviceName(e.displayName, e.id)} · ${e.id}`,
               }))}
               onChange={(value: string) => {
-                setSelected(value)
                 const next = new URLSearchParams(params)
                 next.set('endpoint', value)
                 setParams(next)
