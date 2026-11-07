@@ -682,26 +682,22 @@ try {
   const diagnostics = await manager.request.get(origin + diagnosticPath)
   assert.equal(diagnostics.status(), 200)
   assert.equal((await diagnostics.json()).originalResult.availability, 'available')
-  const indexed = await manager.request.get(
-    origin + diagnosticBase + '?operationId=' + provisionOperation,
-  )
-  assert.equal(indexed.status(), 200)
-  const attempt = (await indexed.json()).items.find(
-    ({ fact }) => fact.origin === 'request' && fact.requestId,
-  )
-  assert.ok(attempt)
-  assert.equal(
-    (
-      await manager.request.get(origin + diagnosticBase + '/requests/' + attempt.fact.requestId)
-    ).status(),
-    200,
-  )
   assert.ok([401, 403].includes((await admin.request.get(origin + diagnosticPath)).status()))
-  await nav(
-    manager,
-    '/platform/operation-diagnostics?' +
-      new URLSearchParams({ mode: 'request', requestId: attempt.fact.requestId }),
-    '操作排障',
+  await nav(manager, '/platform/operation-diagnostics', '操作排障')
+  await manager.getByLabel('原操作编号', { exact: true }).fill(provisionOperation)
+  const indexed = await result(manager, 'GET', diagnosticBase, () =>
+    manager.getByRole('button', { name: '查询操作', exact: true }).click(),
+  )
+  const attempt = indexed.items.find(({ fact }) => fact.origin === 'request' && fact.requestId)
+  assert.ok(attempt)
+  const requestHref = `a[href*="/platform/operation-diagnostics"][href*="requestId=${attempt.fact.requestId}"]`
+  const discoveryRow = manager
+    .locator('details')
+    .filter({ has: manager.locator(requestHref) })
+    .first()
+  await discoveryRow.locator(':scope > summary').click()
+  await result(manager, 'GET', diagnosticBase + '/requests/' + attempt.fact.requestId, () =>
+    discoveryRow.locator(requestHref).first().click(),
   )
   await manager.getByText('请求尝试与关联证据', { exact: true }).waitFor()
   await manager

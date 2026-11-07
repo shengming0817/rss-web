@@ -142,17 +142,23 @@ const invocationOwners = new Set([
 export function requiredOperationCoordinates(
   owner: string,
 ): readonly (keyof OperationCoordinates)[] {
-  if (owner === 'filevault' || invocationOwners.has(owner))
-    return ['device', 'registration', 'generation']
+  if (invocationOwners.has(owner)) return ['actor', 'device', 'registration', 'generation']
+  if (owner === 'filevault') return ['device', 'registration', 'generation']
   if (deviceOwners.has(owner)) return ['device']
   if (owner === 'registration_recovery') return ['registration']
   if (owner === 'content' || owner === 'software_source_snapshot') return ['target']
   return []
 }
 
+export function operationAllowsInstance(owner: string): boolean {
+  return !invocationOwners.has(owner)
+}
+
 export function validateOperationAddress(address: OperationAddress): void {
   identifier(address.owner, 64)
   uuid(address.operationId)
+  if (address.instance !== undefined && !operationAllowsInstance(address.owner))
+    throw new Error('Self-service invocation has no instance coordinate')
   if (requiredOperationCoordinates(address.owner).some((field) => address[field] === undefined))
     throw new Error('Missing required operation coordinate')
   for (const value of [address.actor, address.device, address.target])

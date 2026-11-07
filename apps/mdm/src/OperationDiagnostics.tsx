@@ -1,5 +1,6 @@
 import {
   requiredOperationCoordinates,
+  operationAllowsInstance,
   type DiagnosticPage,
   type DiagnosticsContext,
   type Evidence,
@@ -488,6 +489,7 @@ function LocatorForm({
                 mode !== 'operation' ||
                 ['owner', 'operationId', 'actor', 'instance'].includes(name ?? ''),
             )
+            .filter(([name]) => name !== 'instance' || operationAllowsInstance(owner ?? ''))
             .map(([name, label]) => (
               <Form.Item
                 key={name}

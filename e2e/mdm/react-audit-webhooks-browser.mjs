@@ -430,6 +430,11 @@ try {
           await route.abort('failed').catch(() => {})
         }
       }
+    let contextWrites = 0
+    const observeWrites = (request) => {
+      if (request.method() === 'PUT' && new URL(request.url()).pathname === path) contextWrites++
+    }
+    p.context().on('request', observeWrites)
     await p.context().route(pattern, lose)
     await button('保存订阅配置').click()
     await button('显式重提原 Webhook 请求').waitFor()
@@ -444,7 +449,8 @@ try {
       await receiptPage.close()
       await p.bringToFront()
     }
-    assert.equal(run.count(p, 'PUT', path), 1)
+    p.context().off('request', observeWrites)
+    assert.equal(contextWrites, 1)
 
     const saved = await api('GET', path)
     assert.equal(saved.enabled, false)

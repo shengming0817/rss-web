@@ -878,11 +878,28 @@ try {
         .originalResult.availability,
       'available',
     )
-    const daPage = await api('GET', daBase + '?operationId=' + bindingInput.operationId)
-    const daRequest = daPage.items.find(({ fact }) => fact.origin === 'request' && fact.requestId)
+    await run.nav(p, '/operation-diagnostics?context=da', '操作排障')
+    await label('原操作编号').fill(bindingInput.operationId)
+    const discovery = await run.response(p, 'GET', daBase, () => button('查询操作').click())
+    const daRequest = (await discovery.json()).items.find(
+      ({ fact }) => fact.origin === 'request' && fact.requestId,
+    )
     assert.ok(daRequest)
-    const attempts = await api('GET', daBase + '/requests/' + daRequest.fact.requestId)
+    const requestHref = `a[href*="context=da"][href*="requestId=${daRequest.fact.requestId}"]`
+    const row = p
+      .locator('details')
+      .filter({ has: p.locator(requestHref) })
+      .first()
+    await row.locator(':scope > summary').click()
+    const response = await run.response(
+      p,
+      'GET',
+      daBase + '/requests/' + daRequest.fact.requestId,
+      () => row.locator(requestHref).first().click(),
+    )
+    const attempts = await response.json()
     assert.ok(attempts.items.some(({ fact }) => fact.requestId === daRequest.fact.requestId))
+    await p.getByText('请求尝试与关联证据', { exact: true }).waitFor()
     checks.push('real-da-diagnostics-directory-request-and-original-receipt')
   }
 
