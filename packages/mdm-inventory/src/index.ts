@@ -168,3 +168,5 @@ export function createInventory(port: InventoryPort) {
     },
   })
 }
+
+export * from './software-assets'

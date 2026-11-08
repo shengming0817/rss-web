@@ -51,6 +51,7 @@ import { RecoveryDisclosure } from './RecoveryDisclosure'
 import { DeviceDetail } from './DeviceDetail'
 import { Enrollment } from './Enrollment'
 import { Connections } from './Connections'
+import { SoftwareAssets } from './SoftwareAssets'
 import { Inventory } from './Inventory'
 import { GroupsPage } from './Groups'
 import { Compliance } from './Compliance'
@@ -258,6 +259,13 @@ const featureRoutes: readonly FeatureRoute[] = [
     label: 'inventory',
     realm: 'tenant',
     render: (ui) => <Inventory {...ui} />,
+  },
+  {
+    path: '/inventory/software',
+    label: 'softwareAssets',
+    realm: 'tenant',
+    navigation: false,
+    render: (ui) => <SoftwareAssets {...ui} />,
   },
   {
     path: '/resources',
@@ -571,7 +579,8 @@ function Navigation({ runtime, locale, close }: Ui & { close: () => void }) {
                 : `${runtime.management ? '/platform' : ''}${route.path}`
             const active =
               location.pathname === href ||
-              (route.path === '/devices' && location.pathname.startsWith(`${href}/`))
+              ((route.path === '/devices' || route.path === '/inventory') &&
+                location.pathname.startsWith(`${href}/`))
             return (
               <Link
                 key={route.path}

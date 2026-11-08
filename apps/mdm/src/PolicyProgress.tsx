@@ -286,6 +286,16 @@ export function PolicyRuns({
   }
   return (
     <Card title={l('已发生的运行', 'Existing runs')}>
+      {params.get('originalPolicyVersion') && (
+        <p>
+          {l(
+            '此页包含策略的全部运行。原资源引用对应执行版本',
+            'This page shows the full policy run history. Execution version referenced by the resource',
+          )}
+          {' · '}
+          <code>{params.get('originalPolicyVersion')}</code>
+        </p>
+      )}
       <Button onClick={read.reload}>{l('读取运行', 'Read runs')}</Button>
       <ReadState
         locale={locale}

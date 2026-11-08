@@ -909,6 +909,7 @@ html:has(.mdm-overlay-open) {
 .resource-detail,
 .resource-blueprint {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 .resource-detail-heading,
@@ -933,6 +934,15 @@ html:has(.mdm-overlay-open) {
   width: 100%;
 }
 .resource-detail code {
+  overflow-wrap: anywhere;
+}
+.resource-material-select {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.resource-version-author,
+.software-snapshot-draft,
+.content-material-reference {
   overflow-wrap: anywhere;
 }
 .software-grid {
@@ -1001,12 +1011,18 @@ html:has(.mdm-overlay-open) {
 .resource-author,
 .author-record {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-block: 16px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   min-width: 0;
+}
+.resource-author .ant-select,
+.author-record .ant-select {
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 .author-record > .resource-card-top {
   margin-bottom: 8px;
@@ -1038,10 +1054,6 @@ html:has(.mdm-overlay-open) {
 }
 .software-lifecycle code {
   overflow-wrap: anywhere;
-}
-.software-page-filter {
-  flex: 1 1 260px;
-  max-width: 360px;
 }
 .resource-toolbar > details {
   padding-block: 8px;
@@ -1477,4 +1489,9 @@ html:has(.mdm-overlay-open) {
   color: #ff9b99;
   background: #402020;
   border-color: #723434;
+}
+
+.software-asset-panels {
+  display: flex;
+  width: 100%;
 }

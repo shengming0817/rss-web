@@ -157,6 +157,7 @@ export function ResourceMaterialUpload({
     <Card size="small" title={l('交付此精确材料', 'Deliver this exact material')}>
       <Select
         aria-label={l('交付材料引用', 'Delivery material reference')}
+        className="resource-material-select"
         disabled={blocked || (intent !== null && !finished)}
         value={reference || null}
         options={artifacts.map((artifact) => ({

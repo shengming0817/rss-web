@@ -102,7 +102,7 @@ function permissionPanel(allowed: boolean, children: ReactNode) {
     items: [{ key: 'original', label: 'Operation', forceRender: true, children }],
   })
 }
-it('keeps a kind-filtered software directory as a single page read and labels its local name/category filter honestly', async () => {
+it('searches the kind-filtered software directory through its server query without detail fan-out', async () => {
   const list = vi.fn<ResourcesUseCases['list']>().mockResolvedValue({
       items: [
         {
@@ -136,10 +136,13 @@ it('keeps a kind-filtered software directory as a single page read and labels it
   expect(list.mock.calls[0]?.[1]).toBe('software')
   expect(read).not.toHaveBeenCalled()
   expect(host.querySelectorAll('.software-card')).toHaveLength(2)
-  await fill('Filter software on this page', 'Office')
+  list.mockResolvedValue({ items: [{ id: 'company/two', kind: 'software' }], nextCursor: null })
+  await fill('Software name', "O'Reilly")
+  await click('Search software')
   expect(host.querySelectorAll('.software-card')).toHaveLength(1)
-  expect(host.textContent).toContain('Matches on this page')
-  expect(list).toHaveBeenCalledTimes(1)
+  expect(list).toHaveBeenCalledTimes(2)
+  expect(list.mock.calls[1]?.[0]?.filter).toBe("(presentation.name=icontains='O\\'Reilly')")
+  expect(list.mock.calls[1]?.[1]).toBe('software')
   expect(read).not.toHaveBeenCalled()
   expect(host.textContent).not.toContain('Installed devices')
 })

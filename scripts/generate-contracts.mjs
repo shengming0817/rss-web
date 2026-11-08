@@ -142,8 +142,19 @@ function referenceSiblings(schema, definitions) {
     ]),
   )
 }
-for (const [id, schema] of Object.entries(schemas))
+for (const [id, schema] of Object.entries(schemas)) {
+  const definitions = schema?.$defs
+  const value = definitions?.InstallationEvidence?.properties?.value
+  if (value && definitions.Scalar) {
+    const evidenceScalar = (ref) =>
+      ref === '#/$defs/Scalar' ? '#/$defs/InstallationEvidenceValue' : ref
+    // The adapter withholds observation values outside browser precision.
+    // All other uses of Scalar retain the standard safe integer bounds.
+    definitions.InstallationEvidence.properties.value = schemaWalk(value, evidenceScalar)
+    definitions.InstallationEvidenceValue = schemaWalk(definitions.Scalar, evidenceScalar)
+  }
   schemas[id] = referenceSiblings(schema, schema.$defs)
+}
 // Visit only schema positions. A const/enum/example containing JSON Schema is ordinary data.
 function objectShape(schema) {
   return (
@@ -153,18 +164,33 @@ function objectShape(schema) {
       ['allOf', 'anyOf', 'oneOf'].some((key) => schema[key]?.some(objectShape)))
   )
 }
-function transform(schema, mode, composed = false) {
+function transform(schema, mode, composed = false, observation = false) {
   if (typeof schema === 'boolean') return schema
   const result = {}
   for (const [key, value] of Object.entries(schema)) {
     if (!schemaKeys.has(key)) throw new Error(`Unsupported schema assertion: ${key}`)
     if (annotationKeys.has(key) || key === '$schema') continue
     result[key] = schemaMaps.has(key)
-      ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, transform(v, mode)]))
+      ? Object.fromEntries(
+          Object.entries(value).map(([k, v]) => [
+            k,
+            transform(
+              v,
+              mode,
+              false,
+              observation || (key === '$defs' && k === 'InstallationEvidenceValue'),
+            ),
+          ]),
+        )
       : schemaLists.has(key)
-        ? value.map((v) => transform(v, mode, key !== 'prefixItems'))
+        ? value.map((v) => transform(v, mode, key !== 'prefixItems', observation))
         : schemaChildren.has(key)
-          ? transform(value, mode, ['contains', 'not', 'if', 'then', 'else'].includes(key))
+          ? transform(
+              value,
+              mode,
+              ['contains', 'not', 'if', 'then', 'else'].includes(key),
+              observation,
+            )
           : value
   }
   // Close the complete record after composition. Closing individual union arms
@@ -189,13 +215,18 @@ function transform(schema, mode, composed = false) {
   }
   // Rust integers must remain exact in JavaScript; floating point fields keep their wire range.
   if (
-    result.type === 'integer' ||
-    (Array.isArray(result.type) &&
-      result.type.includes('integer') &&
-      !result.type.includes('number'))
+    !observation &&
+    (result.type === 'integer' ||
+      (Array.isArray(result.type) &&
+        result.type.includes('integer') &&
+        !result.type.includes('number')))
   ) {
     result.minimum = Math.max(result.minimum ?? Number.MIN_SAFE_INTEGER, Number.MIN_SAFE_INTEGER)
     result.maximum = Math.min(result.maximum ?? Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+  }
+  if (observation && result.type === 'integer' && result.format === 'int64') {
+    result.minimum = Math.max(result.minimum ?? -(2 ** 63), -(2 ** 63))
+    result.maximum = Math.min(result.maximum ?? 2 ** 63, 2 ** 63)
   }
   if (mode === 'types') {
     // ref: json-schema.org/draft/2020-12/json-schema-core §8.2.3.1; json-schema-to-typescript issue #613.
@@ -543,6 +574,11 @@ const headerName = (name) =>
 const names = new Set()
 let index = ''
 let schemaIndex = ''
+const snapshotJson = new Map([
+  ['POST /api/v1/software/source-snapshots/{source}', 'request'],
+  ['GET /api/v1/software/source-snapshots/{source}', 'document'],
+  ['GET /api/v1/software/source-snapshots/{source}/entries/{entry}', 'data'],
+])
 for (const e of endpoints) {
   const name = operationName(e)
   if (names.has(name)) throw new Error(`Duplicate generated operation ${name}`)
@@ -577,10 +613,17 @@ for (const e of endpoints) {
       `query${optional ? '?' : ''}: WireInput<${typeOf(e.request.query)}>${optional ? ' | undefined' : ''}`,
     )
   }
-  if (e.request.body)
-    args.push(
-      `body: ${e.request.body.content_type === 'application/octet-stream' ? 'ArrayBuffer' : `WireInput<${typeOf(e.request.body.schema)}>`}`,
-    )
+  const rawSnapshot = snapshotJson.get(e.method + ' ' + e.path)
+  if (e.request.body?.content_type === 'application/octet-stream') {
+    args.push('body: ArrayBuffer')
+  } else if (e.request.body) {
+    const wire = typeOf(e.request.body.schema)
+    const input =
+      rawSnapshot === 'request'
+        ? `Omit<${wire}, 'input'> & { input: Omit<${wire}['input'], 'document'> & { document: string } }`
+        : wire
+    args.push(`body: WireInput<${input}>`)
+  }
   const requestHeaders = Object.entries(e.request.headers).filter(
     ([key]) => !browserOwnedHeaders.has(key.toLowerCase()),
   )
@@ -600,10 +643,32 @@ for (const e of endpoints) {
       r.body &&
       (!r.body.content_type.startsWith('application/json') || 'content-disposition' in r.headers),
   )
+  if (rawSnapshot) {
+    const contract = rawSnapshot === 'request' ? e.request.body : success[0]?.body
+    const schema = schemas[contract?.schema.schemaId]
+    const inputRef = schema?.properties?.input?.$ref
+    const leaf =
+      rawSnapshot === 'request'
+        ? schema?.$defs?.[inputRef?.replace('#/$defs/', '')]?.properties?.document
+        : schema?.properties?.[rawSnapshot]
+    if (
+      contract?.content_type !== 'application/json' ||
+      typeof leaf?.['x-rss-extension'] !== 'string' ||
+      Object.keys(leaf).some((key) => !annotationKeys.has(key))
+    )
+      throw new Error('Snapshot JSON declaration changed: ' + e.operationId)
+  }
   const returns =
     [
       ...new Set(
-        success.map((r) => (!r.body ? 'void' : binary ? 'BinaryResponse' : typeOf(r.body.schema))),
+        success.map((r) => {
+          if (!r.body) return 'void'
+          if (binary) return 'BinaryResponse'
+          const wire = typeOf(r.body.schema)
+          return rawSnapshot && rawSnapshot !== 'request'
+            ? `Omit<${wire}, '${rawSnapshot}'> & { ${rawSnapshot}: string }`
+            : wire
+        }),
       ),
     ].join(' | ') || 'never'
   const descriptor = {
@@ -621,6 +686,7 @@ for (const e of endpoints) {
             : 'tuple'
         : null,
     queryOwner: e.request.query_owner,
+    ...(rawSnapshot ? { rawSnapshot } : {}),
     publicRead: !e.authentication,
     contentType: e.request.body?.content_type ?? null,
     requestHeaders: requestHeaders.map(([key]) => key),

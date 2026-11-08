@@ -108,7 +108,7 @@ export function ContentDownload({
   }
   return (
     <Card size="small" title={l('下载此精确材料', 'Download this exact material')}>
-      <p className="subtitle">
+      <p className="subtitle content-material-reference">
         {request.target.artifact.reference} · {request.target.artifact.length} {l('字节', 'bytes')}
       </p>
       {!streamSupported && (

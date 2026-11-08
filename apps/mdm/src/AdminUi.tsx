@@ -28,6 +28,7 @@ export function readFailure(error: unknown): 'conflict' | 'cursor' | 'result' | 
   switch (error.code) {
     case 'query_read_conflict':
       return 'conflict'
+    case 'resource_cursor_invalidated':
     case 'query_cursor_invalidated':
       return 'cursor'
     case 'query_result_unavailable':
@@ -40,6 +41,7 @@ export function isUnknown(error: unknown): boolean {
   const e = error && typeof error === 'object' ? error : {}
   const status = 'status' in e && typeof e.status === 'number' ? e.status : 0
   if ('cause' in e && e.cause === 'client') return false
+  if ('cause' in e && e.cause === 'protocol' && status >= 200 && status < 300) return true
   if (
     'cause' in e &&
     e.cause === 'wire' &&

@@ -42,12 +42,17 @@ export function resultReturnPath(value: string | null, expected?: string): strin
             'batchCursor',
             'memberCursor',
             'returnTo',
+            'softwareResource',
+            'softwareVersion',
+            'originalPolicyVersion',
           ]
-        : path === '/operations'
-          ? ['filter', 'cursor', 'operation', 'kind', 'policy', 'returnTo', ...originalRunKeys]
-          : /^\/devices\/(endpoint|association)\/[^/]+$/.test(path)
-            ? ['tab', 'endpoint', 'retirement', 'returnTo', ...auditContextKeys]
-            : []
+        : path === '/software'
+          ? ['resource', 'version', 'variant', 'filter', 'sort', 'field', 'limit', 'cursor']
+          : path === '/operations'
+            ? ['filter', 'cursor', 'operation', 'kind', 'policy', 'returnTo', ...originalRunKeys]
+            : /^\/devices\/(endpoint|association)\/[^/]+$/.test(path)
+              ? ['tab', 'endpoint', 'retirement', 'returnTo', ...auditContextKeys]
+              : []
     if (!fields.length || [...url.searchParams.keys()].some((key) => !fields.includes(key)))
       return null
     return path + url.search

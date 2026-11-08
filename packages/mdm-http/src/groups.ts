@@ -186,18 +186,19 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
   return {
     list: (query = {}) => {
       const { referenceableFor, ...directory } = query
-      if (directory.fields && !directory.fields.includes('id'))
-        throw new Error('Directory identity required')
+      const projection =
+        directory.fields ?? (Object.keys(directoryFields) as (keyof typeof directoryFields)[])
+      if (!projection.includes('id')) throw new Error('Directory identity required')
       return api.getApiV1Groups(
         transport,
         {
           query: {
-            ...queryParameters({ limit: 20, ...directory }),
+            ...queryParameters({ limit: 20, ...directory, fields: projection }),
             ...(referenceableFor === undefined ? {} : { referenceableFor: uuid(referenceableFor) }),
           },
         },
         (value) =>
-          projectedPage(value, directoryFields, directory.fields, ['id']) as {
+          projectedPage(value, directoryFields, projection, ['id']) as {
             items: GroupRow[]
             nextCursor: string | null
           },

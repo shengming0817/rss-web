@@ -1,5 +1,6 @@
 /** Shared browser/demo budget matching the MDM JSON ingress contract. */
 export const MDM_JSON_BODY_LIMIT = 16_384
+export const SNAPSHOT_JSON_BODY_LIMIT = 64 * 1024 * 1024
 export const MDM_CONTENT_BODY_LIMIT = 16_777_216
 // Allow the content owner's maximum 24h budget plus normal request setup time.
 // The view's AbortSignal still cancels the request.
@@ -11,6 +12,7 @@ export const isMdmContentRequest = (method: string, path: string) =>
 /** Current management ingress budgets, shared with the HTTP demo. */
 export function mdmJsonBodyLimit(method: string, path: string) {
   if (method === 'POST') {
+    if (path === '/api/v1/software/source-snapshots/{source}') return SNAPSHOT_JSON_BODY_LIMIT
     if (
       /^\/api\/v1\/apple\/materials\/(?:apns|profile|managed_account)\/(?:keys|certificates)$/.test(
         path,

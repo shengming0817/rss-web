@@ -93,7 +93,7 @@ def query_digest(query):
 
 
 def collect(fixture, action, resource, cycle):
-    check(action in {'memory', 'memory_partial', 'applications', 'partial'}, 'collector-action')
+    check(action in {'memory', 'memory_partial', 'applications', 'partial', 'software_assets', 'software_assets_os'}, 'collector-action')
     uuid.UUID(resource)
     agent = fixture['collector']
     def request(path, body=None, method='POST'):
@@ -104,12 +104,22 @@ def collect(fixture, action, resource, cycle):
                            environment=dict(edition=None, tools={}, nativeEngines={'macos.hardware':1,'macos.applications':1}), executionContext=agent['executionContext']))
         if response['task'] is not None:
             signed = response['task']
-            check(signed['payload']['kind'] == 'collection', 'collector-task-family')
-            task = signed['payload']['task']
-            break
+            payload = signed['payload']
+            task = payload['task']
+            check(task['deviceId'] == agent['runtime']['deviceId'], 'collector-task-device')
+            if payload['kind'] == 'collection' and task['resource']['id'] == resource:
+                break
+            check(action in {'software_assets', 'software_assets_os'}, 'collector-task-binding')
+            check(task['registrationId'] == agent['runtime']['registrationId'], 'collector-task-registration')
+            # This dedicated fixture can still receive earlier test offers. Close them
+            # without obtaining a start permit or performing a device effect.
+            for kind in ['received', 'cancelled']:
+                receipt = request('/api/v1/agent/runtime/tasks/'+task['taskId']+'/events',
+                                  dict(wireVersion=1, operationId=str(uuid.uuid4()), attemptId=task['attemptId'],
+                                       executionContext=agent['executionContext'], event=dict(kind=kind)))
+                check(receipt['accepted'], 'collector-terminal-'+kind)
         check(time.monotonic() < deadline, 'collector-due-deadline')
         time.sleep(1)
-    check(task['resource']['id'] == resource and task['deviceId'] == agent['runtime']['deviceId'], 'collector-task-binding')
     check(task['taskId'] not in [r['task'] for r in agent['runs']], 'collector-duplicate-run')
     path = '/api/v1/agent/runtime/tasks/'+task['taskId']+'/events'
     def event(value, operation=None):
@@ -124,10 +134,15 @@ def collect(fixture, action, resource, cycle):
         if action in {'memory', 'memory_partial'}:
             check(d == dict(kind='macos_hardware', section='memory'), 'collector-memory-query')
             rows = [dict(total_bytes=str(8192+cycle))]
+        elif action == 'software_assets_os':
+            check(d == dict(kind='macos_hardware', section='os'), 'collector-os-query')
+            rows = [dict(name='macOS', version='15.0', build='24A335')]
         else:
             check(d['kind'] == 'macos_applications', 'collector-application-query')
             user = d['root'] == 'user_applications'
             rows = [dict(id='app-'+str(i), native_id='com.fixture.app'+str(i), name='Periodic app '+str(i), version='1', publisher='Fixture', scope='user' if user else 'device', owner='501' if user else '', origin='application', location='/controlled/fixture/'+str(i), signature_status='signed') for i in range(45)]
+            if action == 'software_assets':
+                rows = [dict(row, name='Browser Editor', version=str(i+1)) for i, row in enumerate(rows[:3])]
         queries[key] = dict(scan=None, queryDigest=query_digest(query), collectedAt=now,
                             status='partial' if action in {'partial', 'memory_partial'} else 'complete', enumerationComplete=action not in {'partial', 'memory_partial'}, rowCount=len(rows), rows=rows, users=None)
     operation = str(uuid.uuid4())

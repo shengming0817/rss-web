@@ -30,6 +30,7 @@ export function PolicyEditor({
   baseline,
   id,
   initialScope,
+  initialAction,
   runtime,
   instance,
   locale,
@@ -43,6 +44,7 @@ export function PolicyEditor({
   baseline: Policy | null
   id: string
   initialScope: string
+  initialAction?: PolicyDefinition['action'] | undefined
   runtime: Runtime
   instance: string
   locale: Locale
@@ -56,7 +58,7 @@ export function PolicyEditor({
       structuredClone(
         baseline?.definition ?? {
           scope: initialScope,
-          action: newPolicyAction('execution', initialScope),
+          action: initialAction ?? newPolicyAction('execution', initialScope),
           alias: null,
           customEvent: null,
         },

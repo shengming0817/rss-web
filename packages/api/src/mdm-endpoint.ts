@@ -111,8 +111,16 @@ export function defineEndpoint<Input extends object, Output>(description: Endpoi
     } else if (description.checks.body) {
       if (input.body === undefined) throw clientError()
       safeJson(input.body)
-      // Validate the JSON representation sent by the executor (undefined means omitted).
-      if (!description.checks.body(JSON.parse(JSON.stringify(input.body)))) throw clientError()
+      // Validate the envelope. The snapshot codec validates and inserts the original JSON value.
+      const checked =
+        description.rawSnapshot === 'request'
+          ? (() => {
+              const body = input.body as { input?: { document?: unknown } } | null
+              if (!body?.input || typeof body.input.document !== 'string') throw clientError()
+              return { ...body, input: { ...body.input, document: null } }
+            })()
+          : input.body
+      if (!description.checks.body(JSON.parse(JSON.stringify(checked)))) throw clientError()
     } else if (input.body !== undefined) throw clientError()
     const success = description.responses.filter((r) => description.statuses.includes(r.status))
     const empty = success.every((r) => !r.validate)

@@ -76,7 +76,7 @@ def seed_authority():
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['user_attribute_definitions_read','user_attribute_definitions_write','compliance_write','compliance_rule_read']]
         rule['grants'].append(dict(operation='compliance_read', scope=dict(kind='all_devices')))
     if browser_module == 'react-assets-browser.mjs':
-        rule['grants'].append(dict(operation='compliance_recompute', scope=dict(kind='tenant')))
+        rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['compliance_recompute','inventory_software_write']]
     if browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['audit_read','runtime_diagnostics_read']]
         # Explicit authority for disposable HTTP acceptance, never production account initialization.
