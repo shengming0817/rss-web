@@ -1,4 +1,4 @@
-import { freeze, identifier, revision, uuid } from '@rss/mdm-inventory'
+import { freeze, identifier, uuid } from '@rss/mdm-inventory'
 import type { AuditFact, AuditPage, AuditQuery } from './model'
 import { validateAuditQuery } from './query'
 
@@ -183,12 +183,7 @@ export function createOperationDiagnostics(port: DiagnosticsPort) {
       )
         throw new Error('Invalid evidence continuation')
       const detail = await port.operation(freeze(address), freeze(evidence), signal)
-      const coordinates = [
-        'actor',
-        'instance',
-        'device',
-        'target',
-      ] as const
+      const coordinates = ['actor', 'instance', 'device', 'target'] as const
       if (
         coordinates.some(
           (key) =>

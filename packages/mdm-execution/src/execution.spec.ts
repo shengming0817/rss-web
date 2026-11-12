@@ -7,8 +7,6 @@ const item: Execution = {
   id,
   kind: 'command',
   device: 'device',
-  registrationId,
-  generation: 2,
   origin: 'direct',
   policy: null,
   deadline: 100,
@@ -24,8 +22,6 @@ const detail: CommandDetail = {
   inputVersion: 'v1',
   dispatchFailure: null,
   device: 'device',
-  registrationId: null,
-  generation: null,
   owner: 'device',
   delivery: 'applied',
   observation: { protocol: 'syncml', effect: 'unknown' },
@@ -83,8 +79,6 @@ it('requires exact dangerous confirmation and a six-digit ephemeral PIN without 
       action: {
         kind: 'lock' as const,
         confirmed: true as const,
-        expectedRegistrationId: registrationId,
-        expectedGeneration: 2,
       },
     }
   await expect(f.core.create(intent, '１２３４５６')).rejects.toThrow('Six ASCII')

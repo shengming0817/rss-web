@@ -165,24 +165,11 @@ function transform(schema, mode, composed = false) {
     if (!schemaKeys.has(key)) throw new Error(`Unsupported schema assertion: ${key}`)
     if (annotationKeys.has(key) || key === '$schema') continue
     result[key] = schemaMaps.has(key)
-      ? Object.fromEntries(
-          Object.entries(value).map(([k, v]) => [
-            k,
-            transform(
-              v,
-              mode,
-              false,
-            ),
-          ]),
-        )
+      ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, transform(v, mode, false)]))
       : schemaLists.has(key)
         ? value.map((v) => transform(v, mode, key !== 'prefixItems'))
         : schemaChildren.has(key)
-          ? transform(
-              value,
-              mode,
-              ['contains', 'not', 'if', 'then', 'else'].includes(key),
-            )
+          ? transform(value, mode, ['contains', 'not', 'if', 'then', 'else'].includes(key))
           : value
   }
   // Flattened producer records can repeat a required property. Required is a set;
@@ -210,10 +197,10 @@ function transform(schema, mode, composed = false) {
   }
   // Rust integers must remain exact in JavaScript; floating point fields keep their wire range.
   if (
-    (result.type === 'integer' ||
-      (Array.isArray(result.type) &&
-        result.type.includes('integer') &&
-        !result.type.includes('number')))
+    result.type === 'integer' ||
+    (Array.isArray(result.type) &&
+      result.type.includes('integer') &&
+      !result.type.includes('number'))
   ) {
     result.minimum = Math.max(result.minimum ?? Number.MIN_SAFE_INTEGER, Number.MIN_SAFE_INTEGER)
     result.maximum = Math.min(result.maximum ?? Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)

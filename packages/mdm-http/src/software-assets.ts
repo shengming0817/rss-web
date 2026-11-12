@@ -26,12 +26,15 @@ function checkedNumbers(value: unknown): void {
 /** Integer evidence uses the producer's exact signed 64-bit decimal representation. */
 function validateEvidenceValue(value: SoftwareEvidenceValue): void {
   if (value.kind === 'integer') {
-    if (!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value.value)) throw new Error('Invalid integer evidence')
+    if (!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value.value))
+      throw new Error('Invalid integer evidence')
     const integer = BigInt(value.value)
-    if (integer < -9223372036854775808n || integer > 9223372036854775807n) throw new Error('Integer evidence out of range')
+    if (integer < -9223372036854775808n || integer > 9223372036854775807n)
+      throw new Error('Integer evidence out of range')
   } else if (value.kind === 'array') value.value.forEach(validateEvidenceValue)
   else if (value.kind === 'object') Object.values(value.value).forEach(validateEvidenceValue)
-  else if ((value.kind === 'time' || value.kind === 'number') && !Number.isFinite(value.value)) throw new Error('Invalid evidence number')
+  else if ((value.kind === 'time' || value.kind === 'number') && !Number.isFinite(value.value))
+    throw new Error('Invalid evidence number')
 }
 function record<T>(value: SoftwareRecord<T>, expected?: string) {
   if (expected && value.id !== expected) throw new Error('Wrong software asset record')
@@ -170,7 +173,11 @@ export function createSoftwareAssetsAdapter(
           signal,
         },
         (value) => {
-          if (value.tenantId !== tenant || value.asset.kind !== 'software' || value.asset.response.kind !== 'evidence')
+          if (
+            value.tenantId !== tenant ||
+            value.asset.kind !== 'software' ||
+            value.asset.response.kind !== 'evidence'
+          )
             throw new Error('Wrong software evidence binding')
           const { items, ...page } = value.asset.response
           checkedNumbers(page)

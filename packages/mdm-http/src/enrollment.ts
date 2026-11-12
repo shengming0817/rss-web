@@ -445,19 +445,28 @@ export function createEnrollmentAdapter(
           ),
       ),
     registration: (device, signal) =>
-      api.getApiV1DevicesByDeviceRegistration(transport, { signal, pathParams: { device: identifier(device) } }, (value) => {
-        if (value.deviceId !== device) throw new Error('Wrong registration device')
-        return value
-      }),
+      api.getApiV1DevicesByDeviceRegistration(
+        transport,
+        { signal, pathParams: { device: identifier(device) } },
+        (value) => {
+          if (value.deviceId !== device) throw new Error('Wrong registration device')
+          return value
+        },
+      ),
     revokeRegistration: (device, operationId) =>
-      api.postApiV1DevicesByDeviceRegistrationRevoke(transport, {
-        pathParams: { device: identifier(device) },
-        headers: { 'Idempotency-Key': uuid(operationId) }, body: {},
-      }, (value) => {
-        if (value.operation_id !== operationId || value.device !== device)
-          throw new Error('Wrong device revocation')
-        return { operationId, deviceId: device }
-      }),
+      api.postApiV1DevicesByDeviceRegistrationRevoke(
+        transport,
+        {
+          pathParams: { device: identifier(device) },
+          headers: { 'Idempotency-Key': uuid(operationId) },
+          body: {},
+        },
+        (value) => {
+          if (value.operation_id !== operationId || value.device !== device)
+            throw new Error('Wrong device revocation')
+          return { operationId, deviceId: device }
+        },
+      ),
     agentSettings: () => api.getApiV1AgentEnrollmentSettings(transport, {}),
     saveAgentSettings: (operationId, expectedRevision, values) =>
       api.putApiV1AgentEnrollmentSettings(transport, {

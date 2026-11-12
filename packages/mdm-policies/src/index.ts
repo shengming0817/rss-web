@@ -38,8 +38,16 @@ export function createPolicies(port: PoliciesPort) {
       validateDefinition(definition)
       if (scopeResult !== null) uuid(scopeResult)
       uuid(id)
-      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error('Save the scope before qualification')
-      const value = await port.preview(id, expectedRevision, freeze(definition), scopeResult, query, signal)
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+        throw new Error('Save the scope before qualification')
+      const value = await port.preview(
+        id,
+        expectedRevision,
+        freeze(definition),
+        scopeResult,
+        query,
+        signal,
+      )
       if (scopeResult !== null && value.scopeResult !== scopeResult)
         throw new Error('Wrong preview scope result')
       return value

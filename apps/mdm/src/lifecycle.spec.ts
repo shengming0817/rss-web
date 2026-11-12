@@ -58,9 +58,10 @@ afterEach(async () => {
 function enrollment(id: string): Enrollment {
   return {
     enrollmentId: id,
+    deviceId: 'new-device',
     source: 'mdm.apple',
     status: 'pending',
-    registrationId: null,
+
     expiresAt: 2000000000,
     instructions: {
       platform: 'macos',

@@ -60,7 +60,7 @@ def exercise(path, policy, version):
     if accepted['replayed'] or not replayed['replayed']:
         raise RuntimeError('batch-replay')
     call('/api/v1/agent/runtime/telemetry/gaps', dict(reportId=str(uuid.uuid4()),
-        registrationId=agent['runtime']['registrationId'], generation=agent['runtime']['generation'],
+        deviceId=agent['runtime']['deviceId'],
         createdAt=now, gaps=[dict(reason='capacity',count=3,first=now-90_000_000,last=now-60_000_000),
               dict(reason='expired',count=2,first=now-180_000_000,last=now-150_000_000)]), 202)
     return dict(result='passed', observations=len(observations))

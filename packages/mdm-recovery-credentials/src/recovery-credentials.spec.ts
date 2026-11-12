@@ -21,7 +21,7 @@ const target = { device, id, version: 2 }
 const material = (subject: Subject = { kind: 'recovery_lock' }): Material => ({
   id,
   version: 2,
-  binding: { device, registration, generation: 3, subject },
+  binding: { device, subject },
   current: true,
   validity: 'unverified',
   escrowed: true,
@@ -41,8 +41,6 @@ const config = (): FileVaultConfiguration => ({
 const intent = (): OperationIntent => ({
   device,
   operationId,
-  registration,
-  generation: 3,
   deadline: 1800000000,
   action: { kind: 'collect_filevault', expectedRevision: 12, recipient: null },
 })
@@ -128,19 +126,15 @@ describe('Recovery credentials', () => {
   })
   it('keeps FileVault configuration revision, material revision, custody epoch and transport generation independent', async () => {
     const { core, port } = fixture()
-    expect(await core.configuration(device, { registration, generation: 3 })).toEqual(config())
+    expect(await core.configuration(device)).toEqual(config())
     await core.configure(device, {
       operationId,
-      registration,
-      generation: 3,
       expectedRevision: 5,
       enabled: true,
       recipientId: 'escrow-recipient',
     })
     expect(port.configure).toHaveBeenCalledWith(device, {
       operationId,
-      registration,
-      generation: 3,
       expectedRevision: 5,
       enabled: true,
       recipientId: 'escrow-recipient',
@@ -160,8 +154,6 @@ describe('Recovery credentials', () => {
     expect(
       await core.configure(device, {
         operationId,
-        registration,
-        generation: 3,
         expectedRevision: 5,
         enabled: false,
         recipientId: '',
@@ -178,8 +170,6 @@ describe('Recovery credentials', () => {
     await expect(
       core.configure(device, {
         operationId,
-        registration,
-        generation: 3,
         expectedRevision: 5,
         enabled: true,
         recipientId: 'escrow-recipient',
@@ -193,8 +183,6 @@ describe('Recovery credentials', () => {
     await expect(
       core.configure(device, {
         operationId,
-        registration,
-        generation: 3,
         expectedRevision: 6,
         enabled: true,
         recipientId: 'escrow-recipient',

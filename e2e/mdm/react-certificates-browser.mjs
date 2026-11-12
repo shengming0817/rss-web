@@ -401,7 +401,7 @@ try {
   await run.response(
     p,
     'POST',
-    `/api/v1/agent-registrations/${f.collector.runtime.registrationId}/recovery`,
+    `/api/v1/devices/${f.collector.runtime.deviceId}/registration/recovery`,
     () => button('提交注册恢复').click(),
   )
   assert.equal(await label('重新输入同一恢复秘密').inputValue(), '')

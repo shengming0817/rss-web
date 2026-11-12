@@ -50,7 +50,8 @@ const fields = {
   versionId: uuid,
   state: (v: unknown) => enumeration(v, ['enabled', 'disabled', 'archived'] as const),
   definition: (value: unknown) => {
-    if (!schema.getApiV1PoliciesResponse.validateDefinition(value)) throw new Error('Invalid policy directory definition')
+    if (!schema.getApiV1PoliciesResponse.validateDefinition(value))
+      throw new Error('Invalid policy directory definition')
     return value
   },
   scope: uuid,
@@ -117,15 +118,16 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         },
       ),
     read: (id, signal) =>
-      api.getApiV1PoliciesByPolicy(transport, { pathParams: { policy: uuid(id) }, signal }, (value) =>
-        policy(value, id),
+      api.getApiV1PoliciesByPolicy(
+        transport,
+        { pathParams: { policy: uuid(id) }, signal },
+        (value) => policy(value, id),
       ),
     change: (id, change) =>
       api.postApiV1PoliciesByPolicy(
         transport,
         {
           pathParams: { policy: uuid(id) },
-          signal,
           body: requestInput(change, schema.postApiV1PoliciesByPolicyBody.validateRoot),
         },
         (value) => policy(value, id),
@@ -135,7 +137,6 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         transport,
         {
           pathParams: { policy: uuid(id) },
-          signal,
           body: requestInput(
             { operationId, expectedRevision },
             schema.deleteApiV1PoliciesByPolicyBody.validateRoot,
@@ -148,7 +149,6 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         transport,
         {
           pathParams: { policy: uuid(id) },
-          signal,
           body: requestInput(change, schema.postApiV1PoliciesByPolicyRerunsBody.validateRoot),
         },
         (value) => {
@@ -192,9 +192,18 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
                 ? Object.fromEntries(Object.entries(node).sort(([a], [b]) => a.localeCompare(b)))
                 : node,
             )
-          const actionKey = (action: typeof input.action | typeof value.action) => action.kind === 'software'
-            ? { ...action, rollout: { stages: action.rollout.stages.map(({ scope: _scope, ...stage }) => { void _scope; return stage }) } }
-            : action
+          const actionKey = (action: typeof input.action | typeof value.action) =>
+            action.kind === 'software'
+              ? {
+                  ...action,
+                  rollout: {
+                    stages: action.rollout.stages.map(({ scope: _scope, ...stage }) => {
+                      void _scope
+                      return stage
+                    }),
+                  },
+                }
+              : action
           if (canonical(actionKey(value.action)) !== canonical(actionKey(input.action)))
             throw new Error('Wrong policy preview action')
           return {

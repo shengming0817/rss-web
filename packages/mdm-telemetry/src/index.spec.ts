@@ -6,7 +6,7 @@ const tenant = '11111111-1111-4111-8111-111111111111',
   epoch = '33333333-3333-4333-8333-333333333333'
 function row(): Observation {
   return {
-    registration,
+    device: 'device-a',
     epoch,
     source: 'agent.script',
     receivedAt: 30,
@@ -20,7 +20,7 @@ function row(): Observation {
       reading: { quality: 'valid', value: -12.5 },
       stream: {
         scope: { tenant, namespace: 'mdm.telemetry' },
-        source: registration + ':agent.script',
+        source: 'device-a' + ':agent.script',
         generation: epoch,
       },
       series: {
@@ -77,7 +77,6 @@ it('retains real source/epoch/definition/dimensions for aggregate selection', as
   await f.telemetry.aggregate(request)
   expect(f.aggregate).toHaveBeenCalledWith(
     expect.objectContaining({
-      registration,
       epoch,
       source: 'agent.script',
       definitionVersion: 2,

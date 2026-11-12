@@ -1,3 +1,7 @@
+import { MemoryRouter } from 'react-router-dom'
+import { isValidElement } from 'react'
+import { DirectoryCatalogContext } from './DirectorySearch'
+import { directoryFixtures } from './directory.spec-helper'
 // @vitest-environment jsdom
 import { act, createElement as h, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -67,7 +71,15 @@ function inject<T>(methods: Partial<T>): T {
   }) as T
 }
 async function render(node: ReactNode) {
-  await act(async () => root.render(node))
+  await act(async () =>
+    root.render(
+      h(
+        DirectoryCatalogContext.Provider,
+        { value: directoryFixtures },
+        isValidElement(node) && node.type === MemoryRouter ? node : h(MemoryRouter, null, node),
+      ),
+    ),
+  )
 }
 function button(text: string) {
   const value = [...host.querySelectorAll('button')].find((node) => node.textContent === text)
@@ -137,11 +149,11 @@ it('searches the kind-filtered software directory through its server query witho
   expect(read).not.toHaveBeenCalled()
   expect(host.querySelectorAll('.software-card')).toHaveLength(2)
   list.mockResolvedValue({ items: [{ id: 'company/two', kind: 'software' }], nextCursor: null })
-  await fill('Software name', "O'Reilly")
-  await click('Search software')
+  await fill('Name', "O'Reilly")
+  await click('Apply')
   expect(host.querySelectorAll('.software-card')).toHaveLength(1)
   expect(list).toHaveBeenCalledTimes(2)
-  expect(list.mock.calls[1]?.[0]?.filter).toBe("(presentation.name=icontains='O\\'Reilly')")
+  expect(list.mock.calls[1]?.[0]?.filter).toBe("presentation.name=icontains='O\\'Reilly'")
   expect(list.mock.calls[1]?.[1]).toBe('software')
   expect(read).not.toHaveBeenCalled()
   expect(host.textContent).not.toContain('Installed devices')

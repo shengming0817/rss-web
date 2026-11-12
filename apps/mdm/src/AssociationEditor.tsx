@@ -122,7 +122,16 @@ export function AssociationEditor({
             <Select
               aria-label={l('当前终端通道', 'Current endpoint channel')}
               value={channel}
-              options={endpoint.status === 'active' && endpoint.channel ? [{ value: endpoint.channel, label: endpoint.channel === 'mdm' ? 'MDM' : 'Agent' }] : []}
+              options={
+                endpoint.status === 'active' && endpoint.channel
+                  ? [
+                      {
+                        value: endpoint.channel,
+                        label: endpoint.channel === 'mdm' ? 'MDM' : 'Agent',
+                      },
+                    ]
+                  : []
+              }
               onChange={(value: 'mdm' | 'agent') => {
                 setChannel(value)
                 setCursor(undefined)

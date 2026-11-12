@@ -739,28 +739,18 @@ try {
     ),
   )
   await p.getByRole('cell', { name: sourceId, exact: true }).first().waitFor()
-  const registrations = await api(
-    'GET',
-    `/api/v1/devices/${f.agent}/registrations?fields=registrationId,certificateGrantId&limit=1`,
-  )
-  assert.equal(registrations.items.length, 1)
-  assert.equal(typeof registrations.items[0].certificateGrantId, 'string')
-  assert.equal('agentGrantId' in registrations.items[0], false)
-  checks.push(
-    'real-field-resource-direct-reference-pages-and-certificate-grant-directory-projection',
-  )
+  const registration = await api('GET', `/api/v1/devices/${f.agent}/registration`)
+  assert.equal(registration.deviceId, f.agent)
+  assert.equal(typeof registration.certificateGrantId, 'string')
+  checks.push('real-device-registration-summary-and-certificate-grant-binding')
 
   run.step('associated-conflict-missing-and-authorization')
   const mdm = await api('GET', `/api/v1/devices/${f.mdm}`),
     agent = await api('GET', `/api/v1/devices/${f.agent}`),
     primary = (device, channel) => {
-      const c = device.channels.find((c) => c.channel === channel && c.status === 'active')
-      return {
-        device: device.id,
-        channel,
-        registrationId: c.registrationId,
-        generation: c.generation,
-      }
+      assert.equal(device.channel, channel)
+      assert.equal(device.status, 'active')
+      return { device: device.id, channel }
     }
   const association = await api('POST', '/api/v1/device-associations', {
     operationId: randomUUID(),
@@ -848,7 +838,6 @@ try {
     ['macos.agent.applications_local', 'software_assets'],
   ]) {
     const collectionResource = randomUUID(),
-      collectionScope = randomUUID(),
       collectionPolicy = randomUUID(),
       collectionPath = '/api/v1/resources/' + collectionResource
     const sourceResource = await api(
@@ -870,27 +859,6 @@ try {
       collectionPath,
       operation({ action: 'activate', version: sourceVersion.id }, sourceResource.revision),
     )
-    const sourceScope = await api(
-      'POST',
-      '/api/v1/scopes/' + collectionScope,
-      operation({
-        action: 'put',
-        definition: {
-          targets: [{ kind: 'device', id: collector }],
-          limitations: null,
-          exclusions: [],
-        },
-      }),
-    )
-    for (let index = 0; index < 60; index++) {
-      const state = await api(
-        'GET',
-        '/api/v1/scopes/' + collectionScope + '/tasks/' + sourceScope.task,
-      )
-      if (state.status === 'completed') break
-      assert.ok(index < 59, 'software collector scope publication deadline')
-      await new Promise((done) => setTimeout(done, 250))
-    }
     const installed = await api(
       'POST',
       '/api/v1/policies/' + collectionPolicy,
@@ -898,7 +866,11 @@ try {
         action: 'put',
         enabled: true,
         definition: {
-          scope: collectionScope,
+          scope: {
+            targets: [{ kind: 'device', id: collector }],
+            limitations: null,
+            exclusions: [],
+          },
           alias: null,
           customEvent: null,
           action: {
@@ -1105,11 +1077,8 @@ try {
         const result = await response.json()
         const row = result.asset.response.items[0]
         assert.equal(row.value.kind, 'object')
-        row.value.value.external_version = { kind: 'integer', value: 9007199254740992 }
-        const body = JSON.stringify(result).replace(
-          '"value":9007199254740992',
-          '"value":9007199254740993',
-        )
+        row.value.value.external_version = { kind: 'integer', value: '9223372036854775807' }
+        const body = JSON.stringify(result)
         await route.fulfill({ response, body })
       })
     const evidencePromise = p.waitForResponse(
@@ -1128,7 +1097,7 @@ try {
     if (domain === 'endpoint') {
       await p.unroute(evidencePattern)
       await p.getByText('展开原始记录', { exact: true }).first().click()
-      await p.getByText('原始值超出浏览器精度，保留来源和证据坐标。', { exact: true }).waitFor()
+      await p.getByText('9223372036854775807', { exact: false }).waitFor()
       await run.nav(p, '/inventory/software?task=' + task, '软件资产')
       await assetButton('Browser standard editor').click()
     }
@@ -1137,8 +1106,15 @@ try {
       await p.locator('.ant-select-dropdown:visible').getByText(label, { exact: true }).click()
     }
     if (domain === 'endpoint') {
-      await run.response(p, 'GET', base + '/breakdowns/os', () => chooseBreakdown('操作系统'), 400)
-      await p.getByText('原任务未请求此分桶维度。', { exact: true }).waitFor()
+      await p.getByRole('combobox', { name: '分桶维度', exact: true }).press('ArrowDown')
+      assert.equal(
+        await p
+          .locator('.ant-select-dropdown:visible')
+          .getByText('操作系统', { exact: true })
+          .count(),
+        0,
+      )
+      await p.keyboard.press('Escape')
       const malformedResponse = '**/breakdowns/version*'
       await p.route(malformedResponse, (route) =>
         route.fulfill({ status: 400, contentType: 'application/json', body: '{}' }),

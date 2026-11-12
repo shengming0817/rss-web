@@ -23,7 +23,13 @@ const sets = new Set(['=in=', '=out=', '=containsany=', '=containsall='])
 const bytes = (text: string) => new TextEncoder().encode(text).length
 
 export class FilterSyntaxError extends Error {
-  constructor(message: string, readonly position: number) { super(message); this.name = 'FilterSyntaxError' }
+  constructor(
+    message: string,
+    readonly position: number,
+  ) {
+    super(message)
+    this.name = 'FilterSyntaxError'
+  }
 }
 export function parseFilter(input: string): Filter {
   if (!input || bytes(input) > 8192) throw new FilterSyntaxError('Invalid filter budget', 0)
@@ -53,7 +59,8 @@ export function parseFilter(input: string): Filter {
         if (!c || !'\\\'",;()'.includes(c)) throw new FilterSyntaxError('Invalid escape', offset)
       } else if (!quote && (/\s/.test(c) || '(\'"=!<>*'.includes(c)))
         throw new FilterSyntaxError('Invalid operand', offset)
-      if (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127) throw new FilterSyntaxError('Invalid operand', offset)
+      if (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)
+        throw new FilterSyntaxError('Invalid operand', offset)
       text += c
       if (bytes(text) > 1024) throw new FilterSyntaxError('Invalid operand budget', offset)
     }
@@ -92,7 +99,8 @@ export function parseFilter(input: string): Filter {
     if (sets.has(operator)) {
       if (!eat('(')) throw new FilterSyntaxError('Invalid set', offset)
       do {
-        if (values.length >= 64 || ++setItems > 256) throw new FilterSyntaxError('Invalid set budget', offset)
+        if (values.length >= 64 || ++setItems > 256)
+          throw new FilterSyntaxError('Invalid set budget', offset)
         values.push(value())
         if (eat(')')) return { kind: 'compare', field, operator, values }
       } while (eat(','))

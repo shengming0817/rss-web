@@ -161,10 +161,7 @@ export function RecoveryCredentials({
                     },
                     {
                       title: l('原设备', 'Original device'),
-                      render: (_, row) =>
-                        row.binding
-                          ? row.binding.device
-                          : '—',
+                      render: (_, row) => (row.binding ? row.binding.device : '—'),
                     },
                     {
                       title: l('有效性', 'Validity'),
@@ -315,9 +312,7 @@ function MaterialDetail({
           </div>
           <div>
             <dt>{l('原设备', 'Original device')}</dt>
-            <dd>
-              {value.binding.device}
-            </dd>
+            <dd>{value.binding.device}</dd>
           </div>
           <div>
             <dt>{l('Subject 身份', 'Subject identity')}</dt>

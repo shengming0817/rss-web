@@ -18,7 +18,7 @@ import type {
   AuditPort,
   ManagementActivity,
 } from '@rss/mdm-audit'
-import { boolean, count, enumeration, list, nullable, positive, text, uuid } from './decode'
+import { boolean, count, enumeration, list, nullable, text, uuid } from './decode'
 import { distinct, integer, requestInput } from './inventory-values'
 
 export function auditFact(value: unknown): AuditFact {

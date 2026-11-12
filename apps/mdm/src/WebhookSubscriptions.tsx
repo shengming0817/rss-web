@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { Alert, Button, Card, Descriptions, Form, Input, Popconfirm, Select, Space } from 'antd'
+import { Alert, Button, Card, Descriptions, Form, Input, Popconfirm, Space } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Subscription, SubscriptionRow, Webhooks } from '@rss/mdm-webhooks'
 import type { GroupsUseCases } from './GroupPicker'
@@ -449,7 +449,6 @@ export function WebhookSubscriptions({
             {l('返回创建原操作', 'Return to the original creation')}
           </Button>
         )}
-
       </Space>
       <details>
         <summary>{l('定位已知订阅', 'Locate a known subscription')}</summary>
@@ -511,14 +510,15 @@ export function WebhookSubscriptions({
       )}
       {canRead ? (
         <Card title={l('订阅目录', 'Subscriptions')}>
-            <DirectoryControls catalog="webhooks"
-              locale={locale}
-              query={query}
-              fields={[...fields]}
-              sort={['id', 'revision', 'targetVersion', 'enabled', 'deleted']}
-              onChange={update}
-              disabled={blocked}
-            />
+          <DirectoryControls
+            catalog="webhooks"
+            locale={locale}
+            query={query}
+            fields={[...fields]}
+            sort={['id', 'revision', 'targetVersion', 'enabled', 'deleted']}
+            onChange={update}
+            disabled={blocked}
+          />
           {detailDenied && (
             <Alert
               type="warning"

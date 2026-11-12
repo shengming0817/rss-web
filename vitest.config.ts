@@ -16,6 +16,7 @@ export default defineConfig({
             'apps/mdm/src/execution-lifecycle.spec.ts',
             'apps/mdm/src/agent-entry.spec.ts',
             'apps/mdm/src/policy-lifecycle.spec.ts',
+            'apps/mdm/src/directory-search.spec.ts',
             'apps/mdm/src/assets-lifecycle.spec.ts',
             'apps/mdm/src/resources-lifecycle.spec.ts',
             'apps/mdm/src/material-source.spec.ts',

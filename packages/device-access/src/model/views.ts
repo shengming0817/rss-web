@@ -26,13 +26,7 @@ export const observation = (value: unknown): Observation => {
   }
 }
 export function computerView(value: unknown): Computer {
-  const v = closed(value, [
-    'id',
-    'name',
-    'platform',
-    'status',
-    'lastObservedAt',
-  ])
+  const v = closed(value, ['id', 'name', 'platform', 'status', 'lastObservedAt'])
   return {
     id: text(v['id']),
     name: text(v['name']),

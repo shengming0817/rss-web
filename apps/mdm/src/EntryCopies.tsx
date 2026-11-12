@@ -59,10 +59,7 @@ export function EntryCopies({
       if (!selected || !current) throw new Error('Agent registration unavailable')
       const endpoint = await devices.endpoint(selected),
         registration = activeAgent(endpoint)
-      if (
-        !registration ||
-        registration.id !== current.id
-      )
+      if (!registration || registration.id !== current.id)
         throw { cause: 'client', code: 'registration_changed' }
       if (!stillCurrent()) throw { cause: 'client', code: 'stale' }
       const formatted = agentViewEntry(entry.target, {

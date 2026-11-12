@@ -498,8 +498,6 @@ it.each(['binding', 'application'] as const)(
                     id: 'device',
                     name: 'Computer',
                     platform: 'windows',
-                    registration: id,
-                    generation: 1,
                     status: 'active',
                     lastObservedAt: null,
                   }}

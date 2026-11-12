@@ -35,11 +35,7 @@ import { useAdministration } from './useAdministration'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { ResourceContentRecovery } from './ResourceContent'
-import {
-  catalogQuery,
-  writeCatalogQuery,
-  type CatalogLocation,
-} from './directory-location'
+import { catalogQuery, writeCatalogQuery, type CatalogLocation } from './directory-location'
 import { ResourceBlueprints } from './ResourceBlueprints'
 
 const fields = [

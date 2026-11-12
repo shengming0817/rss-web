@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
-import { act, createElement as h, type ComponentProps } from 'react'
+import { act, createElement as h, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { defaultSchedule, type Policy, type RolloutStage } from '@rss/mdm-policies'
-import type { ScopeRead } from '@rss/mdm-scopes'
+import type { Policy, RolloutStage } from '@rss/mdm-policies'
 import { PolicyEditor } from './PolicyEditor'
-import { ScopeEditor } from './ScopeEditor'
-import { Scopes } from './Scopes'
-import { ReadEpoch, usePageRead, useRead } from './AdminUi'
 import { PolicyRolloutEditor } from './PolicyRolloutEditor'
-import type { Runtime } from './runtime'
-
+import { PolicyScope, emptyScope } from './PolicyScope'
+vi.mock('./PolicyNames', () => ({ PolicyNames: () => null }))
 const id = '11111111-1111-4111-8111-111111111111',
   scope = '22222222-2222-4222-8222-222222222222'
 let host: HTMLDivElement, root: Root
@@ -41,8 +37,8 @@ afterEach(async () => {
   host.remove()
   vi.unstubAllGlobals()
 })
-function inject<T>(methods: Partial<T>): T {
-  return methods as T
+function inject(value: unknown): never {
+  return value as never
 }
 function button(text: string) {
   const node = [...host.querySelectorAll('button')].find(
@@ -54,11 +50,19 @@ function button(text: string) {
 async function click(text: string) {
   await act(async () => button(text).click())
 }
-async function approve() {
+async function checkbox(text: string) {
   const node = [...host.querySelectorAll('label')]
-    .find((node) => node.textContent?.includes('确认范围、资源、调度与潜在影响'))!
-    .querySelector<HTMLInputElement>('input')!
+    .find((node) => node.textContent?.includes(text))
+    ?.querySelector('input')
+  if (!node) throw new Error('Missing checkbox: ' + text)
   await act(async () => node.click())
+}
+async function fill(label: string, value: string) {
+  const node = host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(node, value)
+    node.dispatchEvent(new Event('input', { bubbles: true }))
+  })
 }
 function policy(): Policy {
   return {
@@ -67,8 +71,9 @@ function policy(): Policy {
     version: 2,
     versionId: scope,
     state: 'disabled',
+    scopes: [],
     definition: {
-      scope,
+      scope: emptyScope(),
       alias: 'original',
       customEvent: null,
       action: {
@@ -81,22 +86,29 @@ function policy(): Policy {
     },
   }
 }
-it('reads the original policy after an unknown write without resubmitting or unlocking writes', async () => {
-  const change = vi.fn().mockRejectedValue({ cause: 'transport' }),
-    read = vi.fn(async () => policy())
+function runtime(operation = vi.fn()) {
+  return inject({
+    administration: () => ({
+      devices: {},
+      groups: {},
+      operationDiagnostics: { mdm: { operation } },
+      policyEvents: {},
+    }),
+  })
+}
+async function editor(methods: object, operation = vi.fn()) {
   await act(async () =>
     root.render(
       h(
         MemoryRouter,
         null,
         h(PolicyEditor, {
-          policies: inject<ComponentProps<typeof PolicyEditor>['policies']>({ change, read }),
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
-          resources: inject<ComponentProps<typeof PolicyEditor>['resources']>({}),
+          policies: inject({ preview: async () => null, ...methods }),
+          scopes: inject({}),
+          resources: inject({}),
           baseline: policy(),
           id,
-          initialScope: scope,
-          runtime: inject<Runtime>({}),
+          runtime: runtime(operation),
           instance: id,
           locale: 'zh',
           canWrite: true,
@@ -106,453 +118,142 @@ it('reads the original policy after an unknown write without resubmitting or unl
       ),
     ),
   )
-  await approve()
+}
+it('keeps unknown writes locked after current-state reads and resubmits exactly the original intent', async () => {
+  const change = vi.fn().mockRejectedValue({ cause: 'transport' }),
+    read = vi.fn(async () => policy())
+  await editor({ change, read })
+  await checkbox('确认范围、资源、调度与潜在影响')
   await click('保存策略定义')
   const original = change.mock.calls[0]![1]
   await click('读取原策略当前状态')
-  await click('读取原策略当前状态')
   expect(read).toHaveBeenCalledWith(id)
-  expect(change).toHaveBeenCalledTimes(1)
+  expect(button('保存策略定义').disabled).toBe(true)
   expect(host.textContent).toContain(original.operationId)
-  expect(button('保存策略定义').disabled).toBe(true)
-  expect(host.textContent).toContain('不能据此确认原操作')
+  await checkbox('确认使用原标识和原输入重发')
+  await click('重提原操作')
+  expect(change.mock.calls[1]).toEqual(change.mock.calls[0])
+  expect(Object.isFrozen(original.input)).toBe(true)
 })
-it('keeps an unknown Scope write locked after reading a matching current definition', async () => {
-  const baseline: ScopeRead = {
-      id,
-      revision: 3,
-      definition: { targets: [], limitations: null, exclusions: [] },
-      resolution: null,
-      resolutionRevision: 0,
-    },
-    change = vi.fn().mockRejectedValue({ cause: 'transport' }),
-    read = vi.fn(async () => ({ ...baseline, revision: 4 }))
-  await act(async () =>
-    root.render(
-      h(
-        MemoryRouter,
-        null,
-        h(ScopeEditor, {
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({
-            change,
-            read,
-            references: async () => ({ items: [], nextCursor: null }),
-          }),
-          groups: inject<ComponentProps<typeof ScopeEditor>['groups']>({}),
-          devices: inject<ComponentProps<typeof ScopeEditor>['devices']>({}),
-          id,
-          baseline,
-          locale: 'zh',
-          canWrite: true,
-          done() {},
-        }),
-      ),
-    ),
-  )
-  await click('保存并计算范围')
-  await click('读取原范围当前状态')
-  expect(change).toHaveBeenCalledTimes(1)
-  expect(read).toHaveBeenCalledWith(id)
-  expect(button('保存并计算范围').closest('fieldset')?.disabled).toBe(true)
-  expect(button('返回目录并读取当前状态').disabled).toBe(true)
-  expect(host.textContent).toContain(change.mock.calls[0]![1].operationId)
-})
-it('requires review again after a deployment wizard returns to an earlier step', async () => {
-  await act(async () =>
-    root.render(
-      h(
-        MemoryRouter,
-        null,
-        h(PolicyEditor, {
-          policies: inject<ComponentProps<typeof PolicyEditor>['policies']>({}),
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
-          resources: inject<ComponentProps<typeof PolicyEditor>['resources']>({
-            list: async () => ({ items: [], nextCursor: null }),
-          }),
-          baseline: null,
-          id,
-          initialScope: scope,
-          runtime: inject<Runtime>({}),
-          instance: id,
-          locale: 'zh',
-          canWrite: true,
-          canRerun: true,
-          done() {},
-        }),
-      ),
-    ),
-  )
-  expect(
-    [...host.querySelectorAll('button')]
-      .find((node) => node.textContent === '保存策略定义')
-      ?.closest('[hidden]'),
-  ).not.toBeNull()
-  await click('下一步')
-  await click('下一步')
-  await approve()
-  expect(button('保存策略定义').disabled).toBe(false)
-  await click('上一步')
-  const input = host.querySelector<HTMLInputElement>('input[aria-label="唯一别名"]')!
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
-      input,
-      'changed',
-    )
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-  await click('下一步')
-  expect(button('保存策略定义').disabled).toBe(true)
-})
-
-it('shows the exact opening time and scope of a single custom rollout stage', async () => {
-  await act(async () =>
-    root.render(
-      h(
-        MemoryRouter,
-        null,
-        h(PolicyRolloutEditor, {
-          value: [{ scope: id, opensAt: 123, minimumVerifiedPercent: null }],
-          scope,
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
-          onChange() {},
-          locale: 'zh',
-        }),
-      ),
-    ),
-  )
-  expect(host.querySelector<HTMLInputElement>('input[aria-label="批次开放时间 1"]')?.value).toBe(
-    '123',
-  )
-  expect(host.textContent).toContain(id)
-})
-it('can remove the second rollout stage while retaining the first stage exact coordinates', async () => {
-  const first = { scope: id, opensAt: 123, minimumVerifiedPercent: null },
-    onChange = vi.fn()
-  await act(async () =>
-    root.render(
-      h(
-        MemoryRouter,
-        null,
-        h(PolicyRolloutEditor, {
-          value: [first, { scope, opensAt: 456, minimumVerifiedPercent: 90 }],
-          scope,
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
-          onChange,
-          locale: 'zh',
-        }),
-      ),
-    ),
-  )
-  const remove = [...host.querySelectorAll('button')].filter(
-    (node) => node.textContent === '移除此批次',
-  )[1]!
-  await act(async () => remove.click())
-  expect(onChange).toHaveBeenCalledWith([first])
-})
-it('clears the orphaned preceding-stage gate when removing the first rollout stage', async () => {
-  const onChange = vi.fn()
-  await act(async () =>
-    root.render(
-      h(
-        MemoryRouter,
-        null,
-        h(PolicyRolloutEditor, {
-          value: [
-            { scope: id, opensAt: 123, minimumVerifiedPercent: null },
-            { scope, opensAt: 456, minimumVerifiedPercent: 90 },
-          ],
-          scope,
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
-          onChange,
-          locale: 'zh',
-        }),
-      ),
-    ),
-  )
-  await click('移除此批次')
-  expect(onChange).toHaveBeenCalledWith([{ scope, opensAt: 456, minimumVerifiedPercent: null }])
-})
-
-const changedScope = '33333333-3333-4333-8333-333333333333'
-function software(stages: readonly RolloutStage[]): Policy {
-  const original = policy()
-  return {
-    ...original,
-    definition: {
-      ...original.definition,
-      action: {
-        kind: 'software',
-        channel: 'agent',
-        delivery: { kind: 'direct' },
-        intent: 'required_install',
-        resource: {
-          kind: 'software',
-          id: 'example/app',
-          version: 'v1',
-          variants: { windows_x86_64: 'default' },
-        },
-        rollout: { stages },
-        schedule: defaultSchedule(),
-        runLifetimeSeconds: 86400,
-      },
-    },
-  }
-}
-it.each([
-  {
-    name: 'independent stage scope',
-    stage: { scope: id, opensAt: 0, minimumVerifiedPercent: null },
-    follows: false,
-  },
-  {
-    name: 'future opening time',
-    stage: { scope, opensAt: 2000000000, minimumVerifiedPercent: null },
-    follows: false,
-  },
-  {
-    name: 'default whole-scope stage',
-    stage: { scope, opensAt: 0, minimumVerifiedPercent: null },
-    follows: true,
-  },
-])('changes the overall Scope without overriding $name', async ({ stage, follows }) => {
-  const baseline = software([stage]),
-    change = vi.fn<ComponentProps<typeof PolicyEditor>['policies']['change']>(async () => baseline)
-  await act(async () =>
-    root.render(
-      h(
-        MemoryRouter,
-        null,
-        h(PolicyEditor, {
-          policies: inject<ComponentProps<typeof PolicyEditor>['policies']>({ change }),
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({
-            list: async () => ({
-              items: [{ id: changedScope, revision: 1, resolution: null, resolutionRevision: 0 }],
-              nextCursor: null,
-            }),
-            read: async () => ({
-              id: changedScope,
-              revision: 1,
-              definition: { targets: [], limitations: null, exclusions: [] },
-              resolution: null,
-              resolutionRevision: 0,
-            }),
-          }),
-          resources: inject<ComponentProps<typeof PolicyEditor>['resources']>({
-            list: async () => ({ items: [], nextCursor: null }),
-          }),
-          baseline,
-          id,
-          initialScope: scope,
-          runtime: inject<Runtime>({}),
-          instance: id,
-          locale: 'zh',
-          canWrite: true,
-          canRerun: true,
-          done() {},
-        }),
-      ),
-    ),
-  )
-  await click('选择范围')
-  await click('使用此范围')
-  await approve()
+it('only original durable receipts unlock unknown saves', async () => {
+  const change = vi.fn().mockRejectedValue({ cause: 'transport' }),
+    read = vi.fn(async () => ({ ...policy(), revision: 5 })),
+    operation = vi.fn().mockResolvedValue({ originalResult: { availability: 'not_found' } })
+  await editor({ change, read }, operation)
+  await checkbox('确认范围、资源、调度与潜在影响')
   await click('保存策略定义')
+  await click('读取原操作回执')
+  expect(read).not.toHaveBeenCalled()
+  expect(button('保存策略定义').disabled).toBe(true)
+  operation.mockResolvedValue({
+    originalResult: {
+      availability: 'available',
+      value: { operationId: change.mock.calls[0]![1].operationId, object: id },
+    },
+  })
+  await click('读取原操作回执')
+  expect(read).toHaveBeenCalledTimes(1)
   expect(change).toHaveBeenCalledTimes(1)
-  expect(change.mock.calls[0]![1]).toMatchObject({
-    input: {
-      definition: {
-        scope: changedScope,
-        action: { rollout: { stages: [follows ? { ...stage, scope: changedScope } : stage] } },
-      },
-    },
-  })
 })
-it('submits the selected ARM64 architecture for a credential policy', async () => {
-  const original = policy(),
-    baseline: Policy = {
-      ...original,
-      definition: {
-        ...original.definition,
-        action: {
-          kind: 'credential',
-          operation: { kind: 'collect_bitlocker' },
-          architecture: 'x86_64',
-          frequency: 'once_per_version',
-          schedule: defaultSchedule(),
-          runLifetimeSeconds: 86400,
-        },
-      },
-    },
-    change = vi.fn<ComponentProps<typeof PolicyEditor>['policies']['change']>(async () => baseline)
-  await act(async () =>
-    root.render(
-      h(
-        MemoryRouter,
-        null,
-        h(PolicyEditor, {
-          policies: inject<ComponentProps<typeof PolicyEditor>['policies']>({ change }),
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({}),
-          resources: inject<ComponentProps<typeof PolicyEditor>['resources']>({}),
-          baseline,
-          id,
-          initialScope: scope,
-          runtime: inject<Runtime>({}),
-          instance: id,
-          locale: 'zh',
-          canWrite: true,
-          canRerun: true,
-          done() {},
-        }),
-      ),
-    ),
-  )
-  await act(async () =>
-    host
-      .querySelector('input[aria-label="所需处理器架构"]')!
-      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true })),
-  )
-  await vi.waitFor(() =>
-    expect(
-      [...document.querySelectorAll('.ant-select-item-option-content')].some(
-        (node) => node.textContent === 'aarch64',
-      ),
-    ).toBe(true),
-  )
-  await act(async () =>
-    (
-      [...document.querySelectorAll('.ant-select-item-option-content')].find(
-        (node) => node.textContent === 'aarch64',
-      ) as HTMLElement
-    ).click(),
-  )
-  await approve()
-  await click('保存策略定义')
-  expect(change).toHaveBeenCalledTimes(1)
-  expect(change.mock.calls[0]![1]).toMatchObject({
-    input: {
-      definition: {
-        action: {
-          kind: 'credential',
-          architecture: 'aarch64',
-          operation: { kind: 'collect_bitlocker' },
-        },
-      },
-    },
-  })
-})
-
-it('does not infer stale scope results by comparing independent revision counters', async () => {
-  const runtime = inject<Runtime>({
-    administration: () =>
-      inject<ReturnType<Runtime['administration']>>({
-        binding: `${id}/${scope}/${id}`,
-        authorization: inject<ReturnType<Runtime['administration']>['authorization']>({
-          effective: async () => ({
-            instanceId: id,
-            tenantId: scope,
-            principalId: id,
-            grants: [
-              {
-                operation: 'scope_read',
-                scope: { kind: 'tenant' },
-                ruleId: id,
-                ruleRevision: 1,
-                subject: {
-                  kind: 'user',
-                  user: { instanceId: id, tenantId: scope, principalId: id },
-                },
-                observation: null,
-              },
-            ],
-          }),
-        }),
-        scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({
-          list: async () => ({
-            items: [
-              { id, revision: 3, resolution: scope, resolutionRevision: 1, calculationRevision: 5 },
-            ],
-            nextCursor: null,
-          }),
-        }),
-      }),
-  })
-  await act(async () => root.render(h(MemoryRouter, null, h(Scopes, { runtime, locale: 'zh' }))))
-  await vi.waitFor(() => expect(host.textContent).toContain('已有发布结果；打开查看'))
-  expect(host.textContent).not.toContain('定义待计算')
-})
-
-it('reloads current navigation reads while discarding an earlier stale response', async () => {
-  let rejectOld!: (reason: Error) => void
-  const old = new Promise<string>((_, reject) => {
-      rejectOld = reject
-    }),
-    load = vi
-      .fn<() => Promise<string>>()
-      .mockReturnValueOnce(old)
-      .mockResolvedValue('current directory')
-  const authorization = vi.fn(async () => 'authorized')
-  function Directory() {
-    const state = usePageRead('same-directory', load)
-    const authority = useRead('same-authority', authorization)
-    return h('p', null, state.error ? 'read failed' : (state.value ?? 'loading'), authority.value)
-  }
-  await act(async () => root.render(h(ReadEpoch.Provider, { value: 'before' }, h(Directory))))
-  expect(load).toHaveBeenCalledTimes(1)
-  await act(async () => root.render(h(ReadEpoch.Provider, { value: 'after' }, h(Directory))))
-  expect(load).toHaveBeenCalledTimes(2)
-  await act(async () => rejectOld(new Error('Stale response')))
-  expect(host.textContent).toBe('current directoryauthorized')
-  expect(authorization).toHaveBeenCalledTimes(1)
-})
-
-it('requires explicit approval to retry an unknown recompute with the original request', async () => {
-  const baseline: ScopeRead = {
-    id,
-    revision: 3,
-    definition: { targets: [], limitations: null, exclusions: [] },
-    resolution: null,
-    resolutionRevision: 0,
-  }
+it('retains an edited draft through CAS conflict and requires explicit adoption of the new revision', async () => {
   const change = vi
       .fn()
-      .mockRejectedValueOnce({ cause: 'transport' })
-      .mockResolvedValue({ id, revision: 3, task: scope }),
-    read = vi.fn(async () => baseline)
-  await act(async () =>
-    root.render(
-      h(
-        MemoryRouter,
-        null,
-        h(ScopeEditor, {
-          scopes: inject<ComponentProps<typeof ScopeEditor>['scopes']>({
-            change,
-            read,
-            references: async () => ({ items: [], nextCursor: null }),
-            task: vi.fn().mockRejectedValue({ cause: 'transport' }),
-          }),
-          groups: inject<ComponentProps<typeof ScopeEditor>['groups']>({}),
-          devices: inject<ComponentProps<typeof ScopeEditor>['devices']>({}),
-          id,
-          baseline,
-          locale: 'zh',
-          canWrite: true,
-          done() {},
-        }),
-      ),
-    ),
+      .mockRejectedValue({ cause: 'wire', status: 409, code: 'revision_conflict' }),
+    read = vi.fn(async () => ({ ...policy(), revision: 7 }))
+  await editor({ change, read })
+  await fill('唯一别名', 'my.draft')
+  await checkbox('确认范围、资源、调度与潜在影响')
+  await click('保存策略定义')
+  await click('读取原策略当前状态')
+  expect(host.querySelector<HTMLInputElement>('input[aria-label="唯一别名"]')!.value).toBe(
+    'my.draft',
   )
-  await click('重新计算已保存范围')
-  const original = change.mock.calls[0]![1]
-  expect(original).toMatchObject({ expectedRevision: 3, input: { action: 'recompute' } })
-  expect(button('重提原重算请求').disabled).toBe(true)
-  await click('读取原范围当前状态')
-  expect(change).toHaveBeenCalledTimes(1)
-  const approval = [...host.querySelectorAll('label')]
-    .find((node) => node.textContent?.includes('确认使用原操作标识和原输入重提重算请求'))!
-    .querySelector<HTMLInputElement>('input')!
-  await act(async () => approval.click())
-  await click('重提原重算请求')
-  expect(change).toHaveBeenCalledTimes(2)
-  expect(change.mock.calls[1]).toEqual(change.mock.calls[0])
-  expect(host.textContent).toContain('操作已确认')
+  await click('保留草稿，采用此修订继续编辑')
+  await checkbox('确认范围、资源、调度与潜在影响')
+  await click('保存策略定义')
+  expect(change.mock.calls[1]![1]).toMatchObject({
+    expectedRevision: 7,
+    input: { definition: { alias: 'my.draft' } },
+  })
+})
+it('edits scope locally and distinguishes null limitations from the explicitly empty intersection', async () => {
+  let latest = emptyScope()
+  const preview = vi.fn(async (..._args: unknown[]) => ({
+    items: [],
+    channel: 'agent',
+    scanComplete: false,
+    stopReason: 'work_budget',
+    hasUnknown: true,
+    inputFingerprint: 'fixed',
+    assetCut: {},
+    sources: [],
+    asOf: 0,
+  }))
+  function Editor() {
+    const [value, setValue] = useState(latest)
+    return h(PolicyScope, {
+      owner: { policyId: id },
+      policyRevision: 0,
+      value,
+      saved: null,
+      onChange: (value) => {
+        latest = value
+        setValue(value)
+      },
+      scopes: inject({ preview }),
+      devices: inject({}),
+      groups: inject({}),
+      runtime: runtime(),
+      locale: 'zh',
+      canRecompute: true,
+      disabled: false,
+    })
+  }
+  await act(async () => root.render(h(MemoryRouter, null, h(Editor))))
+  await checkbox('限制范围（交集）')
+  expect(latest.limitations).toEqual([])
+  expect(preview).not.toHaveBeenCalled()
+  await click('预览当前范围样例（不保存）')
+  expect(preview.mock.calls[0]?.[1]).toMatchObject({
+    expectedRevision: 0,
+    definition: { limitations: [] },
+  })
+  expect(host.textContent).toContain('空样例不能说明范围为空')
+  await checkbox('限制范围（交集）')
+  expect(latest.limitations).toBeNull()
+  expect(host.textContent).not.toContain('本次匹配样例')
+})
+it('retains stage identities when reordered or removed and accepts an empty unbatched rollout', async () => {
+  let latest: readonly RolloutStage[] = [
+    { id, scope: emptyScope(), opensAt: 0, minimumVerifiedPercent: null },
+    { id: scope, scope: emptyScope(), opensAt: 10, minimumVerifiedPercent: 90 },
+  ]
+  function Editor() {
+    const [value, setValue] = useState(latest)
+    return h(PolicyRolloutEditor, {
+      value,
+      onChange: (value) => {
+        latest = value
+        setValue(value)
+      },
+      owner: { policyId: id },
+      policyRevision: 0,
+      savedScopes: [],
+      scopes: inject({}),
+      devices: inject({}),
+      groups: inject({}),
+      runtime: runtime(),
+      locale: 'zh',
+      canRecompute: false,
+      disabled: false,
+    })
+  }
+  await act(async () => root.render(h(MemoryRouter, null, h(Editor))))
+  await click('下移批次')
+  expect(latest.map((s) => s.id)).toEqual([scope, id])
+  expect(latest[0]?.minimumVerifiedPercent).toBeNull()
+  await click('移除此批次')
+  expect(latest.map((s) => s.id)).toEqual([id])
+  await checkbox('分批部署')
+  expect(latest).toEqual([])
 })

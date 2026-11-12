@@ -25,7 +25,13 @@ export function PolicyPreview({
     [requested, setRequested] = useState(0),
     [basis, setBasis] = useState<string | null>(null),
     [query, setQuery] = useState<Query>({ limit: 20 }),
-    read = usePageRead(`qualification/${id}/${expectedRevision}/${active}/${requested}/${JSON.stringify(query)}`, signal => active && requested ? policies.preview(id, expectedRevision, definition, basis, query, signal) : Promise.resolve(null)),
+    read = usePageRead(
+      `qualification/${id}/${expectedRevision}/${active}/${requested}/${JSON.stringify(query)}`,
+      (signal) =>
+        active && requested
+          ? policies.preview(id, expectedRevision, definition, basis, query, signal)
+          : Promise.resolve(null),
+    ),
     page = read.value
   return (
     <Card title={l('资格预览', 'Qualification preview')}>
@@ -37,7 +43,11 @@ export function PolicyPreview({
       </p>
       <Button
         disabled={read.busy}
-        onClick={() => { setBasis(null); setQuery({ limit: 20 }); setRequested(n => n + 1) }}
+        onClick={() => {
+          setBasis(null)
+          setQuery({ limit: 20 })
+          setRequested((n) => n + 1)
+        }}
       >
         {l('预览此草稿资格', 'Preview this draft qualification')}
       </Button>
@@ -81,7 +91,8 @@ export function PolicyPreview({
             locale={locale}
             query={query}
             onChange={(query) => {
-              setBasis(page.scopeResult); setQuery(query)
+              setBasis(page.scopeResult)
+              setQuery(query)
             }}
             next={page.nextCursor}
             count={page.items.length}

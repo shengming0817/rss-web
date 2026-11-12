@@ -124,6 +124,7 @@ export function createDevicePkiAdapter(
   transport: HttpTransport,
   tenant: string,
   service: string,
+  actor: string,
 ): DevicePkiPort {
   return {
     trust: (purpose) =>
@@ -187,7 +188,11 @@ export function createDevicePkiAdapter(
         observation,
       ),
     registrationRecovery: (device, operation) =>
-      api.getApiV1DevicesByIdRegistrationRecoveryOperationsByOperation(transport, { pathParams: { id: device, operation } }, value => value === null ? null : grant(value)),
+      api.getApiV1DevicesByIdRegistrationRecoveryOperationsByOperation(
+        transport,
+        { pathParams: { id: device, operation }, query: { actor, instance: service } },
+        (value) => (value === null ? null : grant(value)),
+      ),
     recoverRegistration: (input, secret) =>
       api.postApiV1DevicesByIdRegistrationRecovery(
         transport,

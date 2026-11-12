@@ -43,12 +43,8 @@ function AgentObservation({
   const l = labels(locale),
     { connections, binding } = useAdministration(runtime),
     registration = endpoint.channel === 'agent' && endpoint.status === 'active',
-    read = useRead(
-      `${binding}/device-connection/${endpoint.id}/${endpoint.status}`,
-      () =>
-        registration
-          ? connections.agent.observation(endpoint.id)
-          : Promise.resolve(null),
+    read = useRead(`${binding}/device-connection/${endpoint.id}/${endpoint.status}`, () =>
+      registration ? connections.agent.observation(endpoint.id) : Promise.resolve(null),
     )
   return (
     <Card title={l('Agent 连接观察', 'Agent connection observation')}>
@@ -63,9 +59,7 @@ function AgentObservation({
         <dl className="device-facts">
           <div>
             <dt>{l('设备', 'Device')}</dt>
-            <dd>
-              {read.value.device}
-            </dd>
+            <dd>{read.value.device}</dd>
           </div>
           <div>
             <dt>{l('目标版本', 'Target revision')}</dt>
@@ -251,11 +245,26 @@ function EndpointFacts({
       </Card>
       <Card title={l('设备通道', 'Device channel')}>
         <dl className="device-facts">
-          <div><dt>{l('通道', 'Channel')}</dt><dd>{endpoint.channel ?? '—'}</dd></div>
-          <div><dt>{l('来源', 'Source')}</dt><dd>{endpoint.source ?? '—'}</dd></div>
-          <div><dt>{l('首次注册时间', 'First enrollment')}</dt><dd>{timestamp(locale, endpoint.registeredAt)}</dd></div>
-          <div><dt>{l('最近通信', 'Last communication')}</dt><dd>{timestamp(locale, endpoint.lastCommunicationReceivedAt)}</dd></div>
-          <div><dt>{l('注册申请', 'Enrollment request')}</dt><dd>{endpoint.enrollment?.enrollmentId ?? '—'}</dd></div>
+          <div>
+            <dt>{l('通道', 'Channel')}</dt>
+            <dd>{endpoint.channel ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>{l('来源', 'Source')}</dt>
+            <dd>{endpoint.source ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>{l('首次注册时间', 'First enrollment')}</dt>
+            <dd>{timestamp(locale, endpoint.registeredAt)}</dd>
+          </div>
+          <div>
+            <dt>{l('最近通信', 'Last communication')}</dt>
+            <dd>{timestamp(locale, endpoint.lastCommunicationReceivedAt)}</dd>
+          </div>
+          <div>
+            <dt>{l('注册申请', 'Enrollment request')}</dt>
+            <dd>{endpoint.enrollment?.enrollmentId ?? '—'}</dd>
+          </div>
         </dl>
       </Card>
       <Card title={l('当前能力事实', 'Current capability facts')}>

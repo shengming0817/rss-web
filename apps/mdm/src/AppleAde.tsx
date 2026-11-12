@@ -376,7 +376,8 @@ export function AppleAde({
             )}
           </Space>
           <h2>{l('ADE 配置描述文件', 'ADE setup profiles')}</h2>
-          <DirectoryControls catalog="ade"
+          <DirectoryControls
+            catalog="ade"
             locale={locale}
             query={profileQuery}
             onChange={setProfileQuery}

@@ -38,9 +38,7 @@ export function DevicePkiObservation({
       `${binding}/device-pki-observation/${endpoint.id}/${endpoint.status}/${canRead}`,
       () => (canRead && registration ? devicePki.observation(endpoint.id) : Promise.resolve(null)),
     ),
-    current =
-      read.value &&
-      read.value.device === endpoint.id && registration
+    current = read.value && read.value.device === endpoint.id && registration
   return (
     <Card title={l('设备公共信任材料观察', 'Device public trust material observation')}>
       <ReadState busy={read.busy} error={read.error} locale={locale} />
@@ -64,10 +62,7 @@ export function DevicePkiObservation({
             type={current ? 'info' : 'warning'}
             title={
               current
-                ? l(
-                    '当前 Agent 设备的报告',
-                    'Report for the current Agent device',
-                  )
+                ? l('当前 Agent 设备的报告', 'Report for the current Agent device')
                 : l(
                     '报告不属于当前设备，请重新读取；当前安装未知。',
                     'Report is from another device. Read again; current installation is unknown.',
@@ -77,9 +72,7 @@ export function DevicePkiObservation({
           <dl className="device-facts">
             <div>
               <dt>{l('原设备', 'Original device')}</dt>
-              <dd>
-                {read.value.device}
-              </dd>
+              <dd>{read.value.device}</dd>
             </div>
             <div>
               <dt>{l('报告序号', 'Report sequence')}</dt>
@@ -158,11 +151,7 @@ export function DevicePkiRecovery({
       lookupForm.resetFields()
     }, canRecover)
   usePendingSelection(!!grant || !!issuance)
-  function recoverGrant(value: {
-    platform: 'windows' | 'macos'
-    csr: string
-    secret: string
-  }) {
+  function recoverGrant(value: { platform: 'windows' | 'macos'; csr: string; secret: string }) {
     let secret = value.secret
     value.secret = ''
     grantForm.setFieldValue('secret', '')
@@ -242,7 +231,8 @@ export function DevicePkiRecovery({
             layout="vertical"
             disabled={!canRecover || action.busy}
             initialValues={{
-              platform: endpoint.platform.state === 'known' ? endpoint.platform.values[0] : 'windows',
+              platform:
+                endpoint.platform.state === 'known' ? endpoint.platform.values[0] : 'windows',
             }}
             onFinish={recoverGrant}
           >
@@ -320,12 +310,27 @@ export function DevicePkiRecovery({
                   {l('结束本次注册恢复', 'Finish this registration recovery')}
                 </Button>
               )}
-              <Button disabled={!canRecover || action.busy} onClick={() => void action.run(async () => {
-                const receipt = await devicePki.registrationRecovery(grant.intent.device, grant.intent.operationId)
-                setGrantReceipt(receipt)
-                if (receipt) setGrantOutcome('confirmed')
-              })}>{l('读取原设备恢复回执', 'Read original device recovery receipt')}</Button>
-              <p className="subtitle">{l('结果未知时读取原回执；显式重提须保持原设备、原操作和 CSR，并重新输入同一秘密。', 'Read the original receipt when unknown. Explicit resubmission keeps the original device, operation and CSR and requires the same secret.')}</p>
+              <Button
+                disabled={!canRecover || action.busy}
+                onClick={() =>
+                  void action.run(async () => {
+                    const receipt = await devicePki.registrationRecovery(
+                      grant.intent.device,
+                      grant.intent.operationId,
+                    )
+                    setGrantReceipt(receipt)
+                    if (receipt) setGrantOutcome('confirmed')
+                  })
+                }
+              >
+                {l('读取原设备恢复回执', 'Read original device recovery receipt')}
+              </Button>
+              <p className="subtitle">
+                {l(
+                  '结果未知时读取原回执；显式重提须保持原设备、原操作和 CSR，并重新输入同一秘密。',
+                  'Read the original receipt when unknown. Explicit resubmission keeps the original device, operation and CSR and requires the same secret.',
+                )}
+              </p>
             </>
           )}
         </Card>

@@ -181,7 +181,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         groups: createGroups(createGroupsAdapter(transport)),
         compliance: createCompliance(createComplianceAdapter(transport)),
         devicePki: createDevicePki(
-          createDevicePkiAdapter(transport, tenant, host.serviceId),
+          createDevicePkiAdapter(transport, tenant, host.serviceId, state.identity.principalId),
           tenant,
           host.serviceId,
         ),

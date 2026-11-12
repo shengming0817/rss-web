@@ -87,7 +87,7 @@ const fieldFields = {
   searchable: boolean,
   sensitivity: (value: unknown) => enumeration(value, ['standard', 'sensitive', 'secret'] as const),
   valueType: (value: unknown): FieldDescriptor['valueType'] => {
-    if (!schema.getApiV1AssetFieldsResponse200.validateValueType2(value))
+    if (!schema.getApiV1AssetFieldsResponse.validateValueType(value))
       throw new Error('Invalid field type')
     return value
   },
@@ -104,7 +104,7 @@ const fieldFields = {
   itemKey: (value: unknown) => nullable(value, text),
   timeSeries: (value: unknown): FieldDescriptor['timeSeries'] => {
     if (value === null) return null
-    if (!schema.getApiV1AssetFieldsResponse200.validateTimeSeriesBinding(value))
+    if (!schema.getApiV1AssetFieldsResponse.validateTimeSeriesBinding(value))
       throw new Error('Invalid time series field binding')
     return value
   },
@@ -138,7 +138,9 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         transport,
         { query: queryParameters({ limit: 50, ...query }) },
         (value) => {
-          const result = asset(value, tenant, 'field_list')
+          if (value.tenantId !== tenant || value.asset.kind !== 'field_list')
+            throw new Error('Wrong field directory binding')
+          const result = value.asset
           return {
             dictionary: result.dictionary,
             ...projectedPage(
@@ -298,7 +300,9 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         transport,
         { query: queryParameters({ limit: 20, ...query }) },
         (value) => {
-          const result = asset(value, tenant, 'saved_list')
+          if (value.tenantId !== tenant || value.asset.kind !== 'saved_list')
+            throw new Error('Wrong saved query directory binding')
+          const result = value.asset
           return projectedPage(
             { items: result.items, nextCursor: result.nextCursor },
             savedFields,

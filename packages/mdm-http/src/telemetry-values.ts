@@ -22,7 +22,6 @@ import * as wireSchemas from '@rss/api/mdm-schemas'
 import {
   array,
   count,
-  enumeration,
   string,
   wireInteger,
   wireCount,
@@ -163,10 +162,18 @@ export function unavailable(value: unknown, tenant: string) {
     if (!wireSchemas.postApiV1TelemetryHistoryResponse.validateUnavailable(x))
       throw new Error('Invalid unavailable interval')
     return {
-      selection: x.selection.selection === 'exact'
-        ? { ...x.selection, series: { ...x.selection.series, definition: definition(x.selection.series.definition, tenant) } }
-        : x.selection,
-      window: interval(x.window), reason: x.reason,
+      selection:
+        x.selection.selection === 'exact'
+          ? {
+              ...x.selection,
+              series: {
+                ...x.selection.series,
+                definition: definition(x.selection.series.definition, tenant),
+              },
+            }
+          : x.selection,
+      window: interval(x.window),
+      reason: x.reason,
     }
   })
 }

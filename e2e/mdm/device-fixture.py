@@ -60,7 +60,7 @@ if browser_module not in {'react-devices-browser.mjs', 'react-assets-browser.mjs
 def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
-    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','inventory_fields_write','software_read','software_write','release_publish','software_withdraw','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
+    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','inventory_fields_write','software_read','software_write','release_publish','software_withdraw','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
     if browser_module == 'react-setup-browser.mjs': rule['grants'] += [dict(operation=p,scope=dict(kind='tenant')) for p in ['runtime_diagnostics_read','storage_configuration_read','storage_configuration_write']]
     if browser_module == 'react-audit-webhooks-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write','webhook_replay','audit_read']] + [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','operation_cancel','device_unmanage']]
@@ -93,33 +93,30 @@ def seed():
     sql = [f"SET rss.tenant_id = '{tenant}'"]
     devices = [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin'), ('fixture-alone','mdm','mdm.windows')]
     if browser_module in {'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}: devices.append(('fixture-mac','mdm','mdm.apple'))
+    devices += [(f'extra-{index:02}', 'agent', 'agent.builtin') for index in range(24)]
     for device, channel, source in devices:
-        registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
-        sql.append(f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','{device}')")
+        grant, request, credential = [str(uuid.uuid4()) for _ in range(3)]
         if channel == 'mdm':
             sql += [f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','{device}','enrollment','consumed',clock_timestamp()+interval '2 minutes')",
-                    f"INSERT INTO mdm_access.requests(tenant_id,id,grant_id,source,windows_profile) VALUES('{tenant}','{request}','{grant}','{source}',CASE WHEN '{source}'='mdm.windows' THEN 'Device' END)"]
+                    f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile) VALUES('{tenant}','{request}','{device}','{grant}','{source}',CASE WHEN '{source}'='mdm.windows' THEN 'Device' END)"]
             column, origin = 'request_id', request
         else:
             sql.append(f"INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{grant}','{request}','download','fixture','{INSTANCE}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')")
             column, origin = 'certificate_grant_id', grant
-        sql += [f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,{column},state,purpose,epoch) VALUES('{tenant}','{registration}','{device}','{channel}',1,'{origin}','active','primary',gen_random_uuid())",
-                f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
+        sql += [f"INSERT INTO mdm_access.devices(tenant_id,id,channel,{column},state,purpose,epoch,registered_at) VALUES('{tenant}','{device}','{channel}','{origin}','active','primary',gen_random_uuid(),1)",
+                f"INSERT INTO mdm_access.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES('{tenant}','{credential}','{device}','primary','{channel}',md5('{credential}')||md5('{device}'),'active')"]
         if channel == 'mdm':
-            # Device reads require the active registration's native source binding.
-            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
+            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,device,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.devices WHERE tenant_id='{tenant}' AND id='{device}'")
         if browser_module in {'react-audit-webhooks-browser.mjs', 'react-execution-access-browser.mjs'} and device == 'fixture-mdm':
             # Same controlled Windows capability prerequisite as rss-mdm device/mod.rs; no device effect claim.
-            sql.append(f"INSERT INTO mdm_windows.capabilities(tenant_id,registration,generation,os_version,edition,session,observed_at) VALUES('{tenant}','{registration}',1,'10.0.22621.0',48,1,1)")
-        fact=dict(state=dict(kind='known',value=dict(kind='string',value=device)),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
+            sql.append(f"INSERT INTO mdm_windows.capabilities(tenant_id,device,protocol_epoch,os_version,edition,session,observed_at) VALUES('{tenant}','{device}',gen_random_uuid(),'10.0.22621.0',48,1,1)")
+        fact=dict(state=dict(kind='known',value=dict(kind='string',value=device)),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,deviceId=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
         sql.append(f"INSERT INTO mdm.manual_assignments(tenant_id,device,field,revision,fact) VALUES('{tenant}','{device}','custom.asset_tag',1,{q(json.dumps(fact))}::jsonb)")
     # Explicit asset scenarios own their disposable array paging data.
     if browser_module == 'react-assets-browser.mjs':
         definition=dict(key='custom.browser_list',version=1,valueType=dict(kind='array',items=dict(kind='integer'),maxItems=1000),nullable=True,manual=True,sources=dict(manual=0),platforms=['windows','macos'],sensitivity='standard',unit=None,searchable=True,itemKey=None)
         # Private disposable fixture publication; no user operation or current-state assertion is forged.
         sql.append(f"INSERT INTO mdm.field_versions(tenant_id,field,version,revision,definition) VALUES('{tenant}','custom.browser_list',1,mdm.record_asset_change('{tenant}'::uuid,'catalog',jsonb_build_object('field','custom.browser_list'),ARRAY['custom.browser_list']),{q(json.dumps(definition))}::jsonb)")
-    for index in range(24):
-        sql.append(f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','extra-{index:02}')")
     try:
         environment.sql(';'.join(sql)+';', 'mdm_dev')
     except subprocess.CalledProcessError as error:

@@ -142,7 +142,9 @@ function ConfigurationPreview({
               >
                 {policy.value.definition.alias ?? value.policyId}
               </Link>
-              <Link to={`/policies?${new URLSearchParams({ policy: policy.value.id, tab: 'scope' })}`}>
+              <Link
+                to={`/policies?${new URLSearchParams({ policy: policy.value.id, tab: 'scope' })}`}
+              >
                 {l('策略范围', 'Policy scope')}
               </Link>
             </Space>
@@ -151,6 +153,8 @@ function ConfigurationPreview({
               {policy.value.revision} / {policy.value.version}
             </p>
             <PolicyPreview
+              id={policy.value.id}
+              expectedRevision={policy.value.revision}
               policies={policies}
               definition={policy.value.definition}
               locale={locale}
@@ -221,9 +225,7 @@ export function TelemetryConfigurations({
               </div>
               <div>
                 <dt>{l('设备', 'Device')}</dt>
-                <dd>
-                  {read.value.device}
-                </dd>
+                <dd>{read.value.device}</dd>
               </div>
             </dl>
             <DataTable

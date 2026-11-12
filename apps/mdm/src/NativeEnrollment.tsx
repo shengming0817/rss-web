@@ -116,11 +116,7 @@ export function NativeEnrollment({
   const nativeLink = read.value ? windowsEnrollmentLink(read.value.instructions) : null
   return (
     <div className="enrollment-layout">
-      <Card
-        title={
-          l('注册我的设备', 'Enroll my device')
-        }
-      >
+      <Card title={l('注册我的设备', 'Enroll my device')}>
         <Alert
           type="info"
           title={l(

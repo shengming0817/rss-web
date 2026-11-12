@@ -121,7 +121,6 @@ try {
   )
   assert.equal(invalidCounter.status(), 400, 'backend owns cross-field aggregation admission')
   const template = randomUUID(),
-    scope = randomUUID(),
     content = Buffer.from('#!/bin/sh\n# Controlled synthetic telemetry fixture.\n')
   run.step('formal-template')
   await write('POST', `/api/v1/resources/${template}`, { action: 'create', kind: 'script' })
@@ -197,17 +196,6 @@ try {
     true,
   )
   await write('POST', `/api/v1/resources/${template}`, { action: 'activate', version: 'v1' }, 2)
-  const task = await write('POST', `/api/v1/scopes/${scope}`, {
-    action: 'put',
-    definition: { targets: [{ kind: 'device', id: device }], limitations: null, exclusions: [] },
-  })
-  for (let i = 0; i < 60; i++) {
-    const status = await api('GET', `/api/v1/scopes/${scope}/tasks/${task.task}`)
-    if (status.status === 'completed') break
-    assert.ok(i < 59, 'scope publication deadline')
-    await new Promise((resolve) => setTimeout(resolve, 250))
-  }
-
   run.step('publish-exact-profile')
   const profile = randomUUID(),
     definition = {
@@ -278,7 +266,7 @@ try {
     action: 'put',
     enabled: true,
     definition: {
-      scope,
+      scope: { targets: [{ kind: 'device', id: device }], limitations: null, exclusions: [] },
       alias: 'browser.telemetry',
       customEvent: null,
       action: {
@@ -393,10 +381,7 @@ try {
     .waitFor()
   await page
     .locator('.telemetry-health-grid')
-    .getByText(
-      `${fixture.collector.runtime.registrationId} / ${fixture.collector.runtime.generation}`,
-      { exact: true },
-    )
+    .getByText(fixture.collector.runtime.deviceId, { exact: true })
     .waitFor()
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({

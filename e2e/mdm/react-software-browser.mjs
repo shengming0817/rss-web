@@ -381,19 +381,7 @@ try {
   const scope = randomUUID(),
     laterScope = randomUUID(),
     policyId = randomUUID()
-  for (const id of [scope, laterScope])
-    await api('POST', '/api/v1/scopes/' + id, {
-      operationId: randomUUID(),
-      expectedRevision: 0,
-      input: {
-        action: 'put',
-        definition: {
-          targets: [{ kind: 'device', id: f.agent }],
-          limitations: null,
-          exclusions: [],
-        },
-      },
-    })
+  const range = { targets: [{ kind: 'device', id: f.agent }], limitations: null, exclusions: [] }
   const opensAt = Math.floor(Date.now() / 1000) + 7200,
     schedule = {
       trigger: { kind: 'check_in', minimumSeconds: 60 },
@@ -410,7 +398,7 @@ try {
       action: 'put',
       enabled: false,
       definition: {
-        scope,
+        scope: range,
         alias: null,
         customEvent: null,
         action: {
@@ -428,8 +416,8 @@ try {
           runLifetimeSeconds: 86400,
           rollout: {
             stages: [
-              { scope, opensAt: 0, minimumVerifiedPercent: null },
-              { scope: laterScope, opensAt, minimumVerifiedPercent: 85 },
+              { id: scope, scope: range, opensAt: 0, minimumVerifiedPercent: null },
+              { id: laterScope, scope: range, opensAt, minimumVerifiedPercent: 85 },
             ],
           },
         },
@@ -457,7 +445,7 @@ try {
     ['users', '指定用户与组织'],
   ]) {
     await run.nav(p, '/policies?policy=' + policyId, '策略与部署')
-    await button('打开定位策略').click()
+    await label('唯一别名').waitFor()
     await run.choose(p, label('访问主体'), caption)
     if (kind === 'users') {
       await button('添加访问引用').click()
@@ -478,15 +466,16 @@ try {
       count: 0,
     })
     assert.deepEqual(current.definition.action.rollout.stages, [
-      { scope, opensAt: 0, minimumVerifiedPercent: null },
-      { scope: laterScope, opensAt, minimumVerifiedPercent: 85 },
+      { id: scope, scope: range, opensAt: 0, minimumVerifiedPercent: null },
+      { id: laterScope, scope: range, opensAt, minimumVerifiedPercent: 85 },
     ])
     if (kind === 'users')
       assert.equal(current.definition.selfService.access.selectors[0].principalId, f.principal)
   }
   await run.nav(p, '/policies?policy=' + policyId, '策略与部署')
-  await button('打开定位策略').click()
+  await label('唯一别名').waitFor()
   await label('发布到自助目录').uncheck()
+  await p.getByRole('tab', { name: '范围', exact: true }).click()
   await label('批次开放时间 2').fill(String(opensAt + 3600))
   await label('最低核实成功率（%）').fill('90')
   await label('确认范围、资源、调度与潜在影响').check()

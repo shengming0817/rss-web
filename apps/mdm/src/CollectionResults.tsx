@@ -25,9 +25,7 @@ export function QualityRuns({
       <DataTable
         locale={locale}
         dataSource={rows}
-        rowKey={(row) =>
-          JSON.stringify([row.endpoint, row.device, row.epoch, row.runId])
-        }
+        rowKey={(row) => JSON.stringify([row.endpoint, row.device, row.epoch, row.runId])}
         columns={[
           {
             title: l('来源 / 运行', 'Source / run'),
@@ -248,9 +246,7 @@ export function CollectionResults({
             </div>
             <div>
               <dt>{l('原设备与来源', 'Original device and source')}</dt>
-              <dd>
-                {read.value.device}
-              </dd>
+              <dd>{read.value.device}</dd>
             </div>
           </dl>
           <details>

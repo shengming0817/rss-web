@@ -50,10 +50,7 @@ export function DeviceControl({
   const [stale, setStale] = useState(false)
   const [errorKind, setErrorKind] = useState<'read' | 'write'>('read')
   const { fact, ready } = controlApplicability(snapshot, kind)
-  const validReview =
-    review && ready && review.intent.device === snapshot?.id
-      ? review
-      : null
+  const validReview = review && ready && review.intent.device === snapshot?.id ? review : null
   function clearReview() {
     setPin('')
     setApproved(false)

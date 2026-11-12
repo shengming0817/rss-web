@@ -17,11 +17,16 @@ const operations = {
   apiKeys: api.getApiV1ApiKeys,
 }
 export type DirectoryName = keyof typeof operations
-export const directoryCapabilities = Object.freeze(Object.fromEntries(
-  Object.entries(operations).map(([name, operation]) => {
-    const owner = operation.queryOwner
-    if (owner?.kind !== 'directory' || typeof owner.schema['max_limit'] !== 'number')
-      throw new Error(`Missing formal directory capabilities: ${name}`)
-    return [name, Object.freeze({ fields: owner.schema.fields, maximum: owner.schema['max_limit'] })]
-  }),
-) as Readonly<Record<DirectoryName, DirectoryCapabilities>>)
+export const directoryCapabilities = Object.freeze(
+  Object.fromEntries(
+    Object.entries(operations).map(([name, operation]) => {
+      const owner = operation.queryOwner
+      if (owner?.kind !== 'directory' || typeof owner.schema['max_limit'] !== 'number')
+        throw new Error(`Missing formal directory capabilities: ${name}`)
+      return [
+        name,
+        Object.freeze({ fields: owner.schema.fields, maximum: owner.schema['max_limit'] }),
+      ]
+    }),
+  ) as Readonly<Record<DirectoryName, DirectoryCapabilities>>,
+)

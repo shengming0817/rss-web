@@ -133,8 +133,6 @@ it('rejects observation from another registration generation and fixed-target pa
   const agent = {
       observation: async () => ({
         targetRevision: 3,
-        registration: generation,
-        generation: 2,
         acknowledgement: null,
         receivedAt: null,
         failure: null,
@@ -142,8 +140,6 @@ it('rejects observation from another registration generation and fixed-target pa
       devices: async () => ({ targetRevision: 4, items: [], next: null }),
     } as unknown as ConnectionsPorts['agent'],
     connection = createConnections(ports({ agent }), tenant, service)
-  await expect(
-    connection.agent.observation('endpoint', { registrationId: generation, generation: 1 }),
-  ).rejects.toThrow('Changed connection registration')
+  await expect(connection.agent.observation('endpoint')).rejects.toThrow('Wrong connection device')
   await expect(connection.agent.devices(3)).rejects.toThrow('Wrong connection convergence target')
 })

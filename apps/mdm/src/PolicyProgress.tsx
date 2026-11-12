@@ -227,10 +227,7 @@ export function PolicyAssignments({
                           : l('关联未核实', 'Unverified association')}{' '}
                         ·{' '}
                         {source.members
-                          .map(
-                            (member) =>
-                              `${member.channel}/${member.device}`,
-                          )
+                          .map((member) => `${member.channel}/${member.device}`)
                           .join(' · ')}
                       </p>
                     ))}

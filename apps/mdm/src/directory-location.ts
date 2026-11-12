@@ -31,9 +31,14 @@ export function writeCatalogQuery(params: URLSearchParams, query: Query, prefix 
   return next
 }
 
-export function useDirectoryQuery(prefix: string, initial: Query = { limit: 20 }): readonly [Query, (query: Query) => void] {
+export function useDirectoryQuery(
+  prefix: string,
+  initial: Query = { limit: 20 },
+): readonly [Query, (query: Query) => void] {
   const [params, setParams] = useSearchParams()
-  const hasQuery = ['filter', 'sort', 'field', 'limit', 'cursor'].some(key => params.has(prefix + key))
+  const hasQuery = ['filter', 'sort', 'field', 'limit', 'cursor'].some((key) =>
+    params.has(prefix + key),
+  )
   const query = hasQuery ? catalogQuery(params, prefix) : initial
-  return [query, next => setParams(current => writeCatalogQuery(current, next, prefix))]
+  return [query, (next) => setParams((current) => writeCatalogQuery(current, next, prefix))]
 }

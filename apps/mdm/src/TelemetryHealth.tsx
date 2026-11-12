@@ -115,11 +115,7 @@ export function TelemetryHealth({
               columns={[
                 {
                   title: l('原设备', 'Original device'),
-                  render: (_, r) => (
-                    <code>
-                      {r.deviceId}
-                    </code>
-                  ),
+                  render: (_, r) => <code>{r.deviceId}</code>,
                 },
                 {
                   title: l('缺口', 'Gaps'),

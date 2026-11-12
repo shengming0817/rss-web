@@ -17,7 +17,6 @@ import {
   ReadState,
   useAction,
   useRead,
-  type Query,
 } from './AdminUi'
 import { DataTable } from './DataTable'
 import { ComplianceEditor } from './ComplianceEditor'
@@ -126,7 +125,8 @@ function RuleDirectory({
     <SelectionGuard.Provider value={guard.register}>
       <Card title={l('合规规则', 'Compliance rules')}>
         <fieldset className="permission-panel" disabled={guard.locked || action.busy}>
-          <DirectoryControls catalog="compliance"
+          <DirectoryControls
+            catalog="compliance"
             locale={locale}
             query={query}
             onChange={setQuery}

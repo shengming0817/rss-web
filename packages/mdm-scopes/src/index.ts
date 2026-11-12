@@ -1,7 +1,14 @@
 export type * from './model'
 import type { Channel, WindowQuery } from '@rss/mdm-devices'
 import { freeze, identifier, uuid } from '@rss/mdm-inventory'
-import type { ScopeDefinition, ScopeReference, ScopeResultKind, ScopeOwner, ScopePreviewRequest, ScopesPort } from './model'
+import type {
+  ScopeDefinition,
+  ScopeReference,
+  ScopeResultKind,
+  ScopeOwner,
+  ScopePreviewRequest,
+  ScopesPort,
+} from './model'
 
 export function validateDefinition(definition: ScopeDefinition): void {
   const sources = new Set<string>()
@@ -38,34 +45,64 @@ export function createScopes(port: ScopesPort) {
     async preview(owner: ScopeOwner, request: ScopePreviewRequest, signal?: AbortSignal) {
       validateOwner(owner)
       validateDefinition(request.definition)
-      if (!Number.isSafeInteger(request.expectedRevision) || request.expectedRevision < 0 || !['agent', 'mdm'].includes(request.channel))
+      if (
+        !Number.isSafeInteger(request.expectedRevision) ||
+        request.expectedRevision < 0 ||
+        !['agent', 'mdm'].includes(request.channel)
+      )
         throw new Error('Invalid scope preview')
       const value = await port.preview(owner, freeze(request), signal)
-      if (value.channel !== request.channel || value.items.length > 1000 || value.scanComplete !== (value.stopReason === 'complete'))
+      if (
+        value.channel !== request.channel ||
+        value.items.length > 1000 ||
+        value.scanComplete !== (value.stopReason === 'complete')
+      )
         throw new Error('Wrong scope preview')
       return value
     },
-    async recompute(owner: ScopeOwner, request: { readonly operationId: string; readonly expectedRevision: number }) {
+    async recompute(
+      owner: ScopeOwner,
+      request: { readonly operationId: string; readonly expectedRevision: number },
+    ) {
       validateOwner(owner)
       uuid(request.operationId)
-      if (!Number.isSafeInteger(request.expectedRevision) || request.expectedRevision < 1) throw new Error('Invalid policy revision')
+      if (!Number.isSafeInteger(request.expectedRevision) || request.expectedRevision < 1)
+        throw new Error('Invalid policy revision')
       const value = await port.recompute(owner, freeze(request))
       if (!value.task) throw new Error('Missing scope computation')
       return value
     },
     async task(owner: ScopeOwner, scope: string, task: string, signal?: AbortSignal) {
       validateOwner(owner)
-      uuid(scope); uuid(task)
+      uuid(scope)
+      uuid(task)
       const value = await port.task(owner, scope, task, signal)
-      if (value.target !== scope || value.task !== task || value.kind !== 'scope') throw new Error('Wrong scope task')
+      if (value.target !== scope || value.task !== task || value.kind !== 'scope')
+        throw new Error('Wrong scope task')
       return value
     },
-    async result(owner: ScopeOwner, scope: string, result: string, kind: ScopeResultKind, channel: Channel, query: WindowQuery = {}, signal?: AbortSignal) {
+    async result(
+      owner: ScopeOwner,
+      scope: string,
+      result: string,
+      kind: ScopeResultKind,
+      channel: Channel,
+      query: WindowQuery = {},
+      signal?: AbortSignal,
+    ) {
       validateOwner(owner)
-      uuid(scope); uuid(result)
-      if (!['members', 'decisions'].includes(kind) || !['agent', 'mdm'].includes(channel)) throw new Error('Invalid scope result selection')
+      uuid(scope)
+      uuid(result)
+      if (!['members', 'decisions'].includes(kind) || !['agent', 'mdm'].includes(channel))
+        throw new Error('Invalid scope result selection')
       const value = await port.result(owner, scope, result, kind, channel, query, signal)
-      if (value.scope !== scope || value.result !== result || value.channel !== channel || value.page.kind !== kind) throw new Error('Wrong scope result coordinates')
+      if (
+        value.scope !== scope ||
+        value.result !== result ||
+        value.channel !== channel ||
+        value.page.kind !== kind
+      )
+        throw new Error('Wrong scope result coordinates')
       return value
     },
   })

@@ -65,8 +65,6 @@ export const tenantPermissions = [
   'group_read',
   'group_write',
   'group_recompute',
-  'scope_read',
-  'scope_write',
   'policy_read',
   'policy_write',
   'resource_read',

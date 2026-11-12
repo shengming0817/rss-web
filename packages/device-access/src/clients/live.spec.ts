@@ -10,8 +10,6 @@ function endpoint() {
   return {
     id: 'pc',
     status: 'active',
-    primaryMdmRegistration: null,
-    enrollments: [],
     assetState: 'active',
     platform: { state: 'known', values: ['windows'] },
     displayName: {
@@ -19,27 +17,18 @@ function endpoint() {
       sources: [],
       state: { kind: 'known', value: { kind: 'string', value: 'Office PC' } },
     },
-    channels: [
-      {
-        registrationId: id,
-        generation: 2,
-        status: 'active',
-        channel: 'agent',
-        source: 'agent.builtin',
-        platform: 'windows',
-        children: [],
-        userContext: null,
-        lastCommunicationReceivedAt: 100,
-      },
-    ],
+    channel: 'agent',
+    source: 'agent.builtin',
+    registeredAt: null,
+    lastCommunicationReceivedAt: 100,
+    enrollment: null,
   }
 }
 function binding() {
   return {
     id,
     operationId: id,
-    registration: other,
-    registrationGeneration: 2,
+
     accountDisposition: 'keep',
     accountIntent: { kind: 'create', platform: 'windows', name: 'rss' },
     createdByRss: true,
@@ -70,8 +59,7 @@ function material() {
     id,
     binding: {
       device: 'pc',
-      registration: other,
-      generation: 2,
+
       subject: { kind: 'rss_login', binding: id, bindingGeneration: 1, sid: 'S-1-5-21-1' },
     },
     version: 4,
@@ -154,10 +142,10 @@ describe('native public DA adapters', () => {
       nativeComputer({
         ...endpoint(),
         platform: { state: 'unknown', values: [] },
-        channels: [],
+        lastCommunicationReceivedAt: null,
         displayName: undefined,
       }),
-    ).toMatchObject({ name: 'pc', platform: 'unknown', lastObservedAt: null, registration: null })
+    ).toMatchObject({ name: 'pc', platform: 'unknown', lastObservedAt: null })
     expect(() =>
       nativeComputer({ ...endpoint(), platform: { state: 'known', values: [] } }),
     ).toThrow()
@@ -387,7 +375,7 @@ describe('native public DA adapters', () => {
             operationId: null,
             relatedOperationIds: [],
             requestId: null,
-            registrationId: null,
+
             registrationRequestId: null,
             instanceId: null,
             executionState: null,
@@ -423,8 +411,7 @@ it('bounds candidate view models and rejects cross-device data and personal reco
     id: 'pc',
     name: 'Computer',
     platform: 'windows',
-    registration: id,
-    generation: 1,
+
     status: 'active',
     lastObservedAt: null,
   })

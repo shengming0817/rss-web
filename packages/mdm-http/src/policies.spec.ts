@@ -11,7 +11,7 @@ function fixture(value: unknown) {
   return { transport: { request } as unknown as HttpTransport, request }
 }
 const definition = {
-  scope: id,
+  scope: { targets: [], limitations: null, exclusions: [] },
   alias: 'shared.policy',
   customEvent: 'shared.event',
   action: {
@@ -28,7 +28,15 @@ const definition = {
   },
 }
 it('reads exact policy identity and keeps configuration and immutable execution versions distinct', async () => {
-  const value = { id, revision: 8, version: 2, versionId, state: 'disabled', definition },
+  const value = {
+      id,
+      revision: 8,
+      version: 2,
+      versionId,
+      state: 'disabled',
+      definition,
+      scopes: [],
+    },
     client = createPoliciesAdapter(fixture(value).transport)
   expect(await client.read(id)).toEqual(value)
   await expect(client.read(operationId)).rejects.toThrow('detail')
@@ -42,17 +50,20 @@ it('binds preview paging to the original scope result and action without accepti
     }),
     client = createPoliciesAdapter(f.transport)
   expect(
-    (await client.preview(definition, versionId, { cursor: 'previous', limit: 1 })).nextCursor,
+    (await client.preview(id, 8, definition, versionId, { cursor: 'previous', limit: 1 }))
+      .nextCursor,
   ).toBe('next')
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      body: { definition, scopeResult: versionId },
+      body: { definition, expectedRevision: 8, scopeResult: versionId },
       query: { cursor: 'previous', limit: 1 },
     }),
   )
-  await expect(client.preview(definition, operationId, {})).rejects.toThrow('result')
+  await expect(client.preview(id, 8, definition, operationId, {})).rejects.toThrow('result')
   await expect(
     client.preview(
+      id,
+      8,
       { ...definition, action: { ...definition.action, runLifetimeSeconds: 7200 } },
       versionId,
       {},
@@ -133,8 +144,6 @@ it('preserves native collection delivery and intake without fabricating agent ex
       policyId: id,
       versionId,
       device: 'endpoint-1',
-      registrationId: id,
-      generation: 1,
       occurrence: 'collection:1',
       availableAt: 0,
       deadline: 200,
@@ -166,8 +175,6 @@ it('consumes access run state without inventing a software effect', async () => 
       policyId: id,
       versionId,
       device: 'endpoint-1',
-      registrationId: id,
-      generation: 1,
       occurrence: 'access:1',
       availableAt: 0,
       deadline: 200,
@@ -193,7 +200,7 @@ it('keeps recurring eligibility, current trigger knowledge and restricted execut
     channel: 'agent',
     availability: 'ready',
     reason: null,
-    target: { device: 'endpoint-1', channel: 'agent', registrationId: id, generation: 1 },
+    target: { device: 'endpoint-1', channel: 'agent' },
     qualification: { state: 'eligible', entry: 1 },
     sources: [],
     scopeResult: versionId,

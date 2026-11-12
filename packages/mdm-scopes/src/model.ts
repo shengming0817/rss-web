@@ -36,7 +36,7 @@ export interface ScopeTask {
   readonly processed: number
   readonly members: number
   readonly failure: string | null
-  readonly failureDetail: { readonly reason: 'group_input_pending' } | null
+  readonly failureDetail: { readonly reason: string } | null
   readonly replacementTask: string | null
 }
 export interface ScopeSource {
@@ -103,8 +103,23 @@ export interface ScopePreview {
 }
 export interface ScopesPort {
   read(owner: ScopeOwner, signal?: AbortSignal): Promise<ScopeRead>
-  preview(owner: ScopeOwner, request: ScopePreviewRequest, signal?: AbortSignal): Promise<ScopePreview>
-  recompute(owner: ScopeOwner, request: { readonly operationId: string; readonly expectedRevision: number }): Promise<ScopeReceipt>
+  preview(
+    owner: ScopeOwner,
+    request: ScopePreviewRequest,
+    signal?: AbortSignal,
+  ): Promise<ScopePreview>
+  recompute(
+    owner: ScopeOwner,
+    request: { readonly operationId: string; readonly expectedRevision: number },
+  ): Promise<ScopeReceipt>
   task(owner: ScopeOwner, scope: string, task: string, signal?: AbortSignal): Promise<ScopeTask>
-  result(owner: ScopeOwner, scope: string, result: string, kind: ScopeResultKind, channel: Channel, query: WindowQuery, signal?: AbortSignal): Promise<ScopeResult>
+  result(
+    owner: ScopeOwner,
+    scope: string,
+    result: string,
+    kind: ScopeResultKind,
+    channel: Channel,
+    query: WindowQuery,
+    signal?: AbortSignal,
+  ): Promise<ScopeResult>
 }

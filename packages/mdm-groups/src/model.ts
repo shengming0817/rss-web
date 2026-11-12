@@ -1,10 +1,4 @@
-import type {
-  DeviceRef,
-  DirectoryQuery,
-  Page,
-  DeviceMember,
-  WindowQuery,
-} from '@rss/mdm-devices'
+import type { DeviceRef, DirectoryQuery, Page, DeviceMember, WindowQuery } from '@rss/mdm-devices'
 import type { AssetContext, ConditionContext, Operation, Predicate } from '@rss/mdm-inventory'
 
 export type GroupCriteria =
@@ -165,7 +159,9 @@ export interface Reference {
     | 'exclusion'
     | 'compliance_target'
   )[]
-  readonly release: 'edit_or_delete_referencing_object'
+  readonly policy: string | null
+  readonly stage: string | null
+  readonly release: 'edit_or_delete_referencing_object' | 'edit_policy_scope_or_retire_owner'
 }
 export type References = Page<Reference>
 export type ReferenceQuery = WindowQuery

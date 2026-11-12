@@ -42,11 +42,7 @@ function only(value: object, keys: readonly string[]) {
 export function agentViewEntry(target: EntryTarget, ns: EntryNamespace) {
   only(target, ['selector', 'version', 'revision', 'step'])
   only(ns, ['instance', 'tenant', 'device'])
-  if (
-    !id(ns.instance) ||
-    !id(ns.tenant) ||
-    !bounded(ns.device)
-  )
+  if (!id(ns.instance) || !id(ns.tenant) || !bounded(ns.device))
     throw new Error('Invalid Agent namespace')
   const { selector, version, revision, step } = target
   const fields = new URLSearchParams({

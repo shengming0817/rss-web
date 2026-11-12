@@ -99,8 +99,6 @@ const material = (login = false): Material => ({
   version: 2,
   binding: {
     device: target.device,
-    registration,
-    generation: 3,
     subject: login
       ? {
           kind: 'rss_login',
@@ -153,21 +151,11 @@ function endpoint(): ViewEndpoint {
     status: 'active',
     assetState: 'active',
     platform: { state: 'known', values: ['macos'] },
-    primaryMdmRegistration: { registrationId: registration, generation: 3, source: 'mdm.apple' },
-    channels: [
-      {
-        channel: 'mdm',
-        registrationId: registration,
-        generation: 3,
-        status: 'active',
-        source: 'mdm.apple',
-        platform: 'macos',
-        lastCommunicationReceivedAt: null,
-        children: [],
-        userContext: null,
-      },
-    ],
-    enrollments: [],
+    channel: 'mdm',
+    source: 'mdm.apple',
+    registeredAt: null,
+    lastCommunicationReceivedAt: null,
+    enrollment: null,
   }
 }
 const configuration = () => ({
@@ -304,7 +292,7 @@ it('expires completed purpose authorization and prevents later disclosure', asyn
   expect(button('披露此精确材料').disabled).toBe(true)
   expect(host.textContent).toContain('用途认证已到期')
 })
-it('uses FileVault configuration CAS and keeps the original registration across generation changes', async () => {
+it('uses FileVault configuration CAS and keeps the original device across refreshed facts', async () => {
   const configure = vi
       .fn<RecoveryCredentials['configure']>()
       .mockRejectedValue({ status: 409, code: 'operation_conflict' }),
@@ -318,8 +306,6 @@ it('uses FileVault configuration CAS and keeps the original registration across 
   )
   await click('保存 FileVault 收集授权')
   expect(configure.mock.calls[0]![1]).toMatchObject({
-    registration,
-    generation: 3,
     expectedRevision: 5,
   })
   const original = configure.mock.calls[0]![1]
@@ -328,7 +314,7 @@ it('uses FileVault configuration CAS and keeps the original registration across 
       credentials,
       endpoint: {
         ...device,
-        channels: device.channels.map((channel) => ({ ...channel, generation: 4 })),
+        lastCommunicationReceivedAt: 4,
       },
       locale: 'zh',
       permitted: true,
@@ -487,10 +473,12 @@ it('hides denied recovery metadata during retry while retaining an unknown origi
     id: target.device,
     status: 'active',
     assetState: 'active',
-    primaryMdmRegistration: null,
-    channels: [],
-    enrollments: [],
     platform: { state: 'unknown', values: [] },
+    channel: null,
+    source: null,
+    registeredAt: null,
+    lastCommunicationReceivedAt: null,
+    enrollment: null,
   }
   await render(
     h(RecoveryPage, {

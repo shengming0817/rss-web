@@ -500,10 +500,13 @@ export default tseslint.config(
   {
     files: ['packages/mdm-policies/**/*.ts'],
     rules: {
-      'no-restricted-imports': boundaryRule([{
-        regex: '^(?:@rss/(?!mdm-devices$|mdm-inventory$|mdm-scopes$)|react(?:/|$)|antd(?:/|$)|axios$)',
-        message: 'Policy composes pure device, inventory and owned Scope definitions.',
-      }]),
+      'no-restricted-imports': boundaryRule([
+        {
+          regex:
+            '^(?:@rss/(?!mdm-devices$|mdm-inventory$|mdm-scopes$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message: 'Policy composes pure device, inventory and owned Scope definitions.',
+        },
+      ]),
     },
   },
   {

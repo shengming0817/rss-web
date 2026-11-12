@@ -19,7 +19,7 @@ import {
   type WnsOperation,
   type WnsReceipt,
 } from '@rss/mdm-connections'
-import { base64url, count, enumeration, positive, uuid } from './decode'
+import { base64url, count, enumeration, positive, text, uuid } from './decode'
 import { attachment } from './download'
 
 function storageReceipt(value: unknown): StorageReceipt {

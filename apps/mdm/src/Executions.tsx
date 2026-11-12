@@ -99,10 +99,7 @@ function ExecutionFacts({
     else setRecovery(null)
   }, [detail, item, runtime, locale])
   const entries: CopyEntry[] = []
-  if (
-    detail?.kind === 'run' &&
-    detail.attempt
-  ) {
+  if (detail?.kind === 'run' && detail.attempt) {
     const selector = { kind: 'task' as const, task: detail.id, attempt: detail.attempt }
     entries.push({ label: l('原任务', 'Original task'), target: { selector } })
     if ('nodes' in detail) {
@@ -166,9 +163,7 @@ function ExecutionFacts({
         {item && !original && (
           <div>
             <dt>{l('原执行设备', 'Original execution device')}</dt>
-            <dd>
-              {item.device}
-            </dd>
+            <dd>{item.device}</dd>
           </div>
         )}
       </dl>
@@ -229,12 +224,7 @@ function ExecutionFacts({
       )}
       {detail && <ExecutionEvidence detail={detail} locale={locale} />}
       {detail?.kind === 'run' && (
-        <EntryCopies
-          runtime={runtime}
-          locale={locale}
-          entries={entries}
-          device={detail.device}
-        />
+        <EntryCopies runtime={runtime} locale={locale} entries={entries} device={detail.device} />
       )}
       <Alert
         type="info"

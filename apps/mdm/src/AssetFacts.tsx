@@ -48,9 +48,7 @@ export function EvidenceFacts({ evidence, locale }: { evidence: Evidence; locale
       </div>
       <div>
         <dt>{l('原设备', 'Original device')}</dt>
-        <dd>
-          {evidence.deviceId ?? '—'}
-        </dd>
+        <dd>{evidence.deviceId ?? '—'}</dd>
       </div>
       <div>
         <dt>{l('数据集 / 来源代际', 'Dataset / epoch')}</dt>

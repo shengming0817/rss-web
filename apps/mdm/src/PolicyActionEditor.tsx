@@ -317,7 +317,6 @@ export function PolicyActionEditor({
               onChange={(target) => onChange({ ...value, delivery: { kind: 'native', target } })}
             />
           )}
-
         </>
       )}
       {value.kind === 'ensure_agent_installed' && (

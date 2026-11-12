@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import axios from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
 import { createMdmTransport, decodeMdmError } from './mdm'
-import { postApiV1GroupsById, getApiV1PoliciesByIdAssignments } from './generated/mdm'
+import { postApiV1GroupsById, getApiV1PoliciesByPolicyAssignments } from './generated/mdm'
 
 it('accepts product and embedded authentication errors without exposing server detail', () => {
   expect(decodeMdmError(403, { code: 'csrf_rejected' })).toMatchObject({
@@ -67,7 +67,7 @@ it('rejects raw domain requests instead of accepting a parallel handwritten cont
 it('keeps caller credentials and tenant authority out of generated requests', async () => {
   for (const header of ['Authorization', 'X-Tenant-ID', 'X-CSRF-Token'])
     await expect(
-      getApiV1PoliciesByIdAssignments(createMdmTransport(), {
+      getApiV1PoliciesByPolicyAssignments(createMdmTransport(), {
         pathParams: { id: '11111111-1111-4111-8111-111111111111' },
         headers: { [header]: 'secret' },
       } as never),
@@ -130,7 +130,7 @@ it('preserves only a public HTTP response request UUID and leaves response loss 
   spy.mockRestore()
   const id = '11111111-1111-4111-8111-111111111111'
   const url = `/api/v1/policies/${id}/assignments`
-  const read = () => getApiV1PoliciesByIdAssignments(transport, { pathParams: { id } })
+  const read = () => getApiV1PoliciesByPolicyAssignments(transport, { pathParams: { policy: id } })
   mock
     .onGet(url)
     .replyOnce(

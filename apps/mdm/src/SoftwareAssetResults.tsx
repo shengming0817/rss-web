@@ -9,14 +9,7 @@ import {
   type SoftwareQuality,
   type SoftwareTask,
 } from '@rss/mdm-inventory'
-import {
-  CursorControls,
-  labels,
-  readFailure,
-  ReadState,
-  usePageRead,
-  type Query,
-} from './AdminUi'
+import { CursorControls, labels, readFailure, ReadState, usePageRead, type Query } from './AdminUi'
 import { DataTable } from './DataTable'
 import { devicePath } from './Devices'
 import {
@@ -81,7 +74,14 @@ function ResultPage<T, P extends Page<T>>({
   }
   return (
     <Card size="small" title={title}>
-      <ReadState locale={locale} busy={read.busy} error={read.error} empty={read.value?.items.length === 0} onRetry={read.reload} onRestart={() => change(firstAssetPage)} />
+      <ReadState
+        locale={locale}
+        busy={read.busy}
+        error={read.error}
+        empty={read.value?.items.length === 0}
+        onRetry={read.reload}
+        onRestart={() => change(firstAssetPage)}
+      />
       {read.value && (
         <>
           {children(read.value)}

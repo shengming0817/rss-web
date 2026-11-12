@@ -1,6 +1,6 @@
 import { useDirectoryQuery } from './directory-location'
 import { useState } from 'react'
-import { Alert, Button, Card, Collapse, Form, Input, Modal, Select, Tabs } from 'antd'
+import { Alert, Button, Card, Collapse, Modal, Tabs } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Association, EndpointRow, ViewRow } from '@rss/mdm-devices'
 import type { Runtime } from './runtime'
@@ -33,9 +33,7 @@ const viewFields = ['key', 'reference', 'association', 'endpoints'] as const,
     'inventoryAvailable',
   ] as const,
   associationFields = ['id', 'version', 'confirmedAt', 'association'] as const
-function literal(value: string): string {
-  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
-}
+
 export function devicePath(kind: 'endpoint' | 'association', id: string): string {
   return `/devices/${kind}/${encodeURIComponent(id)}`
 }
@@ -77,16 +75,17 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
         </p>
       </div>
       <ReadState busy={stats.busy} error={stats.error} locale={locale} onRetry={stats.reload} />
-<DirectoryControls catalog="devices"
-                key={query.filter ?? ''}
-                locale={locale}
-                query={query}
-                onChange={setQuery}
-                fields={viewFields}
-                sort={['key']}
-                required="key"
-                maximum={100}
-              />
+      <DirectoryControls
+        catalog="devices"
+        key={query.filter ?? ''}
+        locale={locale}
+        query={query}
+        onChange={setQuery}
+        fields={viewFields}
+        sort={['key']}
+        required="key"
+        maximum={100}
+      />
       <ReadState
         busy={read.busy}
         error={read.error}
@@ -199,7 +198,8 @@ function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Loca
         </p>
       )}
       <ReadState busy={stats.busy} error={stats.error} locale={locale} onRetry={stats.reload} />
-      <DirectoryControls catalog="endpoints"
+      <DirectoryControls
+        catalog="endpoints"
         locale={locale}
         query={query}
         onChange={setQuery}
@@ -244,11 +244,37 @@ function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Loca
                     },
                   ]
                 : []),
-              ...(selected.includes('channel') ? [{ title: l('通道', 'Channel'), dataIndex: 'channel' as const }] : []),
-              ...(selected.includes('source') ? [{ title: l('来源', 'Source'), dataIndex: 'source' as const }] : []),
-              ...(selected.includes('registeredAt') ? [{ title: l('首次注册时间', 'First enrollment'), render: (_: unknown, row: EndpointRow) => timestamp(locale, row.registeredAt) }] : []),
-              ...(selected.includes('lastCommunicationReceivedAt') ? [{ title: l('最近通信', 'Last communication'), render: (_: unknown, row: EndpointRow) => timestamp(locale, row.lastCommunicationReceivedAt) }] : []),
-              ...(selected.includes('enrollment') ? [{ title: l('注册申请', 'Enrollment request'), render: (_: unknown, row: EndpointRow) => row.enrollment?.enrollmentId ?? '—' }] : []),
+              ...(selected.includes('channel')
+                ? [{ title: l('通道', 'Channel'), dataIndex: 'channel' as const }]
+                : []),
+              ...(selected.includes('source')
+                ? [{ title: l('来源', 'Source'), dataIndex: 'source' as const }]
+                : []),
+              ...(selected.includes('registeredAt')
+                ? [
+                    {
+                      title: l('首次注册时间', 'First enrollment'),
+                      render: (_: unknown, row: EndpointRow) => timestamp(locale, row.registeredAt),
+                    },
+                  ]
+                : []),
+              ...(selected.includes('lastCommunicationReceivedAt')
+                ? [
+                    {
+                      title: l('最近通信', 'Last communication'),
+                      render: (_: unknown, row: EndpointRow) =>
+                        timestamp(locale, row.lastCommunicationReceivedAt),
+                    },
+                  ]
+                : []),
+              ...(selected.includes('enrollment')
+                ? [
+                    {
+                      title: l('注册申请', 'Enrollment request'),
+                      render: (_: unknown, row: EndpointRow) => row.enrollment?.enrollmentId ?? '—',
+                    },
+                  ]
+                : []),
               ...(selected.includes('inventoryAvailable')
                 ? [
                     {

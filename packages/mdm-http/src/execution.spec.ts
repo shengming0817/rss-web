@@ -8,8 +8,6 @@ const row = {
   id,
   kind: 'command',
   device: 'pc',
-  registrationId,
-  generation: 2,
   origin: 'direct',
   policy: null,
   deadline: 100,
@@ -25,7 +23,7 @@ function fixture(reply: unknown) {
 it('requests the complete identity projection and rejects omitted identities and duplicate rows', async () => {
   const f = fixture({ items: [row], nextCursor: 'YQ' })
   expect((await f.adapter.list({ filter: "device=='pc'" })).nextCursor).toBe('YQ')
-  expect(f.request.mock.calls[0]![0].query?.['fields']).toContain('registrationId')
+  expect(f.request.mock.calls[0]![0].query?.['fields']).toContain('device')
   await expect(fixture({ items: [{ id }], nextCursor: null }).adapter.list({})).rejects.toThrow()
   await expect(fixture({ items: [row, row], nextCursor: null }).adapter.list({})).rejects.toThrow(
     'Duplicate',
@@ -59,7 +57,6 @@ it('preserves native effect waiting even when the command is applied and rejects
     inputVersion: 'v1',
     observation: detail.observation,
     authorization: detail.authorization,
-    registrationId: null,
   })
   await expect(
     fixture({ ...detail, commandId: registrationId }).adapter.command('pc', id),
@@ -72,8 +69,6 @@ it('reads script runs directly from the policy contract with exact task and poli
     policyId: registrationId,
     versionId: id,
     device: 'pc',
-    registrationId,
-    generation: 2,
     occurrence: 'o',
     availableAt: 1,
     deadline: 100,
@@ -128,8 +123,6 @@ it('preserves DA result effects instead of mistaking the missing top-level field
     policyId: registrationId,
     versionId: id,
     device: 'pc',
-    registrationId,
-    generation: 2,
     occurrence: 'o',
     availableAt: 1,
     deadline: 100,
@@ -177,9 +170,7 @@ it('projects the exact software attempt step digest from the formal 32-byte wire
     kind: 'software',
     taskId: id,
     policyId: registrationId,
-    registrationId,
     device: 'pc',
-    generation: 2,
     attemptId: id,
     availableAt: 1,
     deadline: 100,

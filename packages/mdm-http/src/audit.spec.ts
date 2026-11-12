@@ -19,7 +19,7 @@ const fact = {
   operationId: id,
   relatedOperationIds: [other],
   requestId: other,
-  registrationId: null,
+
   registrationRequestId: null,
   instanceId: id,
   auditOutcome: 'succeeded',
@@ -38,7 +38,7 @@ const activity = {
   recordedAt: 20,
   observedAt: -1,
   origin: 'human',
-  target: { device: 'paired-device', registration: id, generation: 1 },
+  target: { device: 'paired-device' },
   links: {
     policy: null,
     version: null,
@@ -139,10 +139,11 @@ it('projects exact current capability identity without leaking definitions or tr
       version: 1,
       versionId: other,
       state: 'enabled',
+      scopes: [],
       definition: {
         alias: 'support',
         customEvent: 'support.event',
-        scope: id,
+        scope: { targets: [], limitations: null, exclusions: [] },
         action: {
           kind: 'device_access',
           mac: null,

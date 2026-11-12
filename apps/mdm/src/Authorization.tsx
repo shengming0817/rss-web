@@ -736,7 +736,8 @@ function Groups({ runtime, locale, instance }: Props & { instance: string }) {
         </Button>
         <Button onClick={page.reload}>{l('重新读取', 'Read again')}</Button>
       </div>
-      <DirectoryControls catalog="userGroups"
+      <DirectoryControls
+        catalog="userGroups"
         locale={locale}
         query={query}
         onChange={setQuery}

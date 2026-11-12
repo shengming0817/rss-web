@@ -11,8 +11,11 @@ export const computerRecord = (v: Computer) => ({
     {
       id: v.id,
       status: v.status,
-      primaryMdmRegistration: null,
-      enrollments: [],
+      registeredAt: null,
+      enrollment: null,
+      channel: 'agent',
+      source: 'agent.builtin',
+      lastCommunicationReceivedAt: v.lastObservedAt,
       assetState: 'active',
       platform: {
         state: v.platform === 'unknown' ? 'unknown' : 'known',
@@ -23,21 +26,6 @@ export const computerRecord = (v: Computer) => ({
         sources: [],
         state: { kind: 'known', value: { kind: 'string', value: v.name } },
       },
-      channels: v.registration
-        ? [
-            {
-              registrationId: v.registration,
-              generation: v.generation,
-              channel: 'agent',
-              source: 'agent.builtin',
-              platform: v.platform === 'unknown' ? null : v.platform,
-              children: [],
-              userContext: null,
-              status: v.status === 'revoked' ? 'revoked' : 'active',
-              lastCommunicationReceivedAt: v.lastObservedAt,
-            },
-          ]
-        : [],
     },
   ],
 })
@@ -60,8 +48,6 @@ export function bindingRecord(v: Binding, c: Computer) {
     bindingGeneration: v.bindingGeneration,
     operationId: fixtureId,
     device: v.device,
-    registration: c.registration,
-    registrationGeneration: c.generation,
     instance: v.instance,
     factorGeneration: v.factorGeneration,
     accountDisposition: 'keep',
@@ -104,8 +90,6 @@ export const materialRecord = (v: Material) => ({
   invalidatedAt: null,
   binding: {
     device: v.device,
-    registration: v.registration,
-    generation: v.generation,
     subject: v.subject,
   },
 })

@@ -95,8 +95,6 @@ function registration(value: unknown): DeviceMember {
   return {
     device: text(value.device),
     channel: value.channel,
-    registrationId: uuid(value.registrationId),
-    generation: positive(value.generation),
   }
 }
 function decision(value: unknown): Decision {

@@ -20,7 +20,6 @@ import {
   ReadState,
   useAction,
   useRead,
-  type Query,
 } from './AdminUi'
 import type { InventoryUseCases } from './FieldEditor'
 import type { Locale } from './i18n'
@@ -213,7 +212,8 @@ export function SavedQueries({
     <SelectionGuard.Provider value={guard.register}>
       <Card title={l('保存查询', 'Saved queries')}>
         <fieldset className="permission-panel" disabled={action.busy || guard.locked}>
-          <DirectoryControls catalog="savedQueries"
+          <DirectoryControls
+            catalog="savedQueries"
             locale={locale}
             query={query}
             onChange={setQuery}

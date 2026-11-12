@@ -138,7 +138,7 @@ export function fieldDefinition(value: unknown): FieldDefinition {
   return structuredClone(value)
 }
 export function fieldDescriptor(value: unknown): FieldDescriptor {
-  if (!schema.getApiV1AssetFieldsResponse200.validateFieldView(value))
+  if (!schema.getApiV1AssetFieldsResponse.validateFieldView(value))
     throw new Error('Invalid field descriptor')
   count(value.version)
   return structuredClone(value)

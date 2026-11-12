@@ -60,7 +60,7 @@ function page(action: string, cursor: string | null = null): AuditPage {
     operationId: null,
     relatedOperationIds: [],
     requestId: null,
-    registrationId: null,
+
     registrationRequestId: null,
     instanceId: null,
     auditOutcome: 'succeeded',
@@ -84,8 +84,6 @@ const detail: ActivityDetail = {
     origin: 'human',
     target: {
       device: 'paired-device',
-      registration: '11111111-1111-4111-8111-111111111111',
-      generation: 1,
     },
     links: {
       policy: null,
@@ -144,8 +142,6 @@ it('links original task and native command coordinates from their producer activ
     operation: task,
     attempt,
     version,
-    registration: fact.target!.registration,
-    generation: '1',
   })
   expect(Object.fromEntries(params('查看原生命令'))).toMatchObject({ kind: 'command', operation })
 })

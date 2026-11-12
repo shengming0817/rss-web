@@ -80,15 +80,18 @@ function display(value: unknown): PersonDisplay {
 }
 const endpointFields = {
   id: identifier,
-  status: (v: unknown) => enumeration(v, ['active', 'pending', 'revoked', 'cancelled', 'expired'] as const),
-  registeredAt: (v: unknown) => v === null ? null : integer(v),
-  channel: (v: unknown) => v === null ? null : enumeration(v, ['mdm', 'agent'] as const),
-  source: (v: unknown) => v === null ? null : enumeration(v, ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),
-  platform: (v: unknown) => v === null ? null : enumeration(v, ['windows', 'macos'] as const),
-  lastCommunicationReceivedAt: (v: unknown) => v === null ? null : integer(v),
+  status: (v: unknown) =>
+    enumeration(v, ['active', 'pending', 'revoked', 'cancelled', 'expired'] as const),
+  registeredAt: (v: unknown) => (v === null ? null : integer(v)),
+  channel: (v: unknown) => (v === null ? null : enumeration(v, ['mdm', 'agent'] as const)),
+  source: (v: unknown) =>
+    v === null ? null : enumeration(v, ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),
+  platform: (v: unknown) => (v === null ? null : enumeration(v, ['windows', 'macos'] as const)),
+  lastCommunicationReceivedAt: (v: unknown) => (v === null ? null : integer(v)),
   enrollment: (v: unknown): Endpoint['enrollment'] => {
     if (v === null) return null
-    if (!schema.getApiV1DevicesByDeviceResponse.validateEnrollment(v)) throw new Error('Invalid enrollment contract')
+    if (!schema.getApiV1DevicesByDeviceResponse.validateEnrollment(v))
+      throw new Error('Invalid enrollment contract')
     uuid(v.enrollmentId)
     integer(v.expiresAt)
     return v

@@ -78,11 +78,11 @@ try {
   await p.getByRole('tab', { name: '终端关联', exact: true }).click()
   await p.getByRole('button', { name: '关联另一通道终端', exact: true }).click()
   const d = p.getByRole('dialog', { name: '核验终端关联', exact: true })
-  await run.choose(p, d.getByLabel('对侧通道候选终端', { exact: true }), `${f.agent} · agent · 1`)
+  await run.choose(p, d.getByLabel('对侧通道候选终端', { exact: true }), `${f.agent} · agent`)
   await d
     .getByLabel('核验证据或撤销理由', { exact: true })
     .fill('Disposable fixture association, independently identified endpoints')
-  await d.getByRole('button', { name: '读取并核对当前注册', exact: true }).click()
+  await d.getByRole('button', { name: '读取并核对当前终端', exact: true }).click()
   await d.getByRole('checkbox', { name: '已核实两端属于同一实际设备', exact: true }).check()
   // Lose an actually committed response. Subsequent explicit replay must keep the whole original tuple.
   let first,
@@ -125,8 +125,8 @@ try {
   assert.equal(receipt.version, 1)
   assert.equal(receipt.members.find((m) => m.channel === 'mdm').device, f.mdm)
   assert.equal(receipt.members.find((m) => m.channel === 'agent').device, f.agent)
-  assert.equal(first.mdm.generation, 1)
-  assert.equal(first.agent.generation, 1)
+  assert.deepEqual(first.mdm, { device: f.mdm, channel: 'mdm' })
+  assert.deepEqual(first.agent, { device: f.agent, channel: 'agent' })
   await d.getByText('原关系操作已确认。', { exact: true }).waitFor()
   await p.unroute(pattern)
   await d.locator('.ant-modal-close').click()

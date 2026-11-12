@@ -213,17 +213,8 @@ try {
     )
 
     run.step('current-policy-tool-alias-and-shared-event-navigation')
-    const scope = randomUUID(),
-      policyIds = [randomUUID(), randomUUID()],
+    const policyIds = [randomUUID(), randomUUID()],
       event = 'react.audit.shared'
-    await api('POST', '/api/v1/scopes/' + scope, {
-      operationId: randomUUID(),
-      expectedRevision: 0,
-      input: {
-        action: 'put',
-        definition: { targets: [{ kind: 'device', id: f.mdm }], limitations: null, exclusions: [] },
-      },
-    })
     for (const [index, id] of policyIds.entries()) {
       await api('POST', '/api/v1/policies/' + id, {
         operationId: randomUUID(),
@@ -232,7 +223,7 @@ try {
           action: 'put',
           enabled: false,
           definition: {
-            scope,
+            scope: { targets: [{ kind: 'device', id: f.mdm }], limitations: null, exclusions: [] },
             alias: 'react.audit.' + index,
             customEvent: event,
             action: {
@@ -332,13 +323,10 @@ try {
     assert.equal(copiedEvent.pathname, `/v1/event/${event}`)
     assert.equal(copiedEvent.searchParams.get('device'), f.agent)
     assert.equal(copiedEvent.searchParams.get('tenant'), f.tenant)
-    const registered = (await api('GET', `/api/v1/devices/${f.agent}`)).channels.find(
-      (channel) => channel.channel === 'agent' && channel.status === 'active',
-    )
+    const registered = await api('GET', `/api/v1/devices/${f.agent}`)
     assert.ok(registered)
     assert.equal(copiedEvent.searchParams.get('instance'), f.instance)
-    assert.equal(copiedEvent.searchParams.get('registration'), registered.registrationId)
-    assert.equal(copiedEvent.searchParams.get('generation'), String(registered.generation))
+
     checks.push('real-shared-event-copy-for-current-agent-registration')
     await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
     await label('唯一别名').fill('react.audit.1')

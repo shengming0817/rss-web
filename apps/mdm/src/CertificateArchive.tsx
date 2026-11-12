@@ -211,7 +211,8 @@ export function CertificateArchive({
             </Space>
           }
         >
-          <DirectoryControls catalog="certificates"
+          <DirectoryControls
+            catalog="certificates"
             locale={locale}
             query={query}
             onChange={({ fields, ...next }) =>

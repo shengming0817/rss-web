@@ -25,12 +25,8 @@ export function FileVaultCredentials({
   const formPrefix = useId()
 
   const l = labels(locale),
-    read = useRead(
-      `filevault-configuration/${endpoint.id}/${permitted}`,
-      () =>
-        permitted
-          ? credentials.configuration(endpoint.id)
-          : Promise.resolve(null),
+    read = useRead(`filevault-configuration/${endpoint.id}/${permitted}`, () =>
+      permitted ? credentials.configuration(endpoint.id) : Promise.resolve(null),
     ),
     action = useAction(),
     [form] = Form.useForm<{ enabled: boolean; recipientId: string }>(),
@@ -82,7 +78,8 @@ export function FileVaultCredentials({
       read.reload()
     }
   }
-  const current = endpoint.status === 'active', disabled = !permitted || action.busy || !!pending
+  const current = endpoint.status === 'active',
+    disabled = !permitted || action.busy || !!pending
   return (
     <Card
       title={l('FileVault 收集授权与托管归属', 'FileVault collection authorization and custody')}
@@ -137,15 +134,15 @@ export function FileVaultCredentials({
             layout="vertical"
             disabled={disabled || !current}
             onFinish={(value) => {
-                void submit({
-                  kind: 'configure',
-                  input: {
-                    operationId: crypto.randomUUID(),
-                    expectedRevision: read.value!.revision,
-                    enabled: value.enabled,
-                    recipientId: value.recipientId ?? '',
-                  },
-                })
+              void submit({
+                kind: 'configure',
+                input: {
+                  operationId: crypto.randomUUID(),
+                  expectedRevision: read.value!.revision,
+                  enabled: value.enabled,
+                  recipientId: value.recipientId ?? '',
+                },
+              })
             }}
           >
             <Form.Item

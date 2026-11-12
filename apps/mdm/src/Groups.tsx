@@ -16,7 +16,6 @@ import {
   ReadState,
   useAction,
   useRead,
-  type Query,
 } from './AdminUi'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
 import { GroupEditor } from './GroupEditor'
@@ -97,7 +96,8 @@ export function Groups({
         }
       />
       <fieldset className="permission-panel" disabled={guard.locked || action.busy}>
-        <DirectoryControls catalog="groups"
+        <DirectoryControls
+          catalog="groups"
           locale={locale}
           query={query}
           onChange={setQuery}

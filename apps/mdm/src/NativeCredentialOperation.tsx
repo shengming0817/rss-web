@@ -52,9 +52,7 @@ export function NativeCredentialOperation({
     configuration = useRead(
       `native-credential-configuration/${endpoint.id}/${endpoint.status}/${canOperate}`,
       () =>
-        canOperate && registration
-          ? credentials.configuration(endpoint.id)
-          : Promise.resolve(null),
+        canOperate && registration ? credentials.configuration(endpoint.id) : Promise.resolve(null),
     ),
     action = useAction(),
     [form] = Form.useForm<NativeCredentialFields>(),

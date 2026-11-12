@@ -188,7 +188,9 @@ export function ScopeTaskPanel({
   locale: Locale
 }) {
   const l = labels(locale),
-    read = usePageRead(`scope-task/${JSON.stringify(owner)}/${id}/${task}`, (signal) => scopes.task(owner, id, task, signal))
+    read = usePageRead(`scope-task/${JSON.stringify(owner)}/${id}/${task}`, (signal) =>
+      scopes.task(owner, id, task, signal),
+    )
   return (
     <Card title={l('范围计算', 'Scope computation')}>
       <p>

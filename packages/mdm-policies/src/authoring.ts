@@ -102,8 +102,7 @@ export function validateDefinition(value: PolicyDefinition): void {
     }
   }
   if (action.kind === 'software') {
-    if (action.rollout.stages.length > 32)
-      throw new Error('Invalid rollout stages')
+    if (action.rollout.stages.length > 32) throw new Error('Invalid rollout stages')
     const scopes = new Set<string>()
     let previous = -1
     for (const [index, stage] of action.rollout.stages.entries()) {

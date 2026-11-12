@@ -26,7 +26,6 @@ import {
   ReadState,
   useAction,
   useRead,
-  type Query,
 } from './AdminUi'
 type Props = { runtime: Runtime; locale: Locale }
 function KeyEditor({
@@ -231,7 +230,8 @@ function Keys({ runtime, locale }: Props) {
         </Button>
         <Button onClick={page.reload}>{l('重新读取', 'Read again')}</Button>
       </div>
-      <DirectoryControls catalog="apiKeys"
+      <DirectoryControls
+        catalog="apiKeys"
         locale={locale}
         query={query}
         onChange={setQuery}

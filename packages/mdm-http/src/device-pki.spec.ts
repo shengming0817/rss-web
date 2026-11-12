@@ -11,8 +11,12 @@ function fixture(value: unknown) {
     transport = { request } as unknown as HttpTransport
   return {
     request,
-    adapter: createDevicePkiAdapter(transport, tenant, service),
-    core: createDevicePki(createDevicePkiAdapter(transport, tenant, service), tenant, service),
+    adapter: createDevicePkiAdapter(transport, tenant, service, tenant),
+    core: createDevicePki(
+      createDevicePkiAdapter(transport, tenant, service, tenant),
+      tenant,
+      service,
+    ),
   }
 }
 const trust = () => ({
@@ -121,8 +125,7 @@ it('retains installation observations separately from ACK and rejects unpaired m
     observation: {
       version: 1,
       operation,
-      registration: issuance,
-      generation: 2,
+      deviceId: 'device-a',
       sequence: 9,
       target_revision: 2,
       target_digest: 'a'.repeat(64),
@@ -160,13 +163,13 @@ it('uses all three original Agent recovery routes with distinct administrator an
     },
     f = fixture(receipt)
   await f.core.recoverRegistration(
-    { registration: issuance, operationId: operation, platform: 'windows', csr: 'YQ==' },
+    { device: 'device-a', operationId: operation, platform: 'windows', csr: 'YQ==' },
     'A'.repeat(43),
   )
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      path: '/api/v1/agent-registrations/{id}/recovery',
-      pathParams: { id: issuance },
+      path: '/api/v1/devices/{id}/registration/recovery',
+      pathParams: { id: 'device-a' },
       body: {
         wireVersion: 1,
         operationId: operation,

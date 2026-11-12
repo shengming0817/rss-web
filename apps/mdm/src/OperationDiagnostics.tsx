@@ -255,7 +255,9 @@ function currentResource(detail: OperationDetail): string | null {
     const id = decodeURIComponent(match[2]!)
     if (id !== detail.originalResult.value.object) return null
     return `/${match[1]}?${new URLSearchParams({ [match[1] === 'resources' ? 'resource' : 'policy']: id })}`
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 function Results({

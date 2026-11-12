@@ -149,11 +149,7 @@ export function createExecution(port: ExecutionPort) {
           : item.policy
             ? await port.run(item.policy, item.id, signal)
             : null
-      if (
-        !detail ||
-        detail.id !== item.id ||
-        detail.device !== item.device
-      )
+      if (!detail || detail.id !== item.id || detail.device !== item.device)
         throw new Error('Execution target changed; read again')
       return { item, detail, policy: item.policy }
     },

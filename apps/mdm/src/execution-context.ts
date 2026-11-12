@@ -27,7 +27,8 @@ export function resultReturnPath(value: string | null, expected?: string): strin
         ? [
             'policy',
             'tab',
-            'scope',
+            'record',
+            'stage',
             'state',
             'filter',
             'sort',

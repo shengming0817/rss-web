@@ -369,7 +369,7 @@ export interface RolloutProgress {
   readonly versionId: string
   readonly paused: boolean
   readonly asOf: number
-  readonly stages: readonly (RolloutStage<string> & {
+  readonly stages: readonly (Omit<RolloutStage<string>, 'id'> & {
     readonly ready: boolean
     readonly asOf: number | null
     readonly open: boolean

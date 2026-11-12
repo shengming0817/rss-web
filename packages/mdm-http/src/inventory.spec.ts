@@ -82,8 +82,8 @@ it('keeps current unknown distinct from historical known values and source regis
       scope: { kind: 'device' },
       source: 'manual',
       dataset: null,
-      registration: null,
-      registrationGeneration: null,
+      deviceId: null,
+
       epoch: null,
       snapshotId: task,
       observedAt: 2,

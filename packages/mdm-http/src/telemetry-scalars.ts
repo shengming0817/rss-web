@@ -33,7 +33,8 @@ export function nullable<V, T>(value: V, project: (v: Exclude<V, null>) => T): T
 
 /** Current decimal wire only; ordinary f64 fields never pass through this projection. */
 export function wireInteger(value: unknown): number {
-  if (typeof value !== 'string' || !/^(?:0|-?[1-9][0-9]*)$/.test(value)) throw new Error('Invalid telemetry decimal')
+  if (typeof value !== 'string' || !/^(?:0|-?[1-9][0-9]*)$/.test(value))
+    throw new Error('Invalid telemetry decimal')
   const exact = BigInt(value)
   if (exact < BigInt(Number.MIN_SAFE_INTEGER) || exact > BigInt(Number.MAX_SAFE_INTEGER))
     throw new Error('Telemetry integer exceeds exact browser range')
