@@ -208,20 +208,12 @@ try:
             connection_origin = agent['endpoint']['origin']
             status, draft = operator.call('PUT', '/api/v1/agent-connections', dict(operationId=str(uuid.uuid4()), expectedRevision=0, preferredOrigin=connection_origin, origins=[connection_origin]))
             if status != 200: raise RuntimeError('fixture-agent-connection-save')
-            # The disposable fixture owns this deployed host. Record its real HTTPS observation,
-            # bound to the draft just read; publication still passes the product's normal gate.
-            status, readiness_observation = operator.call('GET', '/readyz')
-            observed = readiness_observation.get('observation', {})
-            expected_binding = {wire: config['runtime_binding'][field] for field, wire in [('host_id', 'hostId'), ('operation_id', 'operationId'), ('revision', 'revision'), ('material_digest', 'materialDigest')]}
-            if status != 200 or readiness_observation.get('ready') is not True or any(observed.get(key) != value for key, value in expected_binding.items()) or observed.get('tenantId') != TENANTS[0] or observed.get('instanceId') != INSTANCE:
-                raise RuntimeError('fixture-agent-deployment-observation')
-            host_id = str(uuid.UUID(observed['hostId']))
-            configuration_revision = int(draft['configuration']['revision'])
-            host_revision = int(observed['revision'])
-            quoted_origin = connection_origin.replace("'", "''")
-            environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';INSERT INTO mdm_access.agent_connection_deployments(tenant_id,origin,service_id,host_id,revision,configuration_revision,observed_at) VALUES('{TENANTS[0]}','{quoted_origin}','{INSTANCE}','{host_id}',{host_revision},{configuration_revision},floor(extract(epoch FROM clock_timestamp()))::bigint)", 'mdm_dev')
+            # Deployment observations belong to the installer/prepare-hosts owner (#3144).
+            phase = 'agent-connection-publish'
             status, _ = operator.call('POST', '/api/v1/agent-connections/publish', dict(operationId=str(uuid.uuid4()), expectedRevision=draft['configuration']['revision']))
-            if status != 200: raise RuntimeError('fixture-agent-connection-publish')
+            if status != 200:
+                print(json.dumps(dict(phase=phase, status=status, blockedBy=3144)), flush=True)
+                raise RuntimeError('fixture-agent-connection-publish')
         installer_release = None
         if browser_module == 'react-enrollment-browser.mjs':
             from agent_installer_fixture import publish
