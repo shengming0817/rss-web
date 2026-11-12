@@ -209,11 +209,6 @@ function ActivityDetail({
             locale={locale}
             entries={entries}
             device={fact?.target?.device ?? device}
-            expected={
-              fact?.target
-                ? { registrationId: fact.target.registration, generation: fact.target.generation }
-                : undefined
-            }
           />
           <p className="subtitle">
             {l('详情观察时间', 'Detail observed as of')} · {timestamp(locale, read.value.asOf)}

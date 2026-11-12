@@ -2,8 +2,6 @@ type EntryNamespace = {
   readonly instance: string
   readonly tenant: string
   readonly device: string
-  readonly registration: string
-  readonly generation: number
 }
 
 type PolicyAddress =
@@ -43,22 +41,14 @@ function only(value: object, keys: readonly string[]) {
 /** Web only emits the view subset of ENTRY-04. Rust remains the receiver and authority. */
 export function agentViewEntry(target: EntryTarget, ns: EntryNamespace) {
   only(target, ['selector', 'version', 'revision', 'step'])
-  only(ns, ['instance', 'tenant', 'device', 'registration', 'generation'])
-  if (
-    !id(ns.instance) ||
-    !id(ns.tenant) ||
-    !id(ns.registration) ||
-    !bounded(ns.device) ||
-    !positive(ns.generation)
-  )
+  only(ns, ['instance', 'tenant', 'device'])
+  if (!id(ns.instance) || !id(ns.tenant) || !bounded(ns.device))
     throw new Error('Invalid Agent namespace')
   const { selector, version, revision, step } = target
   const fields = new URLSearchParams({
     instance: ns.instance,
     tenant: ns.tenant,
     device: ns.device,
-    registration: ns.registration,
-    generation: String(ns.generation),
   })
   if (version !== undefined || revision !== undefined) {
     if (

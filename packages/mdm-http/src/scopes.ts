@@ -1,214 +1,88 @@
 import * as api from '@rss/api/mdm-operations'
 import * as schema from '@rss/api/mdm-schemas'
-import { nextCursor, projectedPage, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import type { ScopeDefinition, ScopeReference, ScopeRow, ScopesPort } from '@rss/mdm-scopes'
-import { boolean, count, enumeration, nullable, positive, text, uuid } from './decode'
-import { assetCut, distinct, integer, requestInput, windowQuery } from './inventory-values'
+import type { ScopeOwner, ScopeTask, ScopesPort } from '@rss/mdm-scopes'
+import { enumeration, uuid } from './decode'
+import { requestInput, windowQuery } from './inventory-values'
 
-function reference(value: ScopeReference): ScopeReference {
-  return { kind: value.kind, id: value.kind === 'group' ? uuid(value.id) : text(value.id) }
-}
-function definition(value: ScopeDefinition): ScopeDefinition {
-  const refs = (values: readonly ScopeReference[]) =>
-    distinct(values.map(reference), (item) => JSON.stringify(item))
+function taskResult(value: api.getApiV1PoliciesByPolicyScopeTasksByTaskContract.Output): ScopeTask {
+  if (value.kind !== 'scope') throw new Error('Wrong scope task kind')
   return {
-    targets: refs(value.targets),
-    limitations: value.limitations === null ? null : refs(value.limitations),
-    exclusions: refs(value.exclusions),
+    ...value,
+    kind: 'scope',
+    status: enumeration(value.status, [
+      'pending',
+      'running',
+      'completed',
+      'failed',
+      'superseded',
+    ] as const),
   }
 }
-const fields = {
-  id: uuid,
-  revision: positive,
-  deleted: boolean,
-  calculationRevision: count,
-  resolutionRevision: count,
-  resolution: (value: unknown) => nullable(value, uuid),
+function coordinates(owner: ScopeOwner) {
+  return { policy: uuid(owner.policyId) }
 }
-/** Uses the application's one authenticated transport; writes are never automatically replayed. */
+/** One current Policy-owned Scope protocol over the application's session transport. */
 export function createScopesAdapter(transport: HttpTransport): ScopesPort {
   return {
-    list: (query = {}) => {
-      if (query.fields && !query.fields.includes('id')) throw new Error('Scope identity required')
-      return api.getApiV1Scopes(
-        transport,
-        { query: queryParameters({ limit: 20, ...query }) },
-        (value) =>
-          projectedPage(value, fields, query.fields, ['id']) as {
-            items: ScopeRow[]
-            nextCursor: string | null
-          },
-      )
-    },
-    read: (id) =>
-      api.getApiV1ScopesById(transport, { pathParams: { id: uuid(id) } }, (value) => {
-        if (!schema.getApiV1ScopesByIdResponse200.validateScopeRead(value) || value.id !== id)
-          throw new Error('Wrong scope detail')
-        return {
-          id,
-          revision: positive(value.revision),
-          definition: definition(value.definition),
-          resolution: nullable(value.resolution, uuid),
-          resolutionRevision: count(value.resolutionRevision),
-        }
-      }),
-    preview: (request) =>
-      api.postApiV1ScopesPreviews(
-        transport,
-        { body: requestInput(request, schema.postApiV1ScopesPreviewsBody.validateRoot) },
-        (value) => ({
-          items: value.items.map((item) => ({
-            kind: item.kind,
-            id: item.kind === 'association' ? uuid(item.id) : text(item.id),
-          })),
-          channel: value.channel,
-          scanComplete: value.scanComplete,
-          stopReason: value.stopReason,
-          hasUnknown: value.hasUnknown,
-          inputFingerprint: text(value.inputFingerprint),
-          assetCut: assetCut(value.assetCut),
-          sources: value.sources.map((source) => ({
-            reference: reference(source.reference),
-            coordinates: {
-              ...source.coordinates,
-              definitionVersion: count(source.coordinates.definitionVersion),
-              memberVersion: count(source.coordinates.memberVersion),
-              authorityVersion: count(source.coordinates.authorityVersion),
-              memberSet: nullable(source.coordinates.memberSet, uuid),
-            },
-            objectSnapshot: nullable(source.objectSnapshot, uuid),
-          })),
-          asOf: integer(value.asOf),
-        }),
-      ),
-    references: (id, query = {}) =>
-      api.getApiV1ScopesByIdReferences(
-        transport,
-        { pathParams: { id: uuid(id) }, query: windowQuery(query) },
-        (value) => ({
-          items: value.items.map((item) => ({
-            ...item,
-            id: uuid(item.id),
-            version: uuid(item.version),
-            revision: positive(item.revision),
-            roles: [...item.roles],
-          })),
-          nextCursor: nextCursor(value.nextCursor),
-        }),
-      ),
-    change: (id, change) =>
-      api.postApiV1ScopesById(
-        transport,
-        {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.postApiV1ScopesByIdBody.validateRoot),
-        },
-        (value) => {
-          if (!schema.postApiV1ScopesByIdResponse200.validateScopeReceipt(value) || value.id !== id)
-            throw new Error('Wrong scope receipt')
-          return { id, revision: positive(value.revision), task: nullable(value.task, uuid) }
-        },
-      ),
-    task: (id, task) =>
-      api.getApiV1ScopesByScopeTasksByTask(
-        transport,
-        {
-          pathParams: { scope: uuid(id), task: uuid(task) },
-        },
-        (value) => {
-          if (
-            !schema.getApiV1ScopesByIdResponse200.validateTaskRead(value) ||
-            value.target !== id ||
-            value.task !== task
-          )
-            throw new Error('Wrong scope task')
-          return {
-            task,
-            target: id,
-            kind: enumeration(value.kind, ['scope'] as const),
-            status: enumeration(value.status, [
-              'pending',
-              'running',
-              'completed',
-              'failed',
-              'superseded',
-            ] as const),
-            processed: count(value.processed),
-            members: count(value.members),
-            failure: value.failure,
-            failureDetail: value.failureDetail,
-            replacementTask: nullable(value.replacementTask, uuid),
-          }
-        },
-      ),
-    result: (id, result, kind, channel, query = {}) =>
-      api.getApiV1ScopesByScopeResultsByResultByKind(
-        transport,
-        {
-          pathParams: { scope: uuid(id), result: uuid(result), kind },
-          query: { ...windowQuery(query), channel },
-        },
-        (value) => {
-          if (
-            !schema.getApiV1ScopesByIdResponse200.validateScopePage(value) ||
-            value.scope !== id ||
-            value.result !== result ||
-            value.channel !== channel ||
-            value.page.kind !== kind
-          )
-            throw new Error('Wrong scope result coordinates')
-          const object = (item: { kind: 'endpoint' | 'association'; id: string }) => ({
-            kind: item.kind,
-            id: item.kind === 'association' ? uuid(item.id) : text(item.id),
+    read: (owner, signal) =>
+      owner.stageId
+        ? api.getApiV1PoliciesByPolicyStagesByStageScope(transport, {
+            signal,
+            pathParams: { ...coordinates(owner), stage: uuid(owner.stageId) },
           })
-          const sources = (
-            items: readonly { reference: ScopeReference; version: number }[] | null,
-          ) =>
-            items === null
-              ? null
-              : items.map((item) => ({
-                  reference: reference(item.reference),
-                  version: count(item.version),
-                }))
-          const page = value.page
-          return {
-            scope: id,
-            result,
-            current: value.current,
-            channel,
-            nextCursor: nextCursor(value.nextCursor),
-            page:
-              page.kind === 'members'
-                ? {
-                    kind: 'members',
-                    items: page.items.map((item) => ({
-                      object: object(item.object),
-                      available: boolean(item.available),
-                    })),
-                  }
-                : {
-                    kind: 'decisions',
-                    items: page.items.map((item) => {
-                      const qualification = item.qualification
-                      if (
-                        qualification.state === 'eligible' &&
-                        !Number.isSafeInteger(qualification.entry)
-                      )
-                        throw new Error('Unsafe scope entry')
-                      return {
-                        object: object(item.object),
-                        available: boolean(item.available),
-                        qualification: { ...qualification },
-                        reasons: [...item.reasons],
-                        targets: sources(item.targets),
-                        limitations: sources(item.limitations),
-                        exclusions: sources(item.exclusions),
-                      }
-                    }),
-                  },
-          }
-        },
-      ),
+        : api.getApiV1PoliciesByPolicyScope(transport, { signal, pathParams: coordinates(owner) }),
+    preview: (owner, body, signal) =>
+      owner.stageId
+        ? api.postApiV1PoliciesByPolicyStagesByStageScopePreviews(transport, {
+            signal,
+            pathParams: { ...coordinates(owner), stage: uuid(owner.stageId) },
+            body: requestInput(
+              body,
+              schema.postApiV1PoliciesByPolicyStagesByStageScopePreviewsBody.validateRoot,
+            ),
+          })
+        : api.postApiV1PoliciesByPolicyScopePreviews(transport, {
+            signal,
+            pathParams: coordinates(owner),
+            body: requestInput(
+              body,
+              schema.postApiV1PoliciesByPolicyScopePreviewsBody.validateRoot,
+            ),
+          }),
+    recompute: (owner, body) =>
+      owner.stageId
+        ? api.postApiV1PoliciesByPolicyStagesByStageScopeRecomputations(transport, {
+            pathParams: { ...coordinates(owner), stage: uuid(owner.stageId) },
+            body,
+          })
+        : api.postApiV1PoliciesByPolicyScopeRecomputations(transport, {
+            pathParams: coordinates(owner),
+            body,
+          }),
+    task: (owner, _scope, task, signal) =>
+      owner.stageId
+        ? api.getApiV1PoliciesByPolicyStagesByStageScopeTasksByTask(
+            transport,
+            { signal, pathParams: { ...coordinates(owner), stage: uuid(owner.stageId), task } },
+            taskResult,
+          )
+        : api.getApiV1PoliciesByPolicyScopeTasksByTask(
+            transport,
+            { signal, pathParams: { ...coordinates(owner), task } },
+            taskResult,
+          ),
+    result: (owner, _scope, result, kind, channel, query, signal) =>
+      owner.stageId
+        ? api.getApiV1PoliciesByPolicyStagesByStageScopeResultsByResultByKind(transport, {
+            signal,
+            pathParams: { ...coordinates(owner), stage: uuid(owner.stageId), result, kind },
+            query: { ...windowQuery(query), channel },
+          })
+        : api.getApiV1PoliciesByPolicyScopeResultsByResultByKind(transport, {
+            signal,
+            pathParams: { ...coordinates(owner), result, kind },
+            query: { ...windowQuery(query), channel },
+          }),
   }
 }

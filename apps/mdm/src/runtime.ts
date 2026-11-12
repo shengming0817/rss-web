@@ -1,3 +1,4 @@
+import { directoryCapabilities } from '@rss/mdm-http/directories'
 import { createOperationDiagnostics, createAudit, createAuditPolicyLookup } from '@rss/mdm-audit'
 import { createOperationDiagnosticsAdapter } from '@rss/mdm-http/operation-diagnostics'
 import { createTenantSetup } from '@rss/mdm-tenant-setup'
@@ -104,6 +105,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
   let setup: ReturnType<typeof createTenantSetup> | undefined
   return Object.freeze({
     owner,
+    directoryCapabilities,
     webhookMaterialRecovery: createWebhookMaterialRecovery(owner),
     operationAuthorization,
     ...createCeremonyHandoff(operationAuthorization, passkeys.cancelAuthorization),
@@ -179,7 +181,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         groups: createGroups(createGroupsAdapter(transport)),
         compliance: createCompliance(createComplianceAdapter(transport)),
         devicePki: createDevicePki(
-          createDevicePkiAdapter(transport, tenant, host.serviceId),
+          createDevicePkiAdapter(transport, tenant, host.serviceId, state.identity.principalId),
           tenant,
           host.serviceId,
         ),

@@ -1,8 +1,6 @@
 import { freeze, uuid } from '@rss/mdm-inventory'
 export interface Confirmation {
   readonly confirmed: true
-  readonly expectedRegistrationId: string
-  readonly expectedGeneration: number
 }
 export interface ControlIntent {
   readonly device: string
@@ -31,15 +29,8 @@ export function validateControl(input: ControlIntent, pin?: string) {
   if (!input.device || /\p{Cc}/u.test(input.device) || !Number.isSafeInteger(input.deadline))
     throw new Error('Invalid control target')
   if (!['restart', 'lock', 'wipe'].includes(input.action.kind)) throw new Error('Invalid action')
-  if (input.action.kind !== 'restart') {
-    uuid(input.action.expectedRegistrationId)
-    if (
-      input.action.confirmed !== true ||
-      !Number.isSafeInteger(input.action.expectedGeneration) ||
-      input.action.expectedGeneration < 1
-    )
-      throw new Error('Current registration confirmation required')
-  }
+  if (input.action.kind !== 'restart' && input.action.confirmed !== true)
+    throw new Error('Explicit device confirmation required')
   if (input.action.kind === 'lock' && !/^[0-9]{6}$/.test(pin ?? ''))
     throw new Error('Six ASCII digit PIN required')
 }

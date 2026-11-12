@@ -2,7 +2,7 @@ import * as api from '@rss/api/mdm-operations'
 import * as schema from '@rss/api/mdm-schemas'
 import { nextCursor, projectedPage, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import type { DeviceRef, PrimaryRegistration } from '@rss/mdm-devices'
+import type { DeviceRef, DeviceMember } from '@rss/mdm-devices'
 import type {
   Decision,
   Group,
@@ -89,14 +89,12 @@ function accepted(value: unknown, id: string): TaskAccepted {
     throw new Error('Wrong group task binding')
   return { task, target: id, kind, statusUrl: value.statusUrl }
 }
-function registration(value: unknown): PrimaryRegistration {
+function registration(value: unknown): DeviceMember {
   if (!schema.getApiV1GroupsByIdResponse200.validatePrimaryRegistration(value))
     throw new Error('Invalid source registration')
   return {
     device: text(value.device),
     channel: value.channel,
-    registrationId: uuid(value.registrationId),
-    generation: positive(value.generation),
   }
 }
 function decision(value: unknown): Decision {
@@ -184,7 +182,7 @@ const directoryFields = {
 /** Group authority, dependency admission and computation remain at the formal backend owner. */
 export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
   return {
-    list: (query = {}) => {
+    list: (query = {}, signal) => {
       const { referenceableFor, ...directory } = query
       const projection =
         directory.fields ?? (Object.keys(directoryFields) as (keyof typeof directoryFields)[])
@@ -192,6 +190,7 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
       return api.getApiV1Groups(
         transport,
         {
+          signal,
           query: {
             ...queryParameters({ limit: 20, ...directory, fields: projection }),
             ...(referenceableFor === undefined ? {} : { referenceableFor: uuid(referenceableFor) }),

@@ -9,8 +9,6 @@ const fields = [
   'id',
   'kind',
   'device',
-  'registrationId',
-  'generation',
   'origin',
   'policy',
   'deadline',
@@ -118,8 +116,7 @@ export function createExecutionAdapter(
           value === null
             ? null
             : {
-                registration: uuid(value.observation.registration),
-                generation: positive(value.observation.generation),
+                device: value.observation.deviceId,
                 state: value.observation.state,
                 reason: value.observation.reason,
                 targetRevision: nullable(value.observation.target_revision, positive),
@@ -137,8 +134,6 @@ export function createExecutionAdapter(
             family: item.evidence === null ? null : text(item.evidence?.owner),
             kind: enumeration(item.kind, ['command', 'action_run'] as const),
             device: text(item.device),
-            registrationId: uuid(item.registrationId),
-            generation: positive(item.generation),
             origin: enumeration(item.origin, ['direct', 'policy'] as const),
             policy: nullable(item.policy, uuid),
             deadline: integer(item.deadline),
@@ -184,8 +179,6 @@ export function createExecutionAdapter(
                 }
               : null,
             device,
-            registrationId: null,
-            generation: null,
             owner: value.owner,
             delivery: text(value.commandStatus),
             observation: value.observation,
@@ -233,8 +226,6 @@ export function createExecutionAdapter(
                 : null,
             availableAt: integer(value.availableAt),
             device: text(value.device),
-            registrationId: uuid(value.registrationId),
-            generation: positive(value.generation),
             state,
             delivery: state
               ? state.delivery.kind

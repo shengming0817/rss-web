@@ -29,7 +29,7 @@ from build_run import lease_fds
 from pki_fixtures import running as pki
 from windows_fixtures import generate as windows_inputs
 from candidate_installation_driver import Browser
-from runtime_fixture import storage, readiness as readiness_status
+from runtime_fixture import storage, installation_sql, readiness as readiness_status
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
@@ -60,7 +60,7 @@ if browser_module not in {'react-devices-browser.mjs', 'react-assets-browser.mjs
 def seed_authority():
     tenant = TENANTS[0]
     user = dict(instanceId=INSTANCE, tenantId=tenant, principalId=ADMIN)
-    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','inventory_fields_write','software_read','software_write','release_publish','software_withdraw','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','scope_read','scope_write','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
+    rule = dict(subject=dict(kind='user', user=user), grants=[dict(operation=o, scope=dict(kind='all_devices')) for o in ['inventory_read','inventory_collect','inventory_assign','device_association_write','credentials','enrollment','operation_read','script_execute']] + [dict(operation=o, scope=dict(kind='tenant')) for o in ['inventory_sensitive_read','inventory_fields_write','software_read','software_write','release_publish','software_withdraw','agent_enrollment_read','agent_enrollment_write','group_read','group_write','group_recompute','policy_read','policy_write','resource_read','resource_write','registration_configuration_read','registration_configuration_write']])
     if browser_module == 'react-setup-browser.mjs': rule['grants'] += [dict(operation=p,scope=dict(kind='tenant')) for p in ['runtime_diagnostics_read','storage_configuration_read','storage_configuration_write']]
     if browser_module == 'react-audit-webhooks-browser.mjs':
         rule['grants'] += [dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write','webhook_replay','audit_read']] + [dict(operation=o, scope=dict(kind='all_devices')) for o in ['device_control','operation_cancel','device_unmanage']]
@@ -90,36 +90,33 @@ def seed_authority():
 
 def seed():
     tenant = TENANTS[0]
-    sql = [f"SET rss.tenant_id = '{tenant}'"]
+    sql = [installation_sql(), f"SET rss.tenant_id = '{tenant}'"]
     devices = [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin'), ('fixture-alone','mdm','mdm.windows')]
     if browser_module in {'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}: devices.append(('fixture-mac','mdm','mdm.apple'))
+    devices += [(f'extra-{index:02}', 'agent', 'agent.builtin') for index in range(24)]
     for device, channel, source in devices:
-        registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
-        sql.append(f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','{device}')")
+        grant, request, credential = [str(uuid.uuid4()) for _ in range(3)]
         if channel == 'mdm':
             sql += [f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','{device}','enrollment','consumed',clock_timestamp()+interval '2 minutes')",
-                    f"INSERT INTO mdm_access.requests(tenant_id,id,grant_id,source,windows_profile) VALUES('{tenant}','{request}','{grant}','{source}',CASE WHEN '{source}'='mdm.windows' THEN 'Device' END)"]
+                    f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile,state,expires_at,issuance_operation,password_digest,password_version,credential_ref) VALUES('{tenant}','{request}','{device}','{grant}','{source}',CASE WHEN '{source}'='mdm.windows' THEN 'Device' END,'bound',clock_timestamp()+interval '1 hour',gen_random_uuid(),repeat('0',64),1,'{credential}')"]
             column, origin = 'request_id', request
         else:
             sql.append(f"INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{grant}','{request}','download','fixture','{INSTANCE}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')")
             column, origin = 'certificate_grant_id', grant
-        sql += [f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,{column},state,purpose,epoch) VALUES('{tenant}','{registration}','{device}','{channel}',1,'{origin}','active','primary',gen_random_uuid())",
-                f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','{channel}',md5('{credential}')||md5('{registration}'),'active')"]
+        sql += [f"INSERT INTO mdm_access.devices(tenant_id,id,channel,{column},state,purpose,epoch,registered_at) VALUES('{tenant}','{device}','{channel}','{origin}','active','primary',gen_random_uuid(),1)",
+                f"INSERT INTO mdm_access.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES('{tenant}','{credential}','{device}','primary','{channel}',md5('{credential}')||md5('{device}'),'active')"]
         if channel == 'mdm':
-            # Device reads require the active registration's native source binding.
-            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,registration,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.registrations WHERE tenant_id='{tenant}' AND id='{registration}'")
+            sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,device,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.devices WHERE tenant_id='{tenant}' AND id='{device}'")
         if browser_module in {'react-audit-webhooks-browser.mjs', 'react-execution-access-browser.mjs'} and device == 'fixture-mdm':
             # Same controlled Windows capability prerequisite as rss-mdm device/mod.rs; no device effect claim.
-            sql.append(f"INSERT INTO mdm_windows.capabilities(tenant_id,registration,generation,os_version,edition,session,observed_at) VALUES('{tenant}','{registration}',1,'10.0.22621.0',48,1,1)")
-        fact=dict(state=dict(kind='known',value=dict(kind='string',value=device)),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,registration=None,registrationGeneration=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
+            sql.append(f"INSERT INTO mdm_windows.capabilities(tenant_id,device,protocol_epoch,os_version,edition,session,observed_at) SELECT tenant_id,id,epoch,'10.0.22621.0',48,1,1 FROM mdm_access.devices WHERE tenant_id='{tenant}' AND id='{device}'")
+        fact=dict(state=dict(kind='known',value=dict(kind='string',value=device)),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,deviceId=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
         sql.append(f"INSERT INTO mdm.manual_assignments(tenant_id,device,field,revision,fact) VALUES('{tenant}','{device}','custom.asset_tag',1,{q(json.dumps(fact))}::jsonb)")
     # Explicit asset scenarios own their disposable array paging data.
     if browser_module == 'react-assets-browser.mjs':
         definition=dict(key='custom.browser_list',version=1,valueType=dict(kind='array',items=dict(kind='integer'),maxItems=1000),nullable=True,manual=True,sources=dict(manual=0),platforms=['windows','macos'],sensitivity='standard',unit=None,searchable=True,itemKey=None)
         # Private disposable fixture publication; no user operation or current-state assertion is forged.
-        sql.append(f"INSERT INTO mdm.field_versions(tenant_id,field,version,revision,definition) VALUES('{tenant}','custom.browser_list',1,mdm.record_asset_change('{tenant}'::uuid,'catalog',jsonb_build_object('field','custom.browser_list'),ARRAY['custom.browser_list']),{q(json.dumps(definition))}::jsonb)")
-    for index in range(24):
-        sql.append(f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','extra-{index:02}')")
+        sql.append(f"SELECT mdm.append_field_version('{tenant}','custom.browser_list',1,{q(json.dumps(definition))}::jsonb)")
     try:
         environment.sql(';'.join(sql)+';', 'mdm_dev')
     except subprocess.CalledProcessError as error:
@@ -136,7 +133,8 @@ def start(binary, initialized, log, expected=200):
         child = subprocess.Popen(args,cwd=BACKEND,stdout=log,stderr=log,env={**os.environ,'RUST_MIN_STACK':str(8*1024*1024)})
         processes.append(child)
         children.append(child)
-    deadline=time.monotonic()+180
+    # Full tenant baseline initialization retries transient scope contention every 60s.
+    deadline=time.monotonic()+1800
     while True:
         for role, child in zip(('product', 'gateway'), children):
             if child.poll() is not None:
@@ -290,18 +288,17 @@ try:
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
     private(config_path, config)
-    phase = 'seed'
-    seed()
-    if browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
-        execution_access_fixture.seed(environment, execution_access, TENANTS[0], INSTANCE, ADMIN)
     phase = 'readiness'
     audit_journey = browser_module == 'react-audit-webhooks-browser.mjs'
-    management_only = audit_journey or browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}
+    management_only = audit_journey or browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs', 'react-devices-browser.mjs'}
     backend_readiness = start(binary, initialized, log, expected=None if management_only else 200)
     if management_only:
         phase = 'management-seams'
         # These are actual authenticated reads, not substitute health/authority facts.
         paths = ['/api/v1/authorization', '/api/v1/operations?limit=1']
+        if browser_module == 'react-devices-browser.mjs':
+            # These device management transactions do not consume unrelated platform-template baseline completion.
+            paths += ['/api/v1/devices?limit=1', '/api/v1/device-associations?limit=1']
         if audit_journey:
             paths += ['/api/v1/audit-events?limit=1', '/api/v1/webhooks/subscriptions?limit=1']
         for path in paths:
@@ -310,6 +307,14 @@ try:
                 print(json.dumps(dict(phase=phase, path=path.split('?')[0], status=status)), flush=True)
                 raise RuntimeError('management-seam-unavailable')
         print(json.dumps(dict(phase='management-seams', result='passed', readinessStatus=backend_readiness, backendReady=backend_readiness == 200)), flush=True)
+    # Cold baseline initialization can outlive the preparation session.
+    phase = 'seed-session'
+    operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
+    operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
+    phase = 'seed'
+    seed()
+    if browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
+        execution_access_fixture.seed(environment, execution_access, TENANTS[0], INSTANCE, ADMIN)
     if browser_module == 'react-assets-browser.mjs':
         phase = 'manual-array-seed'
         # The product owner stores immutable array versions and ordinal indexes atomically.
@@ -320,6 +325,7 @@ try:
                      input=dict(action='set',value=dict(kind='array',value=[dict(kind='integer',value=n) for n in range(count)]))))
             if status != 200:
                 raise RuntimeError('manual-array-seed')
+    phase = 'fixture-authority'
     # Keep the real initializer's rule administration, while the one fixture rule owns business grants.
     status, rules = operator.call('GET', '/api/v1/authorization/rules')
     if status != 200:
@@ -367,8 +373,9 @@ try:
         person_b = dict(principalId=account_b['principalId'], login='fixture-person-b')
     if browser_module == 'react-assets-browser.mjs':
         # A real different tenant owns this endpoint; ordinary tenant-scoped UI cannot read it.
-        environment.sql(f"SELECT public.create_new_tenant('{TENANTS[1]}',1,NULL,NULL) WHERE NOT EXISTS (SELECT 1 FROM public.mdm_tenants WHERE tenant_id='{TENANTS[1]}')", 'mdm_dev')
-        environment.sql(f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{TENANTS[1]}','foreign-assets-endpoint')", 'mdm_dev')
+        environment.sql(installation_sql()+f"SELECT public.create_new_tenant('{TENANTS[1]}',1,NULL,NULL) WHERE NOT EXISTS (SELECT 1 FROM public.mdm_tenants WHERE tenant_id='{TENANTS[1]}')", 'mdm_dev')
+        foreign_grant = str(uuid.uuid4())
+        environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','foreign-assets-endpoint','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','foreign-assets-endpoint','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
     phase = 'collector-registration'
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)
@@ -388,7 +395,7 @@ except BaseException as error:
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
     if phase == 'collector-registration' and isinstance(error, RuntimeError) and re.fullmatch(r'collector-[a-z0-9_-]+', str(error)):
         print(json.dumps(dict(phase=phase, reason=str(error))), flush=True)
-    if phase == 'readiness' and browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
+    if phase == 'readiness':
         try:
             diagnostic_operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
             diagnostic_operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
@@ -397,7 +404,7 @@ except BaseException as error:
                 print(json.dumps(dict(phase='readiness-components', components=[{key: component[key] for key in ('name','readiness','health','reasons')} for component in diagnostic_snapshot['components']])), flush=True)
         except Exception:
             print(json.dumps(dict(phase='readiness-components', result='unavailable')), flush=True)
-    if browser_module in {'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
+    if browser_module in {'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs', 'react-telemetry-browser.mjs'}:
         diagnostics = subprocess.run(['docker', 'logs', environment.container()], capture_output=True, text=True, timeout=10, pass_fds=lease_fds())
         for line in (diagnostics.stdout + diagnostics.stderr).splitlines():
             if 'ERROR:' not in line:
@@ -406,12 +413,15 @@ except BaseException as error:
             if permission:
                 print(json.dumps(dict(phase='postgres-diagnostic', classification='permission-denied', kind=permission[1], identifier=permission[2])), flush=True)
             else:
-                classification = next((kind for text, kind in [('lock timeout', 'lock-timeout'), ('statement timeout', 'statement-timeout'), ('deadlock detected', 'deadlock'), ('duplicate key value', 'duplicate-key'), ('violates check constraint', 'check-constraint'), ('violates foreign key constraint', 'foreign-key'), ('row-level security', 'row-security')] if text in line), 'sql-error')
-                print(json.dumps(dict(phase='postgres-diagnostic', classification=classification)), flush=True)
+                classification = next((kind for text, kind in [('lock timeout', 'lock-timeout'), ('statement timeout', 'statement-timeout'), ('deadlock detected', 'deadlock'), ('duplicate key value', 'duplicate-key'), ('violates check constraint', 'check-constraint'), ('violates foreign key constraint', 'foreign-key'), ('row-level security', 'row-security'), ('storage lineage fenced', 'storage-lineage'), ('execution epoch', 'execution-epoch')] if text in line), 'sql-error')
+                identifiers = re.findall(r'(?:constraint|column|function|relation|table) \"([a-zA-Z0-9_.]+)\"', line)
+                print(json.dumps(dict(phase='postgres-diagnostic', classification=classification, identifiers=identifiers)), flush=True)
     product_log = environment.root/'product.log'
     if product_log.exists():
         diagnostic = Path(tempfile.mkdtemp(prefix='mdm-device-failure-'))
         private(diagnostic/'product.log', product_log.read_text())
+        if browser_module == 'react-telemetry-browser.mjs':
+            private(diagnostic/'postgres.log', diagnostics.stdout + diagnostics.stderr)
         print(json.dumps(dict(phase='diagnostics', directory=str(diagnostic))), flush=True)
     if product_log.exists() and 'stack overflow' in product_log.read_text():
         print(json.dumps(dict(phase='product',result='failed',classification='stack-overflow')),flush=True)

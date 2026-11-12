@@ -96,7 +96,7 @@ try {
     } while (Date.now() < until)
     throw new Error('product-task-deadline')
   }
-  async function settleQuery(task) {
+  async function settleQuery(task, expectedDevice) {
     const state = await poll(
       `/api/v1/device-queries/${task}`,
       () => p.getByRole('button', { name: '读取查询进度与结果', exact: true }).click(),
@@ -104,15 +104,14 @@ try {
       (v) => ['completed', 'failed'].includes(v.status),
     )
     assert.equal(state.status, 'completed')
-    await p.getByRole('link', { name: f.mdm, exact: true }).first().waitFor()
+    if (expectedDevice)
+      await p.getByRole('link', { name: expectedDevice, exact: true }).first().waitFor()
+    else await visibleLabel('固定结果每页条目').waitFor()
     return state
   }
   async function openGroup(id, name) {
     await run.nav(p, '/groups', '设备组')
-    await visibleLabel('服务端筛选').fill(`id==${id}`)
-    await run.response(p, 'GET', '/api/v1/groups', () =>
-      p.getByRole('button', { name: '应用', exact: true }).click(),
-    )
+    await run.response(p, 'GET', '/api/v1/groups', () => run.directoryFilter(p, `id=='${id}'`))
     const card = p.locator('.asset-group-card').filter({ hasText: name })
     await run.response(p, 'GET', `/api/v1/groups/${id}`, () =>
       card.getByRole('button', { name: '查看定义与成员 →', exact: true }).click(),
@@ -154,7 +153,7 @@ try {
       )
     ).json()
   ).asset
-  const state = await settleQuery(accepted.task)
+  const state = await settleQuery(accepted.task, f.mdm)
   assert.ok(state.summary.total >= 27)
   assert.equal(state.summary.matched, 1)
   const fixedPath = `/api/v1/device-queries/${accepted.task}/items?limit=1`,
@@ -385,9 +384,8 @@ try {
   const nextCandidates = await candidateContinuation
   assert.equal(nextCandidates.status(), 200)
   assert.ok(new URL(nextCandidates.url()).searchParams.get('cursor'))
-  await picker.getByLabel('候选组服务端筛选', { exact: true }).fill(`id==${staticGroup.id}`)
   await run.response(p, 'GET', '/api/v1/groups', () =>
-    picker.getByRole('button', { name: '查询候选组', exact: true }).click(),
+    run.directoryFilter(picker, `id=='${staticGroup.id}'`),
   )
   await picker
     .getByRole('row')
@@ -739,28 +737,18 @@ try {
     ),
   )
   await p.getByRole('cell', { name: sourceId, exact: true }).first().waitFor()
-  const registrations = await api(
-    'GET',
-    `/api/v1/devices/${f.agent}/registrations?fields=registrationId,certificateGrantId&limit=1`,
-  )
-  assert.equal(registrations.items.length, 1)
-  assert.equal(typeof registrations.items[0].certificateGrantId, 'string')
-  assert.equal('agentGrantId' in registrations.items[0], false)
-  checks.push(
-    'real-field-resource-direct-reference-pages-and-certificate-grant-directory-projection',
-  )
+  const registration = await api('GET', `/api/v1/devices/${f.agent}/registration`)
+  assert.equal(registration.deviceId, f.agent)
+  assert.equal(typeof registration.certificateGrantId, 'string')
+  checks.push('real-device-registration-summary-and-certificate-grant-binding')
 
   run.step('associated-conflict-missing-and-authorization')
   const mdm = await api('GET', `/api/v1/devices/${f.mdm}`),
     agent = await api('GET', `/api/v1/devices/${f.agent}`),
     primary = (device, channel) => {
-      const c = device.channels.find((c) => c.channel === channel && c.status === 'active')
-      return {
-        device: device.id,
-        channel,
-        registrationId: c.registrationId,
-        generation: c.generation,
-      }
+      assert.equal(device.channel, channel)
+      assert.equal(device.status, 'active')
+      return { device: device.id, channel }
     }
   const association = await api('POST', '/api/v1/device-associations', {
     operationId: randomUUID(),
@@ -848,7 +836,6 @@ try {
     ['macos.agent.applications_local', 'software_assets'],
   ]) {
     const collectionResource = randomUUID(),
-      collectionScope = randomUUID(),
       collectionPolicy = randomUUID(),
       collectionPath = '/api/v1/resources/' + collectionResource
     const sourceResource = await api(
@@ -870,27 +857,6 @@ try {
       collectionPath,
       operation({ action: 'activate', version: sourceVersion.id }, sourceResource.revision),
     )
-    const sourceScope = await api(
-      'POST',
-      '/api/v1/scopes/' + collectionScope,
-      operation({
-        action: 'put',
-        definition: {
-          targets: [{ kind: 'device', id: collector }],
-          limitations: null,
-          exclusions: [],
-        },
-      }),
-    )
-    for (let index = 0; index < 60; index++) {
-      const state = await api(
-        'GET',
-        '/api/v1/scopes/' + collectionScope + '/tasks/' + sourceScope.task,
-      )
-      if (state.status === 'completed') break
-      assert.ok(index < 59, 'software collector scope publication deadline')
-      await new Promise((done) => setTimeout(done, 250))
-    }
     const installed = await api(
       'POST',
       '/api/v1/policies/' + collectionPolicy,
@@ -898,7 +864,11 @@ try {
         action: 'put',
         enabled: true,
         definition: {
-          scope: collectionScope,
+          scope: {
+            targets: [{ kind: 'device', id: collector }],
+            limitations: null,
+            exclusions: [],
+          },
           alias: null,
           customEvent: null,
           action: {
@@ -1020,11 +990,14 @@ try {
   async function chooseOverlap(container) {
     await container.getByRole('button', { name: '选择同域设备组', exact: true }).click()
     for (const id of overlappingGroups) {
-      await container.getByLabel('候选组服务端筛选', { exact: true }).fill('id==' + id)
       await run.response(p, 'GET', '/api/v1/groups', () =>
-        container.getByRole('button', { name: '查询候选组', exact: true }).click(),
+        run.directoryFilter(container, `id=='${id}'`),
       )
-      await container.getByRole('button', { name: '使用此组', exact: true }).click()
+      await container
+        .getByRole('row')
+        .filter({ hasText: id })
+        .getByRole('button', { name: '使用此组', exact: true })
+        .click()
     }
     await container.getByRole('button', { name: '关闭组选择器', exact: true }).click()
   }
@@ -1105,11 +1078,8 @@ try {
         const result = await response.json()
         const row = result.asset.response.items[0]
         assert.equal(row.value.kind, 'object')
-        row.value.value.external_version = { kind: 'integer', value: 9007199254740992 }
-        const body = JSON.stringify(result).replace(
-          '"value":9007199254740992',
-          '"value":9007199254740993',
-        )
+        row.value.value.external_version = { kind: 'integer', value: '9223372036854775807' }
+        const body = JSON.stringify(result)
         await route.fulfill({ response, body })
       })
     const evidencePromise = p.waitForResponse(
@@ -1128,7 +1098,7 @@ try {
     if (domain === 'endpoint') {
       await p.unroute(evidencePattern)
       await p.getByText('展开原始记录', { exact: true }).first().click()
-      await p.getByText('原始值超出浏览器精度，保留来源和证据坐标。', { exact: true }).waitFor()
+      await p.getByText('9223372036854775807', { exact: false }).waitFor()
       await run.nav(p, '/inventory/software?task=' + task, '软件资产')
       await assetButton('Browser standard editor').click()
     }
@@ -1137,8 +1107,15 @@ try {
       await p.locator('.ant-select-dropdown:visible').getByText(label, { exact: true }).click()
     }
     if (domain === 'endpoint') {
-      await run.response(p, 'GET', base + '/breakdowns/os', () => chooseBreakdown('操作系统'), 400)
-      await p.getByText('原任务未请求此分桶维度。', { exact: true }).waitFor()
+      await p.getByRole('combobox', { name: '分桶维度', exact: true }).press('ArrowDown')
+      assert.equal(
+        await p
+          .locator('.ant-select-dropdown:visible')
+          .getByText('操作系统', { exact: true })
+          .count(),
+        0,
+      )
+      await p.keyboard.press('Escape')
       const malformedResponse = '**/breakdowns/version*'
       await p.route(malformedResponse, (route) =>
         route.fulfill({ status: 400, contentType: 'application/json', body: '{}' }),

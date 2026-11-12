@@ -4,11 +4,11 @@ import MockAdapter from 'axios-mock-adapter'
 import { createMdmTransport } from './mdm'
 import { createMdmDemoTransport } from './mdm-demo'
 import {
-  getApiV1PoliciesByIdAssignments,
+  getApiV1PoliciesByPolicyAssignments,
   getApiV1AssetFields,
   getApiV1ResourcesByIdVersionsByVersionScript,
   getApiV1AgentEnrollPackagesByIdContent,
-  postApiV1PoliciesByIdReruns,
+  postApiV1PoliciesByPolicyReruns,
   postApiV1ResourcesByIdUploadsByUploadComplete,
   getReadyz,
   getApiV1DeviceViewsByKindById,
@@ -202,12 +202,15 @@ describe('fixed producer HTTP operations', () => {
       cause: 'client',
     })
     await expect(
-      getApiV1PoliciesByIdAssignments(transport, { pathParams: { id }, query: { limit: 0 } }),
+      getApiV1PoliciesByPolicyAssignments(transport, {
+        pathParams: { policy: id },
+        query: { limit: 0 },
+      }),
     ).rejects.toMatchObject({ cause: 'client' })
     expect(request).not.toHaveBeenCalled()
     await expect(
-      postApiV1PoliciesByIdReruns(transport, {
-        pathParams: { id },
+      postApiV1PoliciesByPolicyReruns(transport, {
+        pathParams: { policy: id },
         body: {
           operationId: id,
           expectedRevision: Number.MAX_SAFE_INTEGER + 1,
@@ -218,8 +221,8 @@ describe('fixed producer HTTP operations', () => {
     expect(request).not.toHaveBeenCalled()
     await getApiV1AssetFields(transport, { query: { limit: 1000 } })
     expect(request).toHaveBeenCalledOnce()
-    await postApiV1PoliciesByIdReruns(transport, {
-      pathParams: { id },
+    await postApiV1PoliciesByPolicyReruns(transport, {
+      pathParams: { policy: id },
       body: { operationId: id, expectedRevision: Number.MAX_SAFE_INTEGER, input: { deadline: 1 } },
     })
     expect(request).toHaveBeenCalledTimes(2)
@@ -228,13 +231,13 @@ describe('fixed producer HTTP operations', () => {
     const request = vi.fn(async (options: RequestOptions<unknown> | NoContentRequest) =>
       options.decode?.({ items: [], nextCursor: null }),
     )
-    await getApiV1PoliciesByIdAssignments({ request } as HttpTransport, {
-      pathParams: { id },
+    await getApiV1PoliciesByPolicyAssignments({ request } as HttpTransport, {
+      pathParams: { policy: id },
       query: { limit: 1, cursor: 'YQ' },
     })
     expect(request.mock.calls[0]?.[0]).toMatchObject({
       method: 'GET',
-      path: '/api/v1/policies/{id}/assignments',
+      path: '/api/v1/policies/{policy}/assignments',
       successStatus: 200,
       query: { limit: 1, cursor: 'YQ' },
     })
@@ -255,21 +258,21 @@ describe('fixed producer HTTP operations', () => {
         .onGet(`/api/v1/policies/${id}/assignments`)
         .reply(200, { items: [], nextCursor: null }, { 'Content-Type': 'application/json' })
       await expect(
-        getApiV1PoliciesByIdAssignments(transport, { pathParams: { id } }),
+        getApiV1PoliciesByPolicyAssignments(transport, { pathParams: { policy: id } }),
       ).resolves.toEqual({ items: [], nextCursor: null })
       mock.resetHandlers()
       mock
         .onGet(`/api/v1/policies/${id}/assignments`)
         .reply(201, { items: [], nextCursor: null }, { 'Content-Type': 'application/json' })
       await expect(
-        getApiV1PoliciesByIdAssignments(transport, { pathParams: { id } }),
+        getApiV1PoliciesByPolicyAssignments(transport, { pathParams: { policy: id } }),
       ).rejects.toMatchObject({ cause: 'protocol', status: 201 })
       mock.resetHandlers()
       mock
         .onGet(`/api/v1/policies/${id}/assignments`)
         .reply(200, { items: [], nextCursor: null }, { 'Content-Type': 'text/plain' })
       await expect(
-        getApiV1PoliciesByIdAssignments(transport, { pathParams: { id } }),
+        getApiV1PoliciesByPolicyAssignments(transport, { pathParams: { policy: id } }),
       ).rejects.toMatchObject({ cause: 'protocol', status: 200 })
     } finally {
       create.mockRestore()
@@ -327,7 +330,7 @@ describe('fixed producer HTTP operations', () => {
     const definition = {
       customEvent: null,
       alias: null,
-      scope: id,
+      scope: { targets: [], limitations: null, exclusions: [] },
       action: {
         kind: 'configuration',
         resource: {

@@ -13,7 +13,7 @@ import type {
   ReceiptSummary,
 } from '@rss/mdm-audit'
 import { auditFact } from './audit'
-import { list, nullable, positive, uuid } from './decode'
+import { list, nullable, uuid } from './decode'
 import { integer, requestInput } from './inventory-values'
 
 type WirePage = api.getApiV1OperationDiagnosticsContract.Output
@@ -42,8 +42,7 @@ const endpoints = {
 }
 
 function locator(value: WireDetail['operation']): OperationLocator {
-  const { product, owner, operationId, actor, instance, device, target, registration, generation } =
-    value
+  const { product, owner, operationId, actor, instance, device, target } = value
   return {
     product,
     owner,
@@ -52,8 +51,6 @@ function locator(value: WireDetail['operation']): OperationLocator {
     ...(instance === null ? {} : { instance: uuid(instance) }),
     ...(device === null ? {} : { device }),
     ...(target === null ? {} : { target }),
-    ...(registration === null ? {} : { registration: uuid(registration) }),
-    ...(generation === null ? {} : { generation: positive(generation) }),
   }
 }
 
@@ -161,7 +158,7 @@ function detail(value: WireDetail): OperationDetail {
     auditEvidence: evidence(value.auditEvidence, page),
     requestEvidence: evidence(value.requestEvidence, page),
     executionEvidence: evidence(value.executionEvidence, execution),
-    hasCurrentResource: value.currentResourceUrl !== null,
+    currentResourceUrl: value.currentResourceUrl,
   }
 }
 
@@ -181,19 +178,12 @@ export function createOperationDiagnosticsAdapter(
         { pathParams: { requestId }, query: requestInput(query, discovery), signal },
         page,
       ),
-    operation: (
-      { owner, operationId, actor, instance, device, target, registration, generation },
-      options,
-      signal,
-    ) =>
+    operation: ({ owner, operationId, actor, instance, device, target }, options, signal) =>
       operations.operation(
         transport,
         {
           pathParams: { owner, operationId },
-          query: requestInput(
-            { actor, instance, device, target, registration, generation, ...options },
-            lookup,
-          ),
+          query: requestInput({ actor, instance, device, target, ...options }, lookup),
           signal,
         },
         detail,

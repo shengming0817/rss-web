@@ -14,6 +14,7 @@ it('does not combine a page with a different software query coordinate', async (
   const task: SoftwareTask = {
     task: id,
     status: 'completed',
+    dimensions: ['version'],
     resultState: 'retained',
     failure: null,
     context: 'associated_device',

@@ -3,8 +3,8 @@ export type DeviceRef = { readonly kind: 'endpoint' | 'association'; readonly id
 export type Channel = 'mdm' | 'agent'
 export type Platform = 'windows' | 'macos'
 export type Source = 'mdm.windows' | 'mdm.apple' | 'agent.builtin'
-export type RegistrationState = 'active' | 'revoked' | 'superseded'
-export type EndpointState = RegistrationState | 'pending' | 'registered' | 'cancelled' | 'expired'
+export type RegistrationState = 'active' | 'revoked'
+export type EndpointState = RegistrationState | 'pending' | 'cancelled' | 'expired'
 export type AssetState = 'active' | 'archived' | 'deleted'
 export interface User {
   readonly tenantId: string
@@ -22,53 +22,23 @@ export interface PersonDisplay {
     readonly username: string | null
   }[]
 }
-export interface PrimaryRegistration {
+export interface DeviceMember {
   readonly device: string
   readonly channel: Channel
-  readonly registrationId: string
-  readonly generation: number
-}
-export interface DeviceChannel {
-  readonly channel: Channel
-  readonly registrationId: string
-  readonly generation: number
-  readonly status: RegistrationState
-  readonly source: Source
-  readonly platform: Platform | null
-  /** Server-received communication time; it is not an online assertion. */
-  readonly lastCommunicationReceivedAt: number | null
-  readonly children: readonly {
-    readonly registrationId: string
-    readonly generation: number
-    readonly parentRegistrationId: string
-    readonly parentGeneration: number
-    readonly purpose: string
-    readonly status: RegistrationState
-    readonly ready: boolean
-  }[]
-  readonly userContext: {
-    readonly id: string
-    readonly parentRegistrationId: string
-    readonly parentGeneration: number
-    readonly registrationStatus: RegistrationState
-  } | null
 }
 export interface Endpoint {
   readonly id: string
+  readonly registeredAt: number | null
   readonly status: EndpointState
-  readonly primaryMdmRegistration: {
-    readonly registrationId: string
-    readonly generation: number
-    readonly source: 'mdm.windows' | 'mdm.apple'
-  } | null
-  readonly channels: readonly DeviceChannel[]
-  readonly enrollments: readonly {
+  readonly channel: Channel | null
+  readonly source: Source | null
+  readonly platform: Platform | null
+  readonly lastCommunicationReceivedAt: number | null
+  readonly enrollment: {
     readonly enrollmentId: string
-    readonly platform: Platform | null
-    readonly source: Source
     readonly status: 'pending' | 'bound' | 'cancelled' | 'expired'
     readonly expiresAt: number
-  }[]
+  } | null
   readonly inventoryAvailable?: boolean | null
 }
 export interface EndpointDetail extends Endpoint {
@@ -105,7 +75,7 @@ export interface RegistrationUser {
   readonly revision: number
   readonly user: User | null
 }
-export interface ViewEndpoint extends Endpoint {
+export interface ViewEndpoint extends Omit<Endpoint, 'platform'> {
   readonly assetState: AssetState
   readonly platform: {
     readonly state: 'known' | 'unknown' | 'conflict'
@@ -124,7 +94,7 @@ export interface Association {
   readonly id: string
   readonly version: number
   readonly state: 'confirmed' | 'needs_verification' | 'revoked'
-  readonly members: readonly PrimaryRegistration[]
+  readonly members: readonly DeviceMember[]
   readonly evidence: string
   readonly confirmedBy: string
   readonly confirmedAt: number
@@ -179,8 +149,8 @@ export interface ConfirmAssociation {
   readonly operationId: string
   readonly associationId: string | null
   readonly expectedVersion: number
-  readonly mdm: PrimaryRegistration
-  readonly agent: PrimaryRegistration
+  readonly mdm: DeviceMember
+  readonly agent: DeviceMember
   readonly evidence: string
 }
 export interface RevokeAssociation {
@@ -202,16 +172,13 @@ export interface Retirement {
     readonly object: DeviceRef
     readonly associationVersion: number | null
     readonly verified: boolean
-    readonly members: readonly PrimaryRegistration[]
+    readonly members: readonly DeviceMember[]
   }
   readonly createdAt: number
   readonly forcedAt: number | null
   readonly channels: readonly {
     readonly device: string
     readonly channel: Channel
-    readonly registration: string
-    readonly generation: number
-    readonly parentRegistration: string | null
     readonly stage: 'cleanup' | 'unenroll' | 'revoke' | 'complete'
     readonly effect: 'pending' | 'confirmed' | 'unknown' | 'blocked'
     readonly execution: string | null
@@ -254,7 +221,7 @@ export interface DevicesPort {
     channel: Channel,
     query: WindowQuery,
     signal?: AbortSignal,
-  ): Promise<Page<PrimaryRegistration>>
+  ): Promise<Page<DeviceMember>>
   confirm(change: ConfirmAssociation): Promise<Association>
   revoke(id: string, change: RevokeAssociation): Promise<Association>
   registrationUser(device: string): Promise<RegistrationUser>
@@ -278,4 +245,19 @@ export interface DevicesPort {
     readonly devices: readonly string[]
     readonly state: AssetState
   }>
+}
+
+/** Read-only capabilities projected from the producer's directory declaration. */
+export interface DirectoryCapabilities {
+  readonly fields: readonly {
+    readonly name: string
+    readonly kind: string | Readonly<Record<string, readonly string[]>>
+    readonly filter: boolean
+    readonly sort: boolean
+    readonly output: boolean
+    readonly nullable: boolean
+    readonly operators: readonly string[]
+    readonly limitation: string | null
+  }[]
+  readonly maximum: number
 }

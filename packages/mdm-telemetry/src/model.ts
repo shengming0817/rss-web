@@ -36,7 +36,7 @@ export type Reading =
   | { readonly quality: 'missing' | 'failed' }
   | { readonly quality: 'valid'; readonly value: number | boolean | string }
 export interface Observation {
-  readonly registration: string
+  readonly device: string
   readonly source: Source
   readonly epoch: string
   readonly receivedAt: number
@@ -87,7 +87,6 @@ export type Aggregation = (typeof operations)[number]
 export interface AggregateQuery {
   readonly query: HistoryQuery
   readonly definitionVersion: number
-  readonly registration: string
   readonly source: Source
   readonly epoch: string
   readonly dimensions: Readonly<Record<string, string>>
@@ -175,7 +174,6 @@ export interface Configuration {
 export interface Configurations {
   readonly device: string
   readonly evaluatedAtMicros: number
-  readonly registration: { readonly id: string; readonly generation: number } | null
   readonly configurations: readonly Configuration[]
 }
 export interface Health {
@@ -205,8 +203,7 @@ export interface GapPage {
     readonly device: string
     readonly receivedAt: number
     readonly reportId: string
-    readonly registrationId: string
-    readonly generation: number
+    readonly deviceId: string
     readonly createdAt: number
     readonly gaps: readonly {
       readonly reason: string

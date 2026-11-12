@@ -1,3 +1,4 @@
+import { useDirectoryQuery } from './directory-location'
 import { useState } from 'react'
 import { Button, Card, Form, InputNumber, Space } from 'antd'
 import type { Rule, RuleRow } from '@rss/mdm-compliance'
@@ -16,7 +17,6 @@ import {
   ReadState,
   useAction,
   useRead,
-  type Query,
 } from './AdminUi'
 import { DataTable } from './DataTable'
 import { ComplianceEditor } from './ComplianceEditor'
@@ -107,7 +107,7 @@ function RuleDirectory({
   const l = labels(locale),
     action = useAction(),
     guard = useSelectionGuard(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useDirectoryQuery('compliance.'),
     read = useRead(`compliance-rule-directory/${JSON.stringify(query)}`, () =>
       compliance.list(directoryQuery(query, fields)),
     ),
@@ -126,6 +126,7 @@ function RuleDirectory({
       <Card title={l('合规规则', 'Compliance rules')}>
         <fieldset className="permission-panel" disabled={guard.locked || action.busy}>
           <DirectoryControls
+            catalog="compliance"
             locale={locale}
             query={query}
             onChange={setQuery}

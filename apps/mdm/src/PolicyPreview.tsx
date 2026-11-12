@@ -1,51 +1,57 @@
 import { useState } from 'react'
 import { Alert, Button, Card } from 'antd'
-import { freeze } from '@rss/mdm-inventory'
-import type { createPolicies, PolicyDefinition, PolicyPreview as Preview } from '@rss/mdm-policies'
+import type { createPolicies, PolicyDefinition } from '@rss/mdm-policies'
 import type { Locale } from './i18n'
-import { CursorControls, Failure, labels, useAction, type Query } from './AdminUi'
+import { CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'
 import { DataTable } from './DataTable'
-import { usePendingSelection } from './SelectionGuard'
+import { useSecretVisibility } from './SecretTabs'
 
 export type PoliciesUseCases = ReturnType<typeof createPolicies>
 export function PolicyPreview({
   policies,
+  id,
+  expectedRevision,
   definition,
   locale,
 }: {
   policies: PoliciesUseCases
+  id: string
+  expectedRevision: number
   definition: PolicyDefinition
   locale: Locale
 }) {
   const l = labels(locale),
-    action = useAction(),
-    [fixed, setFixed] = useState<PolicyDefinition | null>(null),
-    [page, setPage] = useState<Preview | null>(null),
-    [query, setQuery] = useState<Query>({ limit: 20 })
-  usePendingSelection(action.busy)
-  async function load(input: PolicyDefinition, basis: string | null, query: Query) {
-    const result = await action.run(() => policies.preview(input, basis, query))
-    if (result.ok) {
-      setFixed(input)
-      setPage(result.value)
-      setQuery(query)
-    }
-  }
+    active = useSecretVisibility(),
+    [requested, setRequested] = useState(0),
+    [basis, setBasis] = useState<string | null>(null),
+    [query, setQuery] = useState<Query>({ limit: 20 }),
+    read = usePageRead(
+      `qualification/${id}/${expectedRevision}/${active}/${requested}/${JSON.stringify(query)}`,
+      (signal) =>
+        active && requested
+          ? policies.preview(id, expectedRevision, definition, basis, query, signal)
+          : Promise.resolve(null),
+    ),
+    page = read.value
   return (
     <Card title={l('资格预览', 'Qualification preview')}>
       <p className="subtitle">
         {l(
-          '预览当前草稿，不保存策略、不创建运行；分页固定同一范围结果。',
-          'Preview the current draft without saving or creating runs. Pagination retains the same scope result.',
+          '仅在范围与已保存配置一致时预览资格；不保存配置、不创建运行。分页固定同一范围结果。',
+          'Preview qualification when scopes match the saved configuration, without saving or creating runs. Pagination retains the same scope result.',
         )}
       </p>
       <Button
-        disabled={action.busy}
-        onClick={() => void load(freeze(definition), null, { limit: 20 })}
+        disabled={read.busy}
+        onClick={() => {
+          setBasis(null)
+          setQuery({ limit: 20 })
+          setRequested((n) => n + 1)
+        }}
       >
         {l('预览此草稿资格', 'Preview this draft qualification')}
       </Button>
-      <Failure locale={locale} error={action.error} kind="read" />
+      <ReadState locale={locale} busy={read.busy} error={read.error} />
       {page && (
         <>
           <Alert
@@ -85,7 +91,8 @@ export function PolicyPreview({
             locale={locale}
             query={query}
             onChange={(query) => {
-              if (fixed) void load(fixed, page.scopeResult, query)
+              setBasis(page.scopeResult)
+              setQuery(query)
             }}
             next={page.nextCursor}
             count={page.items.length}

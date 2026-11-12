@@ -1,6 +1,8 @@
 // Shared mechanics only. Journeys own their business assertions against the real host.
 import { chromium } from 'playwright'
-import { readFileSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import process from 'node:process'
 export async function realBrowser(fixtureVariable, journey) {
@@ -17,6 +19,7 @@ export async function realBrowser(fixtureVariable, journey) {
     csp = [],
     traffic = [],
     httpFailures = []
+  let pageErrorDirectory
   let failed = false,
     closing,
     nextRequest = 0,
@@ -59,7 +62,18 @@ export async function realBrowser(fixtureVariable, journey) {
         if (httpFailures.length > 20) httpFailures.shift()
       }
     })
-    p.on('pageerror', (e) => errors.push(e.name))
+    p.on('pageerror', (e) => {
+      errors.push(e.name)
+      pageErrorDirectory ??= mkdtempSync(join(tmpdir(), 'rss-react-page-error-'))
+      writeFileSync(
+        join(pageErrorDirectory, `error-${errors.length}.json`),
+        JSON.stringify({ name: e.name, message: e.message, stack: e.stack, phase }),
+        { mode: 0o600 },
+      )
+      console.error(
+        JSON.stringify({ journey, phase: 'page-error', diagnosticDirectory: pageErrorDirectory }),
+      )
+    })
     p.on('request', (r) =>
       traffic.push({ page: p, method: r.method(), path: new URL(r.url()).pathname }),
     )
@@ -111,6 +125,14 @@ export async function realBrowser(fixtureVariable, journey) {
     assert.equal(result.status(), status)
     return result
   }
+  async function directoryFilter(scope, expression) {
+    const search = scope.locator('.directory-search:visible')
+    const advanced = search.locator('.directory-advanced')
+    if (!(await advanced.evaluate((node) => node.open))) await advanced.locator('summary').click()
+    await search.getByRole('radio', { name: 'RSQL', exact: true }).check()
+    await search.getByRole('textbox', { name: 'RSQL', exact: true }).fill(expression)
+    await search.getByRole('button', { name: '应用', exact: true }).click()
+  }
   const count = (p, method, path) =>
     traffic.filter((r) => r.page === p && r.method === method && r.path === path).length
   async function finish(error) {
@@ -130,6 +152,9 @@ export async function realBrowser(fixtureVariable, journey) {
         pageErrors: errors,
         csp,
         failure: error?.name,
+        failureLocation: error?.stack?.match(/react-[a-z-]+-browser\.mjs:\d+:\d+/)?.[0],
+        failureOperation: error?.message?.match(/^((?:locator|page)\.[A-Za-z]+)/)?.[1],
+        strictLocator: error?.message?.includes('strict mode violation') ?? false,
       }),
     )
     if (failed) process.exitCode = 1
@@ -142,6 +167,7 @@ export async function realBrowser(fixtureVariable, journey) {
     nav,
     choose,
     response,
+    directoryFilter,
     count,
     checks,
     finish,

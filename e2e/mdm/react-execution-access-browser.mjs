@@ -127,7 +127,7 @@ try {
   )
   run.step('original-cancellation-cas-unknown')
   await p
-    .getByRole('checkbox', { name: '我已核对原操作及注册，并明确确认本次恢复', exact: true })
+    .getByRole('checkbox', { name: '我已核对原操作及设备，并明确确认本次恢复', exact: true })
     .check()
   let cancellation
   const path = `/api/v1/devices/${f.mdm}/operations/${original.operationId}/cancel`
@@ -164,15 +164,28 @@ try {
   run.step('script-policy-real-agent-lifecycle')
   const base = '/api/v1',
     group = randomUUID(),
-    scope = randomUUID(),
     resource = randomUUID()
   async function mutate(kind, id, input, expectedRevision = 0, expected = 200) {
-    return api(
+    const value = await api(
       'POST',
       `${base}/${kind}/${id}`,
       { operationId: randomUUID(), expectedRevision, input },
       expected,
     )
+    if (kind === 'policies' && input.action === 'put' && expected === 200)
+      await until(
+        async () => {
+          const response = await p.request.get(`${origin}${base}/policies/${id}/scope`)
+          if (response.status() === 503) {
+            await response.dispose()
+            return null
+          }
+          assert.equal(response.status(), 200)
+          return response.json()
+        },
+        (scope) => scope?.resolution != null,
+      )
+    return value
   }
   async function until(read, accept, budget = 45000) {
     const end = Date.now() + budget
@@ -203,27 +216,6 @@ try {
   await until(
     () => api('GET', `${base}/groups/${group}/tasks/${membership.task}`),
     (v) => v.status === 'completed',
-  )
-  const scopeWrite = await mutate('scopes', scope, {
-    action: 'put',
-    definition: { targets: [{ kind: 'group', id: group }], limitations: null, exclusions: [] },
-  })
-  await until(
-    () => api('GET', `${base}/scopes/${scope}/tasks/${scopeWrite.task}`),
-    (v) => v.status === 'completed',
-  )
-  await until(
-    async () => {
-      const value = await api('GET', `${base}/scopes/${scope}`)
-      return value.resolution
-        ? api(
-            'GET',
-            `${base}/scopes/${scope}/results/${value.resolution}/members?channel=agent&limit=100`,
-          )
-        : { current: false }
-    },
-    (v) =>
-      v.current === true && v.page.items.some((i) => i.object.id === f.collector.runtime.deviceId),
   )
   const bytes = Buffer.from("#!/bin/sh\nprintf '{}'\n"),
     upload = randomUUID()
@@ -335,7 +327,7 @@ try {
               },
             }
           : {}),
-        scope,
+        scope: { targets: [{ kind: 'group', id: group }], limitations: null, exclusions: [] },
         action: {
           kind: 'execution',
           resource: {
@@ -360,7 +352,8 @@ try {
       },
     })
     await run.nav(p, `/policies?policy=${policy}`, '策略与部署')
-    await button('打开定位策略').click()
+    await label('唯一别名').waitFor()
+    await p.getByRole('tab', { name: '记录', exact: true }).click()
     await p.getByRole('tab', { name: '设备分配', exact: true }).click()
     await p.getByText('当前设备分配资格', { exact: true }).waitFor()
     const assignment = await until(
@@ -451,7 +444,7 @@ try {
       const copied = new URL(await p.evaluate(() => globalThis.navigator.clipboard.readText()))
       assert.equal(copied.pathname, `/v1/task/${task.task}`)
       assert.equal(copied.searchParams.get('attempt'), final.attemptId)
-      assert.equal(copied.searchParams.get('registration'), final.registrationId)
+
       await p.getByRole('link', { name: '查看此执行的管理活动', exact: true }).click()
       await p.waitForURL(
         (url) =>
@@ -468,13 +461,19 @@ try {
       )
       assert.ok(facts.items.every((fact) => fact.links.task === task.task))
       await p.locator('.audit-page tbody tr').first().waitFor()
-      await run.nav(p, `/policies?${new URLSearchParams({ policy, tab: 'names' })}`, '策略与部署')
+      await run.nav(
+        p,
+        `/policies?${new URLSearchParams({ policy, tab: 'configuration' })}`,
+        '策略与部署',
+      )
       await p.getByText('稳定工具名（只读）', { exact: true }).waitFor()
       await button('显示 Agent 查看入口').click()
-      await label('终端候选服务端筛选').fill(`id=='${final.device}'`)
-      await button('查询终端候选').click()
+      await run.directoryFilter(
+        p.getByRole('region', { name: 'Agent 查看入口', exact: true }),
+        `key=='endpoint:${final.device}'`,
+      )
       await p
-        .locator('.ant-modal:visible tbody tr')
+        .locator('.policy-editor tbody tr')
         .filter({ hasText: final.device })
         .getByRole('button', { name: '使用此终端', exact: true })
         .click()
@@ -490,9 +489,9 @@ try {
       assert.equal(resolved.policy.id, policy)
       assert.deepEqual(Object.fromEntries(alias.searchParams), {
         device: final.device,
-        generation: String(final.generation),
+
         instance: resolved.capability.instance,
-        registration: final.registrationId,
+
         revision: String(resolved.capability.revision),
         tenant: f.tenant,
         version: resolved.capability.version,
@@ -534,7 +533,7 @@ try {
     action: 'put',
     enabled: true,
     definition: {
-      scope,
+      scope: { targets: [{ kind: 'group', id: group }], limitations: null, exclusions: [] },
       action: {
         kind: 'agent_collection',
         resource: {
@@ -562,7 +561,7 @@ try {
     () =>
       api(
         'GET',
-        `${base}/operations?filter=${encodeURIComponent(`policy==${collectionPolicy}`)}&fields=id,kind,device,registrationId,generation,origin,policy,deadline,status,evidence&limit=20`,
+        `${base}/operations?filter=${encodeURIComponent(`policy==${collectionPolicy}`)}&fields=id,kind,device,origin,policy,deadline,status,evidence&limit=20`,
       ),
     (v) => v.items.some((i) => i.id === collected.task),
   )
@@ -583,7 +582,6 @@ try {
 
   run.step('configuration-publication-assignment-native-command')
   const configurationResource = randomUUID(),
-    configurationScope = randomUUID(),
     configurationPolicy = randomUUID(),
     configurationUpload = randomUUID()
   const node = './Device/Vendor/MSFT/Policy/Config/Experience/AllowCortana'
@@ -667,20 +665,11 @@ try {
     201,
   )
   await mutate('resources', configurationResource, { action: 'activate', version: '1' }, 2)
-  const configurationScopeReceipt = await mutate('scopes', configurationScope, {
-    action: 'put',
-    definition: { targets: [{ kind: 'device', id: f.mdm }], limitations: null, exclusions: [] },
-  })
-  await until(
-    () =>
-      api('GET', `${base}/scopes/${configurationScope}/tasks/${configurationScopeReceipt.task}`),
-    (v) => v.status === 'completed',
-  )
   await mutate('policies', configurationPolicy, {
     action: 'put',
     enabled: true,
     definition: {
-      scope: configurationScope,
+      scope: { targets: [{ kind: 'device', id: f.mdm }], limitations: null, exclusions: [] },
       action: {
         kind: 'configuration',
         resource: {
@@ -707,7 +696,8 @@ try {
   const command = assignedConfiguration.items.find((i) => i.object.id === f.mdm).execution
     .operationIds[0]
   await run.nav(p, `/policies?policy=${configurationPolicy}`, '策略与部署')
-  await button('打开定位策略').click()
+  await label('唯一别名').waitFor()
+  await p.getByRole('tab', { name: '记录', exact: true }).click()
   await p.getByRole('tab', { name: '设备分配', exact: true }).click()
   await p.getByRole('link', { name: command, exact: true }).click()
   await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()

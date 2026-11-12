@@ -4,14 +4,13 @@ import { createRecoveryCredentials, type Subject } from '@rss/mdm-recovery-crede
 import { createRecoveryCredentialsAdapter } from './recovery-credentials'
 const id = '11111111-1111-4111-8111-111111111111',
   operationId = '22222222-2222-4222-8222-222222222222',
-  registration = '33333333-3333-4333-8333-333333333333',
   custody = '44444444-4444-4444-8444-444444444444',
   device = 'device-a'
 const target = { device, id, version: 2 }
 const material = (subject: Subject = { kind: 'recovery_lock' }) => ({
   id,
   version: 2,
-  binding: { device, registration, generation: 3, subject },
+  binding: { device, subject },
   current: true,
   validity: 'unverified',
   escrowed: true,
@@ -101,15 +100,12 @@ it.each<Subject>([
 })
 it('keeps FileVault selection, collection CAS and custody link on their formal routes', async () => {
   const f = fixture(configuration())
-  await f.core.configuration(device, { registration, generation: 3 })
+  await f.core.configuration(device)
   expect(f.request.mock.calls[0]![0]).toMatchObject({
     method: 'GET',
-    query: { registration, generation: 3 },
   })
   await f.core.configure(device, {
     operationId,
-    registration,
-    generation: 3,
     expectedRevision: 5,
     enabled: true,
     recipientId: 'escrow-recipient',
@@ -119,8 +115,6 @@ it('keeps FileVault selection, collection CAS and custody link on their formal r
     path: '/api/v1/devices/{device}/recovery-credentials/filevault/configuration',
     body: {
       operationId,
-      registration,
-      generation: 3,
       expectedRevision: 5,
       enabled: true,
       recipientId: 'escrow-recipient',
@@ -220,8 +214,6 @@ it('submits rotation acceptance separately from the secret-free original intent 
     {
       device,
       operationId,
-      registration,
-      generation: 3,
       deadline: 1800000000,
       action: { kind: 'rotate_filevault', expectedRevision: 12 },
     },
@@ -231,8 +223,6 @@ it('submits rotation acceptance separately from the secret-free original intent 
     successStatus: 202,
     body: {
       operationId,
-      registration,
-      generation: 3,
       deadline: 1800000000,
       action: {
         kind: 'rotate_filevault',

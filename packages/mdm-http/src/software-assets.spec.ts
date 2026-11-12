@@ -35,3 +35,107 @@ it('opens a software query from the formally accepted HTTP envelope', async () =
     method: 'POST',
   })
 })
+
+const coordinates = {
+  asOf: 1,
+  assetCut: { tenant, epoch: task, snapshot: '1:2:' },
+  associationRevision: 0,
+  configurationRevision: 0,
+  context: 'endpoint',
+  groups: [],
+  objectSnapshot: null,
+  objectVersion: null,
+}
+function evidenceFixture(value: unknown) {
+  const reply = {
+      tenantId: tenant,
+      asset: {
+        kind: 'software',
+        response: {
+          kind: 'evidence',
+          task,
+          coordinates,
+          nextCursor: null,
+          quality: [],
+          items: [
+            {
+              endpoint: 'pc',
+              source: 'device.software.installations',
+              evidence: {
+                scope: { kind: 'device' },
+                source: 'agent.native',
+                dataset: null,
+                deviceId: 'pc',
+                epoch: task,
+                snapshotId: task,
+                observedAt: 1,
+                receivedAt: 2,
+                actor: null,
+              },
+              arrayVersion: 'v1',
+              ordinal: 0,
+              value,
+              rules: [],
+              confirmed: true,
+            },
+          ],
+        },
+      },
+    },
+    request = vi.fn(async (options: RequestOptions<unknown>) => options.decode(reply))
+  return createSoftwareAssetsAdapter({ request } as unknown as HttpTransport, tenant)
+}
+it('retains both signed i64 extremes and nested integer evidence exactly', async () => {
+  const value = {
+    kind: 'object',
+    value: {
+      minimum: { kind: 'integer', value: '-9223372036854775808' },
+      nested: {
+        kind: 'array',
+        value: [
+          { kind: 'integer', value: '9223372036854775807' },
+          { kind: 'integer', value: '0' },
+        ],
+      },
+    },
+  }
+  expect(
+    (await evidenceFixture(value).evidence(task, task, { kind: 'endpoint', id: 'pc' }, {})).items[0]
+      ?.value,
+  ).toEqual(value)
+})
+it.each([9007199254740992, '01', '-0', '+1', '9223372036854775808', '-9223372036854775809'])(
+  'rejects malformed or out-of-range integer evidence %s',
+  async (value) => {
+    await expect(
+      evidenceFixture({ kind: 'integer', value }).evidence(
+        task,
+        task,
+        { kind: 'endpoint', id: 'pc' },
+        {},
+      ),
+    ).rejects.toThrow()
+  },
+)
+it('reopens a task using its required frozen dimensions', async () => {
+  const reply = {
+      tenantId: tenant,
+      asset: {
+        kind: 'software',
+        response: {
+          kind: 'status',
+          task,
+          coordinates,
+          status: 'completed',
+          resultState: 'retained',
+          dimensions: ['version'],
+          failure: null,
+          processed: 0,
+          unknown: 0,
+        },
+      },
+    },
+    request = vi.fn(async (options: RequestOptions<unknown>) => options.decode(reply)),
+    adapter = createSoftwareAssetsAdapter({ request } as unknown as HttpTransport, tenant)
+  expect((await adapter.status(task)).dimensions).toEqual(['version'])
+})

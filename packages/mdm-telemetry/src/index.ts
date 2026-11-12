@@ -17,7 +17,7 @@ export function seriesKey(row: Observation): string {
     row.sample.series.resource,
     row.sample.series.definition.key,
     row.sample.series.definition.version,
-    row.registration,
+    row.device,
     row.source,
     row.epoch,
     Object.entries(row.sample.series.dimensions).sort(([a], [b]) => a.localeCompare(b)),
@@ -82,7 +82,6 @@ export function aggregateSelection(
   return {
     query: { ...query, mode: 'history', after: null },
     definitionVersion: row.sample.series.definition.version,
-    registration: row.registration,
     source: row.source,
     epoch: row.epoch,
     dimensions: row.sample.series.dimensions,
@@ -127,7 +126,6 @@ export function createTelemetry(port: TelemetryPort, tenant: string) {
     },
     async aggregate(request: AggregateQuery) {
       validateHistory(request.query)
-      uuid(request.registration)
       uuid(request.epoch)
       if (
         !sources.includes(request.source) ||

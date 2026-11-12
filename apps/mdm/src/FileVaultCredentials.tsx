@@ -1,13 +1,11 @@
 import { useId, useEffect, useState } from 'react'
-import { Alert, Button, Card, Form, Input, Select, Space, Switch } from 'antd'
+import { Alert, Button, Card, Form, Input, Space, Switch } from 'antd'
 import type { ViewEndpoint } from '@rss/mdm-devices'
 import { freeze, identifier, revision, uuid } from '@rss/mdm-inventory'
 import {
-  validateRegistration,
   type ConfigureFileVault,
   type FileVaultConfiguration,
   type RecoveryCredentials,
-  type Registration,
 } from '@rss/mdm-recovery-credentials'
 import type { Locale } from './i18n'
 import { Failure, isUnknown, labels, ReadState, useAction, useRead, validateInput } from './AdminUi'
@@ -27,18 +25,8 @@ export function FileVaultCredentials({
   const formPrefix = useId()
 
   const l = labels(locale),
-    channels = endpoint.channels.filter((channel) => channel.status === 'active'),
-    [selection, setSelection] = useState<Registration | null>(() =>
-      channels.length === 1
-        ? { registration: channels[0]!.registrationId, generation: channels[0]!.generation }
-        : null,
-    ),
-    read = useRead(
-      `filevault-configuration/${endpoint.id}/${selection?.registration ?? ''}/${selection?.generation ?? ''}/${permitted}`,
-      () =>
-        permitted && selection
-          ? credentials.configuration(endpoint.id, selection)
-          : Promise.resolve(null),
+    read = useRead(`filevault-configuration/${endpoint.id}/${permitted}`, () =>
+      permitted ? credentials.configuration(endpoint.id) : Promise.resolve(null),
     ),
     action = useAction(),
     [form] = Form.useForm<{ enabled: boolean; recipientId: string }>(),
@@ -65,7 +53,6 @@ export function FileVaultCredentials({
       validateInput(() => {
         if (original.kind === 'configure') {
           uuid(original.input.operationId)
-          validateRegistration(original.input)
           revision(original.input.expectedRevision)
           if (original.input.enabled) identifier(original.input.recipientId)
         } else {
@@ -91,13 +78,7 @@ export function FileVaultCredentials({
       read.reload()
     }
   }
-  const current =
-      selection &&
-      channels.some(
-        (channel) =>
-          channel.registrationId === selection.registration &&
-          channel.generation === selection.generation,
-      ),
+  const current = endpoint.status === 'active',
     disabled = !permitted || action.busy || !!pending
   return (
     <Card
@@ -110,35 +91,7 @@ export function FileVaultCredentials({
           'Collection authorization, installed escrow configuration, material revision and custody epoch are separate facts. This panel does not install a profile or rotate keys.',
         )}
       />
-      <Form.Item label={l('读取配置的主注册', 'Primary registration for configuration')}>
-        <Select
-          aria-label={l('FileVault 主注册', 'FileVault primary registration')}
-          disabled={disabled}
-          value={selection ? `${selection.registration}/${selection.generation}` : undefined}
-          placeholder={l('选择当前注册与代次', 'Choose current registration and generation')}
-          options={channels.map((channel) => ({
-            value: `${channel.registrationId}/${channel.generation}`,
-            label: `${channel.source} · ${channel.registrationId} · ${channel.generation}`,
-          }))}
-          onChange={(key) => {
-            const channel = channels.find(
-              (channel) => `${channel.registrationId}/${channel.generation}` === key,
-            )
-            if (channel)
-              setSelection({ registration: channel.registrationId, generation: channel.generation })
-          }}
-        />
-      </Form.Item>
-      {selection && !current && (
-        <Alert
-          type="warning"
-          title={l(
-            '原注册代次已变化，保留原操作；请核对当前注册。',
-            'The original registration generation changed. Original requests are retained; verify current registration.',
-          )}
-        />
-      )}
-      <Button onClick={read.reload} disabled={!permitted || !selection}>
+      <Button onClick={read.reload} disabled={!permitted}>
         {l('读取当前 FileVault 配置', 'Read current FileVault configuration')}
       </Button>
       <ReadState busy={read.busy} error={read.error} locale={locale} />
@@ -181,17 +134,15 @@ export function FileVaultCredentials({
             layout="vertical"
             disabled={disabled || !current}
             onFinish={(value) => {
-              if (selection)
-                void submit({
-                  kind: 'configure',
-                  input: {
-                    operationId: crypto.randomUUID(),
-                    ...selection,
-                    expectedRevision: read.value!.revision,
-                    enabled: value.enabled,
-                    recipientId: value.recipientId ?? '',
-                  },
-                })
+              void submit({
+                kind: 'configure',
+                input: {
+                  operationId: crypto.randomUUID(),
+                  expectedRevision: read.value!.revision,
+                  enabled: value.enabled,
+                  recipientId: value.recipientId ?? '',
+                },
+              })
             }}
           >
             <Form.Item

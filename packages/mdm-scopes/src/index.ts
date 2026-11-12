@@ -1,13 +1,11 @@
 export type * from './model'
-import type { Channel, DirectoryQuery, WindowQuery } from '@rss/mdm-devices'
-import type { Operation } from '@rss/mdm-inventory'
-import { freeze, identifier, operation, uuid } from '@rss/mdm-inventory'
+import type { Channel, WindowQuery } from '@rss/mdm-devices'
+import { freeze, identifier, uuid } from '@rss/mdm-inventory'
 import type {
-  ScopeChange,
   ScopeDefinition,
   ScopeReference,
   ScopeResultKind,
-  ScopeRow,
+  ScopeOwner,
   ScopePreviewRequest,
   ScopesPort,
 } from './model'
@@ -31,27 +29,29 @@ function validateReference(value: ScopeReference): void {
   else if (value.kind === 'device') identifier(value.id)
   else throw new Error('Invalid scope reference')
 }
-/** Membership, qualification and recalculation belong to the backend. */
+function validateOwner(owner: ScopeOwner) {
+  uuid(owner.policyId)
+  if (owner.stageId !== undefined) uuid(owner.stageId)
+}
+/** Policy owns configuration; Scope keeps read, preview and computation coordinates. */
 export function createScopes(port: ScopesPort) {
   return Object.freeze({
-    list: (query: DirectoryQuery<keyof ScopeRow> = {}) => port.list(query),
-    async read(id: string) {
-      const value = await port.read(uuid(id))
-      if (value.id !== id) throw new Error('Wrong scope detail')
+    async read(owner: ScopeOwner, signal?: AbortSignal) {
+      validateOwner(owner)
+      const value = await port.read(owner, signal)
+      if (value.stage !== (owner.stageId ?? null)) throw new Error('Wrong scope owner')
       return value
     },
-    async preview(request: ScopePreviewRequest) {
+    async preview(owner: ScopeOwner, request: ScopePreviewRequest, signal?: AbortSignal) {
+      validateOwner(owner)
       validateDefinition(request.definition)
-      if (!['agent', 'mdm'].includes(request.channel)) throw new Error('Invalid preview channel')
-      if (request.editing) {
-        uuid(request.editing.scopeId)
-        if (
-          !Number.isSafeInteger(request.editing.expectedRevision) ||
-          request.editing.expectedRevision < 1
-        )
-          throw new Error('Invalid preview revision')
-      }
-      const value = await port.preview(freeze(request))
+      if (
+        !Number.isSafeInteger(request.expectedRevision) ||
+        request.expectedRevision < 0 ||
+        !['agent', 'mdm'].includes(request.channel)
+      )
+        throw new Error('Invalid scope preview')
+      const value = await port.preview(owner, freeze(request), signal)
       if (
         value.channel !== request.channel ||
         value.items.length > 1000 ||
@@ -60,44 +60,44 @@ export function createScopes(port: ScopesPort) {
         throw new Error('Wrong scope preview')
       return value
     },
-    references: (id: string, query: WindowQuery = {}) => port.references(uuid(id), query),
-    async change(id: string, change: Operation<ScopeChange>) {
-      uuid(id)
-      operation(change)
-      if (change.input.action === 'put') validateDefinition(change.input.definition)
-      else if (
-        !['delete', 'recompute'].includes(change.input.action) ||
-        change.expectedRevision === 0
-      )
-        throw new Error('Invalid scope deletion')
-      const value = await port.change(id, freeze(change))
-      if (
-        value.id !== id ||
-        value.revision !==
-          change.expectedRevision + (change.input.action === 'recompute' ? 0 : 1) ||
-        (change.input.action === 'recompute' && !value.task)
-      )
-        throw new Error('Wrong scope receipt')
+    async recompute(
+      owner: ScopeOwner,
+      request: { readonly operationId: string; readonly expectedRevision: number },
+    ) {
+      validateOwner(owner)
+      uuid(request.operationId)
+      if (!Number.isSafeInteger(request.expectedRevision) || request.expectedRevision < 1)
+        throw new Error('Invalid policy revision')
+      const value = await port.recompute(owner, freeze(request))
+      if (!value.task) throw new Error('Missing scope computation')
       return value
     },
-    async task(id: string, task: string) {
-      const value = await port.task(uuid(id), uuid(task))
-      if (value.target !== id || value.task !== task || value.kind !== 'scope')
+    async task(owner: ScopeOwner, scope: string, task: string, signal?: AbortSignal) {
+      validateOwner(owner)
+      uuid(scope)
+      uuid(task)
+      const value = await port.task(owner, scope, task, signal)
+      if (value.target !== scope || value.task !== task || value.kind !== 'scope')
         throw new Error('Wrong scope task')
       return value
     },
     async result(
-      id: string,
+      owner: ScopeOwner,
+      scope: string,
       result: string,
       kind: ScopeResultKind,
       channel: Channel,
       query: WindowQuery = {},
+      signal?: AbortSignal,
     ) {
+      validateOwner(owner)
+      uuid(scope)
+      uuid(result)
       if (!['members', 'decisions'].includes(kind) || !['agent', 'mdm'].includes(channel))
         throw new Error('Invalid scope result selection')
-      const value = await port.result(uuid(id), uuid(result), kind, channel, query)
+      const value = await port.result(owner, scope, result, kind, channel, query, signal)
       if (
-        value.scope !== id ||
+        value.scope !== scope ||
         value.result !== result ||
         value.channel !== channel ||
         value.page.kind !== kind

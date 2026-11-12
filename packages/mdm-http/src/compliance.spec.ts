@@ -73,8 +73,7 @@ it('keeps pending current=null and a previous assessment without promoting histo
 it('allows all applicability observations while retaining the per-field two-source evidence budget', async () => {
   const sources = [id, task, other].map((registration, i) => ({
       source: ['mdm.windows', 'agent.builtin', 'agent.native'][i]!,
-      registration,
-      generation: '1',
+      deviceId: registration,
       epoch: task,
     })),
     value = { ...assessment(), applicability: { ...assessment().applicability, sources } },

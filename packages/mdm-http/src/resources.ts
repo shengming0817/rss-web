@@ -4,7 +4,7 @@ import { allOf, nextCursor, projectedPage, queryParameters } from '@rss/api/mdm-
 import type { HttpTransport } from '@rss/api/mdm'
 import type { ResourcesPort } from '@rss/mdm-resources'
 import { resourceKinds, sameArtifact, validateVersionDraft, variantKey } from '@rss/mdm-resources'
-import { count, enumeration, nullable, text } from './decode'
+import { boolean, count, enumeration, nullable, text } from './decode'
 import { requestInput, windowQuery } from './inventory-values'
 import {
   agentDefinition,
@@ -17,6 +17,7 @@ import {
 import { prepareVersionMaterials, reconstructResourceMaterial } from './resource-authoring'
 
 const fields = {
+  active: boolean,
   id: text,
   revision: count,
   kind: (value: unknown) => enumeration(value, resourceKinds),

@@ -128,8 +128,7 @@ try {
     configPath,
     {
       operationId: randomUUID(),
-      registration: f.recovery.macRegistration,
-      generation: 1,
+
       expectedRevision: 0,
       enabled: false,
       recipientId: f.recovery.recipient,
@@ -144,14 +143,10 @@ try {
     mdm: {
       device: f.recovery.mac,
       channel: 'mdm',
-      registrationId: f.recovery.macRegistration,
-      generation: 1,
     },
     agent: {
       device: collector.deviceId,
       channel: 'agent',
-      registrationId: collector.registrationId,
-      generation: collector.generation,
     },
     evidence: 'Disposable independent macOS endpoint identity prerequisite',
   })

@@ -187,7 +187,7 @@ export function setupDestination(id: string): string | null {
     certificates: '/certificates',
     devices: '/devices',
     groups: '/groups',
-    scopes: '/scopes',
+    scopes: '/policies',
     policies: '/policies',
     resources: '/resources',
     software: '/software',

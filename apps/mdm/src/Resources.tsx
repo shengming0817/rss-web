@@ -1,3 +1,4 @@
+import { useDirectoryQuery } from './directory-location'
 import { DiagnosticReference } from './DiagnosticReference'
 import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
@@ -34,12 +35,7 @@ import { useAdministration } from './useAdministration'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { ResourceContentRecovery } from './ResourceContent'
-import {
-  ResourceCatalogSearch,
-  catalogQuery,
-  writeCatalogQuery,
-  type CatalogLocation,
-} from './ResourceCatalogSearch'
+import { catalogQuery, writeCatalogQuery, type CatalogLocation } from './directory-location'
 import { ResourceBlueprints } from './ResourceBlueprints'
 
 const fields = [
@@ -131,8 +127,7 @@ export function ResourceDirectory({
   const l = labels(locale),
     guard = useSelectionGuard(),
     action = useAction(),
-    [localQuery, setLocalQuery] = useState<Query>({ limit: 20 }),
-    [kind, setKind] = useState<ResourceKind | undefined>(fixedKind),
+    [localQuery, setLocalQuery] = useDirectoryQuery('resources.'),
     [lookup, setLookup] = useState(locator?.resource ?? ''),
     [localSelection, setSelected] = useState<Resource | null>(null),
     query = catalog ? catalogQuery(catalog.params) : localQuery,
@@ -144,15 +139,16 @@ export function ResourceDirectory({
     detail = useRead(`resource-detail/${linkedId ?? ''}`, async (signal) => {
       if (!linkedId) return null
       const resource = await resources.read(linkedId, signal)
-      if (resource.kind !== fixedKind) throw { cause: 'client', code: 'invalid_input' }
+      if (fixedKind && resource.kind !== fixedKind) throw { cause: 'client', code: 'invalid_input' }
       return resource
     }),
     selected = catalog ? detail.value : localSelection,
-    read = usePageRead(`resources/${kind ?? 'all'}/${JSON.stringify(query)}`, (signal) =>
-      resources.list(directoryQuery(query, fields), fixedKind ?? kind, signal),
+    read = usePageRead(`resources/${fixedKind ?? 'all'}/${JSON.stringify(query)}`, (signal) =>
+      resources.list(directoryQuery(query, fields), fixedKind, signal),
     ),
     controls = (
       <DirectoryControls
+        catalog="resources"
         key={query.filter ?? ''}
         disabled={guard.locked || action.busy}
         locale={locale}
@@ -200,42 +196,7 @@ export function ResourceDirectory({
       >
         <fieldset className="permission-panel" disabled={guard.locked || action.busy}>
           <div className="resource-toolbar">
-            {!fixedKind && (
-              <label>
-                {l('资源类型', 'Resource kind')}
-                <Select
-                  aria-label={l('目录资源类型', 'Catalog resource kind')}
-                  disabled={guard.locked || action.busy}
-                  allowClear
-                  value={kind}
-                  options={resourceKinds.map((value) => ({
-                    value,
-                    label: resourceKindName(value, locale),
-                  }))}
-                  onChange={(value) => {
-                    setKind(value)
-                    setQuery({ limit: query.limit ?? 20 })
-                  }}
-                />
-              </label>
-            )}
-            {fixedKind === 'software' ? (
-              <>
-                <ResourceCatalogSearch
-                  key={query.filter ?? ''}
-                  locale={locale}
-                  query={query}
-                  onChange={setQuery}
-                  disabled={guard.locked || action.busy}
-                />
-                <details>
-                  <summary>{l('高级目录筛选', 'Advanced catalog filters')}</summary>
-                  {controls}
-                </details>
-              </>
-            ) : (
-              controls
-            )}
+            {controls}
             <Button onClick={read.reload}>{l('读取资源目录', 'Read resource catalog')}</Button>
           </div>
           <ReadState

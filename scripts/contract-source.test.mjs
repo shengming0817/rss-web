@@ -33,7 +33,9 @@ test('reads the prepared contract without a backend checkout or Git object store
   assert.equal(source.revision, current.revision)
   assert.equal(document.formatVersion, 1)
   assert.ok(
-    document.endpoints.some((e) => e.operationId === 'browser:POST:/api/v1/policies/previews'),
+    document.endpoints.some(
+      (e) => e.operationId === 'browser:POST:/api/v1/policies/{policy}/previews',
+    ),
   )
 })
 test('rejects invalid provenance or a snapshot that differs from its pin', async () => {

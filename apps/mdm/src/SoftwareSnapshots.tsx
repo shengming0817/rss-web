@@ -22,7 +22,7 @@ import {
   type Query,
 } from './AdminUi'
 import { DataTable } from './DataTable'
-import { ResourceCatalogSearch } from './ResourceCatalogSearch'
+import { DirectorySearch } from './DirectorySearch'
 import { ResourceVersionEditor } from './ResourceVersionEditor'
 import { ResourceCommandState, useResourceCommand, type ResourcesUseCases } from './ResourceCommand'
 import type { ContentUseCases } from './ContentUpload'
@@ -686,7 +686,8 @@ export function SnapshotDraft({
           />
         ) : (
           <>
-            <ResourceCatalogSearch
+            <DirectorySearch
+              catalog="resources"
               key={query.filter ?? ''}
               locale={locale}
               query={query}

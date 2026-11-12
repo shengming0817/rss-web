@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Alert, Button, Card, Select, Space } from 'antd'
 import { Link } from 'react-router-dom'
 import type { Channel } from '@rss/mdm-devices'
-import type { createScopes, ScopeResultKind } from '@rss/mdm-scopes'
+import type { createScopes, ScopeResultKind, ScopeOwner } from '@rss/mdm-scopes'
 import type { Locale } from './i18n'
 import { CursorControls, firstPage, labels, ReadState, usePageRead, type Query } from './AdminUi'
 import { DataTable } from './DataTable'
@@ -11,11 +11,13 @@ import { devicePath } from './Devices'
 export type ScopesUseCases = ReturnType<typeof createScopes>
 export function ScopeResults({
   scopes,
+  owner,
   id,
   result,
   locale,
 }: {
   scopes: ScopesUseCases
+  owner: ScopeOwner
   id: string
   result: string
   locale: Locale
@@ -25,8 +27,8 @@ export function ScopeResults({
     [kind, setKind] = useState<ScopeResultKind>('members'),
     [query, setQuery] = useState<Query>({ limit: 20 }),
     read = usePageRead(
-      `scope-result/${id}/${result}/${channel}/${kind}/${JSON.stringify(query)}`,
-      () => scopes.result(id, result, kind, channel, query),
+      `scope-result/${JSON.stringify(owner)}/${id}/${result}/${channel}/${kind}/${JSON.stringify(query)}`,
+      (signal) => scopes.result(owner, id, result, kind, channel, query, signal),
     )
   return (
     <Card title={l('范围结果与解释', 'Scope results and explanations')}>
@@ -174,17 +176,21 @@ export function ScopeResults({
 
 export function ScopeTaskPanel({
   scopes,
+  owner,
   id,
   task,
   locale,
 }: {
   scopes: ScopesUseCases
+  owner: ScopeOwner
   id: string
   task: string
   locale: Locale
 }) {
   const l = labels(locale),
-    read = usePageRead(`scope-task/${id}/${task}`, () => scopes.task(id, task))
+    read = usePageRead(`scope-task/${JSON.stringify(owner)}/${id}/${task}`, (signal) =>
+      scopes.task(owner, id, task, signal),
+    )
   return (
     <Card title={l('范围计算', 'Scope computation')}>
       <p>

@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@rss/mdm-devices": "workspace:*",
-    "@rss/mdm-inventory": "workspace:*"
+    "@rss/mdm-inventory": "workspace:*",
+    "@rss/mdm-scopes": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

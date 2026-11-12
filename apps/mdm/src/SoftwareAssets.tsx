@@ -175,14 +175,12 @@ function SoftwareAssetQuery({
     [tags, setTags] = useState<string[]>([]),
     [split, setSplit] = useState<Dimension[]>(['version', 'component']),
     [taskInput, setTaskInput] = useState(''),
-    [last, setLast] = useState<{ task: string; dimensions: readonly Dimension[] } | null>(null),
     [invalidTask, setInvalidTask] = useState<string | null>(null),
     status = usePageRead(`software-asset-task/${canRead}/${task ?? ''}`, (signal) =>
       canRead && task ? assets.status(task, signal) : Promise.resolve(null),
     ),
     command = useSoftwareAssetCommand(assets, (receipt, original) => {
       if (receipt.kind === 'accepted' && original.kind === 'query') {
-        setLast({ task: receipt.task, dimensions: original.operation.input.dimensions })
         setInvalidTask(null)
         setTask(receipt.task)
       }
@@ -423,7 +421,6 @@ function SoftwareAssetQuery({
           task={status.value}
           locale={locale}
           invalidate={invalidate}
-          requestedDimensions={last?.task === task ? last.dimensions : undefined}
           openMapping={openMapping}
         />
       )}

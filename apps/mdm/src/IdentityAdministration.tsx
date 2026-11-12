@@ -321,7 +321,10 @@ function Accounts(props: Props) {
   ]
   const page = useRead(`${binding}/accounts/${source}/${JSON.stringify(query)}`, () =>
     identity.accounts({
-      ...query,
+      ...(query.filter === undefined ? {} : { filter: query.filter }),
+      ...(query.sort === undefined ? {} : { sort: query.sort }),
+      ...(query.limit === undefined ? {} : { limit: query.limit }),
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
       fields: query.fields ? (query.fields as (keyof AccountRow)[]) : base,
       ...(source ? { source } : {}),
     }),

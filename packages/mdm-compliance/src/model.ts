@@ -58,8 +58,7 @@ export interface GroupInput {
 export interface FactReference {
   readonly source: string
   readonly dataset: string | null
-  readonly registration: string | null
-  readonly registrationGeneration: number | null
+  readonly deviceId: string | null
   readonly epoch: string | null
   readonly snapshotId: string
   readonly observedAt: number
@@ -81,8 +80,7 @@ export interface Assessment {
     readonly platformDecision: Decision
     readonly sources: readonly {
       readonly source: string
-      readonly registration: string
-      readonly generation: string
+      readonly deviceId: string
       readonly epoch: string
     }[]
     readonly groups: readonly {

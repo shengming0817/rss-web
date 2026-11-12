@@ -8,20 +8,20 @@ const tenant = '11111111-1111-4111-8111-111111111111',
 function sample() {
   return {
     id: 'sample',
-    sequence: 1,
-    observedAt: 20,
+    sequence: '1',
+    observedAt: '20',
     interval: null,
     reading: { quality: 'valid', value: { type: 'number', value: { type: 'f64', value: -12.5 } } },
     stream: {
       scope: { tenant, namespace: 'mdm.telemetry' },
-      source: reg + ':agent.script',
+      source: 'device-a' + ':agent.script',
       generation: epoch,
     },
     series: {
       definition: {
         scope: { tenant, namespace: 'mdm.telemetry' },
         key: 'custom.gauge',
-        version: 1,
+        version: '1',
         unit: 'degree',
         metric: { kind: 'gauge', number: 'f64' },
         dimensions: {
@@ -59,27 +59,31 @@ function fixture(reply: unknown) {
 it('uses generated operations and admits script observations with all exact coordinates', async () => {
   const f = fixture({
       mode: 'history',
-      rows: [{ sample: sample(), receivedAt: 25, liveSource: false }],
+      rows: [{ sample: sample(), receivedAt: '25', liveSource: false }],
       unavailable: [],
       next: 'opaque',
       retired: false,
     }),
     result = await f.telemetry.history(query)
   expect(result.rows[0]).toMatchObject({
-    registration: reg,
+    device: 'device-a',
     source: 'agent.script',
     epoch,
     liveSource: false,
     sample: { reading: { quality: 'valid', value: -12.5 } },
   })
   expect(f.request).toHaveBeenCalledWith(
-    expect.objectContaining({ method: 'POST', path: '/api/v1/telemetry/history', body: query }),
+    expect.objectContaining({
+      method: 'POST',
+      path: '/api/v1/telemetry/history',
+      body: { ...query, startMicros: '0', endMicros: '100' },
+    }),
   )
 })
 it('uses the server latest effective source and conflict facts', async () => {
   const f = fixture({
     mode: 'latest',
-    rows: [{ sample: sample(), receivedAt: 25, effectiveSource: true, sourceConflict: true }],
+    rows: [{ sample: sample(), receivedAt: '25', effectiveSource: true, sourceConflict: true }],
     unavailable: [],
     next: null,
     retired: false,
@@ -96,7 +100,7 @@ it('rejects unsafe integer telemetry rather than rendering a rounded value', asy
   await expect(
     fixture({
       mode: 'history',
-      rows: [{ sample: value, receivedAt: 25, liveSource: true }],
+      rows: [{ sample: value, receivedAt: '25', liveSource: true }],
       unavailable: [],
       next: null,
       retired: false,
@@ -109,7 +113,7 @@ it('rejects foreign scope and mismatched metric readings after protocol admissio
   await expect(
     fixture({
       mode: 'history',
-      rows: [{ sample: value, receivedAt: 25, liveSource: true }],
+      rows: [{ sample: value, receivedAt: '25', liveSource: true }],
       unavailable: [],
       next: null,
       retired: false,
@@ -126,7 +130,6 @@ it('reads fixed configuration bindings and registration without substituting act
     },
     f = fixture({
       device: 'device-a',
-      registration: { id: reg, generation: 4 },
       evaluatedAtMicros: 50,
       configurations: [
         {

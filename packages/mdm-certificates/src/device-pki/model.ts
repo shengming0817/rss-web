@@ -52,8 +52,7 @@ export interface SigningRecovery {
 }
 export interface Observation {
   readonly operation: string
-  readonly registration: string
-  readonly generation: number
+  readonly device: string
   readonly sequence: number
   readonly target: { readonly revision: number; readonly digest: string } | null
   readonly actual: { readonly revision: number; readonly digest: string } | null
@@ -71,7 +70,7 @@ export interface Observation {
 }
 /** Secret is supplied only to submission; never retained in the original operation record. */
 export interface RegistrationRecovery {
-  readonly registration: string
+  readonly device: string
   readonly operationId: string
   readonly platform: 'windows' | 'macos'
   readonly csr: string
@@ -103,6 +102,7 @@ export interface DevicePkiPort {
     input: SigningRecovery,
   ): Promise<{ readonly attempt: string; readonly fingerprint: string }>
   observation(device: string): Promise<Observation | null>
+  registrationRecovery(device: string, operation: string): Promise<GrantReceipt | null>
   recoverRegistration(input: RegistrationRecovery, secret: string): Promise<GrantReceipt>
   recoverIssuance(input: IssuanceRecovery): Promise<IssuanceCandidate>
   issuanceRecovery(

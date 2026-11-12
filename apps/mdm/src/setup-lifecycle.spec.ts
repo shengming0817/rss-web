@@ -357,14 +357,10 @@ it('uses the filtered directory once and hides supplemental entries until their 
   const f = fixture()
   vi.mocked(f.port.catalog).mockResolvedValue({
     items: [],
-    domains: [
-      { id: 'scopes', href: '/api/v1/scopes' },
-      { id: 'policies', href: '/api/v1/policies' },
-    ],
+    domains: [{ id: 'policies', href: '/api/v1/policies' }],
   })
   await render(f.runtime, Settings)
   const paths = () => [...host.querySelectorAll('a')].map((a) => a.getAttribute('href'))
-  expect(paths().filter((p) => p === '/scopes')).toHaveLength(1)
   expect(paths().filter((p) => p === '/policies')).toHaveLength(1)
   expect(paths()).not.toContain('/resources')
   f.effective.mockResolvedValue({

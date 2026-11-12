@@ -381,19 +381,7 @@ try {
   const scope = randomUUID(),
     laterScope = randomUUID(),
     policyId = randomUUID()
-  for (const id of [scope, laterScope])
-    await api('POST', '/api/v1/scopes/' + id, {
-      operationId: randomUUID(),
-      expectedRevision: 0,
-      input: {
-        action: 'put',
-        definition: {
-          targets: [{ kind: 'device', id: f.agent }],
-          limitations: null,
-          exclusions: [],
-        },
-      },
-    })
+  const range = { targets: [{ kind: 'device', id: f.agent }], limitations: null, exclusions: [] }
   const opensAt = Math.floor(Date.now() / 1000) + 7200,
     schedule = {
       trigger: { kind: 'check_in', minimumSeconds: 60 },
@@ -410,7 +398,7 @@ try {
       action: 'put',
       enabled: false,
       definition: {
-        scope,
+        scope: range,
         alias: null,
         customEvent: null,
         action: {
@@ -428,8 +416,8 @@ try {
           runLifetimeSeconds: 86400,
           rollout: {
             stages: [
-              { scope, opensAt: 0, minimumVerifiedPercent: null },
-              { scope: laterScope, opensAt, minimumVerifiedPercent: 85 },
+              { id: scope, scope: range, opensAt: 0, minimumVerifiedPercent: null },
+              { id: laterScope, scope: range, opensAt, minimumVerifiedPercent: 85 },
             ],
           },
         },
@@ -457,7 +445,7 @@ try {
     ['users', '指定用户与组织'],
   ]) {
     await run.nav(p, '/policies?policy=' + policyId, '策略与部署')
-    await button('打开定位策略').click()
+    await label('唯一别名').waitFor()
     await run.choose(p, label('访问主体'), caption)
     if (kind === 'users') {
       await button('添加访问引用').click()
@@ -478,15 +466,16 @@ try {
       count: 0,
     })
     assert.deepEqual(current.definition.action.rollout.stages, [
-      { scope, opensAt: 0, minimumVerifiedPercent: null },
-      { scope: laterScope, opensAt, minimumVerifiedPercent: 85 },
+      { id: scope, scope: range, opensAt: 0, minimumVerifiedPercent: null },
+      { id: laterScope, scope: range, opensAt, minimumVerifiedPercent: 85 },
     ])
     if (kind === 'users')
       assert.equal(current.definition.selfService.access.selectors[0].principalId, f.principal)
   }
   await run.nav(p, '/policies?policy=' + policyId, '策略与部署')
-  await button('打开定位策略').click()
+  await label('唯一别名').waitFor()
   await label('发布到自助目录').uncheck()
+  await p.getByRole('tab', { name: '范围', exact: true }).click()
   await label('批次开放时间 2').fill(String(opensAt + 3600))
   await label('最低核实成功率（%）').fill('90')
   await label('确认范围、资源、调度与潜在影响').check()
@@ -688,11 +677,11 @@ try {
       detailRequests.push(new URL(request.url()).pathname)
   }
   p.on('request', captureDetails)
-  await label('软件名称').fill(String.raw`éclair O'Reilly \ %_`)
+  await label('名称').fill(String.raw`éclair O'Reilly \ %_`)
   await label('分类').fill('业务工具')
-  await run.choose(p, label('激活状态'), '有激活版本')
+  await run.choose(p, label('激活状态'), '是')
   const softwareDirectory = await run.response(p, 'GET', '/api/v1/resources', () =>
-    button('搜索软件').click(),
+    button('应用').click(),
   )
   const softwareRows = (await softwareDirectory.json()).items
   assert.deepEqual(
@@ -709,15 +698,15 @@ try {
   )
   p.off('request', captureDetails)
   await p.getByRole('link', { name: '从此版本新建分配', exact: true }).click()
-  const draftDialog = p.getByRole('dialog')
-  await draftDialog
+  const draftPage = p.locator('.policy-editor')
+  await draftPage
     .locator('p')
     .filter({ hasText: /^当前固定资源/ })
     .filter({ hasText: resource + ' @ resource-v1' })
     .filter({ hasText: 'windows_x86_64: main' })
     .waitFor()
-  const draftReturn = draftDialog.getByRole('link', { name: '返回来源', exact: true })
-  const sourceUrl = new URL(await draftReturn.getAttribute('href'), origin)
+  const draftReturn = draftPage.getByRole('button', { name: '返回来源', exact: true })
+  const sourceUrl = new URL(new URL(p.url()).searchParams.get('returnTo'), origin)
   assert.equal(sourceUrl.pathname, '/software')
   assert.equal(sourceUrl.searchParams.get('resource'), resource)
   assert.equal(sourceUrl.searchParams.get('version'), 'resource-v1')
@@ -726,9 +715,7 @@ try {
   await p.waitForURL(sourceUrl.href)
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).waitFor()
   await button('清除条件').click()
-  await p.locator('.resource-toolbar summary').click()
-  await label('服务端筛选').fill(`id=='${direct}'`)
-  await run.response(p, 'GET', '/api/v1/resources', () => button('应用').click())
+  await run.response(p, 'GET', '/api/v1/resources', () => run.directoryFilter(p, `id=='${direct}'`))
   await button('查看版本与材料').click()
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).click()
   await p.getByRole('button', { name: '查看策略 ' + policyId, exact: true }).waitFor()
@@ -799,8 +786,8 @@ try {
   const recordButton = p.getByRole('button', { name: previousEntry, exact: true })
   await recordButton.click()
   await button('用于软件草稿').click()
-  await label('软件名称').fill('ÉCLAIR')
-  await button('搜索软件').click()
+  await label('名称').fill('ÉCLAIR')
+  await button('应用').click()
   await button(searchName).click()
   await button('复制所选记录字段').click()
   const version = await label('实际软件版本').inputValue()
@@ -865,13 +852,13 @@ try {
   const frozenLocator = new URLSearchParams({ resource, version: 'snapshot-copy' })
   await run.nav(p, '/software?' + frozenLocator, '软件目录')
   await p.getByRole('link', { name: '从此版本新建分配', exact: true }).click()
-  const frozenDraft = p.getByRole('dialog')
+  const frozenDraft = p.locator('.policy-editor')
   await frozenDraft
     .locator('p')
     .filter({ hasText: /^当前固定资源/ })
     .filter({ hasText: resource + ' @ snapshot-copy' })
     .waitFor()
-  await frozenDraft.getByRole('link', { name: '返回来源', exact: true }).click()
+  await frozenDraft.getByRole('button', { name: '返回来源', exact: true }).click()
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).waitFor()
   checks.push('real-frozen-software-version-to-fixed-policy-draft')
 

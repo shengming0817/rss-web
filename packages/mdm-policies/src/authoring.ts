@@ -1,3 +1,4 @@
+import { validateDefinition as validateScopeDefinition } from '@rss/mdm-scopes'
 import { identifier, uuid } from '@rss/mdm-inventory'
 import type { PolicyDefinition, Schedule } from './model'
 
@@ -59,7 +60,7 @@ function address(value: string | null): void {
     throw new Error('Invalid policy address')
 }
 export function validateDefinition(value: PolicyDefinition): void {
-  uuid(value.scope)
+  validateScopeDefinition(value.scope)
   address(value.alias)
   address(value.customEvent)
   const action = value.action
@@ -101,21 +102,21 @@ export function validateDefinition(value: PolicyDefinition): void {
     }
   }
   if (action.kind === 'software') {
-    if (!action.rollout.stages.length || action.rollout.stages.length > 32)
-      throw new Error('Invalid rollout stages')
+    if (action.rollout.stages.length > 32) throw new Error('Invalid rollout stages')
     const scopes = new Set<string>()
     let previous = -1
     for (const [index, stage] of action.rollout.stages.entries()) {
-      uuid(stage.scope)
+      uuid(stage.id)
+      validateScopeDefinition(stage.scope)
       integer(stage.opensAt, 0, 253402300799)
       if (
         stage.opensAt <= previous ||
-        scopes.has(stage.scope) ||
+        scopes.has(stage.id) ||
         (index === 0 && stage.minimumVerifiedPercent !== null)
       )
         throw new Error('Invalid rollout stage order')
       if (stage.minimumVerifiedPercent !== null) integer(stage.minimumVerifiedPercent, 0, 100)
-      scopes.add(stage.scope)
+      scopes.add(stage.id)
       previous = stage.opensAt
     }
   }

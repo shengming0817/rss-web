@@ -48,18 +48,11 @@ export function NativeCredentialOperation({
   const formPrefix = useId()
 
   const l = labels(locale),
-    registration = endpoint.channels.find(
-      (channel) => channel.status === 'active' && channel.source === 'mdm.apple',
-    ),
+    registration = endpoint.status === 'active' && endpoint.source === 'mdm.apple',
     configuration = useRead(
-      `native-credential-configuration/${endpoint.id}/${registration?.registrationId ?? ''}/${registration?.generation ?? ''}/${canOperate}`,
+      `native-credential-configuration/${endpoint.id}/${endpoint.status}/${canOperate}`,
       () =>
-        canOperate && registration
-          ? credentials.configuration(endpoint.id, {
-              registration: registration.registrationId,
-              generation: registration.generation,
-            })
-          : Promise.resolve(null),
+        canOperate && registration ? credentials.configuration(endpoint.id) : Promise.resolve(null),
     ),
     action = useAction(),
     [form] = Form.useForm<NativeCredentialFields>(),
@@ -82,8 +75,7 @@ export function NativeCredentialOperation({
     form.setFieldsValue({
       material: { id: selected.id, version: selected.version },
       ...(selected.binding.subject.kind === 'recovery_lock' &&
-      selected.binding.registration === registration?.registrationId &&
-      selected.binding.generation === registration?.generation
+      selected.binding.device === endpoint.id
         ? {
             expectedRevision: selected.version,
             current: { id: selected.id, version: selected.version },
@@ -91,7 +83,7 @@ export function NativeCredentialOperation({
           }
         : {}),
     })
-  }, [selected, pending, registration?.registrationId, registration?.generation, form])
+  }, [selected, pending, endpoint.id, form])
   async function submit(value: NativeCredentialFields) {
     let password = value.unlockPassword ?? ''
     value.unlockPassword = ''
@@ -107,8 +99,6 @@ export function NativeCredentialOperation({
             credentialIntent({
               device: endpoint.id,
               operationId: crypto.randomUUID(),
-              registration: registration.registrationId,
-              generation: registration.generation,
               deadline: Math.floor(new Date(value.deadline).getTime() / 1000),
               action: nativeCredentialAction(value, configuration.value ?? null, selected),
             })
@@ -178,7 +168,7 @@ export function NativeCredentialOperation({
       {registration ? (
         <p className="mono">
           {l('当前 Apple MDM 注册 / 代次', 'Current Apple MDM registration / generation')} ·{' '}
-          {registration.registrationId} / {registration.generation}
+          {endpoint.id}
         </p>
       ) : (
         <p>
@@ -354,8 +344,7 @@ export function NativeCredentialOperation({
       {pending && (
         <>
           <p className="mono">
-            {pending.intent.operationId} · {pending.intent.registration} /{' '}
-            {pending.intent.generation}
+            {pending.intent.operationId} · {pending.intent.device}
           </p>
           <p>
             {l('原截止时间', 'Original deadline')} · {timestamp(locale, pending.intent.deadline)} ·{' '}

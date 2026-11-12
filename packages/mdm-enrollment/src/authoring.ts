@@ -71,7 +71,6 @@ export function nativeIntent(
   operationId: string,
   source: NativeIntent['source'],
   windowsProfile: NativeIntent['windowsProfile'],
-  deviceId?: string,
 ): NativeIntent {
   uuid(operationId)
   if (
@@ -79,19 +78,10 @@ export function nativeIntent(
     !['Full', 'Device'].includes(windowsProfile)
   )
     throw new Error('Invalid native enrollment')
-  if (
-    deviceId !== undefined &&
-    (!deviceId.trim() ||
-      deviceId.length > 256 ||
-      deviceId.trim() !== deviceId ||
-      /\p{Cc}/u.test(deviceId))
-  )
-    throw new Error('Invalid endpoint')
   return Object.freeze({
     operationId,
     source,
     windowsProfile,
-    ...(deviceId === undefined ? {} : { deviceId }),
   })
 }
 export function configurationIntent(input: ConfigurationIntent): ConfigurationIntent {

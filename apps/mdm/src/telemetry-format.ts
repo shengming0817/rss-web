@@ -20,7 +20,7 @@ export function allowedAggregations(row: Observation): readonly Aggregation[] {
       : ['min', 'max', 'sum', 'count', 'mean']
 }
 export function seriesLabel(row: Observation): string {
-  return `v${row.sample.series.definition.version} · ${row.registration} · ${row.source} · ${row.epoch} · ${JSON.stringify(row.sample.series.dimensions)}`
+  return `v${row.sample.series.definition.version} · ${row.device} · ${row.source} · ${row.epoch} · ${JSON.stringify(row.sample.series.dimensions)}`
 }
 
 export function aggregationName(value: Aggregation, locale: 'zh' | 'en'): string {

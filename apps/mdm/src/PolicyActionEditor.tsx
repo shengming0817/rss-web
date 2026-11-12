@@ -8,7 +8,6 @@ import {
 import type { ResourceKind } from '@rss/mdm-resources'
 import type { Locale } from './i18n'
 import type { ResourcesUseCases } from './ResourceCommand'
-import type { ScopesUseCases } from './ScopeResults'
 import { labels } from './AdminUi'
 import {
   BooleanField,
@@ -21,7 +20,6 @@ import {
 } from './AuthorFields'
 import { PolicySchedule } from './PolicySchedule'
 import { PolicyResourcePicker } from './PolicyResourcePicker'
-import { PolicyRolloutEditor } from './PolicyRolloutEditor'
 
 export const policyKinds = [
   'execution',
@@ -59,7 +57,7 @@ const emptyResource: ExactResource = {
   architecture: 'x86_64',
   variant: '',
 }
-export function newPolicyAction(kind: PolicyAction['kind'], scope: string): PolicyAction {
+export function newPolicyAction(kind: PolicyAction['kind']): PolicyAction {
   const scheduled = { schedule: defaultSchedule(), runLifetimeSeconds: 86400 }
   if (kind === 'configuration') return { kind, resource: emptyResource, exit: 'retain' }
   if (kind === 'telemetry_profile') return { kind, resource: emptyResource }
@@ -86,7 +84,7 @@ export function newPolicyAction(kind: PolicyAction['kind'], scope: string): Poli
       delivery: { kind: 'direct' },
       resource: { kind: 'software', id: '', version: '', variants: {} },
       intent: 'required_install',
-      rollout: { stages: [{ scope, opensAt: 0, minimumVerifiedPercent: null }] },
+      rollout: { stages: [] },
       ...scheduled,
       schedule: { ...scheduled.schedule, trigger: { kind: 'check_in', minimumSeconds: 60 } },
     }
@@ -106,16 +104,12 @@ export function newPolicyAction(kind: PolicyAction['kind'], scope: string): Poli
 }
 export function PolicyActionEditor({
   value,
-  scope,
   resources,
-  scopes,
   onChange,
   locale,
 }: {
   value: PolicyAction
-  scope: string
   resources: ResourcesUseCases
-  scopes: ScopesUseCases
   onChange: (value: PolicyAction) => void
   locale: Locale
 }) {
@@ -134,7 +128,7 @@ export function PolicyActionEditor({
             value: kind,
             label: policyActionLabel(kind, locale),
           }))}
-          onChange={(kind: PolicyAction['kind']) => onChange(newPolicyAction(kind, scope))}
+          onChange={(kind: PolicyAction['kind']) => onChange(newPolicyAction(kind))}
         />
       </Form.Item>
       {resourceKind && 'resource' in value && (
@@ -323,13 +317,6 @@ export function PolicyActionEditor({
               onChange={(target) => onChange({ ...value, delivery: { kind: 'native', target } })}
             />
           )}
-          <PolicyRolloutEditor
-            value={value.rollout.stages}
-            scope={scope}
-            scopes={scopes}
-            locale={locale}
-            onChange={(stages) => onChange({ ...value, rollout: { stages } })}
-          />
         </>
       )}
       {value.kind === 'ensure_agent_installed' && (

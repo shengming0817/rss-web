@@ -11,8 +11,7 @@ const binding: Binding = {
   id,
   operationId,
   device: 'device',
-  registration: id,
-  registrationGeneration: 1,
+
   bindingGeneration: 2,
   factorGeneration: 3,
   revision: 4,

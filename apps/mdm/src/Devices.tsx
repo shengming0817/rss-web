@@ -1,5 +1,6 @@
+import { useDirectoryQuery } from './directory-location'
 import { useState } from 'react'
-import { Alert, Button, Card, Collapse, Form, Input, Modal, Select, Tabs } from 'antd'
+import { Alert, Button, Card, Collapse, Modal, Tabs } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Association, EndpointRow, ViewRow } from '@rss/mdm-devices'
 import type { Runtime } from './runtime'
@@ -23,22 +24,23 @@ const viewFields = ['key', 'reference', 'association', 'endpoints'] as const,
   endpointFields = [
     'id',
     'status',
-    'primaryMdmRegistration',
-    'channels',
-    'enrollments',
+    'registeredAt',
+    'channel',
+    'source',
+    'platform',
+    'lastCommunicationReceivedAt',
+    'enrollment',
     'inventoryAvailable',
   ] as const,
   associationFields = ['id', 'version', 'confirmedAt', 'association'] as const
-function literal(value: string): string {
-  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
-}
+
 export function devicePath(kind: 'endpoint' | 'association', id: string): string {
   return `/devices/${kind}/${encodeURIComponent(id)}`
 }
 function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
-    [query, setQuery] = useState<Query>({ filter: "assetState=='active'", limit: 20 })
+    [query, setQuery] = useDirectoryQuery('devices.', { limit: 20 })
   const read = useRead(
       `${binding}/views/${JSON.stringify(query)}`,
       (signal) =>
@@ -56,11 +58,6 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
       (signal) => devices.viewStatistics(query.filter, signal),
       { retryReadConflict: true },
     )
-  const [search, setSearch] = useState(''),
-    [platform, setPlatform] = useState<string>(),
-    [channel, setChannel] = useState<string>(),
-    [status, setStatus] = useState<string>(),
-    [asset, setAsset] = useState('active')
   const columns = query.fields ?? viewFields
   return (
     <>
@@ -78,119 +75,16 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
         </p>
       </div>
       <ReadState busy={stats.busy} error={stats.error} locale={locale} onRetry={stats.reload} />
-      <Form
-        className="device-filter-bar"
-        layout="inline"
-        onFinish={() => {
-          const terms = [
-            `assetState==${literal(asset)}`,
-            search ? `search==${literal(search)}` : '',
-            platform ? `platform==${literal(platform)}` : '',
-            channel ? `channel==${literal(channel)}` : '',
-            status ? `status==${literal(status)}` : '',
-          ].filter(Boolean)
-          setQuery({ ...firstPage(query), filter: terms.map((term) => `(${term})`).join(';') })
-        }}
-      >
-        <Form.Item label={l('搜索设备', 'Search devices')}>
-          <Input
-            aria-label={l('搜索设备', 'Search devices')}
-            placeholder={l('名称或序列号', 'Name or serial number')}
-            value={search}
-            maxLength={256}
-            allowClear
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </Form.Item>
-        <Form.Item label={l('平台', 'Platform')}>
-          <Select
-            aria-label={l('平台', 'Platform')}
-            className="admin-select"
-            value={platform}
-            allowClear
-            options={[
-              { value: 'windows', label: 'Windows' },
-              { value: 'macos', label: 'macOS' },
-            ]}
-            onChange={setPlatform}
-          />
-        </Form.Item>
-        <Form.Item label={l('通道', 'Channel')}>
-          <Select
-            aria-label={l('通道', 'Channel')}
-            className="admin-select"
-            value={channel}
-            allowClear
-            options={[
-              { value: 'mdm', label: 'MDM' },
-              { value: 'agent', label: 'Agent' },
-            ]}
-            onChange={setChannel}
-          />
-        </Form.Item>
-        <Form.Item label={l('状态', 'State')}>
-          <Select
-            aria-label={l('状态', 'State')}
-            className="admin-select"
-            value={status}
-            allowClear
-            options={[
-              'active',
-              'pending',
-              'revoked',
-              'superseded',
-              'registered',
-              'cancelled',
-              'expired',
-            ].map((value) => ({ value, label: value }))}
-            onChange={setStatus}
-          />
-        </Form.Item>
-        <Form.Item label={l('资产记录', 'Asset record')}>
-          <Select
-            aria-label={l('资产记录', 'Asset record')}
-            className="admin-select"
-            value={asset}
-            options={[
-              { value: 'active', label: l('在用', 'Active') },
-              { value: 'archived', label: l('已归档', 'Archived') },
-              { value: 'deleted', label: l('已删除', 'Deleted') },
-            ]}
-            onChange={setAsset}
-          />
-        </Form.Item>
-        <Button htmlType="submit" type="primary">
-          {l('查询设备', 'Search devices')}
-        </Button>
-        <Button
-          onClick={() => {
-            read.reload()
-            stats.reload()
-          }}
-        >
-          {l('重新读取', 'Read again')}
-        </Button>
-      </Form>
-      <Collapse
-        ghost
-        items={[
-          {
-            key: 'advanced',
-            label: l('高级查询与列', 'Advanced query and columns'),
-            children: (
-              <DirectoryControls
-                key={query.filter ?? ''}
-                locale={locale}
-                query={query}
-                onChange={setQuery}
-                fields={viewFields}
-                sort={['key']}
-                required="key"
-                maximum={100}
-              />
-            ),
-          },
-        ]}
+      <DirectoryControls
+        catalog="devices"
+        key={query.filter ?? ''}
+        locale={locale}
+        query={query}
+        onChange={setQuery}
+        fields={viewFields}
+        sort={['key']}
+        required="key"
+        maximum={100}
       />
       <ReadState
         busy={read.busy}
@@ -252,7 +146,7 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
                             {endpoint.platform.state === 'conflict' && (
                               <Status value="conflict" locale={locale} />
                             )}{' '}
-                            · {endpoint.channels.map((c) => c.channel).join(' + ')}
+                            · {endpoint.channel ?? '—'}
                           </div>
                         )),
                     },
@@ -275,7 +169,7 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
 function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useDirectoryQuery('endpoints.'),
     read = useRead(
       `${binding}/endpoints/${JSON.stringify(query)}`,
       (signal) => devices.endpoints(directoryQuery(query, endpointFields), signal),
@@ -305,6 +199,7 @@ function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Loca
       )}
       <ReadState busy={stats.busy} error={stats.error} locale={locale} onRetry={stats.reload} />
       <DirectoryControls
+        catalog="endpoints"
         locale={locale}
         query={query}
         onChange={setQuery}
@@ -349,36 +244,34 @@ function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Loca
                     },
                   ]
                 : []),
-              ...(selected.includes('channels')
+              ...(selected.includes('channel')
+                ? [{ title: l('通道', 'Channel'), dataIndex: 'channel' as const }]
+                : []),
+              ...(selected.includes('source')
+                ? [{ title: l('来源', 'Source'), dataIndex: 'source' as const }]
+                : []),
+              ...(selected.includes('registeredAt')
                 ? [
                     {
-                      title: l('注册通道', 'Registrations'),
-                      dataIndex: 'channels' as const,
-                      render: (_: unknown, row: EndpointRow) =>
-                        row.channels?.map((c) => (
-                          <div key={c.channel}>
-                            {c.channel} · {l('代次', 'Generation')} {c.generation} ·{' '}
-                            <Status value={c.status} locale={locale} />
-                            <div className="subtitle">
-                              {l('最近通信', 'Last communication')} ·{' '}
-                              {timestamp(locale, c.lastCommunicationReceivedAt)}
-                            </div>
-                          </div>
-                        )),
+                      title: l('首次注册时间', 'First enrollment'),
+                      render: (_: unknown, row: EndpointRow) => timestamp(locale, row.registeredAt),
                     },
                   ]
                 : []),
-              ...(selected.includes('enrollments')
+              ...(selected.includes('lastCommunicationReceivedAt')
                 ? [
                     {
-                      title: l('注册申请', 'Enrollment requests'),
-                      dataIndex: 'enrollments' as const,
+                      title: l('最近通信', 'Last communication'),
                       render: (_: unknown, row: EndpointRow) =>
-                        row.enrollments?.map((e) => (
-                          <div key={e.enrollmentId}>
-                            {e.source} · <Status value={e.status} locale={locale} />
-                          </div>
-                        )),
+                        timestamp(locale, row.lastCommunicationReceivedAt),
+                    },
+                  ]
+                : []),
+              ...(selected.includes('enrollment')
+                ? [
+                    {
+                      title: l('注册申请', 'Enrollment request'),
+                      render: (_: unknown, row: EndpointRow) => row.enrollment?.enrollmentId ?? '—',
                     },
                   ]
                 : []),
@@ -588,7 +481,7 @@ function AssociationFacts({ value, locale }: { value: Association; locale: Local
         <p key={member.channel}>
           <Link to={devicePath('endpoint', member.device)}>{member.device}</Link>
           <br />
-          {member.channel} · {member.registrationId} · {l('代次', 'Generation')} {member.generation}
+          {member.channel}
         </p>
       ))}
       <p>{value.evidence}</p>
@@ -610,8 +503,8 @@ export function Devices({ runtime, locale }: { runtime: Runtime; locale: Locale 
       <Heading
         title={l('设备', 'Devices')}
         hint={l(
-          '从设备视图进入详情，保留每个终端、通道与注册代次。',
-          'Explore device views while retaining each endpoint, channel and registration generation.',
+          '从设备视图进入详情，保留每个终端和独立通道身份。',
+          'Explore device views while retaining each endpoint and independent channel identity.',
         )}
         actions={
           <Link className="button-link" to="/enroll">
@@ -628,7 +521,13 @@ export function Devices({ runtime, locale }: { runtime: Runtime; locale: Locale 
       />
       <Tabs
         activeKey={['views', 'endpoints', 'associations'].includes(tab) ? tab : 'views'}
-        onChange={(value) => setParams({ tab: value })}
+        onChange={(value) =>
+          setParams((current) => {
+            const next = new URLSearchParams(current)
+            next.set('tab', value)
+            return next
+          })
+        }
         items={[
           {
             key: 'views',

@@ -1,8 +1,11 @@
+import { isValidElement } from 'react'
+import { DirectoryCatalogContext } from './DirectorySearch'
+import { directoryFixtures } from './directory.spec-helper'
 // @vitest-environment jsdom
 import type { ContentUseCases } from './ContentUpload'
 import { act, createElement, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { Form } from 'antd'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
@@ -68,7 +71,15 @@ function inject<T>(methods: Partial<T>): T {
 }
 async function render(node: ReactNode) {
   await act(async () => {
-    root.render(node)
+    root.render(
+      createElement(
+        DirectoryCatalogContext.Provider,
+        { value: directoryFixtures },
+        isValidElement(node) && node.type === MemoryRouter
+          ? node
+          : createElement(MemoryRouter, null, node),
+      ),
+    )
   })
 }
 function button(text: string): HTMLButtonElement {
@@ -216,10 +227,10 @@ it('continues an empty candidate page and verifies full group detail before usin
   expect(list.mock.calls[1]?.[0]).toMatchObject({
     cursor: 'b3BhcXVl',
     referenceableFor: id,
-    filter: "assetContext=='endpoint';deleted==false",
+    filter: "((assetContext=='endpoint';deleted=='false'))",
   })
   expect(read).toHaveBeenCalledWith(nested)
-  expect(selected).toHaveBeenCalledWith(nested)
+  expect(selected).toHaveBeenCalledWith(nested, 'Second page')
 })
 it.each(['blocker', 'continuation', 'unreadable'] as const)(
   'keeps group deletion blocked with %s direct references even when recursive impacts are empty',
@@ -237,6 +248,8 @@ it.each(['blocker', 'continuation', 'unreadable'] as const)(
                       revision: 2,
                       roles: ['target'],
                       release: 'edit_or_delete_referencing_object',
+                      policy: null,
+                      stage: null,
                     },
                   ]
                 : [],
@@ -335,10 +348,12 @@ it('hides denied device facts while retaining the original unknown manual write 
       id: 'endpoint',
       status: 'active' as const,
       assetState: 'active' as const,
-      primaryMdmRegistration: null,
-      channels: [],
-      enrollments: [],
       platform: { state: 'unknown' as const, values: [] },
+      channel: null,
+      source: null,
+      registeredAt: null,
+      lastCommunicationReceivedAt: null,
+      enrollment: null,
     },
     reference = { kind: 'endpoint' as const, id: 'endpoint' },
     view = { reference, association: null, endpoints: [endpoint], fields: {} },
@@ -776,7 +791,7 @@ it('keeps a failed device continuation until explicit retry, then restarts with 
       createElement(Devices, { runtime, locale: 'zh' }),
     ),
   )
-  await fill('服务端筛选', "status=='active'")
+  await fill('状态', 'active')
   await click('应用')
   await fill('每页', '3')
   for (const label of ['排序', '列']) {
@@ -790,7 +805,7 @@ it('keeps a failed device continuation until explicit retry, then restarts with 
   }
   const before = endpoints.mock.calls.at(-1)![0]
   expect(before).toMatchObject({
-    filter: "status=='active'",
+    filter: "status=icontains='active'",
     limit: 3,
     sort: ['id'],
     fields: expect.arrayContaining(['id']),
@@ -846,4 +861,53 @@ it('reruns unavailable fixed results only on explicit action with a new task and
   expect(query.mock.calls[1]![0]).not.toBe(original[0])
   expect(query.mock.calls[1]![1]).toEqual(original[1])
   expect(items.mock.calls[1]![0]).toBe(query.mock.calls[1]![0])
+})
+it('keeps each device directory query through tab changes and restores endpoint paging from URL', async () => {
+  const endpoints = vi.fn<DevicesUseCases['endpoints']>(async () => ({
+      items: [],
+      nextCursor: null,
+    })),
+    views = vi.fn<DevicesUseCases['views']>(async () => ({ items: [], nextCursor: null })),
+    runtime = {
+      administration: () => ({
+        binding: 'query-session',
+        devices: {
+          endpoints,
+          views,
+          viewStatistics: async () => ({
+            statistics: { deviceViewCount: 0, endpointCount: 0 },
+            asOf: 1,
+          }),
+          endpointStatistics: async () => ({ statistics: {}, asOf: 1 }),
+        },
+      }),
+    } as unknown as Runtime
+  function Location() {
+    return createElement('output', { 'data-location': true }, useLocation().search)
+  }
+  const params = new URLSearchParams({
+    tab: 'views',
+    'devices.filter': "search=icontains='Mac'",
+    'devices.cursor': 'views-second',
+    'endpoints.filter': "status=='active'",
+    'endpoints.cursor': 'endpoints-second',
+  })
+  await render(
+    createElement(
+      MemoryRouter,
+      { initialEntries: ['/devices?' + params] },
+      createElement(Location),
+      createElement(Devices, { runtime, locale: 'zh' }),
+    ),
+  )
+  await tab('终端目录')
+  expect(endpoints.mock.calls.at(-1)?.[0]).toMatchObject({
+    filter: "status=='active'",
+    cursor: 'endpoints-second',
+  })
+  await tab('设备视图')
+  const current = new URLSearchParams(host.querySelector('[data-location]')!.textContent!)
+  expect(current.get('devices.filter')).toBe("search=icontains='Mac'")
+  expect(current.get('devices.cursor')).toBe('views-second')
+  expect(current.get('endpoints.cursor')).toBe('endpoints-second')
 })

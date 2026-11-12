@@ -50,7 +50,6 @@ function assessment(value: unknown): Assessment {
       sources: distinct(
         field.sources.map((source) => ({
           ...source,
-          registrationGeneration: nullable(source.registrationGeneration, count),
           observedAt: integer(source.observedAt),
           receivedAt: integer(source.receivedAt),
         })),

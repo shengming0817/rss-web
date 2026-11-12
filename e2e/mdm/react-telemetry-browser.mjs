@@ -121,7 +121,6 @@ try {
   )
   assert.equal(invalidCounter.status(), 400, 'backend owns cross-field aggregation admission')
   const template = randomUUID(),
-    scope = randomUUID(),
     content = Buffer.from('#!/bin/sh\n# Controlled synthetic telemetry fixture.\n')
   run.step('formal-template')
   await write('POST', `/api/v1/resources/${template}`, { action: 'create', kind: 'script' })
@@ -197,17 +196,6 @@ try {
     true,
   )
   await write('POST', `/api/v1/resources/${template}`, { action: 'activate', version: 'v1' }, 2)
-  const task = await write('POST', `/api/v1/scopes/${scope}`, {
-    action: 'put',
-    definition: { targets: [{ kind: 'device', id: device }], limitations: null, exclusions: [] },
-  })
-  for (let i = 0; i < 60; i++) {
-    const status = await api('GET', `/api/v1/scopes/${scope}/tasks/${task.task}`)
-    if (status.status === 'completed') break
-    assert.ok(i < 59, 'scope publication deadline')
-    await new Promise((resolve) => setTimeout(resolve, 250))
-  }
-
   run.step('publish-exact-profile')
   const profile = randomUUID(),
     definition = {
@@ -278,7 +266,7 @@ try {
     action: 'put',
     enabled: true,
     definition: {
-      scope,
+      scope: { targets: [{ kind: 'device', id: device }], limitations: null, exclusions: [] },
       alias: 'browser.telemetry',
       customEvent: null,
       action: {
@@ -294,6 +282,14 @@ try {
     },
   })
   const policy = await api('GET', `/api/v1/policies/${policyId}`)
+  for (let attempt = 0; ; attempt++) {
+    const scope = await page.request.get(`${origin}/api/v1/policies/${policyId}/scope`)
+    assert.ok(scope.status() === 200 || scope.status() === 503)
+    if (scope.status() === 200 && (await scope.json()).resolution !== null) break
+    await scope.dispose()
+    assert.ok(attempt < 89, 'owned scope publication before Agent configuration admission')
+    await new Promise((done) => setTimeout(done, 500))
+  }
   run.step('agent-mtls-ingress')
   const collector = spawnSync(
     'python3',
@@ -305,14 +301,31 @@ try {
     ],
     { encoding: 'utf8', timeout: 90000, stdio: ['ignore', 'pipe', 'pipe'] },
   )
+  if (collector.status !== 0) {
+    try {
+      const diagnostic = JSON.parse(collector.stdout)
+      if (
+        typeof diagnostic.classification === 'string' &&
+        /^[a-zA-Z0-9_-]{1,96}$/.test(diagnostic.classification)
+      )
+        console.error(
+          JSON.stringify({
+            phase: 'agent-mtls-ingress',
+            classification: diagnostic.classification,
+          }),
+        )
+    } catch {
+      /* The bounded process status remains the failure evidence. */
+    }
+  }
   assert.equal(collector.status, 0, 'Agent telemetry ingress')
   coverage.push('real-agent-mtls-ingress-batch-replay-and-gap-report')
   const query = {
     device,
     field: 'custom.browser.gauge',
     resource: 'device',
-    startMicros: Date.now() * 1000 - 3600_000_000,
-    endMicros: Date.now() * 1000 + 1_000_000,
+    startMicros: String(Date.now() * 1000 - 3600_000_000),
+    endMicros: String(Date.now() * 1000 + 1_000_000),
     maxPoints: 256,
     mode: 'history',
     after: null,
@@ -393,10 +406,7 @@ try {
     .waitFor()
   await page
     .locator('.telemetry-health-grid')
-    .getByText(
-      `${fixture.collector.runtime.registrationId} / ${fixture.collector.runtime.generation}`,
-      { exact: true },
-    )
+    .getByText(fixture.collector.runtime.deviceId, { exact: true })
     .waitFor()
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({
@@ -481,7 +491,7 @@ try {
   unsafeRow.sample.series.definition.metric = { kind: 'gauge', number: 'i64' }
   unsafeRow.sample.reading.value = {
     type: 'number',
-    value: { type: 'i64', value: 9007199254740992 },
+    value: { type: 'i64', value: '9007199254740992' },
   }
   await page.route(
     '**/api/v1/telemetry/history',

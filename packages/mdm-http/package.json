@@ -36,7 +36,8 @@
     "./device-access": "./src/device-access.ts",
     "./telemetry": "./src/telemetry.ts",
     "./tenant-setup": "./src/tenant-setup.ts",
-    "./runtime-diagnostics": "./src/runtime-diagnostics.ts"
+    "./runtime-diagnostics": "./src/runtime-diagnostics.ts",
+    "./directories": "./src/directories.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

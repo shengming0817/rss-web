@@ -22,8 +22,17 @@ export const filterOperators = [
 const sets = new Set(['=in=', '=out=', '=containsany=', '=containsall='])
 const bytes = (text: string) => new TextEncoder().encode(text).length
 
+export class FilterSyntaxError extends Error {
+  constructor(
+    message: string,
+    readonly position: number,
+  ) {
+    super(message)
+    this.name = 'FilterSyntaxError'
+  }
+}
 export function parseFilter(input: string): Filter {
-  if (!input || bytes(input) > 8192) throw new Error('Invalid filter budget')
+  if (!input || bytes(input) > 8192) throw new FilterSyntaxError('Invalid filter budget', 0)
   let offset = 0,
     nodes = 0,
     setItems = 0
@@ -47,21 +56,22 @@ export function parseFilter(input: string): Filter {
       offset++
       if (c === '\\') {
         c = input[offset++] ?? ''
-        if (!c || !'\\\'",;()'.includes(c)) throw new Error('Invalid escape')
+        if (!c || !'\\\'",;()'.includes(c)) throw new FilterSyntaxError('Invalid escape', offset)
       } else if (!quote && (/\s/.test(c) || '(\'"=!<>*'.includes(c)))
-        throw new Error('Invalid operand')
-      if (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127) throw new Error('Invalid operand')
+        throw new FilterSyntaxError('Invalid operand', offset)
+      if (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)
+        throw new FilterSyntaxError('Invalid operand', offset)
       text += c
-      if (bytes(text) > 1024) throw new Error('Invalid operand budget')
+      if (bytes(text) > 1024) throw new FilterSyntaxError('Invalid operand budget', offset)
     }
-    if (!closed || (!quote && !text)) throw new Error('Invalid operand')
+    if (!closed || (!quote && !text)) throw new FilterSyntaxError('Invalid operand', offset)
     return text
   }
   function node() {
-    if (++nodes > 128) throw new Error('Invalid filter budget')
+    if (++nodes > 128) throw new FilterSyntaxError('Invalid filter budget', offset)
   }
   function expression(precedence: number, depth: number): Filter {
-    if (depth > 16) throw new Error('Invalid filter depth')
+    if (depth > 16) throw new FilterSyntaxError('Invalid filter depth', offset)
     if (precedence < 2) {
       const first = expression(precedence + 1, depth)
       const separator = precedence === 0 ? ',' : ';'
@@ -75,30 +85,31 @@ export function parseFilter(input: string): Filter {
     }
     if (eat('(')) {
       const inner = expression(0, depth + 1)
-      if (!eat(')')) throw new Error('Unclosed filter')
+      if (!eat(')')) throw new FilterSyntaxError('Unclosed filter', offset)
       return inner
     }
     node()
     const field = input.slice(offset).match(/^[A-Za-z0-9_.]{1,128}/)?.[0]
-    if (!field) throw new Error('Invalid selector')
+    if (!field) throw new FilterSyntaxError('Invalid selector', offset)
     offset += field.length
     const operator = filterOperators.find((op) => input.startsWith(op, offset))
-    if (!operator) throw new Error('Invalid operator')
+    if (!operator) throw new FilterSyntaxError('Invalid operator', offset)
     offset += operator.length
     const values: string[] = []
     if (sets.has(operator)) {
-      if (!eat('(')) throw new Error('Invalid set')
+      if (!eat('(')) throw new FilterSyntaxError('Invalid set', offset)
       do {
-        if (values.length >= 64 || ++setItems > 256) throw new Error('Invalid set budget')
+        if (values.length >= 64 || ++setItems > 256)
+          throw new FilterSyntaxError('Invalid set budget', offset)
         values.push(value())
         if (eat(')')) return { kind: 'compare', field, operator, values }
       } while (eat(','))
-      throw new Error('Unclosed set')
+      throw new FilterSyntaxError('Unclosed set', offset)
     }
     return { kind: 'compare', field, operator, values: [value()] }
   }
   const result = expression(0, 0)
-  if (offset !== input.length) throw new Error('Invalid filter suffix')
+  if (offset !== input.length) throw new FilterSyntaxError('Invalid filter suffix', offset)
   return result
 }
 

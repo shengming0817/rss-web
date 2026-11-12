@@ -13,8 +13,6 @@ export interface ExecutionRef {
 export interface Execution extends ExecutionRef {
   readonly family: string | null
   readonly device: string
-  readonly registrationId: string
-  readonly generation: number
   readonly origin: 'direct' | 'policy'
   readonly policy: string | null
   readonly deadline: number
@@ -25,8 +23,6 @@ export type EvidenceDocument = Readonly<Record<string, unknown>>
 interface DetailIdentity {
   readonly id: string
   readonly device: string
-  readonly registrationId: string | null
-  readonly generation: number | null
   readonly deadline: number
 }
 export interface CommandDetail extends DetailIdentity {
@@ -153,13 +149,7 @@ export function createExecution(port: ExecutionPort) {
           : item.policy
             ? await port.run(item.policy, item.id, signal)
             : null
-      if (
-        !detail ||
-        detail.id !== item.id ||
-        detail.device !== item.device ||
-        (detail.registrationId !== null && detail.registrationId !== item.registrationId) ||
-        (detail.generation !== null && detail.generation !== item.generation)
-      )
+      if (!detail || detail.id !== item.id || detail.device !== item.device)
         throw new Error('Execution target changed; read again')
       return { item, detail, policy: item.policy }
     },

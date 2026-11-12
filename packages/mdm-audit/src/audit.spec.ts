@@ -63,7 +63,7 @@ it('accepts an authorized paired member but rejects another activity identity or
       recordedAt: 20,
       observedAt: 10,
       origin: 'policy',
-      target: { device: 'paired-channel', registration: id, generation: 2 },
+      target: { device: 'paired-channel' },
       links: {
         policy: id,
         version: other,
@@ -124,8 +124,6 @@ it('requires the original self-service actor and rejects a browser instance coor
     owner: 'script_invocation',
     operationId: '11111111-1111-4111-8111-111111111111',
     device: 'endpoint',
-    registration: '22222222-2222-4222-8222-222222222222',
-    generation: 1,
   }
   expect(() => validateOperationAddress(address)).toThrow('Missing required operation coordinate')
   const locator = { ...address, actor: 'registered-user' }

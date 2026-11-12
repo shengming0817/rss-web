@@ -138,11 +138,13 @@ function ConfigurationPreview({
           <>
             <Space wrap>
               <Link
-                to={`/policies?${new URLSearchParams({ policy: value.policyId, tab: 'definition' })}`}
+                to={`/policies?${new URLSearchParams({ policy: value.policyId, tab: 'configuration' })}`}
               >
                 {policy.value.definition.alias ?? value.policyId}
               </Link>
-              <Link to={`/scopes?${new URLSearchParams({ scope: policy.value.definition.scope })}`}>
+              <Link
+                to={`/policies?${new URLSearchParams({ policy: policy.value.id, tab: 'scope' })}`}
+              >
                 {l('策略范围', 'Policy scope')}
               </Link>
             </Space>
@@ -151,6 +153,8 @@ function ConfigurationPreview({
               {policy.value.revision} / {policy.value.version}
             </p>
             <PolicyPreview
+              id={policy.value.id}
+              expectedRevision={policy.value.revision}
               policies={policies}
               definition={policy.value.definition}
               locale={locale}
@@ -220,12 +224,8 @@ export function TelemetryConfigurations({
                 <dd>{utcMicros(read.value.evaluatedAtMicros)}</dd>
               </div>
               <div>
-                <dt>{l('注册 / 代次', 'Registration / generation')}</dt>
-                <dd>
-                  {read.value.registration
-                    ? `${read.value.registration.id} / ${read.value.registration.generation}`
-                    : l('没有当前注册', 'No current registration')}
-                </dd>
+                <dt>{l('设备', 'Device')}</dt>
+                <dd>{read.value.device}</dd>
               </div>
             </dl>
             <DataTable

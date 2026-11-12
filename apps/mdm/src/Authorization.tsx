@@ -1,3 +1,4 @@
+import { useDirectoryQuery } from './directory-location'
 import { DataTable } from './DataTable'
 import { useEffect, useState } from 'react'
 import {
@@ -698,7 +699,7 @@ function Groups({ runtime, locale, instance }: Props & { instance: string }) {
   const l = labels(locale),
     { authorization, binding } = useAdministration(runtime),
     action = useAction()
-  const [query, setQuery] = useState<Query>({ limit: 20 }),
+  const [query, setQuery] = useDirectoryQuery('authorizationGroups.'),
     [id, setId] = useState<string | null>(null),
     [fresh, setFresh] = useState<Revision<UserGroup> | null>(null)
   const [deleting, setDeleting] = useState<Revision<UserGroup> | null>(null),
@@ -736,6 +737,7 @@ function Groups({ runtime, locale, instance }: Props & { instance: string }) {
         <Button onClick={page.reload}>{l('重新读取', 'Read again')}</Button>
       </div>
       <DirectoryControls
+        catalog="userGroups"
         locale={locale}
         query={query}
         onChange={setQuery}

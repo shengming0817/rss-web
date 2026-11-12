@@ -1,3 +1,4 @@
+import { newPolicyAction } from './PolicyActionEditor'
 // @vitest-environment jsdom
 import { webcrypto } from 'node:crypto'
 import { act, createElement as h, Fragment } from 'react'
@@ -73,20 +74,19 @@ const endpoint: ViewEndpoint = {
   status: 'active',
   assetState: 'active',
   platform: { state: 'known', values: ['windows'] },
-  primaryMdmRegistration: {
-    registrationId: '11111111-1111-4111-8111-111111111111',
-    generation: 1,
-    source: 'mdm.windows',
-  },
-  channels: [],
-  enrollments: [],
+  channel: 'mdm' as const,
+  source: 'mdm.windows',
+  registeredAt: null,
+  lastCommunicationReceivedAt: null,
+  enrollment: null,
 }
 function detailSnapshot(target = endpoint, allowed = ['restart']): EndpointDetail {
   return {
     ...target,
+    platform: target.platform.state === 'known' ? (target.platform.values[0] ?? null) : null,
     capabilities: ['restart', 'lock', 'wipe'].map((action) => ({
       action,
-      channel: 'mdm',
+      channel: 'mdm' as const,
       productSupport: { state: 'supported', reason: null },
       devicePrerequisite: { state: 'supported', reason: null },
       permission: {
@@ -181,8 +181,7 @@ it('allows a wipe-only principal to confirm backend-authorized recovery without 
           device: 'device-a',
           id: '11111111-1111-4111-8111-111111111111',
           revision: 4,
-          registration: '22222222-2222-4222-8222-222222222222',
-          generation: 7,
+
           canReauthorize: true,
           confirmationRequired: true,
           terminal: false,
@@ -203,8 +202,6 @@ it('allows a wipe-only principal to confirm backend-authorized recovery without 
       expectedRevision: 4,
       confirmation: {
         confirmed: true,
-        expectedRegistrationId: '22222222-2222-4222-8222-222222222222',
-        expectedGeneration: 7,
       },
     }),
   ])
@@ -257,8 +254,6 @@ it('allows a wipe-only principal to select, review and explicitly submit a wipe'
   expect(create.mock.calls[0]![0].action).toEqual({
     kind: 'wipe',
     confirmed: true,
-    expectedRegistrationId: endpoint.primaryMdmRegistration!.registrationId,
-    expectedGeneration: 1,
   })
 })
 it.each<EnterpriseConfiguration>([
@@ -380,8 +375,6 @@ it.each(['runs', 'assignments'])(
           {
             taskId: run,
             device: 'device-a',
-            registrationId: 'registration',
-            generation: 1,
             occurrence: 'event',
             availableAt: 1,
             deadline: 2,
@@ -419,7 +412,20 @@ it.each(['runs', 'assignments'])(
           },
           policies: {
             list,
-            read: async () => ({ id: policy, definition: { action: { kind: 'execution' } } }),
+            read: async () => ({
+              id: policy,
+              revision: 1,
+              version: 1,
+              versionId: run,
+              state: 'enabled',
+              scopes: [],
+              definition: {
+                scope: { targets: [], limitations: null, exclusions: [] },
+                alias: null,
+                customEvent: null,
+                action: newPolicyAction('execution'),
+              },
+            }),
             runs,
             assignments,
           },
@@ -429,8 +435,6 @@ it.each(['runs', 'assignments'])(
               device: 'device-a',
               policy,
               status: 'unknown',
-              registrationId: 'registration',
-              generation: 1,
             }),
             list: async () => ({ items: [], nextCursor: null }),
             statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
@@ -442,7 +446,7 @@ it.each(['runs', 'assignments'])(
           },
         }),
       } as unknown as Runtime,
-      path = `/policies?${new URLSearchParams({ policy, tab, state: 'enabled', filter: "alias=='selected'", sort: '-revision', field: 'id', limit: '50', cursor: 'directory-page-2', runCursor: 'run-page-2', assignmentCursor: 'assignment-page-2' })}`
+      path = `/policies?${new URLSearchParams({ policy, tab: 'records', record: tab, state: 'enabled', filter: "alias=='selected'", sort: '-revision', field: 'id', limit: '50', cursor: 'directory-page-2', runCursor: 'run-page-2', assignmentCursor: 'assignment-page-2' })}`
     await act(async () =>
       root.render(
         h(
@@ -467,9 +471,11 @@ it.each(['runs', 'assignments'])(
     expect(host.textContent).toContain('原操作与结果')
     await act(async () => button('浏览器返回').click())
     expect(host.querySelector('[data-location]')!.textContent).toBe(path)
-    expect(document.querySelector('[role=tab][aria-selected=true]')!.textContent).toContain(
-      tab === 'runs' ? '执行事实' : '设备分配',
-    )
+    expect(
+      [...document.querySelectorAll('[role=tab][aria-selected=true]')]
+        .map((node) => node.textContent)
+        .join(' '),
+    ).toContain(tab === 'runs' ? '执行事实' : '设备分配')
     await clickRun()
     await act(async () => host.querySelector<HTMLAnchorElement>('a[href^="/policies?"]')!.click())
     expect(host.querySelector('[data-location]')!.textContent).toBe(path)
@@ -477,7 +483,7 @@ it.each(['runs', 'assignments'])(
       expect.objectContaining({
         limit: 50,
         cursor: 'directory-page-2',
-        filter: "(state=='enabled');(alias=='selected')",
+        filter: "(alias=='selected')",
         sort: ['-revision'],
         fields: ['id'],
       }),
@@ -494,9 +500,11 @@ it.each(['runs', 'assignments'])(
         { limit: 20, cursor: 'assignment-page-2' },
         expect.any(AbortSignal),
       ])
-    expect(document.querySelector('[role=tab][aria-selected=true]')!.textContent).toContain(
-      tab === 'runs' ? '执行事实' : '设备分配',
-    )
+    expect(
+      [...document.querySelectorAll('[role=tab][aria-selected=true]')]
+        .map((node) => node.textContent)
+        .join(' '),
+    ).toContain(tab === 'runs' ? '执行事实' : '设备分配')
   },
 )
 it('never applies a policy return locator to another policy or an external host', () => {
@@ -602,8 +610,6 @@ it('loads sensitive evidence explicitly and keeps the authorized summary when de
       id,
       kind: 'command',
       device: 'device-a',
-      registrationId: id,
-      generation: 3,
       policy: null,
       status: 'applied',
     })),
@@ -750,8 +756,7 @@ it.each([false, true])(
       policy = '22222222-2222-4222-8222-222222222222',
       another = '33333333-3333-4333-8333-333333333333',
       attempt = '44444444-4444-4444-8444-444444444444',
-      registrationId = '55555555-5555-4555-8555-555555555555',
-      path = `/operations?kind=action_run&operation=${id}&policy=${policy}&attempt=${mismatch ? policy : attempt}&registration=${registrationId}&generation=3&version=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
+      path = `/operations?kind=action_run&operation=${id}&policy=${policy}&attempt=${mismatch ? policy : attempt}&version=${policy}&filter=device%3D%3D%27device-a%27&cursor=page-two`,
       detail = vi.fn(async () => ({
         item: null,
         policy,
@@ -770,8 +775,6 @@ it.each([false, true])(
           authorization: null,
           result: null,
           attempt,
-          registrationId,
-          generation: 3,
           nodes: [{ stepId: 'install-original', definition: { id: 'package', version: 'v1' } }],
           userAction: null,
         },
@@ -784,7 +787,9 @@ it.each([false, true])(
           devices: {
             endpoint: async () => ({
               id: 'device-a',
-              channels: [{ channel: 'agent', status: 'active', registrationId, generation: 3 }],
+              channel: 'agent',
+              status: 'active',
+              source: 'agent.builtin',
             }),
           },
           authorization: { effective: async () => ({ grants: [] }) },
@@ -794,8 +799,6 @@ it.each([false, true])(
               device: 'device-a',
               policy,
               status: 'succeeded',
-              registrationId,
-              generation: 3,
             }),
             detail,
             list: async () => ({
@@ -869,8 +872,7 @@ it.each([false, true])(
       const uri = new URL(copied.slice("rssmdm open '".length, -1))
       expect(uri.pathname).toBe(`/v1/task/${id}`)
       expect(uri.searchParams.get('attempt')).toBe(attempt)
-      expect(uri.searchParams.get('registration')).toBe(registrationId)
-      expect(uri.searchParams.get('generation')).toBe('3')
+
       expect(uri.searchParams.get('step')).toBe('install-original')
     } finally {
       Reflect.deleteProperty(navigator, 'clipboard')
@@ -899,16 +901,14 @@ it('keeps a retirement read-only without every grant, and never treats a failed 
           channels: [
             {
               device: 'device-a',
-              channel: 'mdm',
-              registration: id,
-              generation: 1,
+              channel: 'mdm' as const,
+
               stage: 'queued',
             },
             {
               device: 'device-b',
               channel: 'agent',
-              registration: id,
-              generation: 1,
+
               stage: 'queued',
             },
           ],
@@ -965,8 +965,6 @@ it('retains an unknown recovery request while refreshing the containing result d
       policy: null,
       origin: 'direct',
       status: 'queued',
-      registrationId: id,
-      generation: 1,
     },
     cancel = vi.fn(async () => {
       throw decodeMdmError(503, { code: 'service_unavailable' })
@@ -1018,7 +1016,7 @@ it('retains an unknown recovery request while refreshing the containing result d
   )
   await act(async () => button('读取详细结果与证据').click())
   const confirmation = [...host.querySelectorAll('label')]
-    .find((node) => node.textContent?.includes('我已核对原操作及注册'))!
+    .find((node) => node.textContent?.includes('我已核对原操作及设备'))!
     .querySelector<HTMLInputElement>('input')!
   await act(async () => confirmation.click())
   await act(async () => button('请求取消原操作').click())
@@ -1044,8 +1042,6 @@ it.each(['//[', '//%'])(
               device: 'device-a',
               policy: id,
               status: 'queued',
-              registrationId: id,
-              generation: 1,
             }),
             list: async () => ({ items: [], nextCursor: null }),
             statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
@@ -1129,7 +1125,12 @@ it('keeps the default endpoint location during a delayed control preflight', asy
   await act(async () =>
     release({
       ...detail,
-      primaryMdmRegistration: { ...detail.primaryMdmRegistration!, generation: 2 },
+      channel: null,
+      source: null,
+      registeredAt: null,
+      lastCommunicationReceivedAt: null,
+      enrollment: null,
+      platform: null,
     }),
   )
   expect(create).not.toHaveBeenCalled()
@@ -1287,7 +1288,7 @@ it('opens the exact linked event batch and member read-only until the user verif
 })
 
 it('aborts evidence on a context switch and ignores a late receipt from the former context', async () => {
-  const id = endpoint.primaryMdmRegistration!.registrationId
+  const id = '11111111-1111-4111-8111-111111111111'
   let resolve!: (value: unknown) => void
   const pending = new Promise((done) => {
     resolve = done
@@ -1344,7 +1345,12 @@ it('aborts evidence on a context switch and ignores a late receipt from the form
 it('clears a confirmed lock PIN on permission loss and again when issuing the write', async () => {
   const target: ViewEndpoint = {
     ...endpoint,
-    primaryMdmRegistration: { ...endpoint.primaryMdmRegistration!, source: 'mdm.apple' },
+    channel: 'mdm' as const,
+    source: 'mdm.apple',
+    registeredAt: null,
+    lastCommunicationReceivedAt: null,
+    enrollment: null,
+    platform: { state: 'known', values: ['macos'] },
   }
   const permitted = detailSnapshot(target, ['lock'])
   const create = vi.fn(async (input: ControlIntent, _pin?: string) => ({
@@ -1455,3 +1461,56 @@ it('keeps the original device command locked when an accepted response cannot be
   expect(host.querySelector(`a[href*="operationId=${original}"]`)).not.toBeNull()
   expect(host.textContent).toContain('提交结果未知')
 })
+it.each([false, true])(
+  'maps only a matching original tenant receipt to the current tenant (%s mismatch)',
+  async (mismatch) => {
+    const id = '11111111-1111-4111-8111-111111111111',
+      tenant = '22222222-2222-4222-8222-222222222222',
+      operation = vi.fn(async () => ({
+        operation: { product: 'mdm', owner: 'tenant_administration', operationId: id },
+        originalResult: {
+          availability: 'available',
+          value: {
+            operationId: id,
+            object: tenant,
+            revision: 1,
+            state: 'active',
+            accepted: null,
+            enabled: true,
+            recordedAt: null,
+            completedAt: null,
+            executions: [],
+            stages: [],
+          },
+        },
+        auditEvidence: { availability: 'not_requested' },
+        requestEvidence: { availability: 'not_requested' },
+        executionEvidence: { availability: 'not_requested' },
+        currentResourceUrl: `/api/v1/tenant-administration/tenants/${mismatch ? id : tenant}`,
+      })),
+      runtime = {
+        management: true,
+        administration: () => ({
+          binding: 'tenant-diagnostics',
+          operationDiagnostics: { management: { operation } },
+        }),
+      } as unknown as Runtime
+    await act(async () =>
+      root.render(
+        h(
+          MemoryRouter,
+          {
+            initialEntries: [
+              `/platform/operation-diagnostics?mode=operation&owner=tenant_administration&operationId=${id}&actor=admin&instance=${tenant}`,
+            ],
+          },
+          h(OperationDiagnostics, { runtime, locale: 'zh' }),
+        ),
+      ),
+    )
+    const link = [...host.querySelectorAll('a')].find((node) => node.textContent === '打开当前对象')
+    expect(link?.getAttribute('href') ?? null).toBe(
+      mismatch ? null : `/platform/tenants?tenant=${tenant}`,
+    )
+  },
+)

@@ -10,8 +10,6 @@ export interface Binding {
   readonly id: string
   readonly operationId: string
   readonly device: string
-  readonly registration: string
-  readonly registrationGeneration: number
   readonly bindingGeneration: number
   readonly factorGeneration: number
   readonly revision: number

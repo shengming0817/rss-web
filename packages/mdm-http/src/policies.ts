@@ -31,7 +31,7 @@ function definition(value: unknown): PolicyDefinition {
   }
 }
 function policy(value: unknown, id: string): Policy {
-  if (!schema.getApiV1PoliciesByIdResponse.validateRoot(value) || value.id !== id)
+  if (!schema.getApiV1PoliciesByPolicyResponse.validateRoot(value) || value.id !== id)
     throw new Error('Wrong policy detail')
   return {
     id: uuid(value.id),
@@ -40,6 +40,7 @@ function policy(value: unknown, id: string): Policy {
     versionId: uuid(value.versionId),
     state: value.state,
     definition: definition(value.definition),
+    scopes: value.scopes,
   }
 }
 const fields = {
@@ -48,7 +49,11 @@ const fields = {
   version: positive,
   versionId: uuid,
   state: (v: unknown) => enumeration(v, ['enabled', 'disabled', 'archived'] as const),
-  definition,
+  definition: (value: unknown) => {
+    if (!schema.getApiV1PoliciesResponse.validateDefinition(value))
+      throw new Error('Invalid policy directory definition')
+    return value
+  },
   scope: uuid,
   resource: (v: unknown) => nullable(v, text),
   category: (v: unknown) => nullable(v, text),
@@ -79,8 +84,6 @@ function policyRun(item: api.getApiV1PoliciesByIdRunsContract.Output['items'][nu
     report: item.kind === 'collection' ? item.report : null,
     taskId: uuid(item.taskId),
     device: text(item.device),
-    registrationId: uuid(item.registrationId),
-    generation: positive(item.generation),
     occurrence: item.occurrence,
     availableAt: item.availableAt,
     deadline: item.deadline,
@@ -115,36 +118,38 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         },
       ),
     read: (id, signal) =>
-      api.getApiV1PoliciesById(transport, { pathParams: { id: uuid(id) }, signal }, (value) =>
-        policy(value, id),
+      api.getApiV1PoliciesByPolicy(
+        transport,
+        { pathParams: { policy: uuid(id) }, signal },
+        (value) => policy(value, id),
       ),
     change: (id, change) =>
-      api.postApiV1PoliciesById(
+      api.postApiV1PoliciesByPolicy(
         transport,
         {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.postApiV1PoliciesByIdBody.validateRoot),
+          pathParams: { policy: uuid(id) },
+          body: requestInput(change, schema.postApiV1PoliciesByPolicyBody.validateRoot),
         },
         (value) => policy(value, id),
       ),
     archive: (id, operationId, expectedRevision) =>
-      api.deleteApiV1PoliciesById(
+      api.deleteApiV1PoliciesByPolicy(
         transport,
         {
-          pathParams: { id: uuid(id) },
+          pathParams: { policy: uuid(id) },
           body: requestInput(
             { operationId, expectedRevision },
-            schema.deleteApiV1PoliciesByIdBody.validateRoot,
+            schema.deleteApiV1PoliciesByPolicyBody.validateRoot,
           ),
         },
         (value) => policy(value, id),
       ),
     rerun: (id, change) =>
-      api.postApiV1PoliciesByIdReruns(
+      api.postApiV1PoliciesByPolicyReruns(
         transport,
         {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.postApiV1PoliciesByIdRerunsBody.validateRoot),
+          pathParams: { policy: uuid(id) },
+          body: requestInput(change, schema.postApiV1PoliciesByPolicyRerunsBody.validateRoot),
         },
         (value) => {
           if (
@@ -161,16 +166,19 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         defaultSoftwareChannel: value.defaultSoftwareChannel,
         mdmSoftwareDistributionEnabled: boolean(value.mdmSoftwareDistributionEnabled),
       })),
-    preview: (input, scopeResult, query) =>
-      api.postApiV1PoliciesPreviews(
+    preview: (id, expectedRevision, input, scopeResult, query, signal) =>
+      api.postApiV1PoliciesByPolicyPreviews(
         transport,
         {
+          pathParams: { policy: uuid(id) },
+          signal,
           body: requestInput(
             {
+              expectedRevision,
               definition: input,
               ...(scopeResult === null ? {} : { scopeResult: uuid(scopeResult) }),
             },
-            schema.postApiV1PoliciesPreviewsBody.validateRoot,
+            schema.postApiV1PoliciesByPolicyPreviewsBody.validateRoot,
           ),
           query: windowQuery(query),
         },
@@ -184,7 +192,19 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
                 ? Object.fromEntries(Object.entries(node).sort(([a], [b]) => a.localeCompare(b)))
                 : node,
             )
-          if (canonical(value.action) !== canonical(input.action))
+          const actionKey = (action: typeof input.action | typeof value.action) =>
+            action.kind === 'software'
+              ? {
+                  ...action,
+                  rollout: {
+                    stages: action.rollout.stages.map(({ scope: _scope, ...stage }) => {
+                      void _scope
+                      return stage
+                    }),
+                  },
+                }
+              : action
+          if (canonical(actionKey(value.action)) !== canonical(actionKey(input.action)))
             throw new Error('Wrong policy preview action')
           return {
             action: value.action,
@@ -198,9 +218,9 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         },
       ),
     assignments: (id, query, signal) =>
-      api.getApiV1PoliciesByIdAssignments(
+      api.getApiV1PoliciesByPolicyAssignments(
         transport,
-        { signal, pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        { signal, pathParams: { policy: uuid(id) }, query: windowQuery(query) },
         (value) => {
           safeNumbers(value)
           return {

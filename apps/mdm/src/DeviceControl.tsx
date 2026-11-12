@@ -19,14 +19,6 @@ import { deviceName } from './DevicePresentation'
 import { executionPath } from './Executions'
 import { useProtectedDelivery } from './useProtectedDelivery'
 import { usePendingSelection } from './SelectionGuard'
-type Registration = NonNullable<EndpointDetail['primaryMdmRegistration']>
-
-function sameRegistration(a: Registration, b: Registration | null | undefined): boolean {
-  return (
-    a.registrationId === b?.registrationId && a.generation === b.generation && a.source === b.source
-  )
-}
-
 export function DeviceControl({
   runtime,
   locale,
@@ -52,17 +44,13 @@ export function DeviceControl({
   const [approved, setApproved] = useState(false)
   const [review, setReview] = useState<{
     intent: ControlIntent
-    registration: Registration
   } | null>(null)
   const [pending, setPending] = useState<ControlIntent | null>(null)
   const [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none')
   const [stale, setStale] = useState(false)
   const [errorKind, setErrorKind] = useState<'read' | 'write'>('read')
   const { fact, ready } = controlApplicability(snapshot, kind)
-  const validReview =
-    review && ready && sameRegistration(review.registration, snapshot?.primaryMdmRegistration)
-      ? review
-      : null
+  const validReview = review && ready && review.intent.device === snapshot?.id ? review : null
   function clearReview() {
     setPin('')
     setApproved(false)
@@ -74,13 +62,11 @@ export function DeviceControl({
     if (!validReview) clearReview()
   }, [validReview])
   function prepare() {
-    const registration = snapshot?.primaryMdmRegistration
-    if (!ready || !registration || action.busy || outcome === 'unknown') return
+    if (!ready || !snapshot || action.busy || outcome === 'unknown') return
     action.clear()
     setStale(false)
     setApproved(false)
     setReview({
-      registration,
       intent: freeze({
         device: endpoint.id,
         operationId: crypto.randomUUID(),
@@ -91,8 +77,6 @@ export function DeviceControl({
             : {
                 kind,
                 confirmed: true,
-                expectedRegistrationId: registration.registrationId,
-                expectedGeneration: registration.generation,
               },
       } as ControlIntent),
     })
@@ -101,7 +85,7 @@ export function DeviceControl({
     const secret = pin
     const epoch = delivery.capture()
     if (!validReview || !approved) return
-    const { intent, registration } = validReview
+    const { intent } = validReview
     if (intent.action.kind === 'lock' && !/^[0-9]{6}$/.test(secret)) return
     clearReview()
     let issued = false
@@ -119,7 +103,7 @@ export function DeviceControl({
       }
       if (!delivery.isCurrent(epoch)) throw { cause: 'client', code: 'authentication_cancelled' }
       if (
-        !sameRegistration(registration, current.primaryMdmRegistration) ||
+        current.id !== intent.device ||
         !controlApplicability(current, intent.action.kind).ready
       ) {
         setStale(true)
@@ -259,9 +243,7 @@ export function DeviceControl({
             </p>
             <p>
               {l('动作', 'Action')}: {validReview.intent.action.kind} · MDM{' '}
-              {validReview.intent.action.kind !== 'restart'
-                ? `${validReview.intent.action.expectedRegistrationId} @${validReview.intent.action.expectedGeneration}`
-                : validReview.registration.registrationId}
+              {validReview.intent.device}
             </p>
             <Alert
               type={validReview.intent.action.kind === 'wipe' ? 'error' : 'warning'}

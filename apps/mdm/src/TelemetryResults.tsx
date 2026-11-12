@@ -241,8 +241,8 @@ export function TelemetryResults({
                 'The server selects latest values using current sources. Observation time does not assert current availability.',
               )
             : l(
-                '历史值保留原注册、来源与定义版本。每页单独展示，不跨缺口插值。',
-                'Historical values retain their registration, source and definition. Pages are shown separately, without interpolation across gaps.',
+                '历史值保留原设备、来源与定义版本。每页单独展示，不跨缺口插值。',
+                'Historical values retain their device, source and definition. Pages are shown separately, without interpolation across gaps.',
               )}
         </p>
         <ReadState

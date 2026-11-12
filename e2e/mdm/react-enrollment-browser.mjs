@@ -141,8 +141,8 @@ try {
     await employee.getByRole('button', { name: '准备一次性注册密码', exact: true }).isDisabled(),
     true,
   )
-  const established = await api('GET', `/api/v1/devices/${f.existingDevice}/registrations`)
-  assert.ok(established.items.some((r) => r.status === 'active'))
+  const established = await api('GET', `/api/v1/devices/${f.existingDevice}/registration`)
+  assert.equal(established.status, 'active')
   await anonymous.reload()
   await anonymous.getByRole('heading', { name: 'Agent 安装包', exact: true }).waitFor()
   assert.equal(new URL(anonymous.url()).pathname, '/downloads/agent')

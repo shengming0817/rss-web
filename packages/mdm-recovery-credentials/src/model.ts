@@ -20,8 +20,6 @@ export interface Material {
   readonly id: string
   readonly binding: {
     readonly device: string
-    readonly registration: string
-    readonly generation: number
     readonly subject: Subject
   }
   readonly version: number
@@ -36,10 +34,6 @@ export interface MaterialRow extends Partial<Omit<Material, 'id' | 'version'>> {
   readonly id: string
   readonly version: number
 }
-export interface Registration {
-  readonly registration: string
-  readonly generation: number
-}
 /** Collection authorization, escrow custody and material revisions are different facts. */
 export interface FileVaultConfiguration {
   readonly enabled: boolean
@@ -50,7 +44,7 @@ export interface FileVaultConfiguration {
   readonly recipientCertificate: string | null
   readonly materialRevision: number
 }
-export interface ConfigureFileVault extends Registration {
+export interface ConfigureFileVault {
   readonly operationId: string
   readonly expectedRevision: number
   readonly enabled: boolean
@@ -95,7 +89,7 @@ export type Action =
       readonly operation: string
     }
   | { readonly kind: 'verify_recovery_lock'; readonly material: Version }
-export interface OperationIntent extends Registration {
+export interface OperationIntent {
   readonly device: string
   readonly operationId: string
   readonly deadline: number
@@ -174,7 +168,7 @@ export interface RecoveryCredentialsPort {
     signal?: AbortSignal,
   ): Promise<Page<MaterialRow>>
   material(target: MaterialRef, signal?: AbortSignal): Promise<Material>
-  configuration(device: string, registration: Registration | null): Promise<FileVaultConfiguration>
+  configuration(device: string): Promise<FileVaultConfiguration>
   configure(device: string, input: ConfigureFileVault): Promise<FileVaultConfiguration>
   link(device: string, operationId: string, otherDevice: string): Promise<FileVaultConfiguration>
   reveal(target: MaterialRef, signal?: AbortSignal): Promise<Disclosure>

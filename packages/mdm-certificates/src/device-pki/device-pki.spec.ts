@@ -48,6 +48,7 @@ function fixture(overrides: Partial<DevicePkiPort> = {}) {
       fingerprint: 'b'.repeat(64),
     })),
     observation: vi.fn(async () => null),
+    registrationRecovery: vi.fn(async () => null),
     recoverRegistration: vi.fn(async (input) => ({
       grantId: issuance,
       state: 'available' as const,
@@ -193,7 +194,7 @@ describe('Device PKI use cases', () => {
       secret = 'A'.repeat(43)
     await core.recoverRegistration(
       {
-        registration: issuance,
+        device: 'device-a',
         operationId: operation,
         platform: 'windows',
         csr: 'YQ==',

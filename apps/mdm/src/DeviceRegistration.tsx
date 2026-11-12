@@ -1,25 +1,13 @@
-import { usePendingSelection } from './SelectionGuard'
 import { useState } from 'react'
-import { Alert, Button, Checkbox, Space } from 'antd'
+import { Alert, Button, Checkbox, Descriptions, Space } from 'antd'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import {
-  firstPage,
-  CursorControls,
-  DirectoryControls,
-  Failure,
-  isUnknown,
-  labels,
-  ReadState,
-  directoryQuery,
-  type Query,
-  useAction,
-  useRead,
-} from './AdminUi'
+import { Failure, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'
 import { useAdministration } from './useAdministration'
-import { DataTable } from './DataTable'
+import { usePendingSelection } from './SelectionGuard'
 import { Status } from './DevicePresentation'
-import { NativeEnrollment } from './NativeEnrollment'
+import { DiagnosticReference } from './DiagnosticReference'
+
 export function DeviceRegistration({
   runtime,
   locale,
@@ -32,36 +20,17 @@ export function DeviceRegistration({
   const l = labels(locale),
     { enrollment, binding } = useAdministration(runtime),
     action = useAction(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
-    [selected, setSelected] = useState<string>(),
     [approved, setApproved] = useState(false),
-    [pending, setPending] = useState<{ registration: string; operationId: string } | null>(null),
+    [pending, setPending] = useState<string | null>(null),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
     read = useRead(
-      `${binding}/device-registrations/${device}/${JSON.stringify(query)}`,
-      (signal) =>
-        enrollment.registrations(
-          device,
-          directoryQuery(query, [
-            'registrationId',
-            'enrollmentId',
-            'certificateGrantId',
-            'userContextId',
-            'source',
-            'generation',
-            'status',
-          ] as const),
-          signal,
-        ),
-      { retryReadConflict: !query.cursor },
+      `${binding}/device-registration/${device}`,
+      (signal) => enrollment.registration(device, signal),
+      { retryReadConflict: true },
     )
-  usePendingSelection(
-    action.busy || (pending !== null && !['confirmed', 'rejected'].includes(outcome)),
-  )
-  async function submit(change: NonNullable<typeof pending>) {
-    const result = await action.run(() =>
-      enrollment.revokeRegistration(device, change.registration, change.operationId),
-    )
+  usePendingSelection(action.busy || outcome === 'unknown')
+  async function submit(operationId: string) {
+    const result = await action.run(() => enrollment.revokeRegistration(device, operationId))
     setOutcome((previous) =>
       result.ok
         ? 'confirmed'
@@ -72,134 +41,111 @@ export function DeviceRegistration({
     if (result.ok) read.reload()
   }
   return (
-    <>
+    <Space orientation="vertical" className="device-editor">
       <Alert
         type="info"
         title={l(
-          '每条注册独立于终端和关联身份。撤销注册不证明设备已完成原生退管。',
-          'Each registration is separate from endpoint and association identity. Revocation does not prove native unenrollment completed.',
+          '此设备标识对应一次通道注册。新注册会创建新设备；撤销与原生退管分别观察。',
+          'This device identifies one channel enrollment. New enrollment creates a new device; observe revocation and native unenrollment separately.',
         )}
       />
-      <DirectoryControls
-        locale={locale}
-        query={query}
-        onChange={setQuery}
-        fields={[
-          'registrationId',
-          'enrollmentId',
-          'certificateGrantId',
-          'userContextId',
-          'source',
-          'generation',
-          'status',
-        ]}
-        sort={['registrationId', 'source', 'generation', 'status']}
-        required="registrationId"
-        maximum={1000}
-      />
-      <ReadState
-        busy={read.busy}
-        error={read.error}
-        locale={locale}
-        onRetry={read.reload}
-        onRestart={() => (query.cursor ? setQuery(firstPage(query)) : read.reload())}
-      />
-      <Failure error={action.error} locale={locale} />
+      <ReadState locale={locale} busy={read.busy} error={read.error} onRetry={read.reload} />
+      <Failure locale={locale} error={action.error} />
       {read.value && (
+        <Descriptions
+          column={1}
+          items={[
+            { key: 'device', label: l('设备', 'Device'), children: read.value.deviceId },
+            { key: 'source', label: l('来源', 'Source'), children: read.value.source ?? '—' },
+            {
+              key: 'status',
+              label: l('状态', 'State'),
+              children: <Status locale={locale} value={read.value.status} />,
+            },
+            {
+              key: 'enrollment',
+              label: l('注册申请', 'Enrollment request'),
+              children: read.value.enrollmentId ?? '—',
+            },
+            {
+              key: 'grant',
+              label: l('凭据请求', 'Credential grant'),
+              children: read.value.certificateGrantId ?? '—',
+            },
+            {
+              key: 'user',
+              label: l('用户范围已登记', 'User scope declared'),
+              children: read.value.enrolledUser ? l('是', 'Yes') : l('否', 'No'),
+            },
+            {
+              key: 'context',
+              label: 'WinDC',
+              children: read.value.windowsDeclared
+                ? `${read.value.windowsDeclared.requestId} · ${read.value.windowsDeclared.ready ? l('就绪', 'Ready') : l('未就绪', 'Not ready')}`
+                : l('无协议上下文', 'No protocol context'),
+            },
+          ]}
+        />
+      )}
+      <Checkbox
+        checked={approved}
+        disabled={pending !== null || action.busy}
+        onChange={(e) => setApproved(e.target.checked)}
+      >
+        {l('确认撤销此设备注册', 'Confirm revocation of this device enrollment')}
+      </Checkbox>
+      <Button
+        danger
+        disabled={!approved || pending !== null || action.busy || read.value?.status !== 'active'}
+        onClick={() => {
+          const operationId = crypto.randomUUID()
+          setPending(operationId)
+          void submit(operationId)
+        }}
+      >
+        {l('撤销此设备注册', 'Revoke device enrollment')}
+      </Button>
+      <Button onClick={read.reload}>{l('读取注册状态', 'Read enrollment state')}</Button>
+      {pending && (
         <>
-          <DataTable
+          <DiagnosticReference
             locale={locale}
-            dataSource={read.value.items}
-            rowKey="registrationId"
-            columns={[
-              {
-                title: l('注册标识', 'Registration ID'),
-                dataIndex: 'registrationId',
-                render: (_, row) => (
-                  <Button
-                    type="link"
-                    disabled={pending !== null || action.busy}
-                    onClick={() => {
-                      setSelected(row.registrationId)
-                      setApproved(false)
-                    }}
-                  >
-                    {row.registrationId}
-                  </Button>
-                ),
-              },
-              { title: l('来源', 'Source'), dataIndex: 'source' },
-              { title: l('代次', 'Generation'), dataIndex: 'generation' },
-              {
-                title: l('状态', 'State'),
-                dataIndex: 'status',
-                render: (_, row) => row.status && <Status value={row.status} locale={locale} />,
-              },
-            ]}
+            context="mdm"
+            selection={{
+              mode: 'operation',
+              address: { owner: 'registration', operationId: pending, device },
+            }}
           />
-          <CursorControls
-            locale={locale}
-            query={query}
-            onChange={setQuery}
-            next={read.value.nextCursor}
-            count={read.value.items.length}
+          <Alert
+            type={outcome === 'confirmed' ? 'success' : 'warning'}
+            title={
+              outcome === 'confirmed'
+                ? l('原撤销已确认', 'Original revocation confirmed')
+                : l(
+                    '当前状态不能确认原操作。保持原设备和原操作标识恢复。',
+                    'Current state cannot confirm the original operation. Recover with the original device and operation identity.',
+                  )
+            }
           />
+          {outcome === 'confirmed' || outcome === 'rejected' ? (
+            <Button
+              onClick={() => {
+                setPending(null)
+                setOutcome('none')
+                setApproved(false)
+                action.clear()
+                read.reload()
+              }}
+            >
+              {l('读取最新记录', 'Read latest record')}
+            </Button>
+          ) : (
+            <Button disabled={action.busy} onClick={() => void submit(pending)}>
+              {l('显式重提原撤销', 'Resubmit original revocation')}
+            </Button>
+          )}
         </>
       )}
-      {selected && (
-        <div className="device-editor">
-          <code>{selected}</code>
-          <Checkbox
-            checked={approved}
-            disabled={pending !== null || action.busy}
-            onChange={(event) => setApproved(event.target.checked)}
-          >
-            {l('确认撤销此注册身份', 'Confirm revocation of this registration')}
-          </Checkbox>
-          <Button
-            danger
-            disabled={!approved || pending !== null || action.busy}
-            onClick={() => {
-              const change = Object.freeze({
-                registration: selected,
-                operationId: crypto.randomUUID(),
-              })
-              setPending(change)
-              void submit(change)
-            }}
-          >
-            {l('撤销此注册', 'Revoke registration')}
-          </Button>
-        </div>
-      )}
-      <Button onClick={read.reload}>{l('读取注册记录', 'Read registration records')}</Button>
-      {pending && (
-        <div className="admin-recovery">
-          <code>{pending.operationId}</code>
-          <Space wrap>
-            {outcome === 'confirmed' || outcome === 'rejected' ? (
-              <Button
-                onClick={() => {
-                  setPending(null)
-                  setOutcome('none')
-                  setApproved(false)
-                  action.clear()
-                  read.reload()
-                }}
-              >
-                {outcome === 'confirmed'
-                  ? l('原撤销已确认，读取最新记录', 'Original revocation confirmed; read latest')
-                  : l('放弃已拒绝撤销并重读', 'Discard rejected revocation and read again')}
-              </Button>
-            ) : (
-              <Button disabled={action.busy} onClick={() => void submit(pending)}>
-                {l('显式重提原注册撤销', 'Resubmit original registration revocation')}
-              </Button>
-            )}
-          </Space>
-        </div>
-      )}
-      <NativeEnrollment runtime={runtime} locale={locale} deviceId={device} />
-    </>
+    </Space>
   )
 }

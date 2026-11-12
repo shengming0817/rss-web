@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Select, Space } from 'antd'
 import type { ReferenceKind, ImpactQuery } from '@rss/mdm-groups'
@@ -159,12 +160,30 @@ export function GroupReferences({
               dataSource={read.value.items}
               columns={[
                 { title: l('来源类型', 'Source kind'), dataIndex: 'kind' },
-                { title: l('引用身份', 'Reference identity'), dataIndex: 'id' },
+                {
+                  title: l('引用身份', 'Reference identity'),
+                  render: (_, row) =>
+                    row.policy ? (
+                      <Link
+                        to={`/policies?${new URLSearchParams({ policy: row.policy, tab: 'scope', ...(row.stage ? { stage: row.stage } : {}) })}`}
+                      >
+                        {l('所属策略范围', 'Owning policy scope')} · {row.id}
+                      </Link>
+                    ) : (
+                      row.id
+                    ),
+                },
                 { title: l('修订', 'Revision'), dataIndex: 'revision' },
                 { title: l('用途', 'Roles'), render: (_, row) => row.roles.join(' · ') },
                 {
                   title: l('解除方式', 'Release'),
-                  render: () => l('编辑或删除引用对象', 'Edit or delete the referencing object'),
+                  render: (_, row) =>
+                    row.release === 'edit_policy_scope_or_retire_owner'
+                      ? l(
+                          '编辑所属策略范围或退役所有者',
+                          'Edit the owning policy scope or retire its owner',
+                        )
+                      : l('编辑或删除引用对象', 'Edit or delete the referencing object'),
                 },
               ]}
             />

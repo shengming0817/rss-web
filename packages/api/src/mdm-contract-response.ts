@@ -17,10 +17,16 @@ export interface EndpointDescription {
     | {
         kind: 'directory'
         schema: {
-          fields: readonly ({ name: string; output: boolean; sort: boolean } & Record<
-            string,
-            unknown
-          >)[]
+          fields: readonly ({
+            name: string
+            output: boolean
+            sort: boolean
+            filter: boolean
+            nullable: boolean
+            kind: string | Readonly<Record<string, readonly string[]>>
+            operators: readonly string[]
+            limitation: string | null
+          } & Record<string, unknown>)[]
         } & Record<string, unknown>
       }
     | { kind: 'window' | 'body_window'; schema: unknown }

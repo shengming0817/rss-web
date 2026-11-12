@@ -12,6 +12,14 @@ from t2_environment import private
 from candidate_installation_driver import Browser
 
 
+def installation_sql():
+    """Use the candidate's real storage coordinates for synthetic prerequisite writes."""
+    from candidate_fixture import installation
+    identity = installation()
+    target, lineage = (bytes(identity[key]).hex() for key in ('target', 'lineage'))
+    return f"SET rss.storage_target='{target}'; SET rss.storage_lineage='{lineage}'; SET rss.execution_epoch='1'; "
+
+
 def readiness(environment, origin):
     endpoint = urlsplit(origin)
     connection = http.client.HTTPSConnection(endpoint.hostname, endpoint.port,

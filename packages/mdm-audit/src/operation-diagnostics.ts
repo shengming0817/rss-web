@@ -1,4 +1,4 @@
-import { freeze, identifier, revision, uuid } from '@rss/mdm-inventory'
+import { freeze, identifier, uuid } from '@rss/mdm-inventory'
 import type { AuditFact, AuditPage, AuditQuery } from './model'
 import { validateAuditQuery } from './query'
 
@@ -9,8 +9,6 @@ export interface OperationCoordinates {
   readonly instance?: string
   readonly device?: string
   readonly target?: string
-  readonly registration?: string
-  readonly generation?: number
 }
 
 export interface OperationAddress extends OperationCoordinates {
@@ -24,8 +22,6 @@ export interface OperationLocator extends OperationAddress {
 
 export interface DiagnosticQuery extends AuditQuery {
   readonly owner?: string
-  readonly registrationId?: string
-  readonly generation?: number
 }
 
 export interface DiagnosticFact {
@@ -88,7 +84,7 @@ export interface OperationDetail {
   readonly auditEvidence: Evidence<DiagnosticPage>
   readonly requestEvidence: Evidence<DiagnosticPage>
   readonly executionEvidence: Evidence<ExecutionEvidence>
-  readonly hasCurrentResource: boolean
+  readonly currentResourceUrl: string | null
 }
 
 export interface EvidenceQuery {
@@ -109,9 +105,6 @@ export interface DiagnosticsPort {
 export function validateDiagnosticQuery(query: DiagnosticQuery): void {
   validateAuditQuery(query)
   if (query.owner !== undefined) identifier(query.owner, 64)
-  if (query.registrationId !== undefined) uuid(query.registrationId)
-  if (query.generation !== undefined && revision(query.generation) < 1)
-    throw new Error('Invalid registration generation')
 }
 
 const deviceOwners = new Set([
@@ -142,10 +135,10 @@ const invocationOwners = new Set([
 export function requiredOperationCoordinates(
   owner: string,
 ): readonly (keyof OperationCoordinates)[] {
-  if (invocationOwners.has(owner)) return ['actor', 'device', 'registration', 'generation']
-  if (owner === 'filevault') return ['device', 'registration', 'generation']
+  if (invocationOwners.has(owner)) return ['actor', 'device']
+  if (owner === 'filevault') return ['device']
   if (deviceOwners.has(owner)) return ['device']
-  if (owner === 'registration_recovery') return ['registration']
+  if (owner === 'registration_recovery') return ['device']
   if (owner === 'content' || owner === 'software_source_snapshot') return ['target']
   return []
 }
@@ -163,9 +156,7 @@ export function validateOperationAddress(address: OperationAddress): void {
     throw new Error('Missing required operation coordinate')
   for (const value of [address.actor, address.device, address.target])
     if (value !== undefined) identifier(value, 256)
-  for (const value of [address.instance, address.registration]) if (value !== undefined) uuid(value)
-  if (address.generation !== undefined && revision(address.generation) < 1)
-    throw new Error('Invalid registration generation')
+  if (address.instance !== undefined) uuid(address.instance)
 }
 
 export function createOperationDiagnostics(port: DiagnosticsPort) {
@@ -192,14 +183,7 @@ export function createOperationDiagnostics(port: DiagnosticsPort) {
       )
         throw new Error('Invalid evidence continuation')
       const detail = await port.operation(freeze(address), freeze(evidence), signal)
-      const coordinates = [
-        'actor',
-        'instance',
-        'device',
-        'target',
-        'registration',
-        'generation',
-      ] as const
+      const coordinates = ['actor', 'instance', 'device', 'target'] as const
       if (
         coordinates.some(
           (key) =>

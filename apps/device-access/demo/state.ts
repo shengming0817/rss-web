@@ -47,8 +47,6 @@ export function seed() {
     id: 'computer-' + (i + 1),
     name,
     platform: [0, 3, 4].includes(i) ? 'macos' : 'windows',
-    registration: randomUUID(),
-    generation: 2,
     status: i === 2 ? 'revoked' : 'active',
     lastObservedAt: i === 4 ? null : now - (i === 2 ? 172800 : 120),
   }))
@@ -105,8 +103,6 @@ export function seed() {
             {
               id: randomUUID(),
               device: c.id,
-              registration: c.registration!,
-              generation: 2,
               version: 4,
               subject: {
                 kind: 'rss_login',

@@ -66,6 +66,7 @@ export type SoftwareReceipt =
 export interface SoftwareTask {
   task: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  dimensions: readonly Dimension[]
   resultState: 'retained' | 'releasing' | 'released'
   failure: string | null
   context: AssetContext
@@ -101,6 +102,12 @@ export interface SoftwareDevice {
   compliance: Compliance
   groupDecisions: Readonly<Record<string, 'match' | 'no_match' | 'unknown'>>
 }
+export type SoftwareEvidenceValue =
+  | { readonly kind: 'string' | 'integer'; readonly value: string }
+  | { readonly kind: 'number' | 'time'; readonly value: number }
+  | { readonly kind: 'boolean'; readonly value: boolean }
+  | { readonly kind: 'array'; readonly value: readonly SoftwareEvidenceValue[] }
+  | { readonly kind: 'object'; readonly value: Readonly<Record<string, SoftwareEvidenceValue>> }
 export interface SoftwareEvidence {
   endpoint: string
   source: string
@@ -108,13 +115,12 @@ export interface SoftwareEvidence {
     observedAt: number
     snapshotId: string
     scope: unknown
-    registration: string | null
+    deviceId: string | null
     epoch: string | null
   }
   arrayVersion: string
   ordinal: number
-  value: unknown
-  precisionLimited: boolean
+  value: SoftwareEvidenceValue
   rules: readonly string[]
   confirmed: boolean
 }
@@ -235,6 +241,8 @@ export function createSoftwareAssets(port: SoftwareAssetsPort) {
       page: WindowQuery,
       signal?: AbortSignal,
     ) {
+      if (!task.dimensions.includes(dimension))
+        throw new Error('Dimension was not requested by the task')
       return fixed(task, await port.breakdowns(task.task, bucket, dimension, page, signal))
     },
     async devices(task: SoftwareTask, bucket: string, page: WindowQuery, signal?: AbortSignal) {

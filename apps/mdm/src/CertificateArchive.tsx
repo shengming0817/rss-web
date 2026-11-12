@@ -1,3 +1,4 @@
+import { useDirectoryQuery } from './directory-location'
 import { useId, useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Select, Space, Switch } from 'antd'
 import type { WindowQuery } from '@rss/mdm-devices'
@@ -13,8 +14,8 @@ import {
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import {
-  type Query,
   DirectoryControls,
+  directoryQuery,
   Failure,
   labels,
   ReadState,
@@ -50,9 +51,7 @@ export function CertificateArchive({
   const l = labels(locale),
     { certificateArchive: archive, binding } = useAdministration(runtime),
     guard = useSelectionGuard(),
-    [query, setQuery] = useState<Omit<Query, 'fields'> & { fields?: readonly (keyof Entry)[] }>({
-      limit: 20,
-    }),
+    [query, setQuery] = useDirectoryQuery('certificates.'),
     [task, setTask] = useState<ArchiveTask>('browse'),
     [visited, setVisited] = useState<Partial<Record<ArchiveTask, boolean>>>({}),
     previousTask = useRef<ArchiveTask>('browse'),
@@ -65,7 +64,17 @@ export function CertificateArchive({
     [historyQuery, setHistoryQuery] = useState<WindowQuery>({ limit: 10 }),
     [vault, setVault] = useState<Vault | null>(null),
     list = useRead(`${binding}/certificate-archive/${canRead}/${JSON.stringify(query)}`, () =>
-      canRead ? archive.list(query) : Promise.resolve(null),
+      canRead
+        ? archive.list(
+            directoryQuery(query, [
+              'id',
+              'revision',
+              'retired',
+              'recommendedVersion',
+              'latest',
+            ] as const),
+          )
+        : Promise.resolve(null),
     ),
     detail = useRead(`${binding}/certificate-detail/${selected ?? ''}/${canRead}`, () =>
       selected && canRead ? archive.entry(selected) : Promise.resolve(null),
@@ -212,6 +221,7 @@ export function CertificateArchive({
           }
         >
           <DirectoryControls
+            catalog="certificates"
             locale={locale}
             query={query}
             onChange={({ fields, ...next }) =>

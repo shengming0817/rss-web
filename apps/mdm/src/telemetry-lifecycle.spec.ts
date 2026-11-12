@@ -52,7 +52,7 @@ const query: HistoryQuery = {
 const page: HistoryPage = {
   rows: [
     {
-      registration: 'reg',
+      device: 'reg',
       source: 'agent.script',
       epoch: 'epoch',
       receivedAt: 30,

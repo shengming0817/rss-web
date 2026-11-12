@@ -114,12 +114,8 @@ export function TelemetryHealth({
               dataSource={gaps.value.reports}
               columns={[
                 {
-                  title: l('注册 / 代次', 'Registration / generation'),
-                  render: (_, r) => (
-                    <code>
-                      {r.registrationId} / {r.generation}
-                    </code>
-                  ),
+                  title: l('原设备', 'Original device'),
+                  render: (_, r) => <code>{r.deviceId}</code>,
                 },
                 {
                   title: l('缺口', 'Gaps'),

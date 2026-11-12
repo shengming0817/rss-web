@@ -17,7 +17,6 @@ import {
   type Page,
   type PublicEnrollmentPort,
   type Quantity,
-  type Registration,
   type Target,
   type Terms,
   type Usage,
@@ -125,7 +124,7 @@ function receipt(
   )
     throw new Error('Wrong enrollment receipt')
   uuid(value.enrollmentId)
-  if (value.registrationId !== null) uuid(value.registrationId)
+  identifier(value.deviceId)
   return {
     ...value,
     source: enumeration(value.source, ['mdm.windows', 'mdm.apple'] as const),
@@ -405,19 +404,9 @@ export function createEnrollmentAdapter(
           ...(intent.source === 'mdm.windows' ? { windowsProfile: intent.windowsProfile } : {}),
         },
         headers = { 'Idempotency-Key': uuid(intent.operationId) }
-      return intent.deviceId === undefined
-        ? api.postApiV1SelfEnrollments(transport, { headers, body }, (value) => {
-            const { deviceId, ...status } = value
-            return {
-              ...receipt(status, intent.operationId, intent.source),
-              deviceId: identifier(deviceId),
-            }
-          })
-        : api.postApiV1Enrollments(
-            transport,
-            { headers, body: { ...body, deviceId: identifier(intent.deviceId) } },
-            (value) => receipt(value, intent.operationId, intent.source),
-          )
+      return api.postApiV1SelfEnrollments(transport, { headers, body }, (value) =>
+        receipt(value, intent.operationId, intent.source),
+      )
     },
     enrollment: (id) =>
       api.getApiV1EnrollmentsById(transport, { pathParams: { id: uuid(id) } }, (value) =>
@@ -455,46 +444,27 @@ export function createEnrollmentAdapter(
             4 * 1024 * 1024,
           ),
       ),
-    registrations: (device, query, signal) => {
-      if (query.fields && !query.fields.includes('registrationId'))
-        throw new Error('Registration identity required')
-      return api.getApiV1DevicesByDeviceRegistrations(
+    registration: (device, signal) =>
+      api.getApiV1DevicesByDeviceRegistration(
         transport,
-        {
-          signal,
-          pathParams: { device: identifier(device) },
-          query: queryParameters({ limit: 20, ...query }),
+        { signal, pathParams: { device: identifier(device) } },
+        (value) => {
+          if (value.deviceId !== device) throw new Error('Wrong registration device')
+          return value
         },
-        (value) =>
-          projectedPage(
-            value,
-            {
-              registrationId: uuid,
-              enrollmentId: (v: unknown) => (v === null ? null : uuid(v)),
-              certificateGrantId: (v: unknown) => (v === null ? null : uuid(v)),
-              userContextId: (v: unknown) => (v === null ? null : uuid(v)),
-              source: (v: unknown) =>
-                enumeration(v, ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),
-              generation: positive,
-              status: (v: unknown) => enumeration(v, ['active', 'superseded', 'revoked'] as const),
-            },
-            query.fields,
-            ['registrationId'],
-          ) as Page<Registration>,
-      )
-    },
-    revokeRegistration: (device, registration, operationId) =>
-      api.postApiV1DevicesByDeviceRegistrationsByRegistrationRevoke(
+      ),
+    revokeRegistration: (device, operationId) =>
+      api.postApiV1DevicesByDeviceRegistrationRevoke(
         transport,
         {
-          pathParams: { device: identifier(device), registration: uuid(registration) },
+          pathParams: { device: identifier(device) },
           headers: { 'Idempotency-Key': uuid(operationId) },
           body: {},
         },
         (value) => {
-          if (value.operation_id !== operationId || value.registration !== registration)
-            throw new Error('Wrong registration revocation')
-          return { operationId, registration }
+          if (value.operation_id !== operationId || value.device !== device)
+            throw new Error('Wrong device revocation')
+          return { operationId, deviceId: device }
         },
       ),
     agentSettings: () => api.getApiV1AgentEnrollmentSettings(transport, {}),

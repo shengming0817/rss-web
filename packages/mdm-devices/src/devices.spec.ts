@@ -1,33 +1,22 @@
 import { expect, it, vi } from 'vitest'
 import { createDevices, referenceKey } from './index'
-import type { Association, DevicesPort, EndpointDetail, PrimaryRegistration } from './model'
+import type { Association, DevicesPort, EndpointDetail, DeviceMember } from './model'
 
 const tenant = '11111111-1111-4111-8111-111111111111',
   operationId = '22222222-2222-4222-8222-222222222222',
-  associationId = '33333333-3333-4333-8333-333333333333',
-  mdmRegistration = '44444444-4444-4444-8444-444444444444',
-  agentRegistration = '55555555-5555-4555-8555-555555555555'
-function endpoint(id: string, channel: 'mdm' | 'agent', generation: number): EndpointDetail {
+  associationId = '33333333-3333-4333-8333-333333333333'
+function endpoint(id: string, channel: 'mdm' | 'agent', _generation: number): EndpointDetail {
   return {
     id,
     status: 'active',
-    primaryMdmRegistration: null,
+    channel,
+    source: channel === 'mdm' ? 'mdm.windows' : 'agent.builtin',
+    platform: 'windows',
+    registeredAt: null,
+    lastCommunicationReceivedAt: null,
+    enrollment: null,
     inventoryAvailable: false,
-    enrollments: [],
     capabilities: [],
-    channels: [
-      {
-        channel,
-        registrationId: channel === 'mdm' ? mdmRegistration : agentRegistration,
-        generation,
-        status: 'active',
-        source: channel === 'mdm' ? 'mdm.windows' : 'agent.builtin',
-        platform: 'windows',
-        lastCommunicationReceivedAt: null,
-        children: [],
-        userContext: null,
-      },
-    ],
   }
 }
 function port(methods: Partial<DevicesPort>): DevicesPort {
@@ -38,7 +27,7 @@ function port(methods: Partial<DevicesPort>): DevicesPort {
     },
   })
 }
-function receipt(mdm: PrimaryRegistration, agent: PrimaryRegistration, version = 1): Association {
+function receipt(mdm: DeviceMember, agent: DeviceMember, version = 1): Association {
   return {
     id: associationId,
     version,
@@ -52,7 +41,7 @@ function receipt(mdm: PrimaryRegistration, agent: PrimaryRegistration, version =
     reason: null,
   }
 }
-it('keeps endpoint and association identity distinct and prepares current registration generations', async () => {
+it('keeps endpoint and association identity distinct and prepares current device members', async () => {
   const read = vi.fn(async (id: string) =>
     endpoint(id, id === 'mdm-endpoint' ? 'mdm' : 'agent', id === 'mdm-endpoint' ? 8 : 3),
   )
@@ -68,10 +57,8 @@ it('keeps endpoint and association identity distinct and prepares current regist
   expect(change.mdm).toEqual({
     device: 'mdm-endpoint',
     channel: 'mdm',
-    registrationId: mdmRegistration,
-    generation: 8,
   })
-  expect(change.agent.generation).toBe(3)
+  expect(change.agent).toEqual({ device: 'agent-endpoint', channel: 'agent' })
   expect(Object.isFrozen(change)).toBe(true)
   expect(Object.isFrozen(change.mdm)).toBe(true)
   expect(referenceKey({ kind: 'endpoint', id: associationId })).not.toBe(
@@ -79,24 +66,20 @@ it('keeps endpoint and association identity distinct and prepares current regist
   )
   expect(() => referenceKey({ kind: 'association', id: 'mdm-endpoint' })).toThrow()
 })
-it('prepares re-verification from full detail and rejects a receipt bound to an old generation', async () => {
+it('prepares re-verification from full detail and rejects a receipt bound to an different device', async () => {
   const mdm = {
       device: 'mdm',
       channel: 'mdm' as const,
-      registrationId: mdmRegistration,
-      generation: 4,
     },
     agent = {
       device: 'agent',
       channel: 'agent' as const,
-      registrationId: agentRegistration,
-      generation: 2,
     }
   const devices = createDevices(
     port({
       endpoint: async (id) => endpoint(id, id === 'mdm' ? 'mdm' : 'agent', id === 'mdm' ? 4 : 2),
       association: async () => ({ ...receipt(mdm, agent, 7), state: 'needs_verification' }),
-      confirm: async () => receipt({ ...mdm, generation: 3 }, agent, 8),
+      confirm: async () => receipt({ ...mdm, device: 'different-mdm' }, agent, 8),
     }),
     tenant,
   )
@@ -132,7 +115,7 @@ it('does not replay an unknown association write or infer confirmation from a re
   expect(confirm).toHaveBeenCalledWith(change)
 })
 it('assigns personnel from the observed CAS detail and rejects a foreign tenant or mismatched receipt', async () => {
-  const target = { tenantId: tenant, instanceId: mdmRegistration, principalId: agentRegistration },
+  const target = { tenantId: tenant, instanceId: operationId, principalId: associationId },
     read = vi.fn(async () => ({ revision: 9, user: null }))
   const assign = vi.fn(async () => ({ revision: 10, user: null }))
   const devices = createDevices(port({ registrationUser: read, assign }), tenant)
@@ -177,19 +160,20 @@ it('keeps a forced retirement receipt pending and checks its operation binding',
     (await devices.forceRetirement(associationId, operationId, 'Recovery approved')).revocation,
   ).toBe('pending')
   await expect(
-    devices.forceRetirement(mdmRegistration, operationId, 'Recovery approved'),
+    devices.forceRetirement(operationId, operationId, 'Recovery approved'),
   ).rejects.toThrow('Wrong retirement receipt')
 })
 
 it('requires the exact MDM capability, current registration and independent permission', async () => {
   const { controlApplicability } = await import('./control-applicability')
-  const base = {
+  const base: EndpointDetail = {
     ...endpoint('control-device', 'mdm', 1),
-    primaryMdmRegistration: {
-      registrationId: '11111111-1111-4111-8111-111111111111',
-      generation: 1,
-      source: 'mdm.windows' as const,
-    },
+    channel: 'mdm',
+    source: 'mdm.windows' as const,
+    registeredAt: null,
+    lastCommunicationReceivedAt: null,
+    enrollment: null,
+    platform: 'windows',
   }
   const fact = {
     action: 'restart',

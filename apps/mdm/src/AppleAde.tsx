@@ -1,3 +1,4 @@
+import { useDirectoryQuery } from './directory-location'
 import { validateInput } from './AdminUi'
 import { validateAdeConfiguration } from '@rss/mdm-enrollment'
 import { usePendingSelection } from './SelectionGuard'
@@ -54,7 +55,7 @@ export function AppleAde({
     { appleEnrollment: apple, binding } = useAdministration(runtime),
     action = useAction(),
     [localCreating, setLocalCreating] = useState(false),
-    [profileQuery, setProfileQuery] = useState<Query>({ limit: 20 }),
+    [profileQuery, setProfileQuery] = useDirectoryQuery(`ade.${organizationId}.`),
     [deviceQuery, setDeviceQuery] = useState<Query>({ limit: 20 }),
     [selectedProfile, setSelectedProfile] = useState<AdeProfile | null>(null),
     [newProfile, setNewProfile] = useState<string>(),
@@ -376,6 +377,7 @@ export function AppleAde({
           </Space>
           <h2>{l('ADE 配置描述文件', 'ADE setup profiles')}</h2>
           <DirectoryControls
+            catalog="ade"
             locale={locale}
             query={profileQuery}
             onChange={setProfileQuery}

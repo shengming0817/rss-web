@@ -13,7 +13,8 @@ export function controlApplicability(
   return {
     fact,
     ready:
-      !!detail?.primaryMdmRegistration &&
+      detail?.channel === 'mdm' &&
+      detail.status === 'active' &&
       fact?.productSupport.state === 'supported' &&
       fact.devicePrerequisite.state === 'supported' &&
       fact.permission.allowed,

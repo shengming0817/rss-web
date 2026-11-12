@@ -486,13 +486,25 @@ export default tseslint.config(
   },
   {
     files: [
-      'packages/{mdm-policies,mdm-scopes,mdm-groups,mdm-compliance,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-execution,mdm-device-access,mdm-telemetry,mdm-tenant-setup,mdm-runtime-diagnostics}/**/*.ts',
+      'packages/{mdm-scopes,mdm-groups,mdm-compliance,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-execution,mdm-device-access,mdm-telemetry,mdm-tenant-setup,mdm-runtime-diagnostics}/**/*.ts',
     ],
     rules: {
       'no-restricted-imports': boundaryRule([
         {
           regex: '^(?:@rss/(?!mdm-devices$|mdm-inventory$)|react(?:/|$)|antd(?:/|$)|axios$)',
           message: 'These domain cores consume only pure device and inventory models.',
+        },
+      ]),
+    },
+  },
+  {
+    files: ['packages/mdm-policies/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundaryRule([
+        {
+          regex:
+            '^(?:@rss/(?!mdm-devices$|mdm-inventory$|mdm-scopes$)|react(?:/|$)|antd(?:/|$)|axios$)',
+          message: 'Policy composes pure device, inventory and owned Scope definitions.',
         },
       ]),
     },

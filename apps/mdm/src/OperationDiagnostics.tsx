@@ -247,22 +247,20 @@ function Execution({ value, locale }: { value: ExecutionEvidence; locale: Locale
 }
 
 function currentResource(detail: OperationDetail): string | null {
-  if (!detail.hasCurrentResource || detail.originalResult.availability !== 'available') return null
-  const id = detail.originalResult.value.object
-  if (!id) return null
-  const owner = detail.operation.owner
-  const object = encodeURIComponent(id)
-  switch (owner) {
-    case 'resource':
-      return `/resources?resource=${object}`
-    case 'policy':
-      return `/policies?policy=${object}`
-    case 'scope':
-      return `/scopes?scope=${object}`
-    case 'tenant_administration':
-      return `/platform/tenants?tenant=${object}`
-    default:
-      return null
+  if (detail.originalResult.availability !== 'available' || !detail.currentResourceUrl) return null
+  // Translate only declared current API locators. A Scope UUID alone has no Policy owner.
+  const match = /^\/api\/v1\/(resources|policies|tenant-administration\/tenants)\/([^/?#]+)$/.exec(
+    detail.currentResourceUrl,
+  )
+  if (!match) return null
+  try {
+    const id = decodeURIComponent(match[2]!)
+    if (id !== detail.originalResult.value.object) return null
+    if (match[1] === 'tenant-administration/tenants')
+      return `/platform/tenants?${new URLSearchParams({ tenant: id })}`
+    return `/${match[1]}?${new URLSearchParams({ [match[1] === 'resources' ? 'resource' : 'policy']: id })}`
+  } catch {
+    return null
   }
 }
 
@@ -470,8 +468,6 @@ function LocatorForm({
                   ['target', l('原对象', 'Original object')],
                   ['actor', l('原主体', 'Original actor')],
                   ['instance', l('原实例', 'Original instance')],
-                  ['registration', l('原注册', 'Original registration')],
-                  ['generation', l('原代次', 'Original generation')],
                 ]
               : [
                   ['targetType', l('对象类型', 'Object type')],

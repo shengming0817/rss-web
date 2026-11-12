@@ -213,17 +213,8 @@ try {
     )
 
     run.step('current-policy-tool-alias-and-shared-event-navigation')
-    const scope = randomUUID(),
-      policyIds = [randomUUID(), randomUUID()],
+    const policyIds = [randomUUID(), randomUUID()],
       event = 'react.audit.shared'
-    await api('POST', '/api/v1/scopes/' + scope, {
-      operationId: randomUUID(),
-      expectedRevision: 0,
-      input: {
-        action: 'put',
-        definition: { targets: [{ kind: 'device', id: f.mdm }], limitations: null, exclusions: [] },
-      },
-    })
     for (const [index, id] of policyIds.entries()) {
       await api('POST', '/api/v1/policies/' + id, {
         operationId: randomUUID(),
@@ -232,7 +223,7 @@ try {
           action: 'put',
           enabled: false,
           definition: {
-            scope,
+            scope: { targets: [{ kind: 'device', id: f.mdm }], limitations: null, exclusions: [] },
             alias: 'react.audit.' + index,
             customEvent: event,
             action: {
@@ -285,10 +276,10 @@ try {
     const policyPath = '/api/v1/policies/' + policyIds[0]
     await run.nav(
       p,
-      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'names' })}`,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'configuration' })}`,
       '策略与部署',
     )
-    const names = p.locator('.ant-modal:visible')
+    const names = p.locator('.policy-editor')
     await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
     const associations = names.getByRole('region', { name: '当前事件关联成员' })
     await associations
@@ -296,9 +287,7 @@ try {
       .filter({ hasText: resolved.capability.toolName })
       .waitFor()
     assert.equal(await associations.locator('tbody tr').count(), 2)
-    await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
     await label('唯一别名').waitFor()
-    await names.getByRole('tab', { name: '名称与入口', exact: true }).click()
     let releasePolicy
     const heldPolicy = new Promise((done) => {
         releasePolicy = done
@@ -314,41 +303,43 @@ try {
       .getByRole('link')
       .click()
     await p.waitForURL((url) => url.searchParams.get('policy') === policyIds[1])
+    await label('唯一别名').waitFor({ state: 'hidden' })
     assert.equal(await label('唯一别名').count(), 0)
     releasePolicy()
     await label('唯一别名').waitFor()
     assert.equal(await label('唯一别名').inputValue(), 'react.audit.1')
     await p.unroute('**' + otherPolicyPath)
-    await button('返回来源').click()
+    await p.getByRole('button', { name: '返回来源', exact: true }).click()
     await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
     await button('显示 Agent 查看入口').click()
     await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
-    await label('终端候选服务端筛选').fill(`id=='${f.agent}'`)
-    await button('查询终端候选').click()
-    await button('使用此终端').click()
+    await run.directoryFilter(names, `key=='endpoint:${f.agent}'`)
+    await names
+      .getByRole('row')
+      .filter({ hasText: f.agent })
+      .getByRole('button', { name: '使用此终端', exact: true })
+      .click()
     await button('复制链接 · 共享事件').click()
     await p.getByRole('status').filter({ hasText: '已复制 · 共享事件' }).waitFor()
     const copiedEvent = new URL(await p.evaluate(() => globalThis.navigator.clipboard.readText()))
     assert.equal(copiedEvent.pathname, `/v1/event/${event}`)
     assert.equal(copiedEvent.searchParams.get('device'), f.agent)
     assert.equal(copiedEvent.searchParams.get('tenant'), f.tenant)
-    const registered = (await api('GET', `/api/v1/devices/${f.agent}`)).channels.find(
-      (channel) => channel.channel === 'agent' && channel.status === 'active',
-    )
+    const registered = await api('GET', `/api/v1/devices/${f.agent}`)
     assert.ok(registered)
     assert.equal(copiedEvent.searchParams.get('instance'), f.instance)
-    assert.equal(copiedEvent.searchParams.get('registration'), registered.registrationId)
-    assert.equal(copiedEvent.searchParams.get('generation'), String(registered.generation))
+
     checks.push('real-shared-event-copy-for-current-agent-registration')
-    await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
     await label('唯一别名').fill('react.audit.1')
     await label('确认范围、资源、调度与潜在影响').check()
     await run.response(p, 'POST', policyPath, () => button('保存策略定义').click(), 409)
     await p
-      .getByText('保存冲突。请重新读取策略修订；若别名被其他策略占用，请换用可用别名。', {
+      .getByText('保存冲突，草稿已保留。读取最新配置并核对差异后继续。', {
         exact: true,
       })
       .waitFor()
+    await button('读取原策略当前状态').click()
+    await button('保留草稿，采用此修订继续编辑').click()
     await label('唯一别名').fill('react.audit.renamed')
     await label('共享事件名').fill('')
     await label('确认范围、资源、调度与潜在影响').check()
@@ -360,10 +351,10 @@ try {
     })
     assert.equal(renamed.policy.id, policyIds[0])
     assert.equal(renamed.policy.definition.customEvent, null)
-    await button('返回并重新读取策略').click()
+    await button('返回策略目录').click()
     await run.nav(
       p,
-      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'definition' })}`,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'configuration' })}`,
       '策略与部署',
     )
     await label('唯一别名').fill('')
@@ -378,10 +369,10 @@ try {
       { kind: 'alias', alias: 'react.audit.renamed' },
       404,
     )
-    await button('返回并重新读取策略').click()
+    await button('返回策略目录').click()
     await run.nav(
       p,
-      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'names' })}`,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'configuration' })}`,
       '策略与部署',
     )
     await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
@@ -634,7 +625,11 @@ try {
     await run.nav(p, '/webhooks?subscription.limit=1', 'Webhook 集成')
     await button('下一页').click()
     await p.waitForURL((url) => url.searchParams.has('subscription.cursor'))
-    await run.choose(p, label('订阅启用状态'), '已启用')
+    await run.choose(p, label('启用状态'), '是')
+    await p
+      .locator('.directory-search:visible')
+      .getByRole('button', { name: '应用', exact: true })
+      .click()
     await p.waitForURL(
       (url) =>
         !url.searchParams.has('subscription.cursor') &&

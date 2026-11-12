@@ -100,8 +100,6 @@ export function evidence(value: unknown): Evidence {
   return {
     ...value,
     scope: scope(value.scope),
-    registration: nullable(value.registration, uuid),
-    registrationGeneration: nullable(value.registrationGeneration, count),
     observedAt: integer(value.observedAt),
     receivedAt: integer(value.receivedAt),
   }
@@ -140,7 +138,7 @@ export function fieldDefinition(value: unknown): FieldDefinition {
   return structuredClone(value)
 }
 export function fieldDescriptor(value: unknown): FieldDescriptor {
-  if (!schema.getApiV1AssetFieldsResponse200.validateFieldView(value))
+  if (!schema.getApiV1AssetFieldsResponse.validateFieldView(value))
     throw new Error('Invalid field descriptor')
   count(value.version)
   return structuredClone(value)
@@ -189,8 +187,6 @@ export function qualityRun(value: unknown): QualityRun {
     throw new Error('Invalid collection quality')
   return {
     ...value,
-    registration: uuid(value.registration),
-    registrationGeneration: count(value.registrationGeneration),
     sequence: integer(value.sequence),
     fields: value.fields.map((field) => ({
       ...field,

@@ -18,7 +18,7 @@ import type {
   AuditPort,
   ManagementActivity,
 } from '@rss/mdm-audit'
-import { boolean, count, enumeration, list, nullable, positive, text, uuid } from './decode'
+import { boolean, count, enumeration, list, nullable, text, uuid } from './decode'
 import { distinct, integer, requestInput } from './inventory-values'
 
 export function auditFact(value: unknown): AuditFact {
@@ -39,7 +39,6 @@ export function auditFact(value: unknown): AuditFact {
     operationId: nullable(value.operationId, uuid),
     relatedOperationIds: list(value.relatedOperationIds, uuid),
     requestId: nullable(value.requestId, uuid),
-    registrationId: nullable(value.registrationId, uuid),
     registrationRequestId: nullable(value.registrationRequestId, uuid),
     instanceId: nullable(value.instanceId, uuid),
     auditOutcome: text(value.auditOutcome),
@@ -76,8 +75,6 @@ function activity(value: unknown): ManagementActivity {
         ? null
         : {
             device: text(value.target.device),
-            registration: uuid(value.target.registration),
-            generation: positive(value.target.generation),
           },
     links: {
       policy: nullable(links.policy, uuid),

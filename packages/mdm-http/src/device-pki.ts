@@ -86,7 +86,7 @@ function candidate(value: unknown, issuance: string): IssuanceCandidate {
 }
 function grant(value: unknown): GrantReceipt {
   if (
-    !schema.postApiV1AgentRegistrationsByIdRecoveryResponse.validateRoot(value) ||
+    !schema.postApiV1DevicesByIdRegistrationRecoveryResponse.validateRoot(value) ||
     value.wireVersion !== 1
   )
     throw new Error('Invalid registration recovery grant')
@@ -109,8 +109,7 @@ function observation(value: unknown): Observation | null {
   if (item.version !== 1) throw new Error('Unsupported trust observation')
   return {
     operation: uuid(item.operation),
-    registration: uuid(item.registration),
-    generation: positive(item.generation),
+    device: text(item.deviceId),
     sequence: positive(item.sequence),
     target: coordinates(item.target_revision, item.target_digest),
     actual: coordinates(item.actual_revision, item.actual_digest),
@@ -125,6 +124,7 @@ export function createDevicePkiAdapter(
   transport: HttpTransport,
   tenant: string,
   service: string,
+  actor: string,
 ): DevicePkiPort {
   return {
     trust: (purpose) =>
@@ -187,11 +187,17 @@ export function createDevicePkiAdapter(
         { pathParams: { device } },
         observation,
       ),
+    registrationRecovery: (device, operation) =>
+      api.getApiV1DevicesByIdRegistrationRecoveryOperationsByOperation(
+        transport,
+        { pathParams: { id: device, operation }, query: { actor, instance: service } },
+        (value) => (value === null ? null : grant(value)),
+      ),
     recoverRegistration: (input, secret) =>
-      api.postApiV1AgentRegistrationsByIdRecovery(
+      api.postApiV1DevicesByIdRegistrationRecovery(
         transport,
         {
-          pathParams: { id: input.registration },
+          pathParams: { id: input.device },
           body: {
             wireVersion: 1,
             operationId: input.operationId,

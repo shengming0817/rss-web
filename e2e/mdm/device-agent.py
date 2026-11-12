@@ -68,7 +68,7 @@ def register(origin, ca, native, operator, private, tenant, capabilities=None, a
     canonical = {key: readback[key] for key in ['version', 'service_id', 'tenant', 'revision', 'keys']}
     canonical['keys'] = [{key: item[key] for key in ['id', 'public_key', 'state']} for item in readback['keys']]
     digest = hashlib.sha256(json.dumps(['rss-mdm/task-signing-trust/v1', canonical], separators=(',', ':')).encode()).hexdigest()
-    acknowledgement = dict(operation=str(uuid.uuid4()), version=1, registration=binding['registrationId'], generation=binding['generation'], revision=trust['revision'], digest=digest)
+    acknowledgement = dict(operation=str(uuid.uuid4()), version=1, deviceId=binding['deviceId'], revision=trust['revision'], digest=digest)
     check(call(origin, ca, '/api/v1/agent/runtime/task-trust', acknowledgement, cert, key) == acknowledgement, 'collector-trust-acknowledgement')
     # The existing enterprise session and mTLS jointly bind a current user.
     session = dict(part.split('=', 1) for part in operator.cookie.split('; '))['__Host-identity-session']
@@ -110,7 +110,7 @@ def collect(fixture, action, resource, cycle):
             if payload['kind'] == 'collection' and task['resource']['id'] == resource:
                 break
             check(action in {'software_assets', 'software_assets_os'}, 'collector-task-binding')
-            check(task['registrationId'] == agent['runtime']['registrationId'], 'collector-task-registration')
+            check(task['deviceId'] == agent['runtime']['deviceId'], 'collector-task-registration')
             # This dedicated fixture can still receive earlier test offers. Close them
             # without obtaining a start permit or performing a device effect.
             for kind in ['received', 'cancelled']:
@@ -167,7 +167,7 @@ def claim_policy(fixture, policy):
             payload = response['task']['payload']
             check(payload['kind'] in ['script','collection','software','device_access','credential','enrollment','unmanage'], 'policy-task-family')
             task = payload['task']
-            check(task['deviceId'] == agent['runtime']['deviceId'] and task['registrationId'] == agent['runtime']['registrationId'], 'policy-task-device-binding')
+            check(task['deviceId'] == agent['runtime']['deviceId'], 'policy-task-device-binding')
             wanted = payload['kind'] == 'script' and task['authorization']['policyId'] == policy
             prior = agent.setdefault('policyTasks', [])
             if wanted:
@@ -198,7 +198,7 @@ def script_event(fixture, action, policy):
             if response['task'] is not None:
                 payload = response['task']['payload']
                 task = payload['task']
-                check(task['deviceId'] == agent['runtime']['deviceId'] and task['registrationId'] == agent['runtime']['registrationId'], 'script-device-binding')
+                check(task['deviceId'] == agent['runtime']['deviceId'], 'script-device-binding')
                 wanted = payload['kind'] == 'script' and task['authorization']['policyId'] == policy
                 kinds = ['received', 'start'] if wanted else ['received', 'cancelled']
                 for kind in kinds:
@@ -238,7 +238,7 @@ def acknowledge_pki(path):
     digest = hashlib.sha256(json.dumps(['device-trust-install/v1',readback['version'],readback['service_id'],readback['tenant'],readback['purpose'],readback['revision'],generations],separators=(',',':')).encode()).hexdigest()
     ack = dict(operation=str(uuid.uuid4()),version=1,revision=trust['revision'],digest=digest)
     call(agent['origin'],agent['ca'],'/api/v1/agent/enroll/trust/acknowledgements',ack,agent['cert'],agent['key'],expected=204)
-    observation = dict(operation=str(uuid.uuid4()),version=1,registration=agent['runtime']['registrationId'],generation=agent['runtime']['generation'],sequence=1,target_revision=trust['revision'],target_digest=digest,actual_revision=trust['revision'],actual_digest=digest,state='applied',reason=None,observed_at=int(time.time()))
+    observation = dict(operation=str(uuid.uuid4()),version=1,deviceId=agent['runtime']['deviceId'],sequence=1,target_revision=trust['revision'],target_digest=digest,actual_revision=trust['revision'],actual_digest=digest,state='applied',reason=None,observed_at=int(time.time()))
     check(call(agent['origin'],agent['ca'],'/api/v1/agent/enroll/trust/observations',observation,agent['cert'],agent['key']) == observation,'collector-pki-observation')
     return dict(result='passed',revision=trust['revision'])
 

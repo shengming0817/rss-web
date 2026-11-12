@@ -80,8 +80,8 @@ export function RecoveryCredentials({
       <Alert
         type="info"
         title={l(
-          '材料身份由设备、注册、代次、Subject 和精确版本组成。托管成功不等于已验证；RSS Login 材料是离线附加因子，不是 Windows 账户密码。',
-          'Material identity includes device, registration, generation, subject and exact version. Escrow does not establish verification; RSS Login material is an offline additional factor, not a Windows account password.',
+          '材料身份由设备、Subject 和精确版本组成。托管成功不等于已验证；RSS Login 材料是离线附加因子，不是 Windows 账户密码。',
+          'Material identity includes device, subject and exact version. Escrow does not establish verification; RSS Login material is an offline additional factor, not a Windows account password.',
         )}
       />
       <SecretPanel active={canRead}>
@@ -160,11 +160,8 @@ export function RecoveryCredentials({
                         row.binding ? subjectName(row.binding.subject, locale) : '—',
                     },
                     {
-                      title: l('注册 / 代次', 'Registration / generation'),
-                      render: (_, row) =>
-                        row.binding
-                          ? `${row.binding.registration} / ${row.binding.generation}`
-                          : '—',
+                      title: l('原设备', 'Original device'),
+                      render: (_, row) => (row.binding ? row.binding.device : '—'),
                     },
                     {
                       title: l('有效性', 'Validity'),
@@ -314,10 +311,8 @@ function MaterialDetail({
             </dd>
           </div>
           <div>
-            <dt>{l('注册 / 代次', 'Registration / generation')}</dt>
-            <dd>
-              {value.binding.registration} / {value.binding.generation}
-            </dd>
+            <dt>{l('原设备', 'Original device')}</dt>
+            <dd>{value.binding.device}</dd>
           </div>
           <div>
             <dt>{l('Subject 身份', 'Subject identity')}</dt>

@@ -1,10 +1,4 @@
-import type {
-  DeviceRef,
-  DirectoryQuery,
-  Page,
-  PrimaryRegistration,
-  WindowQuery,
-} from '@rss/mdm-devices'
+import type { DeviceRef, DirectoryQuery, Page, DeviceMember, WindowQuery } from '@rss/mdm-devices'
 import type { AssetContext, ConditionContext, Operation, Predicate } from '@rss/mdm-inventory'
 
 export type GroupCriteria =
@@ -114,7 +108,7 @@ export interface Decision {
     readonly object: DeviceRef
     readonly associationVersion: number | null
     readonly verified: boolean
-    readonly members: readonly PrimaryRegistration[]
+    readonly members: readonly DeviceMember[]
   }[]
 }
 export type ResultKind = 'members' | 'changes' | 'decisions'
@@ -165,7 +159,9 @@ export interface Reference {
     | 'exclusion'
     | 'compliance_target'
   )[]
-  readonly release: 'edit_or_delete_referencing_object'
+  readonly policy: string | null
+  readonly stage: string | null
+  readonly release: 'edit_or_delete_referencing_object' | 'edit_policy_scope_or_retire_owner'
 }
 export type References = Page<Reference>
 export type ReferenceQuery = WindowQuery
@@ -184,7 +180,7 @@ export interface GroupPreview {
   readonly asOf: number
 }
 export interface GroupsPort {
-  list(query: GroupQuery): Promise<Page<GroupRow>>
+  list(query: GroupQuery, signal?: AbortSignal): Promise<Page<GroupRow>>
   read(id: string): Promise<GroupRead>
   change(id: string, change: Operation<GroupChange>): Promise<GroupReceipt | TaskAccepted>
   preview(request: GroupPreviewRequest): Promise<GroupPreview>

@@ -4,6 +4,7 @@ import { DiagnosticReference } from './DiagnosticReference'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Alert, Button, Empty, Form, Input, InputNumber, Select, Space, Spin } from 'antd'
+import { DirectoryCatalogContext, DirectorySearch } from './DirectorySearch'
 import type { Locale } from './i18n'
 export type AdminProps = { locale: Locale }
 export function labels(locale: Locale) {
@@ -360,11 +361,11 @@ export function ReadState({
   return null
 }
 export interface Query {
-  filter?: string
-  sort?: readonly string[]
-  fields?: readonly string[]
-  limit?: number
-  cursor?: string
+  filter?: string | undefined
+  sort?: readonly string[] | undefined
+  fields?: readonly string[] | undefined
+  limit?: number | undefined
+  cursor?: string | undefined
 }
 export function firstPage<Q extends { readonly cursor?: string | undefined }>(
   query: Q,
@@ -383,6 +384,7 @@ export function DirectoryControls({
   required = 'id',
   maximum = 1000,
   disabled = false,
+  catalog,
 }: AdminProps & {
   query: Query
   onChange: (query: Query) => void
@@ -391,83 +393,109 @@ export function DirectoryControls({
   required?: string | readonly string[]
   maximum?: number
   disabled?: boolean
+  catalog?: string
 }) {
   const l = labels(locale),
     requiredFields = typeof required === 'string' ? [required] : required,
-    [filter, setFilter] = useState(query.filter ?? '')
+    [filter, setFilter] = useState(query.filter ?? ''),
+    capabilities = useContext(DirectoryCatalogContext)[catalog ?? '']
   return (
-    <Form
-      disabled={disabled}
-      className="admin-toolbar"
-      layout="inline"
-      onFinish={() => {
-        if (disabled) return
-        const rest = firstPage(query)
-        delete rest.filter
-        onChange({ ...rest, ...(filter ? { filter } : {}) })
-      }}
-    >
-      <Form.Item label={l('服务端筛选', 'Server filter')}>
-        <Input
-          aria-label={l('服务端筛选', 'Server filter')}
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder={l("字段=='值'", "field=='value'")}
-          maxLength={8192}
-          allowClear
+    <>
+      {catalog && (
+        <DirectorySearch
+          catalog={catalog}
+          locale={locale}
+          query={query}
+          onChange={onChange}
+          disabled={disabled}
         />
-      </Form.Item>
-      <Button htmlType="submit">{l('应用', 'Apply')}</Button>
-      <Form.Item label={l('排序', 'Sort')}>
-        <Select
-          aria-label={l('排序', 'Sort')}
-          value={query.sort?.[0]}
-          allowClear
-          className="admin-select"
-          onChange={(value: string | undefined) => {
-            const rest = firstPage(query)
-            delete rest.sort
-            onChange({ ...rest, ...(value ? { sort: [value] } : {}) })
-          }}
-          options={sort.flatMap((field) => [
-            { value: field, label: `${fieldLabel(locale, field)} ↑` },
-            { value: `-${field}`, label: `${fieldLabel(locale, field)} ↓` },
-          ])}
-        />
-      </Form.Item>
-      <Form.Item label={l('列', 'Columns')}>
-        <Select
-          aria-label={l('列', 'Columns')}
-          mode="multiple"
-          className="admin-fields"
-          value={[...(query.fields ?? fields)]}
-          options={fields.map((field) => ({
-            value: field,
-            label: fieldLabel(locale, field),
-            disabled: requiredFields.includes(field),
-          }))}
-          onChange={(value: string[]) => {
-            const rest = firstPage(query)
-            onChange({ ...rest, fields: [...new Set([...requiredFields, ...value])] })
-          }}
-          maxTagCount="responsive"
-        />
-      </Form.Item>
-      <Form.Item label={l('每页', 'Page size')}>
-        <InputNumber
-          aria-label={l('每页', 'Page size')}
-          min={1}
-          max={maximum}
-          value={query.limit ?? 20}
-          onChange={(limit) => {
-            if (limit) {
+      )}
+      <Form
+        disabled={disabled}
+        className="admin-toolbar"
+        component={catalog ? 'div' : 'form'}
+        layout="inline"
+        onFinish={() => {
+          if (disabled || catalog) return
+          const rest = firstPage(query)
+          delete rest.filter
+          onChange({ ...rest, ...(filter ? { filter } : {}) })
+        }}
+      >
+        {!catalog && (
+          <>
+            <Form.Item label={l('服务端筛选', 'Server filter')}>
+              <Input
+                aria-label={l('服务端筛选', 'Server filter')}
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder={l("字段=='值'", "field=='value'")}
+                maxLength={8192}
+                allowClear
+              />
+            </Form.Item>
+            <Button htmlType="submit">{l('应用', 'Apply')}</Button>
+          </>
+        )}
+        <Form.Item label={l('排序', 'Sort')}>
+          <Select
+            aria-label={l('排序', 'Sort')}
+            value={query.sort?.[0]}
+            allowClear
+            className="admin-select"
+            onChange={(value: string | undefined) => {
               const rest = firstPage(query)
-              onChange({ ...rest, limit })
-            }
-          }}
-        />
-      </Form.Item>
-    </Form>
+              delete rest.sort
+              onChange({ ...rest, ...(value ? { sort: [value] } : {}) })
+            }}
+            options={(capabilities
+              ? capabilities.fields.filter((field) => field.sort).map((field) => field.name)
+              : sort
+            ).flatMap((field) => [
+              { value: field, label: `${fieldLabel(locale, field)} ↑` },
+              { value: `-${field}`, label: `${fieldLabel(locale, field)} ↓` },
+            ])}
+          />
+        </Form.Item>
+        <Form.Item label={l('列', 'Columns')}>
+          <Select
+            aria-label={l('列', 'Columns')}
+            mode="multiple"
+            className="admin-fields"
+            value={[...(query.fields ?? fields)]}
+            options={fields
+              .filter(
+                (field) =>
+                  !capabilities || capabilities.fields.some((f) => f.name === field && f.output),
+              )
+              .map((field) => ({
+                value: field,
+                label: fieldLabel(locale, field),
+                disabled: requiredFields.includes(field),
+              }))}
+            onChange={(value: string[]) => {
+              const rest = firstPage(query)
+              onChange({ ...rest, fields: [...new Set([...requiredFields, ...value])] })
+            }}
+            maxTagCount="responsive"
+          />
+        </Form.Item>
+        <Form.Item label={l('每页', 'Page size')}>
+          <InputNumber
+            aria-label={l('每页', 'Page size')}
+            min={1}
+            max={capabilities?.maximum ?? maximum}
+            value={query.limit ?? 20}
+            onChange={(limit) => {
+              if (limit) {
+                const rest = firstPage(query)
+                onChange({ ...rest, limit })
+              }
+            }}
+          />
+        </Form.Item>
+      </Form>
+    </>
   )
 }
 export function CursorControls<Q extends { readonly cursor?: string | undefined }>({
@@ -520,7 +548,6 @@ const fieldNames: Record<string, readonly [string, string]> = {
   association: ['关联关系', 'Association'],
   endpoints: ['终端', 'Endpoints'],
   status: ['状态', 'State'],
-  primaryMdmRegistration: ['主 MDM 注册', 'Primary MDM registration'],
   channels: ['通道', 'Channels'],
   enrollments: ['注册申请', 'Enrollment requests'],
   inventoryAvailable: ['资产数据可读', 'Inventory readable'],
@@ -563,8 +590,20 @@ export function cellText(locale: Locale, value: unknown): string {
 export function directoryQuery<F extends string>(
   query: Query,
   allowed: readonly F[],
-): Omit<Query, 'fields'> & { fields?: readonly F[] } {
-  const { fields, ...rest } = query
+): {
+  filter?: string
+  sort?: readonly string[]
+  limit?: number
+  cursor?: string
+  fields?: readonly F[]
+} {
+  const { fields } = query
+  const rest = {
+    ...(query.filter !== undefined ? { filter: query.filter } : {}),
+    ...(query.sort !== undefined ? { sort: query.sort } : {}),
+    ...(query.limit !== undefined ? { limit: query.limit } : {}),
+    ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
+  }
   if (fields === undefined) return rest
   if (fields.some((field) => !allowed.includes(field as F)))
     throw new Error('Invalid directory columns')

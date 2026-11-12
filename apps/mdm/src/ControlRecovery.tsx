@@ -16,8 +16,6 @@ export function ControlRecoveryPanel({
   device,
   id,
   revision,
-  registration,
-  generation,
   canReauthorize,
   confirmationRequired,
   terminal,
@@ -28,8 +26,6 @@ export function ControlRecoveryPanel({
   device: string
   id: string
   revision: number
-  registration: string
-  generation: number
   canReauthorize: boolean
   confirmationRequired: boolean
   terminal: boolean
@@ -69,8 +65,6 @@ export function ControlRecoveryPanel({
                 confirmation: confirmationRequired
                   ? {
                       confirmed: true as const,
-                      expectedRegistrationId: registration,
-                      expectedGeneration: generation,
                     }
                   : null,
               }
@@ -98,8 +92,8 @@ export function ControlRecoveryPanel({
         type="warning"
         showIcon
         title={l(
-          '取消是请求停止后续执行，不撤销已发生的设备效果。重新授权保留原动作、注册、PIN 与期限。',
-          'Cancellation requests stopping subsequent execution; it does not undo device effects. Reauthorization keeps the original action, registration, PIN and deadline.',
+          '取消是请求停止后续执行，不撤销已发生的设备效果。重新授权保留原动作、设备、PIN 与期限。',
+          'Cancellation requests stopping subsequent execution; it does not undo device effects. Reauthorization keeps the original action, device, PIN and deadline.',
         )}
       />
       <Checkbox
@@ -108,8 +102,8 @@ export function ControlRecoveryPanel({
         onChange={(e) => setApproved(e.target.checked)}
       >
         {l(
-          '我已核对原操作及注册，并明确确认本次恢复',
-          'I verified the original operation and registration and explicitly confirm this recovery',
+          '我已核对原操作及设备，并明确确认本次恢复',
+          'I verified the original operation and device and explicitly confirm this recovery',
         )}
       </Checkbox>
       <Space wrap>

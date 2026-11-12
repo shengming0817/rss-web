@@ -220,8 +220,7 @@ it('admits complex structured conditions without deciding their outcome and enfo
 it('does not reinterpret partial collection quality as a successful complete snapshot', async () => {
   const run = {
     id,
-    registration: other,
-    generation: 8,
+    device: 'endpoint',
     epoch: 'epoch',
     source: 'agent.native' as const,
     dataset: 'dataset',

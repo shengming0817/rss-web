@@ -12,7 +12,6 @@ import {
   validateIntent,
   validateMaterial,
   validateReference,
-  validateRegistration,
 } from './authoring'
 import type {
   ConfigureFileVault,
@@ -22,7 +21,6 @@ import type {
   MaterialRef,
   OperationIntent,
   RecoveryCredentialsPort,
-  Registration,
 } from './model'
 
 export function credentialIntent(input: OperationIntent): OperationIntent {
@@ -30,8 +28,6 @@ export function credentialIntent(input: OperationIntent): OperationIntent {
   return freeze({
     device: input.device,
     operationId: input.operationId,
-    registration: input.registration,
-    generation: input.generation,
     deadline: input.deadline,
     action: actionIntent(input.action),
   })
@@ -74,17 +70,15 @@ export function createRecoveryCredentials(port: RecoveryCredentialsPort) {
       return port.list(identifier(device, 256), query, signal)
     },
     material: exact,
-    async configuration(device: string, registration: Registration | null = null) {
+    async configuration(device: string) {
       identifier(device, 256)
-      if (registration) validateRegistration(registration)
-      const result = await port.configuration(device, registration && freeze(registration))
+      const result = await port.configuration(device)
       validateConfiguration(result)
       return result
     },
     async configure(device: string, input: ConfigureFileVault) {
       identifier(device, 256)
       uuid(input.operationId)
-      validateRegistration(input)
       revision(input.expectedRevision)
       if (typeof input.enabled !== 'boolean') throw new Error('Invalid FileVault collection choice')
       if (input.enabled) identifier(input.recipientId)

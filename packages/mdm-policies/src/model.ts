@@ -1,10 +1,11 @@
+import type { ScopeDefinition, ScopeRead } from '@rss/mdm-scopes'
 import type {
   Channel,
   DeviceRef,
   DirectoryQuery,
   Page,
   Platform,
-  PrimaryRegistration,
+  DeviceMember,
   WindowQuery,
   Retirement,
 } from '@rss/mdm-devices'
@@ -45,8 +46,9 @@ export interface ExactResource {
   readonly architecture: Architecture
   readonly variant: string
 }
-export interface RolloutStage {
-  readonly scope: string
+export interface RolloutStage<S = ScopeDefinition> {
+  readonly id: string
+  readonly scope: S
   readonly opensAt: number
   readonly minimumVerifiedPercent: number | null
 }
@@ -81,7 +83,7 @@ interface Scheduled {
   readonly schedule: Schedule
   readonly runLifetimeSeconds: number
 }
-export type PolicyAction =
+export type PolicyAction<S = ScopeDefinition> =
   | {
       readonly kind: 'device_access'
       readonly mac: MacLogin | null
@@ -136,7 +138,7 @@ export type PolicyAction =
         readonly variants: Readonly<Record<string, string>>
       }
       readonly intent: 'required_install' | 'available_install' | 'explicit_uninstall'
-      readonly rollout: { readonly stages: readonly RolloutStage[] }
+      readonly rollout: { readonly stages: readonly RolloutStage<S>[] }
     } & Scheduled)
   | ({ readonly kind: 'unmanage_device' } & Scheduled)
   | ({
@@ -174,9 +176,9 @@ export interface SelfService {
   readonly allowAi: boolean | null
   readonly riskLevel: 1 | 2 | null
 }
-export interface PolicyDefinition {
-  readonly scope: string
-  readonly action: PolicyAction
+export interface PolicyDefinition<S = ScopeDefinition> {
+  readonly scope: S
+  readonly action: PolicyAction<S>
   readonly alias: string | null
   readonly customEvent: string | null
   readonly selfService?: SelfService | null
@@ -188,8 +190,10 @@ export interface Policy {
   readonly versionId: string
   readonly state: 'enabled' | 'disabled' | 'archived'
   readonly definition: PolicyDefinition
+  readonly scopes: readonly ScopeRead[]
 }
-export interface PolicyRow extends Partial<Policy> {
+export interface PolicyRow extends Partial<Omit<Policy, 'definition' | 'scopes'>> {
+  readonly definition?: PolicyDefinition<string>
   readonly id: string
   readonly action?: PolicyAction['kind']
   readonly scope?: string
@@ -221,9 +225,12 @@ export interface PoliciesPort {
     readonly mdmSoftwareDistributionEnabled: boolean
   }>
   preview(
+    id: string,
+    expectedRevision: number,
     definition: PolicyDefinition,
     scopeResult: string | null,
     query: WindowQuery,
+    signal?: AbortSignal,
   ): Promise<PolicyPreview>
   assignments(id: string, query: WindowQuery, signal?: AbortSignal): Promise<Page<Assignment>>
   runs(id: string, query: WindowQuery, signal?: AbortSignal): Promise<Page<PolicyRun>>
@@ -274,7 +281,7 @@ export interface TargetFacts {
   readonly channel: Channel | null
   readonly availability: 'ready' | 'unavailable'
   readonly reason: string | null
-  readonly target: PrimaryRegistration | null
+  readonly target: DeviceMember | null
   readonly taskAdmission: {
     readonly state: AdmissionState
     readonly stage?: number | null
@@ -287,7 +294,7 @@ export interface Assignment extends TargetFacts {
     readonly object: DeviceRef
     readonly associationVersion: number | null
     readonly verified: boolean
-    readonly members: readonly PrimaryRegistration[]
+    readonly members: readonly DeviceMember[]
   }[]
   readonly scopeResult: string | null
   readonly execution:
@@ -303,7 +310,7 @@ export interface Assignment extends TargetFacts {
     | { readonly kind: 'restricted' }
 }
 export interface PolicyPreview {
-  readonly action: PolicyAction
+  readonly action: PolicyAction<string>
   readonly scopeResult: string
   readonly items: readonly (TargetFacts & {
     readonly eligibility: Qualification
@@ -350,8 +357,6 @@ export interface PolicyRun {
   } | null
   readonly taskId: string
   readonly device: string
-  readonly registrationId: string
-  readonly generation: number
   readonly occurrence: string
   readonly availableAt: number
   readonly deadline: number
@@ -364,7 +369,7 @@ export interface RolloutProgress {
   readonly versionId: string
   readonly paused: boolean
   readonly asOf: number
-  readonly stages: readonly (RolloutStage & {
+  readonly stages: readonly (Omit<RolloutStage<string>, 'id'> & {
     readonly ready: boolean
     readonly asOf: number | null
     readonly open: boolean

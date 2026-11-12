@@ -138,8 +138,8 @@ export function PolicyNames({
           </Descriptions>
           <p>
             {l(
-              '工具名定位单条策略；别名在租户内唯一，事件可关联多条策略。到“定义与发布”清空字段并保存，即撤回该策略的别名或事件关联。',
-              'A tool name locates one policy. An alias is unique within the tenant; an event may match several policies. Clear and save a field in Definition and publication to withdraw this policy’s alias or event association.',
+              '工具名定位单条策略；别名在租户内唯一，事件可关联多条策略。到“配置”清空字段并保存，即撤回该策略的别名或事件关联。',
+              'A tool name locates one policy. An alias is unique within the tenant; an event may match several policies. Clear and save a field in Configuration to withdraw this policy’s alias or event association.',
             )}
           </p>
           {!eligible && (
@@ -150,12 +150,12 @@ export function PolicyNames({
               )}
             </p>
           )}
-          <EntryCopies runtime={runtime} locale={locale} entries={entries} />
           {event && (
             <EventAssociations key={event} event={event} policies={policies} locale={locale} />
           )}
         </>
       )}
+      <EntryCopies runtime={runtime} locale={locale} entries={entries} />
     </Card>
   )
 }
@@ -215,7 +215,7 @@ function EventAssociations({
                 title: l('所属策略', 'Owning policy'),
                 render: (_, row) => (
                   <Link
-                    to={`/policies?${new URLSearchParams({ policy: row.id, tab: 'definition', returnTo: location.pathname + location.search })}`}
+                    to={`/policies?${new URLSearchParams({ policy: row.id, tab: 'configuration', returnTo: location.pathname + location.search })}`}
                   >
                     {row.toolName ?? row.id}
                   </Link>

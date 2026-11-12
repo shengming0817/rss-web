@@ -105,6 +105,7 @@ export interface Resource {
   readonly versions: readonly ResourceVersion[]
 }
 export interface ResourceRow {
+  readonly active?: boolean
   readonly id: string
   readonly kind?: ResourceKind
   readonly revision?: number

@@ -1,3 +1,4 @@
+import { useDirectoryQuery } from './directory-location'
 import { useState } from 'react'
 import { Button, Form, Select, Space } from 'antd'
 import type { Resource, ResourceKind, ResourceVersion, Variant } from '@rss/mdm-resources'
@@ -5,12 +6,12 @@ import type { ResourcesUseCases } from './ResourceCommand'
 import type { Locale } from './i18n'
 import {
   CursorControls,
+  DirectoryControls,
   Failure,
   labels,
   ReadState,
   useAction,
   useRead,
-  type Query,
 } from './AdminUi'
 import { usePendingSelection } from './SelectionGuard'
 import { DataTable } from './DataTable'
@@ -29,13 +30,14 @@ export function PolicyResourcePicker({
 }) {
   const l = labels(locale),
     action = useAction(),
-    [query, setQuery] = useState<Query>({ limit: 10 }),
+    [query, setQuery] = useDirectoryQuery(`resourcePicker.${kind}.`, { limit: 10 }),
     [selected, setSelected] = useState<Resource | null>(null),
     [version, setVersion] = useState<string | null>(null),
-    read = useRead(`policy-resource/${kind}/${JSON.stringify(query)}`, () =>
+    read = useRead(`policy-resource/${kind}/${JSON.stringify(query)}`, (signal) =>
       resources.list(
-        { ...query, fields: ['id', 'kind', 'activeVersion', 'presentation', 'revision'] },
+        { ...query, fields: ['id', 'kind', 'active', 'activeVersion', 'presentation', 'revision'] },
         kind,
+        signal,
       ),
     ),
     software = kind === 'software',
@@ -51,6 +53,15 @@ export function PolicyResourcePicker({
           ? l('选择软件资源', 'Choose a software resource')
           : l('选择已启用资源', 'Choose an active resource')}
       </legend>
+      <DirectoryControls
+        catalog="resources"
+        locale={locale}
+        query={query}
+        onChange={setQuery}
+        fields={['id', 'kind', 'active', 'activeVersion', 'presentation', 'revision']}
+        sort={[]}
+        disabled={action.busy}
+      />
       <Button onClick={read.reload}>{l('读取资源目录', 'Read resource directory')}</Button>
       <ReadState locale={locale} busy={read.busy} error={read.error} />
       <Failure locale={locale} error={action.error} kind="read" />
@@ -67,6 +78,14 @@ export function PolicyResourcePicker({
                   typeof row.presentation?.['name'] === 'string'
                     ? row.presentation['name']
                     : row.id,
+              },
+              {
+                title: l('分类', 'Category'),
+                render: (_, row) => String(row.presentation?.['category'] ?? '—'),
+              },
+              {
+                title: l('激活状态', 'Activation'),
+                render: (_, row) => (row.active ? l('已激活', 'Active') : l('未激活', 'Inactive')),
               },
               { title: l('启用版本', 'Active version'), dataIndex: 'activeVersion' },
               {

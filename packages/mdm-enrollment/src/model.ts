@@ -107,7 +107,7 @@ export interface EnrollmentStatus {
   readonly enrollmentId: string
   readonly status: 'pending' | 'bound' | 'cancelled' | 'expired'
   readonly expiresAt: number
-  readonly registrationId: string | null
+  readonly deviceId: string
   readonly source: NativeSource
 }
 export interface Enrollment extends EnrollmentStatus {
@@ -135,24 +135,23 @@ export interface Enrollment extends EnrollmentStatus {
 }
 export interface EnrollmentReceipt extends EnrollmentStatus {
   readonly operationId: string
-  readonly deviceId?: string
 }
 /** Contains no password. The caller supplies it only to the submission closure. */
 export interface NativeIntent {
   readonly operationId: string
-  readonly deviceId?: string
   readonly source: NativeSource
   readonly windowsProfile: 'Full' | 'Device'
 }
 export interface Registration {
-  readonly registrationId: string
-  readonly enrollmentId?: string | null
-  readonly certificateGrantId?: string | null
-  readonly userContextId?: string | null
-  readonly source?: Source
-  readonly generation?: number
-  readonly status?: 'active' | 'superseded' | 'revoked'
+  readonly deviceId: string
+  readonly enrollmentId: string | null
+  readonly certificateGrantId: string | null
+  readonly enrolledUser: boolean
+  readonly source: Source | null
+  readonly status: 'pending' | 'active' | 'revoked' | 'cancelled' | 'expired'
+  readonly windowsDeclared: { readonly requestId: string; readonly ready: boolean } | null
 }
+
 export type Quantity =
   | { readonly kind: 'finite'; readonly count: number }
   | { readonly kind: 'unlimited' }
@@ -389,16 +388,11 @@ export interface EnrollmentPort {
   resume(id: string, operationId: string, password: string): Promise<EnrollmentReceipt>
   cancel(id: string, operationId: string): Promise<EnrollmentReceipt>
   profile(id: string, password: string): Promise<Download>
-  registrations(
-    device: string,
-    query: Query<keyof Registration>,
-    signal?: AbortSignal,
-  ): Promise<Page<Registration>>
+  registration(device: string, signal?: AbortSignal): Promise<Registration>
   revokeRegistration(
     device: string,
-    registration: string,
     operationId: string,
-  ): Promise<{ readonly operationId: string; readonly registration: string }>
+  ): Promise<{ readonly operationId: string; readonly deviceId: string }>
   agentSettings(): Promise<AgentSettings>
   saveAgentSettings(
     operationId: string,

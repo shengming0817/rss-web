@@ -303,18 +303,9 @@ export function createConnections(ports: ConnectionsPorts, tenant: string, servi
           throw new Error('Wrong connection convergence target')
         return result
       },
-      async observation(
-        device: string,
-        expected?: { readonly registrationId: string; readonly generation: number },
-      ) {
+      async observation(device: string) {
         const result = await ports.agent.observation(device)
-        if (
-          result &&
-          expected &&
-          (result.registration !== expected.registrationId ||
-            result.generation !== expected.generation)
-        )
-          throw new Error('Changed connection registration')
+        if (result && result.device !== device) throw new Error('Wrong connection device')
         return result
       },
     }),

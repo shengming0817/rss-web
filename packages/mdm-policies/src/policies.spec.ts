@@ -20,7 +20,7 @@ const id = '11111111-1111-4111-8111-111111111111',
   versionId = '33333333-3333-4333-8333-333333333333'
 function definition(): PolicyDefinition {
   return {
-    scope: id,
+    scope: { targets: [], limitations: null, exclusions: [] },
     alias: 'repair.app-1',
     customEvent: 'repair.shared',
     action: {
@@ -49,6 +49,7 @@ it('freezes the exact publication intent without equating configuration revision
         version: 2,
         versionId,
         state: 'enabled' as const,
+        scopes: [],
         definition: input,
       }
     }),
@@ -112,8 +113,18 @@ it('requires ordered, distinct rollout stages with no first-stage success gate',
     runLifetimeSeconds: 3600,
     rollout: {
       stages: [
-        { scope: id, opensAt: 0, minimumVerifiedPercent: null },
-        { scope: versionId, opensAt: 100, minimumVerifiedPercent: 80 },
+        {
+          id,
+          scope: { targets: [], limitations: null, exclusions: [] },
+          opensAt: 0,
+          minimumVerifiedPercent: null,
+        },
+        {
+          id: versionId,
+          scope: { targets: [], limitations: null, exclusions: [] },
+          opensAt: 100,
+          minimumVerifiedPercent: 80,
+        },
       ],
     },
   }
@@ -123,7 +134,16 @@ it('requires ordered, distinct rollout stages with no first-stage success gate',
       ...definition(),
       action: {
         ...action,
-        rollout: { stages: [{ scope: id, opensAt: 0, minimumVerifiedPercent: 80 }] },
+        rollout: {
+          stages: [
+            {
+              id,
+              scope: { targets: [], limitations: null, exclusions: [] },
+              opensAt: 0,
+              minimumVerifiedPercent: 80,
+            },
+          ],
+        },
       },
     }),
   ).toThrow('order')
@@ -134,8 +154,18 @@ it('requires ordered, distinct rollout stages with no first-stage success gate',
         ...action,
         rollout: {
           stages: [
-            { scope: id, opensAt: 100, minimumVerifiedPercent: null },
-            { scope: versionId, opensAt: 100, minimumVerifiedPercent: null },
+            {
+              id,
+              scope: { targets: [], limitations: null, exclusions: [] },
+              opensAt: 100,
+              minimumVerifiedPercent: null,
+            },
+            {
+              id: versionId,
+              scope: { targets: [], limitations: null, exclusions: [] },
+              opensAt: 100,
+              minimumVerifiedPercent: null,
+            },
           ],
         },
       },

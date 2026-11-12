@@ -4,10 +4,11 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 const run = await realBrowser('MDM_DEVICE_BROWSER_FIXTURE', 'react-devices')
-let failure
+let failure, diagnosticPage
 try {
   const { fixture: f, origin, checks } = run,
     p = await run.page()
+  diagnosticPage = p
   async function openDevice(kind, id, navigate) {
     const path = `/api/v1/device-views/${kind}/${id}`,
       matches = (response) =>
@@ -76,13 +77,44 @@ try {
   )
   await p.getByRole('button', { name: '读取最新设备事实', exact: true }).waitFor()
   await p.getByRole('tab', { name: '终端关联', exact: true }).click()
-  await p.getByRole('button', { name: '关联另一通道终端', exact: true }).click()
+  const candidatesPath = `/api/v1/devices/${f.mdm}/association-candidates`
+  let candidates = await (
+    await run.response(p, 'GET', candidatesPath, () =>
+      p.getByRole('button', { name: '关联另一通道终端', exact: true }).click(),
+    )
+  ).json()
   const d = p.getByRole('dialog', { name: '核验终端关联', exact: true })
-  await run.choose(p, d.getByLabel('对侧通道候选终端', { exact: true }), `${f.agent} · agent · 1`)
+  for (
+    let page = 0;
+    !candidates.items.some((item) => item.device === f.agent) && page < 4;
+    page++
+  ) {
+    assert.ok(candidates.nextCursor, 'target remains discoverable through server candidate pages')
+    candidates = await (
+      await run.response(p, 'GET', candidatesPath, () =>
+        d.getByRole('button', { name: '继续查找候选', exact: true }).click(),
+      )
+    ).json()
+  }
+  assert.ok(candidates.items.some((item) => item.device === f.agent))
+  const candidateSelect = d.getByLabel('对侧通道候选终端', { exact: true })
+  await candidateSelect.click()
+  await p.locator('.ant-select-dropdown:visible .ant-select-item-option-content').first().waitFor()
+  // Exercise keyboard navigation within the bounded current candidate window.
+  for (
+    let index = 0;
+    index < candidates.items.findIndex((item) => item.device === f.agent);
+    index++
+  )
+    await candidateSelect.press('ArrowDown')
+  await p
+    .locator('.ant-select-dropdown:visible .ant-select-item-option-content')
+    .getByText(`${f.agent} · agent`, { exact: true })
+    .click()
   await d
     .getByLabel('核验证据或撤销理由', { exact: true })
     .fill('Disposable fixture association, independently identified endpoints')
-  await d.getByRole('button', { name: '读取并核对当前注册', exact: true }).click()
+  await d.getByRole('button', { name: '读取并核对当前终端', exact: true }).click()
   await d.getByRole('checkbox', { name: '已核实两端属于同一实际设备', exact: true }).check()
   // Lose an actually committed response. Subsequent explicit replay must keep the whole original tuple.
   let first,
@@ -125,8 +157,8 @@ try {
   assert.equal(receipt.version, 1)
   assert.equal(receipt.members.find((m) => m.channel === 'mdm').device, f.mdm)
   assert.equal(receipt.members.find((m) => m.channel === 'agent').device, f.agent)
-  assert.equal(first.mdm.generation, 1)
-  assert.equal(first.agent.generation, 1)
+  assert.deepEqual(first.mdm, { device: f.mdm, channel: 'mdm' })
+  assert.deepEqual(first.agent, { device: f.agent, channel: 'agent' })
   await d.getByText('原关系操作已确认。', { exact: true }).waitFor()
   await p.unroute(pattern)
   await d.locator('.ant-modal-close').click()
@@ -200,5 +232,10 @@ try {
   checks.push('versioned-association-revocation-keeps-endpoints')
 } catch (error) {
   failure = error
+  const directory = mkdtempSync(join(tmpdir(), 'rss-react-devices-failure-'))
+  await diagnosticPage
+    ?.screenshot({ path: join(directory, 'failure.png'), fullPage: true })
+    .catch(() => {})
+  console.error(JSON.stringify({ journey: 'react-devices', diagnosticDirectory: directory }))
 }
 await run.finish(failure)

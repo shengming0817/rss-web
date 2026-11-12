@@ -147,15 +147,7 @@ export function AuditFactView({
           <Descriptions.Item label={l('记录位置与阶段', 'Position and phase')}>
             {fact.position} · {fact.phase}
           </Descriptions.Item>
-          {(
-            [
-              'operationId',
-              'requestId',
-              'registrationId',
-              'registrationRequestId',
-              'instanceId',
-            ] as const
-          ).map(
+          {(['operationId', 'requestId', 'registrationRequestId', 'instanceId'] as const).map(
             (key) =>
               fact[key] !== null && (
                 <Descriptions.Item key={key} label={key}>
@@ -203,9 +195,6 @@ export function ActivityFactView({
     original = {
       ...(fact.links.attempt ? { attempt: fact.links.attempt } : {}),
       ...(fact.links.version ? { version: fact.links.version } : {}),
-      ...(fact.target
-        ? { registration: fact.target.registration, generation: String(fact.target.generation) }
-        : {}),
     },
     dimensions = [
       [l('投递证据', 'Delivery evidence'), fact.delivery],
@@ -230,11 +219,9 @@ export function ActivityFactView({
         <Descriptions.Item label={l('生产者观察时间', 'Producer observation time')}>
           {timestamp(locale, fact.observedAt)}
         </Descriptions.Item>
-        <Descriptions.Item
-          label={l('原目标通道与注册代次', 'Original channel and registration generation')}
-        >
+        <Descriptions.Item label={l('原目标设备', 'Original target device')}>
           {fact.target
-            ? `${fact.target.device} · ${fact.target.registration} / ${fact.target.generation}`
+            ? fact.target.device
             : l('父级事实，无设备目标', 'Parent fact without a device target')}
         </Descriptions.Item>
         {dimensions.map(([name, value]) => (
@@ -263,7 +250,7 @@ export function ActivityFactView({
         )}
         {fact.links.policy && (
           <Link
-            to={`/policies?${new URLSearchParams({ policy: fact.links.policy, tab: 'definition', returnTo: source })}`}
+            to={`/policies?${new URLSearchParams({ policy: fact.links.policy, tab: 'configuration', returnTo: source })}`}
           >
             {l('查看所属策略', 'View owning policy')}
           </Link>

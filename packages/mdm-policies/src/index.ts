@@ -28,13 +28,26 @@ export function createPolicies(port: PoliciesPort) {
       identity(await port.read(uuid(id), signal), id),
     capabilities: () => port.capabilities(),
     async preview(
+      id: string,
+      expectedRevision: number,
       definition: PolicyDefinition,
       scopeResult: string | null = null,
       query: WindowQuery = {},
+      signal?: AbortSignal,
     ) {
       validateDefinition(definition)
       if (scopeResult !== null) uuid(scopeResult)
-      const value = await port.preview(freeze(definition), scopeResult, query)
+      uuid(id)
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+        throw new Error('Save the scope before qualification')
+      const value = await port.preview(
+        id,
+        expectedRevision,
+        freeze(definition),
+        scopeResult,
+        query,
+        signal,
+      )
       if (scopeResult !== null && value.scopeResult !== scopeResult)
         throw new Error('Wrong preview scope result')
       return value

@@ -25,10 +25,10 @@ sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
-from runtime_fixture import storage, readiness
+from runtime_fixture import storage, readiness, installation_sql
 from windows_fixtures import generate
 from candidate_installation_driver import Browser
-from pki_fixtures import running as pki
+from pki_fixtures import running as pki, trust as public_trust
 
 browser_module = os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE', 'react-enrollment-browser.mjs')
 if browser_module not in {'react-enrollment-browser.mjs', 'react-certificates-browser.mjs'}:
@@ -57,7 +57,8 @@ def start(binary, initialized, log, expected=200):
         child = subprocess.Popen(args, cwd=BACKEND, stdout=log, stderr=log, pass_fds=lease_fds(), env={**os.environ, 'RUST_MIN_STACK': str(8*1024*1024)})
         processes.append(child)
         children.append(child)
-    until = time.monotonic() + 180
+    # Full tenant baseline initialization retries transient scope contention every 60s.
+    until = time.monotonic() + 1800
     while time.monotonic() < until:
         if any(child.poll() is not None for child in children):
             log.flush()
@@ -151,12 +152,11 @@ try:
     # Established device input for management-read continuity, not protocol/OS proof.
     tenant = TENANTS[0]
     registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
-    environment.sql(f"SET rss.tenant_id='{tenant}';"
-        f"INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{tenant}','enrollment-existing');"
+    environment.sql(installation_sql()+f"SET rss.tenant_id='{tenant}';"
         f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','enrollment-existing','enrollment','consumed',clock_timestamp()+interval '2 minutes');"
-        f"INSERT INTO mdm_access.requests(tenant_id,id,grant_id,source,windows_profile) VALUES('{tenant}','{request}','{grant}','mdm.windows','Device');"
-        f"INSERT INTO mdm_access.registrations(tenant_id,id,device,channel,generation,request_id,state,purpose,epoch,first_authenticated_at) VALUES('{tenant}','{registration}','enrollment-existing','mdm',1,'{request}','active','primary',gen_random_uuid(),clock_timestamp());"
-        f"INSERT INTO mdm_access.credentials VALUES('{tenant}','{credential}','{registration}','mdm',md5('{credential}')||md5('{registration}'),'active');", 'mdm_dev')
+        f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile,state,expires_at,issuance_operation,password_digest,password_version,credential_ref) VALUES('{tenant}','{request}','enrollment-existing','{grant}','mdm.windows','Device','bound',clock_timestamp()+interval '1 hour',gen_random_uuid(),repeat('0',64),1,'{credential}');"
+        f"INSERT INTO mdm_access.devices(tenant_id,id,channel,request_id,state,purpose,epoch,first_authenticated_at) VALUES('{tenant}','enrollment-existing','mdm','{request}','active','primary',gen_random_uuid(),clock_timestamp());"
+        f"INSERT INTO mdm_access.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES('{tenant}','{credential}','enrollment-existing','primary','mdm',md5('{credential}')||md5('{registration}'),'active');", 'mdm_dev')
     log_path = private(environment.root/'product.log', '')
     with log_path.open('w') as log:
         phase = 'signer'
@@ -208,20 +208,12 @@ try:
             connection_origin = agent['endpoint']['origin']
             status, draft = operator.call('PUT', '/api/v1/agent-connections', dict(operationId=str(uuid.uuid4()), expectedRevision=0, preferredOrigin=connection_origin, origins=[connection_origin]))
             if status != 200: raise RuntimeError('fixture-agent-connection-save')
-            # The disposable fixture owns this deployed host. Record its real HTTPS observation,
-            # bound to the draft just read; publication still passes the product's normal gate.
-            status, readiness_observation = operator.call('GET', '/readyz')
-            observed = readiness_observation.get('observation', {})
-            expected_binding = {wire: config['runtime_binding'][field] for field, wire in [('host_id', 'hostId'), ('operation_id', 'operationId'), ('revision', 'revision'), ('material_digest', 'materialDigest')]}
-            if status != 200 or readiness_observation.get('ready') is not True or any(observed.get(key) != value for key, value in expected_binding.items()) or observed.get('tenantId') != TENANTS[0] or observed.get('instanceId') != INSTANCE:
-                raise RuntimeError('fixture-agent-deployment-observation')
-            host_id = str(uuid.UUID(observed['hostId']))
-            configuration_revision = int(draft['configuration']['revision'])
-            host_revision = int(observed['revision'])
-            quoted_origin = connection_origin.replace("'", "''")
-            environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';INSERT INTO mdm_access.agent_connection_deployments(tenant_id,origin,service_id,host_id,revision,configuration_revision,observed_at) VALUES('{TENANTS[0]}','{quoted_origin}','{INSTANCE}','{host_id}',{host_revision},{configuration_revision},floor(extract(epoch FROM clock_timestamp()))::bigint)", 'mdm_dev')
+            # Deployment observations belong to the installer/prepare-hosts owner (#3144).
+            phase = 'agent-connection-publish'
             status, _ = operator.call('POST', '/api/v1/agent-connections/publish', dict(operationId=str(uuid.uuid4()), expectedRevision=draft['configuration']['revision']))
-            if status != 200: raise RuntimeError('fixture-agent-connection-publish')
+            if status != 200:
+                print(json.dumps(dict(phase=phase, status=status, blockedBy=3144)), flush=True)
+                raise RuntimeError('fixture-agent-connection-publish')
         installer_release = None
         if browser_module == 'react-enrollment-browser.mjs':
             from agent_installer_fixture import publish
@@ -230,7 +222,9 @@ try:
         collector = importlib.util.module_from_spec(module); module.loader.exec_module(collector)
         agent_fixture = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0])
         recovery_candidate = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0],activate=False)['originalCandidate']
-        candidate_trust = json.loads(Path(json.loads((next_root/'agent-pki.json').read_text())['trust_file']).read_text())
+        # Read the CA's current signed CRL after cold initialization; its cache lifetime is 10m.
+        authority = json.loads((next_root/'device-pki.json').read_text())[0]
+        candidate_trust = json.loads(public_trust(next_root/'pki/agent', 'agent', agent['endpoint']['origin'], TENANTS[0], authority['provisioner'], authority['kid'], authority['origin']).read_text())
         recovery_input = private(environment.root/'recovery-input.json',dict(wireVersion=1,operationId=str(uuid.uuid4()),secret=secrets.token_urlsafe(32),platform='macos',csr=base64.b64encode((root/'pki/agent/agent.der').read_bytes()).decode()))
         backend_revision = subprocess.run(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,check=True,capture_output=True,text=True).stdout.strip()
         print(json.dumps(dict(phase='backend-baseline',revision=backend_revision)),flush=True)

@@ -7,8 +7,7 @@ const id = '11111111-1111-4111-8111-111111111111',
 const binding = {
   id,
   operationId: id,
-  registration: other,
-  registrationGeneration: 2,
+
   accountDisposition: 'keep',
   accountIntent: { kind: 'create', platform: 'windows', name: 'rss' },
   createdByRss: true,

@@ -19,7 +19,7 @@ import {
   type WnsOperation,
   type WnsReceipt,
 } from '@rss/mdm-connections'
-import { base64url, count, enumeration, positive, uuid } from './decode'
+import { base64url, count, enumeration, positive, text, uuid } from './decode'
 import { attachment } from './download'
 
 function storageReceipt(value: unknown): StorageReceipt {
@@ -162,8 +162,6 @@ function connectionObservation(value: unknown): ConnectionObservation | null {
   if (!schema.getApiV1AgentConnectionsDevicesByDeviceObservationResponse.validateRoot(value))
     throw new Error('Invalid connection observation')
   if (value === null) return null
-  uuid(value.registration)
-  positive(value.generation)
   if ((value.acknowledgement === null) !== (value.receivedAt === null))
     throw new Error('Unpaired connection acknowledgement')
   if (value.acknowledgement) {
@@ -478,11 +476,10 @@ export function createConnectionsAdapters(
           },
           (value) => {
             if (value.targetRevision !== revision) throw new Error('Wrong convergence target')
-            if (new Set(value.items.map((item) => item.registration)).size !== value.items.length)
+            if (new Set(value.items.map((item) => item.device)).size !== value.items.length)
               throw new Error('Duplicate device registration')
             for (const item of value.items) {
-              uuid(item.registration)
-              positive(item.generation)
+              text(item.device)
               if (item.origin !== null) httpsOrigin(item.origin)
             }
             return value
