@@ -24,7 +24,9 @@ import {
   count,
   enumeration,
   string,
-  integer,
+  wireInteger,
+  wireCount,
+  wirePositive,
   nullable,
   uuid,
   finite,
@@ -39,8 +41,8 @@ export function telemetryId(value: unknown) {
 }
 export function interval(value: IntervalWire) {
   const v = value,
-    start = count(v['start']),
-    end = count(v['end'])
+    start = wireCount(v['start']),
+    end = wireCount(v['end'])
   if (end < start) throw new Error('Invalid window')
   return { start, end }
 }
@@ -59,7 +61,7 @@ function definition(value: DefinitionWire, tenant: string) {
   return {
     scope: scope(v['scope'], tenant),
     key: telemetryId(v['key']),
-    version: positive(v['version']),
+    version: wirePositive(v['version']),
     unit: telemetryId(v['unit']),
     metric: metric(v['metric']),
     dimensions: {
@@ -77,8 +79,8 @@ export function numeric(value: NumericWire): number {
   return kind === 'f64'
     ? finite(v['value'])
     : kind === 'u64'
-      ? count(v['value'])
-      : integer(v['value'])
+      ? wireCount(v['value'])
+      : wireInteger(v['value'])
 }
 function reading(value: SampleWire['reading'], expected: ReturnType<typeof metric>): Reading {
   const quality = value['quality']
@@ -122,15 +124,15 @@ export function observation(
   const stream = s['stream'],
     series = s['series']
   const source = telemetryId(stream['source']),
-    colon = source.indexOf(':')
-  const registration = uuid(source.slice(0, colon)),
-    origin = enumeration(source.slice(colon + 1), sourceIds)
+    device = telemetryId(series['subject']),
+    origin = sourceIds.find((candidate) => source === `${device}:${candidate}`)
+  if (!origin) throw new Error('Wrong telemetry source device')
   const snapshot = definition(series['definition'], tenant)
   return {
     sample: {
       id: telemetryId(s['id']),
-      sequence: count(s['sequence']),
-      observedAt: count(s['observedAt']),
+      sequence: wireCount(s['sequence']),
+      observedAt: wireCount(s['observedAt']),
       interval: nullable(s['interval'], interval),
       reading: reading(s['reading'], snapshot.metric),
       stream: {
@@ -147,28 +149,33 @@ export function observation(
         ),
       },
     },
-    registration,
+    device,
     source: origin,
     epoch: uuid(stream['generation']),
-    receivedAt: count(v['receivedAt']),
+    receivedAt: wireCount(v['receivedAt']),
     liveSource: 'liveSource' in v ? v.liveSource : v.effectiveSource,
     sourceConflict: 'sourceConflict' in v ? v.sourceConflict : false,
   }
 }
 
-export function unavailable(value: unknown) {
+export function unavailable(value: unknown, tenant: string) {
   return array(value, (x) => {
     if (!wireSchemas.postApiV1TelemetryHistoryResponse.validateUnavailable(x))
       throw new Error('Invalid unavailable interval')
-    return { selection: x.selection, window: interval(x.window), reason: x.reason }
+    return {
+      selection: x.selection.selection === 'exact'
+        ? { ...x.selection, series: { ...x.selection.series, definition: definition(x.selection.series.definition, tenant) } }
+        : x.selection,
+      window: interval(x.window), reason: x.reason,
+    }
   })
 }
 function sum(value: SumWire) {
   return 'F64' in value
     ? finite(value.F64)
     : 'U128' in value
-      ? count(value.U128)
-      : integer(value.I128)
+      ? wireCount(value.U128)
+      : wireInteger(value.I128)
 }
 function stateValue(value: StateValueWire): boolean | string {
   return 'Bool' in value ? value.Bool : telemetryId(value.State)
@@ -177,13 +184,13 @@ function aggregateValue(value: AggregateWire): AggregateValue {
   if (value === 'Missing') return { kind: 'missing' }
   if ('Number' in value) return { kind: 'number', value: numeric(value.Number) }
   if ('Sum' in value) return { kind: 'number', value: sum(value.Sum) }
-  if ('Count' in value) return { kind: 'number', value: count(value.Count) }
+  if ('Count' in value) return { kind: 'number', value: wireCount(value.Count) }
   if ('Mean' in value)
-    return { kind: 'number', value: sum(value.Mean.sum) / positive(value.Mean.count) }
+    return { kind: 'number', value: sum(value.Mean.sum) / wirePositive(value.Mean.count) }
   if ('Rate' in value)
     return {
       kind: 'number',
-      value: sum(value.Rate.increase) / (positive(value.Rate.duration_micros) / 1_000_000),
+      value: sum(value.Rate.increase) / (wirePositive(value.Rate.duration_micros) / 1_000_000),
     }
   if ('StateSegments' in value)
     return {
@@ -197,7 +204,7 @@ function aggregateValue(value: AggregateWire): AggregateValue {
     return {
       kind: 'transitions',
       transitions: value.Transitions.map((x) => ({
-        at: count(x.at),
+        at: wireCount(x.at),
         from: stateValue(x.from),
         to: stateValue(x.to),
       })),
@@ -206,19 +213,19 @@ function aggregateValue(value: AggregateWire): AggregateValue {
     kind: 'coverage',
     durations: value.StateCoverage.map((x) => ({
       value: stateValue(x.value),
-      micros: count(x.micros),
+      micros: wireCount(x.micros),
     })),
   }
 }
 export function bucket(value: BucketWire): Bucket {
   const v = value
   const window = interval(v['window']),
-    coveredMicros = count(v['covered_micros'])
+    coveredMicros = wireCount(v['covered_micros'])
   if (coveredMicros > window.end - window.start) throw new Error('Invalid coverage')
   return {
     window,
     value: aggregateValue(v['value']),
-    validSamples: count(v['valid_samples']),
+    validSamples: wireCount(v['valid_samples']),
     coveredMicros,
     completeness: array(v['completeness'], (x) => x),
   }
@@ -282,12 +289,12 @@ export function gaps(value: unknown, device: string): GapPage {
     reports: array(v['reports'], (x) => {
       const r = x,
         report = r['report']
+      if (report.deviceId !== device) throw new Error('Wrong telemetry gap device')
       return {
         device,
         receivedAt: count(r['receivedAt']),
         reportId: uuid(report['reportId']),
-        registrationId: uuid(report['registrationId']),
-        generation: positive(report['generation']),
+        deviceId: telemetryId(report['deviceId']),
         createdAt: count(report['createdAt']),
         gaps: array(report['gaps'], (x) => {
           const g = x

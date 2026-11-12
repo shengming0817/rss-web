@@ -244,9 +244,8 @@ export interface AgentIntent {
   readonly origins: readonly string[]
 }
 export interface ConnectionObservation {
+  readonly device: string
   readonly targetRevision: number | null
-  readonly registration: string
-  readonly generation: number
   readonly acknowledgement: {
     readonly operationId: string
     readonly revision: number
@@ -266,8 +265,6 @@ export interface ConnectionObservation {
 }
 export interface ConnectionDevice {
   readonly device: string
-  readonly registration: string
-  readonly generation: number
   readonly installedRevision: number | null
   readonly origin: string | null
   readonly receivedAt: number | null

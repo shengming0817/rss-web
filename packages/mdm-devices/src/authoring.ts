@@ -3,7 +3,7 @@ import type {
   ConfirmAssociation,
   DeviceRef,
   Endpoint,
-  PrimaryRegistration,
+  DeviceMember,
   User,
 } from './model'
 export function deviceId(value: string): string {
@@ -38,20 +38,13 @@ export function validateUser(value: User, tenant: string): void {
   uuid(value.instanceId)
   uuid(value.principalId)
 }
-export function validateMember(member: PrimaryRegistration): void {
+export function validateMember(member: DeviceMember): void {
   deviceId(member.device)
-  uuid(member.registrationId)
-  revision(member.generation)
   if (member.channel !== 'mdm' && member.channel !== 'agent')
     throw new Error('Invalid member channel')
 }
-export function sameMember(a: PrimaryRegistration, b: PrimaryRegistration): boolean {
-  return (
-    a.device === b.device &&
-    a.channel === b.channel &&
-    a.registrationId === b.registrationId &&
-    a.generation === b.generation
-  )
+export function sameMember(a: DeviceMember, b: DeviceMember): boolean {
+  return a.device === b.device && a.channel === b.channel
 }
 export function validateAssociation(value: Association): void {
   uuid(value.id)
@@ -82,19 +75,11 @@ export function validateConfirmation(change: ConfirmAssociation): void {
     throw new Error('Invalid association channels')
   verificationText(change.evidence)
 }
-/** The backend still checks permissions and current registration generations atomically. */
-export function currentMember(
-  endpoint: Endpoint,
-  channel: PrimaryRegistration['channel'],
-): PrimaryRegistration {
-  const registration = endpoint.channels.find((c) => c.channel === channel && c.status === 'active')
-  if (!registration) throw new Error('No active primary registration')
-  const member = {
-    device: endpoint.id,
-    channel,
-    registrationId: registration.registrationId,
-    generation: registration.generation,
-  }
+/** The backend atomically revalidates the selected device and its channel authority. */
+export function currentMember(endpoint: Endpoint, channel: DeviceMember['channel']): DeviceMember {
+  if (endpoint.channel !== channel || endpoint.status !== 'active')
+    throw new Error('No active device on this channel')
+  const member = { device: endpoint.id, channel }
   validateMember(member)
   return Object.freeze(member)
 }

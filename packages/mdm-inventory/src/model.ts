@@ -68,8 +68,7 @@ export interface Evidence {
   readonly scope: CollectionScope
   readonly source: InventorySource
   readonly dataset: string | null
-  readonly registration: string | null
-  readonly registrationGeneration: number | null
+  readonly deviceId: string | null
   readonly epoch: string | null
   readonly snapshotId: string
   readonly observedAt: number
@@ -317,8 +316,7 @@ export interface QualityRun {
   readonly channel: Channel
   readonly source: InventorySource
   readonly runId: string
-  readonly registration: string
-  readonly registrationGeneration: number
+  readonly device: string
   readonly epoch: string
   readonly sequence: number
   readonly dataset: string
@@ -377,8 +375,7 @@ export interface AssetView {
 }
 export interface CollectionRun {
   readonly id: string
-  readonly registration: string
-  readonly generation: number
+  readonly device: string
   readonly epoch: string
   readonly source: InventorySource
   readonly dataset: string

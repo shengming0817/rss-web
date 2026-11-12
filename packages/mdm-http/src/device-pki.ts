@@ -109,8 +109,7 @@ function observation(value: unknown): Observation | null {
   if (item.version !== 1) throw new Error('Unsupported trust observation')
   return {
     operation: uuid(item.operation),
-    registration: uuid(item.registration),
-    generation: positive(item.generation),
+    device: text(item.deviceId),
     sequence: positive(item.sequence),
     target: coordinates(item.target_revision, item.target_digest),
     actual: coordinates(item.actual_revision, item.actual_digest),
@@ -188,10 +187,10 @@ export function createDevicePkiAdapter(
         observation,
       ),
     recoverRegistration: (input, secret) =>
-      api.postApiV1AgentRegistrationsByIdRecovery(
+      api.postApiV1DevicesByIdRegistrationRecovery(
         transport,
         {
-          pathParams: { id: input.registration },
+          pathParams: { id: input.device },
           body: {
             wireVersion: 1,
             operationId: input.operationId,

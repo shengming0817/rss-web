@@ -17,8 +17,7 @@ export type TrustChange =
       readonly keyId: string
     }
 export interface TrustObservation {
-  readonly registration: string
-  readonly generation: number
+  readonly device: string
   readonly state: string
   readonly reason: string | null
   readonly targetRevision: number | null

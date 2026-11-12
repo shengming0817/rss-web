@@ -116,13 +116,13 @@ export function createEnrollment(port: EnrollmentPort, tenant: string, principal
       return result
     },
     async createNative(intent: NativeIntent, password: string) {
-      nativeIntent(intent.operationId, intent.source, intent.windowsProfile, intent.deviceId)
+      nativeIntent(intent.operationId, intent.source, intent.windowsProfile)
       secret256(password)
       const result = await port.createNative(intent, password)
       if (
         result.operationId !== intent.operationId ||
         result.source !== intent.source ||
-        (intent.deviceId === undefined && !result.deviceId)
+        !result.deviceId
       )
         throw new Error('Wrong enrollment receipt')
       return result

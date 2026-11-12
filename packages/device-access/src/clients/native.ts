@@ -21,26 +21,12 @@ export function nativeComputer(value: unknown): Computer {
   const display = v.displayName?.state
   if (display?.kind === 'known' && display.value.kind === 'string')
     name = text(display.value.value, 256)
-  const channels = list(v['channels'], (raw) => {
-    const c = raw
-    return {
-      id: uuid(c['registrationId']),
-      generation: count(c['generation']),
-      status: c['status'],
-      at: nullable(c['lastCommunicationReceivedAt'], count),
-      channel: c['channel'],
-    }
-  })
-  const agent = channels.find((c) => c.channel === 'agent' && c.status === 'active'),
-    times = channels.flatMap((c) => (c.at === null ? [] : [c.at]))
   return {
     id,
     name: name ?? id,
     platform: (state === 'known' ? platforms[0] : 'unknown') as Platform,
-    registration: agent?.id ?? null,
-    generation: agent?.generation ?? null,
     status: v['status'],
-    lastObservedAt: times.length ? Math.max(...times) : null,
+    lastObservedAt: nullable(v.lastCommunicationReceivedAt, count),
   }
 }
 export function nativeAccountLabel(value: unknown) {
@@ -150,8 +136,6 @@ export function nativeMaterial(value: unknown, device: string): Material {
   return {
     id: uuid(v['id']),
     device,
-    registration: uuid(b['registration']),
-    generation: count(b['generation']),
     version: count(v['version']),
     subject: {
       kind,

@@ -52,8 +52,6 @@ export const bindingFields = {
   bindingGeneration: count,
   operationId: uuid,
   device: text,
-  registration: uuid,
-  registrationGeneration: count,
   instance: uuid,
   factorGeneration: count,
   accountDisposition: (v: unknown) => choice(v, ['keep', 'disable', 'standard']),
@@ -67,7 +65,7 @@ export const bindingFields = {
   effect,
 }
 function materialBinding(value: unknown) {
-  const v = closed(value, ['device', 'registration', 'generation', 'subject'])
+  const v = closed(value, ['device', 'subject'])
   const subject = object(v['subject'])
   choice(subject['kind'], [
     'rss_login',
@@ -79,8 +77,6 @@ function materialBinding(value: unknown) {
   ])
   return {
     device: text(v['device']),
-    registration: uuid(v['registration']),
-    generation: count(v['generation']),
     subject,
   }
 }

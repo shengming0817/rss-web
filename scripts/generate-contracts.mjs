@@ -7,6 +7,7 @@ import { readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import Ajv2020 from 'ajv/dist/2020.js'
+import { _ } from 'ajv/dist/compile/codegen/index.js'
 import standaloneCode from 'ajv/dist/standalone/index.js'
 import { compile } from 'json-schema-to-typescript'
 import { build } from 'esbuild'
@@ -68,6 +69,8 @@ const schemaKeys = new Set([
   'format',
   'x-rss-extension',
   'x-rss-owner',
+  'x-rss-maxUtf8Bytes',
+  'x-rss-directory-model',
 ])
 const annotationKeys = new Set([
   'title',
@@ -78,6 +81,7 @@ const annotationKeys = new Set([
   '$comment',
   'x-rss-extension',
   'x-rss-owner',
+  'x-rss-directory-model',
 ])
 const schemaMaps = new Set(['properties', '$defs', 'patternProperties'])
 const schemaLists = new Set(['allOf', 'anyOf', 'oneOf', 'prefixItems'])
@@ -143,16 +147,6 @@ function referenceSiblings(schema, definitions) {
   )
 }
 for (const [id, schema] of Object.entries(schemas)) {
-  const definitions = schema?.$defs
-  const value = definitions?.InstallationEvidence?.properties?.value
-  if (value && definitions.Scalar) {
-    const evidenceScalar = (ref) =>
-      ref === '#/$defs/Scalar' ? '#/$defs/InstallationEvidenceValue' : ref
-    // The adapter withholds observation values outside browser precision.
-    // All other uses of Scalar retain the standard safe integer bounds.
-    definitions.InstallationEvidence.properties.value = schemaWalk(value, evidenceScalar)
-    definitions.InstallationEvidenceValue = schemaWalk(definitions.Scalar, evidenceScalar)
-  }
   schemas[id] = referenceSiblings(schema, schema.$defs)
 }
 // Visit only schema positions. A const/enum/example containing JSON Schema is ordinary data.
@@ -164,7 +158,7 @@ function objectShape(schema) {
       ['allOf', 'anyOf', 'oneOf'].some((key) => schema[key]?.some(objectShape)))
   )
 }
-function transform(schema, mode, composed = false, observation = false) {
+function transform(schema, mode, composed = false) {
   if (typeof schema === 'boolean') return schema
   const result = {}
   for (const [key, value] of Object.entries(schema)) {
@@ -178,21 +172,22 @@ function transform(schema, mode, composed = false, observation = false) {
               v,
               mode,
               false,
-              observation || (key === '$defs' && k === 'InstallationEvidenceValue'),
             ),
           ]),
         )
       : schemaLists.has(key)
-        ? value.map((v) => transform(v, mode, key !== 'prefixItems', observation))
+        ? value.map((v) => transform(v, mode, key !== 'prefixItems'))
         : schemaChildren.has(key)
           ? transform(
               value,
               mode,
               ['contains', 'not', 'if', 'then', 'else'].includes(key),
-              observation,
             )
           : value
   }
+  // Flattened producer records can repeat a required property. Required is a set;
+  // normalize its spelling without changing which properties validation requires.
+  if (result.required) result.required = [...new Set(result.required)]
   // Close the complete record after composition. Closing individual union arms
   // rejects fields owned by the shared record or another composed subschema.
   if (
@@ -215,7 +210,6 @@ function transform(schema, mode, composed = false, observation = false) {
   }
   // Rust integers must remain exact in JavaScript; floating point fields keep their wire range.
   if (
-    !observation &&
     (result.type === 'integer' ||
       (Array.isArray(result.type) &&
         result.type.includes('integer') &&
@@ -224,10 +218,7 @@ function transform(schema, mode, composed = false, observation = false) {
     result.minimum = Math.max(result.minimum ?? Number.MIN_SAFE_INTEGER, Number.MIN_SAFE_INTEGER)
     result.maximum = Math.min(result.maximum ?? Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
   }
-  if (observation && result.type === 'integer' && result.format === 'int64') {
-    result.minimum = Math.max(result.minimum ?? -(2 ** 63), -(2 ** 63))
-    result.maximum = Math.min(result.maximum ?? 2 ** 63, 2 ** 63)
-  }
+  if (mode === 'types') delete result['x-rss-maxUtf8Bytes']
   if (mode === 'types') {
     // ref: json-schema.org/draft/2020-12/json-schema-core §8.2.3.1; json-schema-to-typescript issue #613.
     // Preserve reference siblings as an intersection for the TypeScript compiler.
@@ -275,6 +266,14 @@ const ajv = new Ajv2020({
     ['uri', /^[a-z][a-z0-9+.-]*:[^\s]*$/i],
   ]),
 })
+ajv.addKeyword({
+  keyword: 'x-rss-maxUtf8Bytes',
+  type: 'string',
+  schemaType: 'number',
+  code(context) {
+    context.fail(_`new TextEncoder().encode(${context.data}).length > ${context.schema}`)
+  },
+})
 if (!checking) await mkdir(target, { recursive: true })
 async function output(name, code, parser = 'typescript') {
   outputFiles.add(name)
@@ -319,12 +318,12 @@ for (const e of endpoints) {
       name: 'Root',
       pointer: '',
     })
-  if (e.method === 'GET' && e.path === '/api/v1/policies/{id}') {
+  if (e.method === 'GET' && e.path === '/api/v1/policies/{policy}') {
     const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
     ownerNames.set('PolicyRead', { id, name: 'Root', pointer: '' })
     for (const name of Object.keys(schemas[id].$defs)) ownerNames.set('Policy' + name, { id, name })
   }
-  if (e.method === 'POST' && e.path === '/api/v1/policies/previews') {
+  if (e.method === 'POST' && e.path === '/api/v1/policies/{policy}/previews') {
     const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
     for (const name of ['TaskAdmission', 'TaskAdmissionState']) ownerNames.set(name, { id, name })
   }

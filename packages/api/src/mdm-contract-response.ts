@@ -17,7 +17,7 @@ export interface EndpointDescription {
     | {
         kind: 'directory'
         schema: {
-          fields: readonly ({ name: string; output: boolean; sort: boolean } & Record<
+          fields: readonly ({ name: string; output: boolean; sort: boolean; filter: boolean; nullable: boolean; kind: string | Readonly<Record<string, readonly string[]>>; operators: readonly string[]; limitation: string | null } & Record<
             string,
             unknown
           >)[]

@@ -493,8 +493,7 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
           if (result.id !== run) throw new Error('Wrong collection run')
           return {
             ...result,
-            registration: uuid(result.registration),
-            generation: count(result.generation),
+            device: result.device,
             sequence: integer(result.sequence),
             startedAt: integer(result.startedAt),
             finishedAt: nullable(result.finishedAt, integer),

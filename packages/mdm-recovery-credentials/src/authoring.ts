@@ -4,7 +4,6 @@ import {
   type Subject,
   type Material,
   type MaterialRef,
-  type Registration,
   type OperationIntent,
   type Action,
   type FileVaultConfiguration,
@@ -12,10 +11,6 @@ import {
 export function positive(value: number): number {
   if (!revision(value)) throw new Error('Positive credential revision required')
   return value
-}
-export function validateRegistration(value: Registration): void {
-  uuid(value.registration)
-  positive(value.generation)
 }
 export function validateReference(value: MaterialRef): void {
   identifier(value.device, 256)
@@ -42,7 +37,6 @@ export function validateMaterial(value: Material, expected?: MaterialRef): void 
   uuid(value.id)
   positive(value.version)
   identifier(value.binding.device, 256)
-  validateRegistration(value.binding)
   validateSubject(value.binding.subject)
   uuid(value.operation)
   if (
@@ -118,7 +112,6 @@ export function validateAction(value: Action): void {
 export function validateIntent(input: OperationIntent): void {
   identifier(input.device, 256)
   uuid(input.operationId)
-  validateRegistration(input)
   if (!Number.isSafeInteger(input.deadline) || input.deadline < 1)
     throw new Error('Invalid original credential deadline')
   validateAction(input.action)

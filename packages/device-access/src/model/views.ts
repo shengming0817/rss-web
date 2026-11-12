@@ -30,8 +30,6 @@ export function computerView(value: unknown): Computer {
     'id',
     'name',
     'platform',
-    'registration',
-    'generation',
     'status',
     'lastObservedAt',
   ])
@@ -39,8 +37,6 @@ export function computerView(value: unknown): Computer {
     id: text(v['id']),
     name: text(v['name']),
     platform: choice(v['platform'], ['windows', 'macos', 'unknown']),
-    registration: nullable(v['registration'], uuid),
-    generation: nullable(v['generation'], count),
     status: text(v['status']),
     lastObservedAt: nullable(v['lastObservedAt'], count),
   }
@@ -116,8 +112,6 @@ export function materialView(value: unknown, device: string): Material {
   const v = closed(value, [
       'id',
       'device',
-      'registration',
-      'generation',
       'version',
       'subject',
       'escrowed',
@@ -129,8 +123,6 @@ export function materialView(value: unknown, device: string): Material {
   return {
     id: uuid(v['id']),
     device,
-    registration: uuid(v['registration']),
-    generation: count(v['generation']),
     version: count(v['version']),
     subject: {
       kind: text(s['kind']),

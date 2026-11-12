@@ -2,7 +2,7 @@ import * as api from '@rss/api/mdm-operations'
 import * as schema from '@rss/api/mdm-schemas'
 import { nextCursor, projectedPage, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import type { DeviceRef, PrimaryRegistration } from '@rss/mdm-devices'
+import type { DeviceRef, DeviceMember } from '@rss/mdm-devices'
 import type {
   Decision,
   Group,
@@ -89,7 +89,7 @@ function accepted(value: unknown, id: string): TaskAccepted {
     throw new Error('Wrong group task binding')
   return { task, target: id, kind, statusUrl: value.statusUrl }
 }
-function registration(value: unknown): PrimaryRegistration {
+function registration(value: unknown): DeviceMember {
   if (!schema.getApiV1GroupsByIdResponse200.validatePrimaryRegistration(value))
     throw new Error('Invalid source registration')
   return {

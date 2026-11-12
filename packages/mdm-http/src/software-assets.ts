@@ -50,7 +50,7 @@ export function createSoftwareAssetsAdapter(
       value.asset.response.kind !== kind
     )
       throw new Error('Wrong software asset binding')
-    if (kind !== 'evidence') checkedNumbers(value.asset.response)
+    checkedNumbers(value.asset.response)
     return value.asset.response as ResponseOf<K>
   }
   const accepted = (value: Envelope) => {
@@ -159,23 +159,15 @@ export function createSoftwareAssetsAdapter(
           signal,
         },
         (value) => {
-          const { items, ...page } = response(value, 'evidence')
+          if (value.tenantId !== tenant || value.asset.kind !== 'software' || value.asset.response.kind !== 'evidence')
+            throw new Error('Wrong software evidence binding')
+          const { items, ...page } = value.asset.response
           checkedNumbers(page)
-          return {
-            ...fixedPage({
-              ...page,
-              items: items.map(({ value, ...fact }) => {
-                checkedNumbers(fact)
-                try {
-                  checkedNumbers(value)
-                  return { ...fact, value, precisionLimited: false }
-                } catch {
-                  return { ...fact, value: null, precisionLimited: true }
-                }
-              }),
-            }),
-            quality: page.quality,
+          for (const { value: _value, ...fact } of items) {
+            void _value
+            checkedNumbers(fact)
           }
+          return { ...fixedPage({ ...page, items }), quality: page.quality }
         },
       ),
     coverage: (id, page, signal) =>

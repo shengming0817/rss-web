@@ -119,7 +119,7 @@ export function validateSigningRecovery(input: SigningRecovery): void {
 }
 
 export function validateRegistrationRecovery(input: RegistrationRecovery, secret: string): void {
-  uuid(input.registration)
+  identifier(input.device, 256)
   uuid(input.operationId)
   if (!['windows', 'macos'].includes(input.platform))
     throw new Error('Unsupported registration platform')
@@ -188,7 +188,7 @@ export function createDevicePki(port: DevicePkiPort, tenant: string, service: st
     async recoverRegistration(input: RegistrationRecovery, secret: string) {
       validateRegistrationRecovery(input, secret)
       const original = freeze({
-          registration: input.registration,
+          device: input.device,
           operationId: input.operationId,
           platform: input.platform,
           csr: input.csr,

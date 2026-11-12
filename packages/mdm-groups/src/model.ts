@@ -2,7 +2,7 @@ import type {
   DeviceRef,
   DirectoryQuery,
   Page,
-  PrimaryRegistration,
+  DeviceMember,
   WindowQuery,
 } from '@rss/mdm-devices'
 import type { AssetContext, ConditionContext, Operation, Predicate } from '@rss/mdm-inventory'
@@ -114,7 +114,7 @@ export interface Decision {
     readonly object: DeviceRef
     readonly associationVersion: number | null
     readonly verified: boolean
-    readonly members: readonly PrimaryRegistration[]
+    readonly members: readonly DeviceMember[]
   }[]
 }
 export type ResultKind = 'members' | 'changes' | 'decisions'

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { createDevices, referenceKey } from './index'
-import type { Association, DevicesPort, EndpointDetail, PrimaryRegistration } from './model'
+import type { Association, DevicesPort, EndpointDetail, DeviceMember } from './model'
 
 const tenant = '11111111-1111-4111-8111-111111111111',
   operationId = '22222222-2222-4222-8222-222222222222',
@@ -38,7 +38,7 @@ function port(methods: Partial<DevicesPort>): DevicesPort {
     },
   })
 }
-function receipt(mdm: PrimaryRegistration, agent: PrimaryRegistration, version = 1): Association {
+function receipt(mdm: DeviceMember, agent: DeviceMember, version = 1): Association {
   return {
     id: associationId,
     version,

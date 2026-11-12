@@ -1,5 +1,5 @@
-import type { Channel, DeviceRef, DirectoryQuery, Page, WindowQuery } from '@rss/mdm-devices'
-import type { AssetCut, Operation } from '@rss/mdm-inventory'
+import type { Channel, DeviceRef, WindowQuery } from '@rss/mdm-devices'
+import type { AssetCut } from '@rss/mdm-inventory'
 
 export type ScopeReference = { readonly kind: 'device' | 'group'; readonly id: string }
 export interface ScopeDefinition {
@@ -8,7 +8,14 @@ export interface ScopeDefinition {
   readonly limitations: readonly ScopeReference[] | null
   readonly exclusions: readonly ScopeReference[]
 }
+export interface ScopeOwner {
+  readonly policyId: string
+  readonly stageId?: string
+}
 export interface ScopeRead {
+  readonly stage: string | null
+  readonly retired: boolean
+  readonly task: string | null
   readonly id: string
   readonly revision: number
   readonly definition: ScopeDefinition
@@ -16,17 +23,6 @@ export interface ScopeRead {
   /** Changes with result semantics; independent of the definition revision. */
   readonly resolutionRevision: number
 }
-export interface ScopeRow {
-  readonly id: string
-  readonly revision?: number
-  readonly deleted?: boolean
-  readonly calculationRevision?: number
-  readonly resolutionRevision?: number
-  readonly resolution?: string | null
-}
-export type ScopeChange =
-  | { readonly action: 'put'; readonly definition: ScopeDefinition }
-  | { readonly action: 'delete' | 'recompute' }
 export interface ScopeReceipt {
   readonly id: string
   readonly revision: number
@@ -82,7 +78,7 @@ export interface ScopeResult {
 export interface ScopePreviewRequest {
   readonly definition: ScopeDefinition
   readonly channel: Channel
-  readonly editing?: { readonly scopeId: string; readonly expectedRevision: number }
+  readonly expectedRevision: number
 }
 export interface ScopePreview {
   readonly items: readonly DeviceRef[]
@@ -105,26 +101,10 @@ export interface ScopePreview {
   }[]
   readonly asOf: number
 }
-export interface ScopeBlocker {
-  readonly kind: 'policy'
-  readonly id: string
-  readonly version: string
-  readonly revision: number
-  readonly roles: readonly ('policy_scope' | 'rollout_stage')[]
-  readonly release: 'edit_referencing_policy' | 'retained_archived_policy'
-}
 export interface ScopesPort {
-  list(query: DirectoryQuery<keyof ScopeRow>): Promise<Page<ScopeRow>>
-  read(id: string): Promise<ScopeRead>
-  preview(request: ScopePreviewRequest): Promise<ScopePreview>
-  references(id: string, query: WindowQuery): Promise<Page<ScopeBlocker>>
-  change(id: string, change: Operation<ScopeChange>): Promise<ScopeReceipt>
-  task(id: string, task: string): Promise<ScopeTask>
-  result(
-    id: string,
-    result: string,
-    kind: ScopeResultKind,
-    channel: Channel,
-    query: WindowQuery,
-  ): Promise<ScopeResult>
+  read(owner: ScopeOwner, signal?: AbortSignal): Promise<ScopeRead>
+  preview(owner: ScopeOwner, request: ScopePreviewRequest, signal?: AbortSignal): Promise<ScopePreview>
+  recompute(owner: ScopeOwner, request: { readonly operationId: string; readonly expectedRevision: number }): Promise<ScopeReceipt>
+  task(owner: ScopeOwner, scope: string, task: string, signal?: AbortSignal): Promise<ScopeTask>
+  result(owner: ScopeOwner, scope: string, result: string, kind: ScopeResultKind, channel: Channel, query: WindowQuery, signal?: AbortSignal): Promise<ScopeResult>
 }

@@ -26,8 +26,6 @@ function binding(value: unknown, device: string): Binding {
     id: uuid(value.id),
     operationId: uuid(value.operationId),
     device,
-    registration: uuid(value.registration),
-    registrationGeneration: positive(value.registrationGeneration),
     bindingGeneration: positive(value.bindingGeneration),
     factorGeneration: positive(value.factorGeneration),
     revision: positive(value.revision),

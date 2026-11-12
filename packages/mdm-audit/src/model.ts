@@ -29,7 +29,6 @@ export interface AuditFact {
   readonly operationId: string | null
   readonly relatedOperationIds: readonly string[]
   readonly requestId: string | null
-  readonly registrationId: string | null
   readonly registrationRequestId: string | null
   readonly instanceId: string | null
   readonly auditOutcome: string
@@ -98,8 +97,6 @@ export interface ManagementActivity {
   /** May be an authorized paired channel rather than the path device. */
   readonly target: {
     readonly device: string
-    readonly registration: string
-    readonly generation: number
   } | null
   readonly links: ActivityLinks
   readonly delivery: 'queued' | 'offered' | 'dispatched' | 'received' | 'unknown' | null

@@ -29,8 +29,6 @@ function binding(value: unknown): Material['binding'] {
     throw new Error('Invalid recovery credential binding')
   return {
     device: text(value.device),
-    registration: uuid(value.registration),
-    generation: positive(value.generation),
     subject: subject(value.subject),
   }
 }
@@ -203,14 +201,11 @@ export function createRecoveryCredentialsAdapter(
           return material(page.items[0], target)
         },
       ),
-    configuration: (device, selection) =>
+    configuration: (device) =>
       api.getApiV1DevicesByDeviceRecoveryCredentialsFilevaultConfiguration(
         transport,
         {
           pathParams: { device },
-          ...(selection
-            ? { query: { registration: selection.registration, generation: selection.generation } }
-            : {}),
         },
         configuration,
       ),
@@ -221,8 +216,6 @@ export function createRecoveryCredentialsAdapter(
           pathParams: { device },
           body: {
             operationId: input.operationId,
-            registration: input.registration,
-            generation: input.generation,
             expectedRevision: input.expectedRevision,
             enabled: input.enabled,
             recipientId: input.recipientId,
@@ -282,8 +275,6 @@ export function createRecoveryCredentialsAdapter(
           body: requestInput(
             {
               operationId: input.operationId,
-              registration: input.registration,
-              generation: input.generation,
               deadline: input.deadline,
               action:
                 input.action.kind === 'rotate_filevault'

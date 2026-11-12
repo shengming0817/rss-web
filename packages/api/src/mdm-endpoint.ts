@@ -159,6 +159,7 @@ export function defineEndpoint<Input extends object, Output>(description: Endpoi
     return transport.request(options as RequestOptions<View>)
   }
   endpoint.method = description.method
+  endpoint.queryOwner = description.queryOwner
   endpoint.url = (
     pathParams: Input extends { pathParams: infer P } ? P : Record<string, never>,
   ) => {

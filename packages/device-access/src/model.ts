@@ -13,8 +13,6 @@ export interface Computer {
   id: string
   name: string
   platform: Platform
-  registration: string | null
-  generation: number | null
   status: string
   lastObservedAt: number | null
 }
@@ -61,8 +59,6 @@ export interface PasskeyRecord {
 export interface Material {
   id: string
   device: string
-  registration: string
-  generation: number
   version: number
   subject: {
     kind: string

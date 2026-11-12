@@ -883,6 +883,9 @@ importers:
       '@rss/mdm-inventory':
         specifier: workspace:*
         version: link:../mdm-inventory
+      '@rss/mdm-scopes':
+        specifier: workspace:*
+        version: link:../mdm-scopes
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 'catalog:'

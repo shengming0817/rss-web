@@ -42,7 +42,7 @@ const endpoints = {
 }
 
 function locator(value: WireDetail['operation']): OperationLocator {
-  const { product, owner, operationId, actor, instance, device, target, registration, generation } =
+  const { product, owner, operationId, actor, instance, device, target } =
     value
   return {
     product,
@@ -52,8 +52,6 @@ function locator(value: WireDetail['operation']): OperationLocator {
     ...(instance === null ? {} : { instance: uuid(instance) }),
     ...(device === null ? {} : { device }),
     ...(target === null ? {} : { target }),
-    ...(registration === null ? {} : { registration: uuid(registration) }),
-    ...(generation === null ? {} : { generation: positive(generation) }),
   }
 }
 
@@ -161,7 +159,7 @@ function detail(value: WireDetail): OperationDetail {
     auditEvidence: evidence(value.auditEvidence, page),
     requestEvidence: evidence(value.requestEvidence, page),
     executionEvidence: evidence(value.executionEvidence, execution),
-    hasCurrentResource: value.currentResourceUrl !== null,
+    currentResourceUrl: value.currentResourceUrl,
   }
 }
 
@@ -182,7 +180,7 @@ export function createOperationDiagnosticsAdapter(
         page,
       ),
     operation: (
-      { owner, operationId, actor, instance, device, target, registration, generation },
+      { owner, operationId, actor, instance, device, target },
       options,
       signal,
     ) =>
@@ -191,7 +189,7 @@ export function createOperationDiagnosticsAdapter(
         {
           pathParams: { owner, operationId },
           query: requestInput(
-            { actor, instance, device, target, registration, generation, ...options },
+            { actor, instance, device, target, ...options },
             lookup,
           ),
           signal,

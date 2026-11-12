@@ -1,3 +1,4 @@
+import { directoryCapabilities } from '@rss/mdm-http/directories'
 import { createOperationDiagnostics, createAudit, createAuditPolicyLookup } from '@rss/mdm-audit'
 import { createOperationDiagnosticsAdapter } from '@rss/mdm-http/operation-diagnostics'
 import { createTenantSetup } from '@rss/mdm-tenant-setup'
@@ -137,6 +138,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
       }
       const content = createContent(createContentAdapter(transport))
       return Object.freeze({
+        directoryCapabilities,
         tenantSetup: setup,
         settingsCatalog: createCatalogAdapter(transport, management),
         diagnostics: createRuntimeDiagnostics(createRuntimeDiagnosticsAdapter()),

@@ -8,6 +8,7 @@ import {
   uuid,
   positive,
   exactResource,
+  decimal, wirePositive, wireCount,
 } from './telemetry-scalars'
 import type { TelemetryPort } from '@rss/mdm-telemetry'
 import { sources as sourceIds } from '@rss/mdm-telemetry'
@@ -33,10 +34,6 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
           return {
             device,
             evaluatedAtMicros: count(v['evaluatedAtMicros']),
-            registration: nullable(v['registration'], (x) => {
-              const r = x
-              return { id: uuid(r['id']), generation: positive(r['generation']) }
-            }),
             configurations: array(v['configurations'], (x) => {
               const c = x
               return {
@@ -69,7 +66,7 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     history: (query: Parameters<TelemetryPort['history']>[0]) =>
-      api.postApiV1TelemetryHistory(transport, { body: query }, (value) => {
+      api.postApiV1TelemetryHistory(transport, { body: { ...query, startMicros: decimal(query.startMicros), endMicros: decimal(query.endMicros) } }, (value) => {
         const v = value
         if (v['mode'] !== query.mode) throw new Error('Wrong history mode')
         const rows = array(v['rows'], (x) => observation(x, tenant, query.mode))
@@ -88,17 +85,23 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
         if (query.mode === 'latest' && next !== null) throw new Error('Latest cannot continue')
         return {
           rows,
-          unavailable: unavailable(v['unavailable']),
+          unavailable: unavailable(v['unavailable'], tenant),
           next,
           retired: v['retired'],
         }
       }),
     aggregate: (request: Parameters<TelemetryPort['aggregate']>[0]) =>
-      api.postApiV1TelemetryAggregate(transport, { body: request }, (value) => {
+      api.postApiV1TelemetryAggregate(transport, { body: {
+        ...request,
+        query: { ...request.query, startMicros: decimal(request.query.startMicros), endMicros: decimal(request.query.endMicros) },
+        definitionVersion: decimal(request.definitionVersion), resolutionMicros: decimal(request.resolutionMicros),
+        maxGapMicros: request.maxGapMicros === null ? null : decimal(request.maxGapMicros),
+        coverage: request.coverage.coverage === 'holdLast' ? { coverage: 'holdLast', maxHoldMicros: decimal(request.coverage.maxHoldMicros) } : request.coverage,
+      } }, (value) => {
         const v = value
         const buckets = array(v['buckets'], bucket)
         if (
-          v['resolutionMicros'] !== request.resolutionMicros ||
+          wirePositive(v['resolutionMicros']) !== request.resolutionMicros ||
           buckets.some(
             (b, i) =>
               b.window.end <= request.query.startMicros ||
@@ -110,9 +113,9 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
           throw new Error('Wrong aggregate window')
         return {
           buckets,
-          unavailable: unavailable(v['unavailable']),
-          resolutionMicros: positive(v['resolutionMicros']),
-          refreshedThrough: nullable(v['refreshedThrough'], count),
+          unavailable: unavailable(v['unavailable'], tenant),
+          resolutionMicros: wirePositive(v['resolutionMicros']),
+          refreshedThrough: nullable(v['refreshedThrough'], wireCount),
           next: opaque(v['next']),
         }
       }),

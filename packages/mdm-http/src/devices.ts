@@ -19,7 +19,7 @@ import {
   type DirectoryQuery,
   type Page,
   type PersonDisplay,
-  type PrimaryRegistration,
+  type DeviceMember,
   type User,
   type RegistrationUser,
   type Retirement,
@@ -39,14 +39,12 @@ function integer(value: unknown): number {
 function unique<T>(values: readonly T[], key: (v: T) => string): void {
   if (new Set(values.map(key)).size !== values.length) throw new Error('Duplicate device identity')
 }
-function member(value: unknown): PrimaryRegistration {
+function member(value: unknown): DeviceMember {
   if (!schema.getApiV1DeviceViewsResponse.validatePrimaryRegistration(value))
     throw new Error('Invalid registration contract')
   return {
     device: identifier(value.device),
     channel: value.channel,
-    registrationId: uuid(value.registrationId),
-    generation: positive(value.generation),
   }
 }
 function association(value: unknown): Association {
@@ -82,88 +80,32 @@ function display(value: unknown): PersonDisplay {
 }
 const endpointFields = {
   id: identifier,
-  status: (v: unknown) =>
-    enumeration(v, [
-      'active',
-      'pending',
-      'revoked',
-      'superseded',
-      'registered',
-      'cancelled',
-      'expired',
-    ] as const),
-  primaryMdmRegistration: (v: unknown): Endpoint['primaryMdmRegistration'] => {
+  status: (v: unknown) => enumeration(v, ['active', 'pending', 'revoked', 'cancelled', 'expired'] as const),
+  registeredAt: (v: unknown) => v === null ? null : integer(v),
+  channel: (v: unknown) => v === null ? null : enumeration(v, ['mdm', 'agent'] as const),
+  source: (v: unknown) => v === null ? null : enumeration(v, ['mdm.windows', 'mdm.apple', 'agent.builtin'] as const),
+  platform: (v: unknown) => v === null ? null : enumeration(v, ['windows', 'macos'] as const),
+  lastCommunicationReceivedAt: (v: unknown) => v === null ? null : integer(v),
+  enrollment: (v: unknown): Endpoint['enrollment'] => {
     if (v === null) return null
-    if (!schema.getApiV1DevicesByDeviceResponse.validatePrimary(v))
-      throw new Error('Invalid primary registration')
-    return {
-      registrationId: uuid(v.registrationId),
-      generation: positive(v.generation),
-      source: enumeration(v.source, ['mdm.windows', 'mdm.apple'] as const),
-    }
-  },
-  channels: (v: unknown): Endpoint['channels'] => {
-    if (!Array.isArray(v)) throw new Error('Invalid channels')
-    const result = v.map((raw: unknown) => {
-      if (!schema.getApiV1DevicesByDeviceResponse.validateChannel(raw))
-        throw new Error('Invalid channel contract')
-      uuid(raw.registrationId)
-      positive(raw.generation)
-      if (raw.lastCommunicationReceivedAt !== null) integer(raw.lastCommunicationReceivedAt)
-      unique(raw.children, (c) => c.registrationId)
-      for (const child of raw.children) {
-        uuid(child.registrationId)
-        positive(child.generation)
-        if (
-          child.parentRegistrationId !== raw.registrationId ||
-          child.parentGeneration !== raw.generation
-        )
-          throw new Error('Wrong child registration binding')
-      }
-      if (
-        raw.userContext &&
-        (raw.userContext.parentRegistrationId !== raw.registrationId ||
-          raw.userContext.parentGeneration !== raw.generation)
-      )
-        throw new Error('Wrong user channel binding')
-      return raw
-    })
-    unique(result, (c) => c.channel)
-    return result
-  },
-  enrollments: (v: unknown): Endpoint['enrollments'] => {
-    if (!Array.isArray(v)) throw new Error('Invalid enrollments')
-    const result = v.map((e: unknown) => {
-      if (!schema.getApiV1DevicesByDeviceResponse.validateEnrollment(e))
-        throw new Error('Invalid enrollment contract')
-      uuid(e.enrollmentId)
-      integer(e.expiresAt)
-      return e
-    })
-    unique(result, (e) => e.enrollmentId)
-    return result
+    if (!schema.getApiV1DevicesByDeviceResponse.validateEnrollment(v)) throw new Error('Invalid enrollment contract')
+    uuid(v.enrollmentId)
+    integer(v.expiresAt)
+    return v
   },
   inventoryAvailable: boolean,
 }
+
 function endpoint(value: unknown, id: string): EndpointDetail {
   if (!schema.getApiV1DevicesByDeviceResponse.validateRoot(value))
     throw new Error('Invalid endpoint detail')
   if (value.id !== id) throw new Error('Wrong endpoint')
-  return {
-    ...value,
-    id: identifier(value.id),
-    channels: endpointFields.channels(value.channels),
-    enrollments: endpointFields.enrollments(value.enrollments),
-    primaryMdmRegistration: endpointFields.primaryMdmRegistration(value.primaryMdmRegistration),
-  }
+  return { ...value, id: identifier(value.id) }
 }
 function viewEndpoint(value: unknown, tenant: string): ViewEndpoint {
   if (!schema.getApiV1DeviceViewsByKindByIdResponse.validateEndpoint(value))
     throw new Error('Invalid view endpoint')
   identifier(value.id)
-  endpointFields.channels(value.channels)
-  endpointFields.enrollments(value.enrollments)
-  endpointFields.primaryMdmRegistration(value.primaryMdmRegistration)
   const platform = value.platform
   unique(platform.values, (v) => v)
   if (
@@ -188,7 +130,6 @@ function viewEndpoint(value: unknown, tenant: string): ViewEndpoint {
   const { displayName, serialNumber, registrationUser, currentUser, ...rest } = value
   return {
     ...rest,
-    primaryMdmRegistration: endpointFields.primaryMdmRegistration(value.primaryMdmRegistration),
     ...(displayName ? { displayName: displayName.state } : {}),
     ...(serialNumber ? { serialNumber: serialNumber.state } : {}),
     ...(registrationUser ? { registrationUser } : {}),
@@ -419,8 +360,6 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
         value.target.members.forEach(member)
         for (const channel of value.channels) {
           identifier(channel.device)
-          uuid(channel.registration)
-          positive(channel.generation)
         }
         return value satisfies Retirement
       }),
