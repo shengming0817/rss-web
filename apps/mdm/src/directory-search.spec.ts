@@ -160,27 +160,36 @@ it('keeps an empty set editable, rejects its application and round trips the ref
   })
 })
 it('keeps visible RSQL identical to the submitted filter after editing or clearing common criteria', async () => {
-  const change = vi.fn()
-  await search("name=='a';deleted==false", change)
+  const change = vi.fn(),
+    nested = parseFilter("name=='a',name=='b'")
+  await search("(name=='a',name=='b');deleted==false", change)
   await act(async () => host.querySelector<HTMLInputElement>('input[value="text"]')!.click())
   await fill('input[aria-label="名称"]', 'b')
   const text = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="RSQL"]')!
   expect(parseFilter(text.value)).toEqual({
     kind: 'and',
     children: [
+      nested,
       { kind: 'compare', field: 'deleted', operator: '==', values: ['false'] },
       { kind: 'compare', field: 'name', operator: '=icontains=', values: ['b'] },
     ],
   })
   expect(change).not.toHaveBeenCalled()
+  await choose('删除状态', '是')
+  expect(parseFilter(text.value)).toEqual({
+    kind: 'and',
+    children: [
+      nested,
+      { kind: 'compare', field: 'name', operator: '=icontains=', values: ['b'] },
+      { kind: 'compare', field: 'deleted', operator: '==', values: ['true'] },
+    ],
+  })
   await act(async () => button('应用').click())
   expect(change.mock.calls.at(-1)![0].filter).toBe(text.value)
   await fill('input[aria-label="名称"]', '')
   expect(parseFilter(text.value)).toEqual({
-    kind: 'compare',
-    field: 'deleted',
-    operator: '==',
-    values: ['false'],
+    kind: 'and',
+    children: [nested, { kind: 'compare', field: 'deleted', operator: '==', values: ['true'] }],
   })
   await act(async () => button('应用').click())
   expect(change.mock.calls.at(-1)![0].filter).toBe(text.value)
