@@ -410,6 +410,105 @@ it('keeps a scope recomputation owner mounted until an unknown request is resolv
   expect(host.querySelector<HTMLInputElement>('input[aria-label="策略动作"]')!.disabled).toBe(true)
   expect(done).not.toHaveBeenCalled()
 })
+async function savedScopeEditor(methods: object, operation: ReturnType<typeof vi.fn>) {
+  const saved = {
+    id: scope,
+    stage: null,
+    retired: false,
+    task: null,
+    revision: 4,
+    resolution: null,
+    resolutionRevision: 0,
+    definition: emptyScope(),
+  }
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(PolicyScope, {
+          owner: { policyId: id },
+          policyRevision: 4,
+          saved,
+          value: saved.definition,
+          onChange() {},
+          scopes: inject({ read: async () => saved, ...methods }),
+          groups: inject({}),
+          devices: inject({}),
+          runtime: runtime(operation),
+          locale: 'zh',
+          canRecompute: true,
+          disabled: false,
+        }),
+      ),
+    ),
+  )
+}
+it('restores the original failed task after receipt recovery and replaces a previously displayed task', async () => {
+  const first = '33333333-3333-4333-8333-333333333333',
+    recovered = '44444444-4444-4444-8444-444444444444',
+    replacement = '55555555-5555-4555-8555-555555555555',
+    recompute = vi
+      .fn()
+      .mockResolvedValueOnce({ id: scope, revision: 4, task: first })
+      .mockRejectedValue({ cause: 'transport' }),
+    task = vi.fn(async (_owner: unknown, _scope: string, task: string) => ({
+      task,
+      target: scope,
+      kind: 'scope',
+      status: task === recovered ? 'failed' : 'completed',
+      processed: 0,
+      members: 0,
+      failure: task === recovered ? 'original-scope-failure' : null,
+      failureDetail: null,
+      replacementTask: task === recovered ? replacement : null,
+    })),
+    operation = vi.fn(async () => ({
+      originalResult: {
+        availability: 'available',
+        value: {
+          operationId: recompute.mock.calls.at(-1)![1].operationId,
+          object: scope,
+          executions: [recovered],
+        },
+      },
+    }))
+  await savedScopeEditor({ recompute, task }, operation)
+  await click('重新计算已保存范围')
+  expect(host.textContent).toContain(first)
+  await click('重新计算已保存范围')
+  expect(button('重新计算已保存范围').disabled).toBe(true)
+  await click('读取原重算回执')
+  expect(task).toHaveBeenLastCalledWith({ policyId: id }, scope, recovered, expect.any(AbortSignal))
+  expect(host.textContent).not.toContain(first)
+  expect(host.textContent).toContain('original-scope-failure')
+  expect(host.textContent).toContain(replacement)
+  expect(button('重新计算已保存范围').disabled).toBe(false)
+  expect(recompute).toHaveBeenCalledTimes(2)
+})
+it.each([[], [id, scope]])(
+  'keeps unknown recomputation locked without exactly one original task: %j',
+  async (executions) => {
+    const recompute = vi.fn().mockRejectedValue({ cause: 'transport' }),
+      task = vi.fn(),
+      operation = vi.fn(async () => ({
+        originalResult: {
+          availability: 'available',
+          value: {
+            operationId: recompute.mock.calls[0]![1].operationId,
+            object: scope,
+            executions,
+          },
+        },
+      }))
+    await savedScopeEditor({ recompute, task }, operation)
+    await click('重新计算已保存范围')
+    await click('读取原重算回执')
+    expect(button('重新计算已保存范围').disabled).toBe(true)
+    expect(task).not.toHaveBeenCalled()
+    expect(recompute).toHaveBeenCalledTimes(1)
+  },
+)
 it('keeps a scope picker inside its authority fence and allows only name reads after editing is disabled', async () => {
   const change = vi.fn(),
     view = vi.fn(async () => ({

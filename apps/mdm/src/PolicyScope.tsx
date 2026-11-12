@@ -309,8 +309,10 @@ function SavedScope({
                   if (
                     receipt.availability === 'available' &&
                     receipt.value.operationId === pending.operationId &&
-                    receipt.value.object === current?.id
+                    receipt.value.object === current?.id &&
+                    receipt.value.executions.length === 1
                   ) {
+                    setTask(receipt.value.executions[0]!)
                     setUnknown(false)
                     setPending(null)
                     setReload((n) => n + 1)
