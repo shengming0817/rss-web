@@ -351,7 +351,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                     key: 'query',
                     label: l('筛选与排序', 'Filter and sort'),
                     children: (
-                      <DirectoryControls
+                      <DirectoryControls catalog="policies"
                         locale={locale}
                         query={query}
                         onChange={setQuery}

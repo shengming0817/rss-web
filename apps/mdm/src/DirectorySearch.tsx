@@ -26,18 +26,18 @@ const labels: Record<string, readonly [string, string]> = {
   deleted: ['删除状态', 'Deletion'], retired: ['归档状态', 'Retirement'], revoked: ['撤销状态', 'Revocation'],
   state: ['状态', 'State'], status: ['状态', 'State'], kind: ['类型', 'Type'],
   platform: ['平台', 'Platform'], channel: ['通道', 'Channel'], assetContext: ['统计域', 'Asset context'],
-  action: ['动作', 'Action'], 'definition.action.kind': ['动作', 'Action'],
+  assetState: ['资产状态', 'Asset state'], action: ['动作', 'Action'], 'definition.action.kind': ['动作', 'Action'],
   id: ['标识', 'Identifier'], remoteUuid: ['远端 UUID', 'Remote UUID'],
 }
 const common: Readonly<Record<string, readonly string[]>> = {
   resources: ['presentation.name', 'presentation.category', 'kind', 'active'],
-  devices: ['search', 'platform', 'channel', 'status'], endpoints: ['id', 'channel', 'status'],
+  devices: ['search', 'platform', 'channel', 'status', 'assetState'], endpoints: ['id', 'channel', 'status'],
   groups: ['name', 'kind', 'assetContext', 'deleted'],
   policies: ['alias', 'category', 'state', 'action'],
   certificates: ['latest.metadata.name', 'latest.metadata.category', 'retired'],
   webhooks: ['settings.presentation.name', 'enabled', 'deleted'],
   ade: ['configuration.name', 'remoteUuid'], compliance: ['name', 'enabled', 'deleted'],
-  savedQueries: ['name', 'deleted'], userGroups: ['value.name', 'deleted'], apiKeys: ['name', 'revoked'],
+  savedQueries: ['name', 'deleted'], userGroups: ['value.name', 'deleted'], apiKeys: ['name', 'enabled'],
 }
 function label(field: Field, locale: Locale) {
   const text = labels[field.name]

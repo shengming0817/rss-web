@@ -22,7 +22,7 @@ import {
   type Query,
 } from './AdminUi'
 import { DataTable } from './DataTable'
-import { ResourceCatalogSearch } from './ResourceCatalogSearch'
+import { ResourceCatalogSearch } from './directory-location'
 import { ResourceVersionEditor } from './ResourceVersionEditor'
 import { ResourceCommandState, useResourceCommand, type ResourcesUseCases } from './ResourceCommand'
 import type { ContentUseCases } from './ContentUpload'

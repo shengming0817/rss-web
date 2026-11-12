@@ -184,7 +184,7 @@ export interface GroupPreview {
   readonly asOf: number
 }
 export interface GroupsPort {
-  list(query: GroupQuery): Promise<Page<GroupRow>>
+  list(query: GroupQuery, signal?: AbortSignal): Promise<Page<GroupRow>>
   read(id: string): Promise<GroupRead>
   change(id: string, change: Operation<GroupChange>): Promise<GroupReceipt | TaskAccepted>
   preview(request: GroupPreviewRequest): Promise<GroupPreview>

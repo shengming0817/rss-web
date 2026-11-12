@@ -407,7 +407,7 @@ export function DirectoryControls({
       className="admin-toolbar"
       layout="inline"
       onFinish={() => {
-        if (disabled) return
+        if (disabled || catalog) return
         const rest = firstPage(query)
         delete rest.filter
         onChange({ ...rest, ...(filter ? { filter } : {}) })

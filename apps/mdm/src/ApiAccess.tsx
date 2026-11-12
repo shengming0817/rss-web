@@ -1,3 +1,4 @@
+import { useDirectoryQuery } from './directory-location'
 import { DataTable } from './DataTable'
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -157,7 +158,7 @@ function Keys({ runtime, locale }: Props) {
   const l = labels(locale),
     { authorization, binding } = useAdministration(runtime),
     action = useAction()
-  const [query, setQuery] = useState<Query>({ limit: 20 }),
+  const [query, setQuery] = useDirectoryQuery('apiKeys.'),
     [id, setId] = useState<string | null>(null),
     [fresh, setFresh] = useState<string | null>(null)
   const [secret, setSecret] = useState<{
@@ -230,7 +231,7 @@ function Keys({ runtime, locale }: Props) {
         </Button>
         <Button onClick={page.reload}>{l('重新读取', 'Read again')}</Button>
       </div>
-      <DirectoryControls
+      <DirectoryControls catalog="apiKeys"
         locale={locale}
         query={query}
         onChange={setQuery}

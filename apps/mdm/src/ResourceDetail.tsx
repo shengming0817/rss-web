@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { CatalogLocation } from './ResourceCatalogSearch'
+import type { CatalogLocation } from './directory-location'
 import { Alert, Button, Card, Select, Space, Tag } from 'antd'
 import { declarationMaterials, variantKey, type Resource } from '@rss/mdm-resources'
 import { CursorControls, labels, ReadState, usePageRead, type Query } from './AdminUi'

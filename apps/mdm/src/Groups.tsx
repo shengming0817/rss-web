@@ -1,3 +1,4 @@
+import { useDirectoryQuery } from './directory-location'
 import { useState } from 'react'
 import { Button, Card, Tag } from 'antd'
 import type { Group, GroupRead } from '@rss/mdm-groups'
@@ -54,7 +55,7 @@ export function Groups({
   const l = labels(locale),
     action = useAction(),
     guard = useSelectionGuard(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useDirectoryQuery('groups.'),
     read = useRead(`groups/${JSON.stringify(query)}`, () =>
       groups.list(directoryQuery(query, fields)),
     ),
@@ -96,7 +97,7 @@ export function Groups({
         }
       />
       <fieldset className="permission-panel" disabled={guard.locked || action.busy}>
-        <DirectoryControls
+        <DirectoryControls catalog="groups"
           locale={locale}
           query={query}
           onChange={setQuery}

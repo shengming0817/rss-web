@@ -184,7 +184,7 @@ const directoryFields = {
 /** Group authority, dependency admission and computation remain at the formal backend owner. */
 export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
   return {
-    list: (query = {}) => {
+    list: (query = {}, signal) => {
       const { referenceableFor, ...directory } = query
       const projection =
         directory.fields ?? (Object.keys(directoryFields) as (keyof typeof directoryFields)[])
@@ -192,6 +192,7 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
       return api.getApiV1Groups(
         transport,
         {
+          signal,
           query: {
             ...queryParameters({ limit: 20, ...directory, fields: projection }),
             ...(referenceableFor === undefined ? {} : { referenceableFor: uuid(referenceableFor) }),

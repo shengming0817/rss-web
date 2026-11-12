@@ -449,34 +449,7 @@ export function WebhookSubscriptions({
             {l('返回创建原操作', 'Return to the original creation')}
           </Button>
         )}
-        <Select
-          aria-label={l('订阅启用状态', 'Subscription enabled state')}
-          disabled={!canRead || blocked}
-          value={
-            query.filter === "enabled=='true'"
-              ? 'enabled'
-              : query.filter === "enabled=='false'"
-                ? 'disabled'
-                : query.filter
-                  ? 'advanced'
-                  : 'all'
-          }
-          options={[
-            { value: 'all', label: l('启用状态不限', 'Any enabled state') },
-            { value: 'enabled', label: l('已启用', 'Enabled') },
-            { value: 'disabled', label: l('已停用', 'Disabled') },
-            ...(query.filter && !["enabled=='true'", "enabled=='false'"].includes(query.filter)
-              ? [{ value: 'advanced', label: l('高级条件', 'Advanced filter'), disabled: true }]
-              : []),
-          ]}
-          onChange={(state) => {
-            const { filter, ...rest } = firstPage(query)
-            void filter
-            update(
-              state === 'all' ? rest : { ...rest, filter: `enabled=='${state === 'enabled'}'` },
-            )
-          }}
-        />
+
       </Space>
       <details>
         <summary>{l('定位已知订阅', 'Locate a known subscription')}</summary>
@@ -538,9 +511,7 @@ export function WebhookSubscriptions({
       )}
       {canRead ? (
         <Card title={l('订阅目录', 'Subscriptions')}>
-          <details>
-            <summary>{l('服务端筛选与列', 'Server filters and columns')}</summary>
-            <DirectoryControls
+            <DirectoryControls catalog="webhooks"
               locale={locale}
               query={query}
               fields={[...fields]}
@@ -548,7 +519,6 @@ export function WebhookSubscriptions({
               onChange={update}
               disabled={blocked}
             />
-          </details>
           {detailDenied && (
             <Alert
               type="warning"

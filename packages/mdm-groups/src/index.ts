@@ -92,7 +92,7 @@ export function validateChange(change: Operation<GroupChange>): void {
 /** Group computation and cycle admission stay with the server; a preview never publishes members. */
 export function createGroups(port: GroupsPort) {
   return Object.freeze({
-    list: (query: GroupQuery = {}) => port.list(query),
+    list: (query: GroupQuery = {}, signal?: AbortSignal) => port.list(query, signal),
     async read(id: string) {
       const result = await port.read(uuid(id))
       if (result.group.id !== id) throw new Error('Wrong group detail')
