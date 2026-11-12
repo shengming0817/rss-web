@@ -282,6 +282,14 @@ try {
     },
   })
   const policy = await api('GET', `/api/v1/policies/${policyId}`)
+  for (let attempt = 0; ; attempt++) {
+    const scope = await page.request.get(`${origin}/api/v1/policies/${policyId}/scope`)
+    assert.ok(scope.status() === 200 || scope.status() === 503)
+    if (scope.status() === 200 && (await scope.json()).resolution !== null) break
+    await scope.dispose()
+    assert.ok(attempt < 89, 'owned scope publication before Agent configuration admission')
+    await new Promise((done) => setTimeout(done, 500))
+  }
   run.step('agent-mtls-ingress')
   const collector = spawnSync(
     'python3',
@@ -293,14 +301,31 @@ try {
     ],
     { encoding: 'utf8', timeout: 90000, stdio: ['ignore', 'pipe', 'pipe'] },
   )
+  if (collector.status !== 0) {
+    try {
+      const diagnostic = JSON.parse(collector.stdout)
+      if (
+        typeof diagnostic.classification === 'string' &&
+        /^[a-zA-Z0-9_-]{1,96}$/.test(diagnostic.classification)
+      )
+        console.error(
+          JSON.stringify({
+            phase: 'agent-mtls-ingress',
+            classification: diagnostic.classification,
+          }),
+        )
+    } catch {
+      /* The bounded process status remains the failure evidence. */
+    }
+  }
   assert.equal(collector.status, 0, 'Agent telemetry ingress')
   coverage.push('real-agent-mtls-ingress-batch-replay-and-gap-report')
   const query = {
     device,
     field: 'custom.browser.gauge',
     resource: 'device',
-    startMicros: Date.now() * 1000 - 3600_000_000,
-    endMicros: Date.now() * 1000 + 1_000_000,
+    startMicros: String(Date.now() * 1000 - 3600_000_000),
+    endMicros: String(Date.now() * 1000 + 1_000_000),
     maxPoints: 256,
     mode: 'history',
     after: null,
@@ -466,7 +491,7 @@ try {
   unsafeRow.sample.series.definition.metric = { kind: 'gauge', number: 'i64' }
   unsafeRow.sample.reading.value = {
     type: 'number',
-    value: { type: 'i64', value: 9007199254740992 },
+    value: { type: 'i64', value: '9007199254740992' },
   }
   await page.route(
     '**/api/v1/telemetry/history',
