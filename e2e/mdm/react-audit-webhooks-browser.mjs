@@ -303,6 +303,7 @@ try {
       .getByRole('link')
       .click()
     await p.waitForURL((url) => url.searchParams.get('policy') === policyIds[1])
+    await label('唯一别名').waitFor({ state: 'hidden' })
     assert.equal(await label('唯一别名').count(), 0)
     releasePolicy()
     await label('唯一别名').waitFor()

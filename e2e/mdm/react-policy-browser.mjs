@@ -98,7 +98,10 @@ try {
   await label('共享事件名').fill('react.policy.event')
   await p.getByRole('tab', { name: '范围', exact: true }).click()
   for (const endpoint of [f.mdm, f.agent]) {
-    await button('添加终端').click()
+    await p
+      .getByRole('region', { name: '目标（并集）', exact: true })
+      .getByRole('button', { name: '添加终端', exact: true })
+      .click()
     const drawer = p.getByRole('dialog', { name: '目标（并集） · 选择对象', exact: true })
     await drawer.locator('.directory-advanced summary').click()
     await drawer.getByRole('radio', { name: 'RSQL', exact: true }).check()

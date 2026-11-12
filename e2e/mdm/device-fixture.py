@@ -98,7 +98,7 @@ def seed():
         grant, request, credential = [str(uuid.uuid4()) for _ in range(3)]
         if channel == 'mdm':
             sql += [f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','{device}','enrollment','consumed',clock_timestamp()+interval '2 minutes')",
-                    f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile) VALUES('{tenant}','{request}','{device}','{grant}','{source}',CASE WHEN '{source}'='mdm.windows' THEN 'Device' END)"]
+                    f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile,state,expires_at,issuance_operation,password_digest,password_version,credential_ref) VALUES('{tenant}','{request}','{device}','{grant}','{source}',CASE WHEN '{source}'='mdm.windows' THEN 'Device' END,'bound',clock_timestamp()+interval '1 hour',gen_random_uuid(),repeat('0',64),1,'{credential}')"]
             column, origin = 'request_id', request
         else:
             sql.append(f"INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{tenant}','{grant}','{request}','download','fixture','{INSTANCE}','{device}','windows',repeat('0',64),repeat('0',64),'consumed',clock_timestamp()+interval '1 hour')")
@@ -133,7 +133,7 @@ def start(binary, initialized, log, expected=200):
         child = subprocess.Popen(args,cwd=BACKEND,stdout=log,stderr=log,env={**os.environ,'RUST_MIN_STACK':str(8*1024*1024)})
         processes.append(child)
         children.append(child)
-    # The current producer resumes 295 baseline steps and retries contention every 60s.
+    # Full tenant baseline initialization retries transient scope contention every 60s.
     deadline=time.monotonic()+1800
     while True:
         for role, child in zip(('product', 'gateway'), children):

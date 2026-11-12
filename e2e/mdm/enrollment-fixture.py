@@ -57,7 +57,8 @@ def start(binary, initialized, log, expected=200):
         child = subprocess.Popen(args, cwd=BACKEND, stdout=log, stderr=log, pass_fds=lease_fds(), env={**os.environ, 'RUST_MIN_STACK': str(8*1024*1024)})
         processes.append(child)
         children.append(child)
-    until = time.monotonic() + 180
+    # Full tenant baseline initialization retries transient scope contention every 60s.
+    until = time.monotonic() + 1800
     while time.monotonic() < until:
         if any(child.poll() is not None for child in children):
             log.flush()
@@ -153,7 +154,7 @@ try:
     registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
     environment.sql(installation_sql()+f"SET rss.tenant_id='{tenant}';"
         f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','enrollment-existing','enrollment','consumed',clock_timestamp()+interval '2 minutes');"
-        f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile) VALUES('{tenant}','{request}','enrollment-existing','{grant}','mdm.windows','Device');"
+        f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile,state,expires_at,issuance_operation,password_digest,password_version,credential_ref) VALUES('{tenant}','{request}','enrollment-existing','{grant}','mdm.windows','Device','bound',clock_timestamp()+interval '1 hour',gen_random_uuid(),repeat('0',64),1,'{credential}');"
         f"INSERT INTO mdm_access.devices(tenant_id,id,channel,request_id,state,purpose,epoch,first_authenticated_at) VALUES('{tenant}','enrollment-existing','mdm','{request}','active','primary',gen_random_uuid(),clock_timestamp());"
         f"INSERT INTO mdm_access.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES('{tenant}','{credential}','enrollment-existing','primary','mdm',md5('{credential}')||md5('{registration}'),'active');", 'mdm_dev')
     log_path = private(environment.root/'product.log', '')
