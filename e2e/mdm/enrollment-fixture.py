@@ -25,7 +25,7 @@ sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
-from runtime_fixture import storage, readiness
+from runtime_fixture import storage, readiness, installation_sql
 from windows_fixtures import generate
 from candidate_installation_driver import Browser
 from pki_fixtures import running as pki
@@ -151,7 +151,7 @@ try:
     # Established device input for management-read continuity, not protocol/OS proof.
     tenant = TENANTS[0]
     registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
-    environment.sql(f"SET rss.tenant_id='{tenant}';"
+    environment.sql(installation_sql()+f"SET rss.tenant_id='{tenant}';"
         f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','enrollment-existing','enrollment','consumed',clock_timestamp()+interval '2 minutes');"
         f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile) VALUES('{tenant}','{request}','enrollment-existing','{grant}','mdm.windows','Device');"
         f"INSERT INTO mdm_access.devices(tenant_id,id,channel,request_id,state,purpose,epoch,first_authenticated_at) VALUES('{tenant}','enrollment-existing','mdm','{request}','active','primary',gen_random_uuid(),clock_timestamp());"

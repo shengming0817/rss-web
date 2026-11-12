@@ -46,6 +46,7 @@ export function PolicyEditor({
   canInventory = false,
   canOperations = false,
   done,
+  doneLabel,
 }: {
   policies: PoliciesUseCases
   scopes: ScopesUseCases
@@ -62,6 +63,7 @@ export function PolicyEditor({
   canInventory?: boolean
   canOperations?: boolean
   done(): void
+  doneLabel?: string | undefined
 }) {
   const l = labels(locale),
     action = useAction(),
@@ -227,6 +229,7 @@ export function PolicyEditor({
         <CardComparison
           current={observed}
           draft={definition}
+          draftEnabled={enabled}
           locale={locale}
           canAdopt={!unknown && !blocked && canWrite}
           adopt={() => {
@@ -640,7 +643,7 @@ export function PolicyEditor({
         </Checkbox>
       )}
       <Button disabled={blocked || unknown || (dirty && !discardApproved)} onClick={done}>
-        {l('返回策略目录', 'Return to policies')}
+        {doneLabel ?? l('返回策略目录', 'Return to policies')}
       </Button>
     </section>
   )
@@ -648,12 +651,14 @@ export function PolicyEditor({
 function CardComparison({
   current,
   draft,
+  draftEnabled,
   locale,
   canAdopt,
   adopt,
 }: {
   current: Policy
   draft: PolicyDefinition
+  draftEnabled: boolean
   locale: Locale
   canAdopt: boolean
   adopt(): void
@@ -668,7 +673,16 @@ function CardComparison({
         <summary>
           {l('核对服务端配置与当前草稿', 'Compare server configuration and current draft')}
         </summary>
-        <pre>{JSON.stringify({ server: current.definition, draft }, null, 2)}</pre>
+        <pre>
+          {JSON.stringify(
+            {
+              server: { definition: current.definition, state: current.state },
+              draft: { definition: draft, enabled: draftEnabled },
+            },
+            null,
+            2,
+          )}
+        </pre>
       </details>
       <Button disabled={!canAdopt} onClick={adopt}>
         {l('保留草稿，采用此修订继续编辑', 'Keep draft and continue editing against this revision')}

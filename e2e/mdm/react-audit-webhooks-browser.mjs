@@ -276,10 +276,10 @@ try {
     const policyPath = '/api/v1/policies/' + policyIds[0]
     await run.nav(
       p,
-      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'names' })}`,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'configuration' })}`,
       '策略与部署',
     )
-    const names = p.locator('.ant-modal:visible')
+    const names = p.locator('.policy-editor')
     await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
     const associations = names.getByRole('region', { name: '当前事件关联成员' })
     await associations
@@ -287,9 +287,7 @@ try {
       .filter({ hasText: resolved.capability.toolName })
       .waitFor()
     assert.equal(await associations.locator('tbody tr').count(), 2)
-    await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
     await label('唯一别名').waitFor()
-    await names.getByRole('tab', { name: '名称与入口', exact: true }).click()
     let releasePolicy
     const heldPolicy = new Promise((done) => {
         releasePolicy = done
@@ -310,12 +308,11 @@ try {
     await label('唯一别名').waitFor()
     assert.equal(await label('唯一别名').inputValue(), 'react.audit.1')
     await p.unroute('**' + otherPolicyPath)
-    await button('返回来源').click()
+    await p.getByRole('button', { name: '返回来源', exact: true }).click()
     await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
     await button('显示 Agent 查看入口').click()
     await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
-    await label('终端候选服务端筛选').fill(`id=='${f.agent}'`)
-    await button('查询终端候选').click()
+    await run.directoryFilter(names, `key=='endpoint:${f.agent}'`)
     await button('使用此终端').click()
     await button('复制链接 · 共享事件').click()
     await p.getByRole('status').filter({ hasText: '已复制 · 共享事件' }).waitFor()
@@ -328,7 +325,6 @@ try {
     assert.equal(copiedEvent.searchParams.get('instance'), f.instance)
 
     checks.push('real-shared-event-copy-for-current-agent-registration')
-    await names.getByRole('tab', { name: '定义与发布', exact: true }).click()
     await label('唯一别名').fill('react.audit.1')
     await label('确认范围、资源、调度与潜在影响').check()
     await run.response(p, 'POST', policyPath, () => button('保存策略定义').click(), 409)
@@ -348,10 +344,10 @@ try {
     })
     assert.equal(renamed.policy.id, policyIds[0])
     assert.equal(renamed.policy.definition.customEvent, null)
-    await button('返回并重新读取策略').click()
+    await button('返回策略目录').click()
     await run.nav(
       p,
-      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'definition' })}`,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'configuration' })}`,
       '策略与部署',
     )
     await label('唯一别名').fill('')
@@ -366,10 +362,10 @@ try {
       { kind: 'alias', alias: 'react.audit.renamed' },
       404,
     )
-    await button('返回并重新读取策略').click()
+    await button('返回策略目录').click()
     await run.nav(
       p,
-      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'names' })}`,
+      `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'configuration' })}`,
       '策略与部署',
     )
     await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()

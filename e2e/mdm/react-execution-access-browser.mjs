@@ -345,6 +345,7 @@ try {
     })
     await run.nav(p, `/policies?policy=${policy}`, '策略与部署')
     await label('唯一别名').waitFor()
+    await p.getByRole('tab', { name: '记录', exact: true }).click()
     await p.getByRole('tab', { name: '设备分配', exact: true }).click()
     await p.getByText('当前设备分配资格', { exact: true }).waitFor()
     const assignment = await until(
@@ -452,13 +453,16 @@ try {
       )
       assert.ok(facts.items.every((fact) => fact.links.task === task.task))
       await p.locator('.audit-page tbody tr').first().waitFor()
-      await run.nav(p, `/policies?${new URLSearchParams({ policy, tab: 'names' })}`, '策略与部署')
+      await run.nav(
+        p,
+        `/policies?${new URLSearchParams({ policy, tab: 'configuration' })}`,
+        '策略与部署',
+      )
       await p.getByText('稳定工具名（只读）', { exact: true }).waitFor()
       await button('显示 Agent 查看入口').click()
-      await label('终端候选服务端筛选').fill(`id=='${final.device}'`)
-      await button('查询终端候选').click()
+      await run.directoryFilter(p, `key=='endpoint:${final.device}'`)
       await p
-        .locator('.ant-modal:visible tbody tr')
+        .locator('.policy-editor tbody tr')
         .filter({ hasText: final.device })
         .getByRole('button', { name: '使用此终端', exact: true })
         .click()
@@ -682,6 +686,7 @@ try {
     .operationIds[0]
   await run.nav(p, `/policies?policy=${configurationPolicy}`, '策略与部署')
   await label('唯一别名').waitFor()
+  await p.getByRole('tab', { name: '记录', exact: true }).click()
   await p.getByRole('tab', { name: '设备分配', exact: true }).click()
   await p.getByRole('link', { name: command, exact: true }).click()
   await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()

@@ -138,3 +138,21 @@ it('round trips query state while preserving other directory and selection coord
   expect(next.get('devices.cursor')).toBe('kept')
   expect(next.get('policy')).toBe('one')
 })
+it('removes the last condition from nested visual groups without retaining an invalid empty group', async () => {
+  const onChange = vi.fn()
+  await act(async () =>
+    root.render(
+      h(
+        DirectoryCatalogContext.Provider,
+        { value: { groups: capabilities } },
+        h(DirectorySearch, { catalog: 'groups', locale: 'zh', query: {}, onChange }),
+      ),
+    ),
+  )
+  await act(async () => host.querySelector<HTMLElement>('.directory-advanced summary')!.click())
+  await act(async () => button('添加分组').click())
+  await act(async () => button('移除条件').click())
+  await act(async () => button('应用').click())
+  expect(onChange).toHaveBeenCalledWith({})
+  expect(host.querySelectorAll('.directory-condition-group')).toHaveLength(0)
+})

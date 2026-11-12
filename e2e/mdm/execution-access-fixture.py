@@ -26,6 +26,7 @@ def configure(environment, config, private):
 
 def seed(environment, state, tenant, instance, actor):
     from task_trust_materials import prepare, leaf
+    from runtime_fixture import installation_sql
     root = Path(state['root'])
     prepare(root)
     # The existing purpose-bound certificate generator performs real X.509 signing.
@@ -57,7 +58,7 @@ def seed(environment, state, tenant, instance, actor):
     def doc(value):
         return q(json.dumps(value, separators=(',', ':'))) + '::jsonb'
     t = q(tenant)
-    sql = ["BEGIN", f"SELECT set_config('rss.tenant_id',{t},true)",
+    sql = ["BEGIN", installation_sql(), f"SELECT set_config('rss.tenant_id',{t},true)",
            f"INSERT INTO rss_da.certificate_grants(certificate_purpose,tenant_id,id,operation_id,source,actor,instance,device,secret_digest,request_digest,state,expires_at) VALUES('da_device',{t},{q(grant)},{q(grant)},'administrator',{q(actor)},{q(instance)},{q(state['device'])},repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour')",
            f"INSERT INTO rss_da.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES({t},{q(state['device'])},NULL,{q(grant)},'active','da_device',{q(uuid.uuid4())})",
            f"INSERT INTO rss_da.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES({t},{q(credential)},{q(state['device'])},'da_device',NULL,{q(fingerprint)},'active')",

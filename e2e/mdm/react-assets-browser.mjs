@@ -109,10 +109,7 @@ try {
   }
   async function openGroup(id, name) {
     await run.nav(p, '/groups', '设备组')
-    await visibleLabel('服务端筛选').fill(`id==${id}`)
-    await run.response(p, 'GET', '/api/v1/groups', () =>
-      p.getByRole('button', { name: '应用', exact: true }).click(),
-    )
+    await run.response(p, 'GET', '/api/v1/groups', () => run.directoryFilter(p, `id=='${id}'`))
     const card = p.locator('.asset-group-card').filter({ hasText: name })
     await run.response(p, 'GET', `/api/v1/groups/${id}`, () =>
       card.getByRole('button', { name: '查看定义与成员 →', exact: true }).click(),
@@ -385,9 +382,8 @@ try {
   const nextCandidates = await candidateContinuation
   assert.equal(nextCandidates.status(), 200)
   assert.ok(new URL(nextCandidates.url()).searchParams.get('cursor'))
-  await picker.getByLabel('候选组服务端筛选', { exact: true }).fill(`id==${staticGroup.id}`)
   await run.response(p, 'GET', '/api/v1/groups', () =>
-    picker.getByRole('button', { name: '查询候选组', exact: true }).click(),
+    run.directoryFilter(picker, `id=='${staticGroup.id}'`),
   )
   await picker
     .getByRole('row')
@@ -992,9 +988,8 @@ try {
   async function chooseOverlap(container) {
     await container.getByRole('button', { name: '选择同域设备组', exact: true }).click()
     for (const id of overlappingGroups) {
-      await container.getByLabel('候选组服务端筛选', { exact: true }).fill('id==' + id)
       await run.response(p, 'GET', '/api/v1/groups', () =>
-        container.getByRole('button', { name: '查询候选组', exact: true }).click(),
+        run.directoryFilter(container, `id=='${id}'`),
       )
       await container.getByRole('button', { name: '使用此组', exact: true }).click()
     }

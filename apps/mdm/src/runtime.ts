@@ -105,6 +105,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
   let setup: ReturnType<typeof createTenantSetup> | undefined
   return Object.freeze({
     owner,
+    directoryCapabilities,
     webhookMaterialRecovery: createWebhookMaterialRecovery(owner),
     operationAuthorization,
     ...createCeremonyHandoff(operationAuthorization, passkeys.cancelAuthorization),
@@ -138,7 +139,6 @@ export async function createRuntime(origin: string, pathname: string, storage: S
       }
       const content = createContent(createContentAdapter(transport))
       return Object.freeze({
-        directoryCapabilities,
         tenantSetup: setup,
         settingsCatalog: createCatalogAdapter(transport, management),
         diagnostics: createRuntimeDiagnostics(createRuntimeDiagnosticsAdapter()),

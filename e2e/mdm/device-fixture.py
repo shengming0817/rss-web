@@ -29,7 +29,7 @@ from build_run import lease_fds
 from pki_fixtures import running as pki
 from windows_fixtures import generate as windows_inputs
 from candidate_installation_driver import Browser
-from runtime_fixture import storage, readiness as readiness_status
+from runtime_fixture import storage, installation_sql, readiness as readiness_status
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
@@ -90,7 +90,7 @@ def seed_authority():
 
 def seed():
     tenant = TENANTS[0]
-    sql = [f"SET rss.tenant_id = '{tenant}'"]
+    sql = [installation_sql(), f"SET rss.tenant_id = '{tenant}'"]
     devices = [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin'), ('fixture-alone','mdm','mdm.windows')]
     if browser_module in {'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}: devices.append(('fixture-mac','mdm','mdm.apple'))
     devices += [(f'extra-{index:02}', 'agent', 'agent.builtin') for index in range(24)]
@@ -364,8 +364,9 @@ try:
         person_b = dict(principalId=account_b['principalId'], login='fixture-person-b')
     if browser_module == 'react-assets-browser.mjs':
         # A real different tenant owns this endpoint; ordinary tenant-scoped UI cannot read it.
-        environment.sql(f"SELECT public.create_new_tenant('{TENANTS[1]}',1,NULL,NULL) WHERE NOT EXISTS (SELECT 1 FROM public.mdm_tenants WHERE tenant_id='{TENANTS[1]}')", 'mdm_dev')
-        environment.sql(f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.devices(tenant_id,id) VALUES('{TENANTS[1]}','foreign-assets-endpoint')", 'mdm_dev')
+        environment.sql(installation_sql()+f"SELECT public.create_new_tenant('{TENANTS[1]}',1,NULL,NULL) WHERE NOT EXISTS (SELECT 1 FROM public.mdm_tenants WHERE tenant_id='{TENANTS[1]}')", 'mdm_dev')
+        foreign_grant = str(uuid.uuid4())
+        environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','foreign-assets-endpoint','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','foreign-assets-endpoint','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
     phase = 'collector-registration'
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)
@@ -385,7 +386,7 @@ except BaseException as error:
     print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
     if phase == 'collector-registration' and isinstance(error, RuntimeError) and re.fullmatch(r'collector-[a-z0-9_-]+', str(error)):
         print(json.dumps(dict(phase=phase, reason=str(error))), flush=True)
-    if phase == 'readiness' and browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
+    if phase == 'readiness':
         try:
             diagnostic_operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
             diagnostic_operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
@@ -403,8 +404,9 @@ except BaseException as error:
             if permission:
                 print(json.dumps(dict(phase='postgres-diagnostic', classification='permission-denied', kind=permission[1], identifier=permission[2])), flush=True)
             else:
-                classification = next((kind for text, kind in [('lock timeout', 'lock-timeout'), ('statement timeout', 'statement-timeout'), ('deadlock detected', 'deadlock'), ('duplicate key value', 'duplicate-key'), ('violates check constraint', 'check-constraint'), ('violates foreign key constraint', 'foreign-key'), ('row-level security', 'row-security')] if text in line), 'sql-error')
-                print(json.dumps(dict(phase='postgres-diagnostic', classification=classification)), flush=True)
+                classification = next((kind for text, kind in [('lock timeout', 'lock-timeout'), ('statement timeout', 'statement-timeout'), ('deadlock detected', 'deadlock'), ('duplicate key value', 'duplicate-key'), ('violates check constraint', 'check-constraint'), ('violates foreign key constraint', 'foreign-key'), ('row-level security', 'row-security'), ('storage lineage fenced', 'storage-lineage'), ('execution epoch', 'execution-epoch')] if text in line), 'sql-error')
+                identifiers = re.findall(r'(?:constraint|column|function|relation|table) \"([a-zA-Z0-9_.]+)\"', line)
+                print(json.dumps(dict(phase='postgres-diagnostic', classification=classification, identifiers=identifiers)), flush=True)
     product_log = environment.root/'product.log'
     if product_log.exists():
         diagnostic = Path(tempfile.mkdtemp(prefix='mdm-device-failure-'))

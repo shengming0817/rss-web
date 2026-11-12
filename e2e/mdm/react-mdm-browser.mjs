@@ -111,6 +111,14 @@ export async function realBrowser(fixtureVariable, journey) {
     assert.equal(result.status(), status)
     return result
   }
+  async function directoryFilter(scope, expression) {
+    const search = scope.locator('.directory-search:visible')
+    const advanced = search.locator('.directory-advanced')
+    if (!(await advanced.evaluate((node) => node.open))) await advanced.locator('summary').click()
+    await search.getByRole('radio', { name: 'RSQL', exact: true }).check()
+    await search.getByRole('textbox', { name: 'RSQL', exact: true }).fill(expression)
+    await search.getByRole('button', { name: '应用', exact: true }).click()
+  }
   const count = (p, method, path) =>
     traffic.filter((r) => r.page === p && r.method === method && r.path === path).length
   async function finish(error) {
@@ -142,6 +150,7 @@ export async function realBrowser(fixtureVariable, journey) {
     nav,
     choose,
     response,
+    directoryFilter,
     count,
     checks,
     finish,

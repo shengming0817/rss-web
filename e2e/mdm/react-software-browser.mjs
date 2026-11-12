@@ -677,11 +677,11 @@ try {
       detailRequests.push(new URL(request.url()).pathname)
   }
   p.on('request', captureDetails)
-  await label('软件名称').fill(String.raw`éclair O'Reilly \ %_`)
+  await label('名称').fill(String.raw`éclair O'Reilly \ %_`)
   await label('分类').fill('业务工具')
-  await run.choose(p, label('激活状态'), '有激活版本')
+  await run.choose(p, label('激活状态'), '是')
   const softwareDirectory = await run.response(p, 'GET', '/api/v1/resources', () =>
-    button('搜索软件').click(),
+    button('应用').click(),
   )
   const softwareRows = (await softwareDirectory.json()).items
   assert.deepEqual(
@@ -715,9 +715,7 @@ try {
   await p.waitForURL(sourceUrl.href)
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).waitFor()
   await button('清除条件').click()
-  await p.locator('.resource-toolbar summary').click()
-  await label('服务端筛选').fill(`id=='${direct}'`)
-  await run.response(p, 'GET', '/api/v1/resources', () => button('应用').click())
+  await run.response(p, 'GET', '/api/v1/resources', () => run.directoryFilter(p, `id=='${direct}'`))
   await button('查看版本与材料').click()
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).click()
   await p.getByRole('button', { name: '查看策略 ' + policyId, exact: true }).waitFor()
@@ -788,8 +786,8 @@ try {
   const recordButton = p.getByRole('button', { name: previousEntry, exact: true })
   await recordButton.click()
   await button('用于软件草稿').click()
-  await label('软件名称').fill('ÉCLAIR')
-  await button('搜索软件').click()
+  await label('名称').fill('ÉCLAIR')
+  await button('应用').click()
   await button(searchName).click()
   await button('复制所选记录字段').click()
   const version = await label('实际软件版本').inputValue()

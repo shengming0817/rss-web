@@ -849,9 +849,7 @@ function Shell({
                       key={`${runtime.tenant}/${state.identity?.principalId}/${state.session?.id}`}
                     >
                       <ReadEpoch.Provider value={location.key}>
-                        <DirectoryCatalogContext.Provider
-                          value={runtime.administration().directoryCapabilities}
-                        >
+                        <DirectoryCatalogContext.Provider value={runtime.directoryCapabilities}>
                           {route.render({ runtime, locale })}
                         </DirectoryCatalogContext.Provider>
                       </ReadEpoch.Provider>

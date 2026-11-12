@@ -179,7 +179,9 @@ function ConditionRow({
               })
             }
             onRemove={() =>
-              onChange({ ...node, children: node.children.filter((_, i) => i !== index) })
+              node.children.length === 1
+                ? onRemove()
+                : onChange({ ...node, children: node.children.filter((_, i) => i !== index) })
             }
           />
         ))}
