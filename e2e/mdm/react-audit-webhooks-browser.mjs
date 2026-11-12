@@ -314,7 +314,11 @@ try {
     await button('显示 Agent 查看入口').click()
     await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
     await run.directoryFilter(names, `key=='endpoint:${f.agent}'`)
-    await button('使用此终端').click()
+    await names
+      .getByRole('row')
+      .filter({ hasText: f.agent })
+      .getByRole('button', { name: '使用此终端', exact: true })
+      .click()
     await button('复制链接 · 共享事件').click()
     await p.getByRole('status').filter({ hasText: '已复制 · 共享事件' }).waitFor()
     const copiedEvent = new URL(await p.evaluate(() => globalThis.navigator.clipboard.readText()))
