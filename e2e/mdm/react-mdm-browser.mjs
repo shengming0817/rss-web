@@ -138,6 +138,9 @@ export async function realBrowser(fixtureVariable, journey) {
         pageErrors: errors,
         csp,
         failure: error?.name,
+        failureLocation: error?.stack?.match(/react-[a-z-]+-browser\.mjs:\d+:\d+/)?.[0],
+        failureOperation: error?.message?.match(/^((?:locator|page)\.[A-Za-z]+)/)?.[1],
+        strictLocator: error?.message?.includes('strict mode violation') ?? false,
       }),
     )
     if (failed) process.exitCode = 1

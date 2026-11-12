@@ -993,7 +993,11 @@ try {
       await run.response(p, 'GET', '/api/v1/groups', () =>
         run.directoryFilter(container, `id=='${id}'`),
       )
-      await container.getByRole('button', { name: '使用此组', exact: true }).click()
+      await container
+        .getByRole('row')
+        .filter({ hasText: id })
+        .getByRole('button', { name: '使用此组', exact: true })
+        .click()
     }
     await container.getByRole('button', { name: '关闭组选择器', exact: true }).click()
   }

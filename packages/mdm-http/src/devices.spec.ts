@@ -51,6 +51,14 @@ it('uses the relationship directory and keeps empty candidate windows continuabl
     }),
   )
 })
+it('decodes current nonempty association candidates by device and channel', async () => {
+  const f = fixture({ items: [{ device: 'fixture-agent', channel: 'agent' }], nextCursor: 'eA' }),
+    client = createDevicesAdapter(f.transport, tenant)
+  expect(await client.candidates('fixture-mdm', 'mdm', {})).toEqual({
+    items: [{ device: 'fixture-agent', channel: 'agent' }],
+    nextCursor: 'eA',
+  })
+})
 it('keeps personnel idempotency in the header and rejects foreign-tenant read results', async () => {
   const f = fixture({ revision: 4, user: null }),
     client = createDevicesAdapter(f.transport, tenant)
