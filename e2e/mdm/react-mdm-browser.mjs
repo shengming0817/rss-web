@@ -1,6 +1,8 @@
 // Shared mechanics only. Journeys own their business assertions against the real host.
 import { chromium } from 'playwright'
-import { readFileSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import process from 'node:process'
 export async function realBrowser(fixtureVariable, journey) {
@@ -17,6 +19,7 @@ export async function realBrowser(fixtureVariable, journey) {
     csp = [],
     traffic = [],
     httpFailures = []
+  let pageErrorDirectory
   let failed = false,
     closing,
     nextRequest = 0,
@@ -59,7 +62,18 @@ export async function realBrowser(fixtureVariable, journey) {
         if (httpFailures.length > 20) httpFailures.shift()
       }
     })
-    p.on('pageerror', (e) => errors.push(e.name))
+    p.on('pageerror', (e) => {
+      errors.push(e.name)
+      pageErrorDirectory ??= mkdtempSync(join(tmpdir(), 'rss-react-page-error-'))
+      writeFileSync(
+        join(pageErrorDirectory, `error-${errors.length}.json`),
+        JSON.stringify({ name: e.name, message: e.message, stack: e.stack, phase }),
+        { mode: 0o600 },
+      )
+      console.error(
+        JSON.stringify({ journey, phase: 'page-error', diagnosticDirectory: pageErrorDirectory }),
+      )
+    })
     p.on('request', (r) =>
       traffic.push({ page: p, method: r.method(), path: new URL(r.url()).pathname }),
     )

@@ -290,12 +290,15 @@ try:
     private(config_path, config)
     phase = 'readiness'
     audit_journey = browser_module == 'react-audit-webhooks-browser.mjs'
-    management_only = audit_journey or browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}
+    management_only = audit_journey or browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs', 'react-devices-browser.mjs'}
     backend_readiness = start(binary, initialized, log, expected=None if management_only else 200)
     if management_only:
         phase = 'management-seams'
         # These are actual authenticated reads, not substitute health/authority facts.
         paths = ['/api/v1/authorization', '/api/v1/operations?limit=1']
+        if browser_module == 'react-devices-browser.mjs':
+            # These device management transactions do not consume unrelated platform-template baseline completion.
+            paths += ['/api/v1/devices?limit=1', '/api/v1/device-associations?limit=1']
         if audit_journey:
             paths += ['/api/v1/audit-events?limit=1', '/api/v1/webhooks/subscriptions?limit=1']
         for path in paths:
