@@ -96,7 +96,7 @@ try {
     } while (Date.now() < until)
     throw new Error('product-task-deadline')
   }
-  async function settleQuery(task) {
+  async function settleQuery(task, expectedDevice) {
     const state = await poll(
       `/api/v1/device-queries/${task}`,
       () => p.getByRole('button', { name: '读取查询进度与结果', exact: true }).click(),
@@ -104,7 +104,9 @@ try {
       (v) => ['completed', 'failed'].includes(v.status),
     )
     assert.equal(state.status, 'completed')
-    await p.getByRole('link', { name: f.mdm, exact: true }).first().waitFor()
+    if (expectedDevice)
+      await p.getByRole('link', { name: expectedDevice, exact: true }).first().waitFor()
+    else await visibleLabel('固定结果每页条目').waitFor()
     return state
   }
   async function openGroup(id, name) {
@@ -151,7 +153,7 @@ try {
       )
     ).json()
   ).asset
-  const state = await settleQuery(accepted.task)
+  const state = await settleQuery(accepted.task, f.mdm)
   assert.ok(state.summary.total >= 27)
   assert.equal(state.summary.matched, 1)
   const fixedPath = `/api/v1/device-queries/${accepted.task}/items?limit=1`,
