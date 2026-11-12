@@ -7,6 +7,7 @@ import { Telemetry } from './Telemetry'
 import { Executions } from './Executions'
 import { DeviceAccess } from './DeviceAccess'
 import { ReadEpoch } from './AdminUi'
+import { DirectoryCatalogContext } from './DirectorySearch'
 import { Policies } from './Policies'
 import { Scopes } from './Scopes'
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
@@ -850,7 +851,9 @@ function Shell({
                       key={`${runtime.tenant}/${state.identity?.principalId}/${state.session?.id}`}
                     >
                       <ReadEpoch.Provider value={location.key}>
+                        <DirectoryCatalogContext.Provider value={runtime.administration().directoryCapabilities}>
                         {route.render({ runtime, locale })}
+                        </DirectoryCatalogContext.Provider>
                       </ReadEpoch.Provider>
                     </div>
                   }
