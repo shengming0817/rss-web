@@ -401,7 +401,7 @@ except BaseException as error:
                 print(json.dumps(dict(phase='readiness-components', components=[{key: component[key] for key in ('name','readiness','health','reasons')} for component in diagnostic_snapshot['components']])), flush=True)
         except Exception:
             print(json.dumps(dict(phase='readiness-components', result='unavailable')), flush=True)
-    if browser_module in {'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
+    if browser_module in {'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs', 'react-telemetry-browser.mjs'}:
         diagnostics = subprocess.run(['docker', 'logs', environment.container()], capture_output=True, text=True, timeout=10, pass_fds=lease_fds())
         for line in (diagnostics.stdout + diagnostics.stderr).splitlines():
             if 'ERROR:' not in line:
@@ -417,6 +417,8 @@ except BaseException as error:
     if product_log.exists():
         diagnostic = Path(tempfile.mkdtemp(prefix='mdm-device-failure-'))
         private(diagnostic/'product.log', product_log.read_text())
+        if browser_module == 'react-telemetry-browser.mjs':
+            private(diagnostic/'postgres.log', diagnostics.stdout + diagnostics.stderr)
         print(json.dumps(dict(phase='diagnostics', directory=str(diagnostic))), flush=True)
     if product_log.exists() and 'stack overflow' in product_log.read_text():
         print(json.dumps(dict(phase='product',result='failed',classification='stack-overflow')),flush=True)
