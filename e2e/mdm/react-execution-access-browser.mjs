@@ -174,8 +174,16 @@ try {
     )
     if (kind === 'policies' && input.action === 'put' && expected === 200)
       await until(
-        () => api('GET', `${base}/policies/${id}/scope`),
-        (scope) => scope.resolution !== null,
+        async () => {
+          const response = await p.request.get(`${origin}${base}/policies/${id}/scope`)
+          if (response.status() === 503) {
+            await response.dispose()
+            return null
+          }
+          assert.equal(response.status(), 200)
+          return response.json()
+        },
+        (scope) => scope?.resolution != null,
       )
     return value
   }

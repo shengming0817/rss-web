@@ -334,10 +334,12 @@ try {
     await label('确认范围、资源、调度与潜在影响').check()
     await run.response(p, 'POST', policyPath, () => button('保存策略定义').click(), 409)
     await p
-      .getByText('保存冲突。请重新读取策略修订；若别名被其他策略占用，请换用可用别名。', {
+      .getByText('保存冲突，草稿已保留。读取最新配置并核对差异后继续。', {
         exact: true,
       })
       .waitFor()
+    await button('读取原策略当前状态').click()
+    await button('保留草稿，采用此修订继续编辑').click()
     await label('唯一别名').fill('react.audit.renamed')
     await label('共享事件名').fill('')
     await label('确认范围、资源、调度与潜在影响').check()
@@ -623,7 +625,11 @@ try {
     await run.nav(p, '/webhooks?subscription.limit=1', 'Webhook 集成')
     await button('下一页').click()
     await p.waitForURL((url) => url.searchParams.has('subscription.cursor'))
-    await run.choose(p, label('订阅启用状态'), '已启用')
+    await run.choose(p, label('启用状态'), '是')
+    await p
+      .locator('.directory-search:visible')
+      .getByRole('button', { name: '应用', exact: true })
+      .click()
     await p.waitForURL(
       (url) =>
         !url.searchParams.has('subscription.cursor') &&

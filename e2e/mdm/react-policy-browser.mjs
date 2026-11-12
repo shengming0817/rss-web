@@ -31,7 +31,14 @@ try {
   }
   async function settled(policy) {
     for (let i = 0; i < 90; i++) {
-      const scope = await api('GET', `/api/v1/policies/${policy}/scope`)
+      const response = await p.request.get(`${origin}/api/v1/policies/${policy}/scope`)
+      if (response.status() === 503) {
+        await response.dispose()
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        continue
+      }
+      assert.equal(response.status(), 200)
+      const scope = await response.json()
       if (scope.resolution) return scope
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
@@ -109,7 +116,9 @@ try {
       .getByRole('textbox', { name: 'RSQL', exact: true })
       .fill(`key=='endpoint:${endpoint}'`)
     await drawer.getByRole('button', { name: '应用', exact: true }).click()
-    await drawer.getByRole('row').filter({ hasText: endpoint }).getByRole('checkbox').check()
+    const choice = drawer.getByRole('row').filter({ hasText: endpoint }).getByRole('checkbox')
+    await choice.click()
+    await p.waitForFunction((input) => input.checked, await choice.elementHandle())
     await drawer.getByRole('button', { name: '完成选择', exact: true }).click()
   }
   run.step('owned-scope-draft-preview')

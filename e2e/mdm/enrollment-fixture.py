@@ -28,7 +28,7 @@ from build_run import lease_fds
 from runtime_fixture import storage, readiness, installation_sql
 from windows_fixtures import generate
 from candidate_installation_driver import Browser
-from pki_fixtures import running as pki
+from pki_fixtures import running as pki, trust as public_trust
 
 browser_module = os.environ.get('MDM_ENROLLMENT_BROWSER_MODULE', 'react-enrollment-browser.mjs')
 if browser_module not in {'react-enrollment-browser.mjs', 'react-certificates-browser.mjs'}:
@@ -230,7 +230,9 @@ try:
         collector = importlib.util.module_from_spec(module); module.loader.exec_module(collector)
         agent_fixture = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0])
         recovery_candidate = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0],activate=False)['originalCandidate']
-        candidate_trust = json.loads(Path(json.loads((next_root/'agent-pki.json').read_text())['trust_file']).read_text())
+        # Read the CA's current signed CRL after cold initialization; its cache lifetime is 10m.
+        authority = json.loads((next_root/'device-pki.json').read_text())[0]
+        candidate_trust = json.loads(public_trust(next_root/'pki/agent', 'agent', agent['endpoint']['origin'], TENANTS[0], authority['provisioner'], authority['kid'], authority['origin']).read_text())
         recovery_input = private(environment.root/'recovery-input.json',dict(wireVersion=1,operationId=str(uuid.uuid4()),secret=secrets.token_urlsafe(32),platform='macos',csr=base64.b64encode((root/'pki/agent/agent.der').read_bytes()).decode()))
         backend_revision = subprocess.run(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,check=True,capture_output=True,text=True).stdout.strip()
         print(json.dumps(dict(phase='backend-baseline',revision=backend_revision)),flush=True)
