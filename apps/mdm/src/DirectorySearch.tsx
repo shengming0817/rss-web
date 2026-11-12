@@ -213,8 +213,13 @@ function ConditionRow({
           onChange({
             ...node,
             operator,
-            values:
-              unary || ['=isnull=', '=isnotnull='].includes(operator) ? ['true'] : node.values,
+            values: ['=isnull=', '=isnotnull='].includes(operator)
+              ? ['true']
+              : unary
+                ? [allowed?.[0] ?? '']
+                : sets.has(operator)
+                  ? node.values
+                  : [node.values[0] ?? ''],
           })
         }
       />
@@ -261,11 +266,11 @@ export function DirectorySearch({
 }) {
   const capabilities = useContext(DirectoryCatalogContext)[catalog],
     l = (zh: string, en: string) => (locale === 'zh' ? zh : en),
-    [text, setText] = useState(query.filter ?? ''),
+    [draft, setDraft] = useState<Filter | string | null>(query.filter ?? null),
     [mode, setMode] = useState<'visual' | 'text'>('visual'),
     [error, setError] = useState('')
   useEffect(() => {
-    setText(query.filter ?? '')
+    setDraft(query.filter ?? null)
     setError('')
   }, [query.filter])
   if (!capabilities)
@@ -283,7 +288,7 @@ export function DirectorySearch({
   let tree: Filter | null = null,
     syntax = ''
   try {
-    tree = text ? parseFilter(text) : null
+    tree = typeof draft === 'string' ? (draft ? parseFilter(draft) : null) : draft
   } catch (error) {
     syntax =
       error instanceof FilterSyntaxError
@@ -292,8 +297,13 @@ export function DirectorySearch({
   }
   const parts = tree?.kind === 'and' ? tree.children : tree ? [tree] : []
   function update(next: Filter | null) {
+    setDraft(next)
+    setError('')
+  }
+  function changeMode(next: 'visual' | 'text') {
     try {
-      setText(next ? formatFilter(next) : '')
+      if (next === 'text' && typeof draft !== 'string') setDraft(draft ? formatFilter(draft) : '')
+      setMode(next)
       setError('')
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error))
@@ -301,8 +311,9 @@ export function DirectorySearch({
   }
   function apply() {
     try {
-      const node = text ? parseFilter(text) : null
+      const node = typeof draft === 'string' ? (draft ? parseFilter(draft) : null) : draft
       if (node) validate(node, fields)
+      const text = typeof draft === 'string' ? draft : node ? formatFilter(node) : ''
       const { cursor: _cursor, filter: _filter, ...rest } = query
       void _cursor
       void _filter
@@ -381,7 +392,7 @@ export function DirectorySearch({
         <Radio.Group
           aria-label={l('条件编辑模式', 'Condition editing mode')}
           value={mode}
-          onChange={(e) => setMode(e.target.value as 'visual' | 'text')}
+          onChange={(e) => changeMode(e.target.value as 'visual' | 'text')}
           options={[
             { value: 'visual', label: l('可视条件', 'Visual conditions') },
             { value: 'text', label: 'RSQL' },
@@ -391,10 +402,10 @@ export function DirectorySearch({
           <>
             <Input.TextArea
               aria-label="RSQL"
-              value={text}
+              value={typeof draft === 'string' ? draft : ''}
               maxLength={8192}
               rows={4}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => setDraft(e.target.value)}
             />
             <p>
               {l('字段与操作符提示', 'Field and operator hints')}:{' '}
@@ -456,7 +467,7 @@ export function DirectorySearch({
         </Button>
         <Button
           onClick={() => {
-            setText('')
+            setDraft(null)
             setError('')
             const { filter: _filter, cursor: _cursor, ...rest } = query
             void _filter

@@ -43,7 +43,7 @@ const capabilities: DirectoryCapabilities = {
       sort: true,
       output: true,
       nullable: false,
-      operators: ['Eq', 'Icontains'],
+      operators: ['Eq', 'Ne', 'In', 'Out', 'Icontains'],
       limitation: null,
     },
     {
@@ -73,6 +73,91 @@ async function fill(selector: string, value: string) {
     node.dispatchEvent(new Event('input', { bubbles: true }))
   })
 }
+async function choose(label: string, value: string) {
+  await act(async () =>
+    host
+      .querySelector(`input[aria-label="${label}"]`)!
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true })),
+  )
+  const option = [
+    ...document.querySelectorAll<HTMLElement>(
+      '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option',
+    ),
+  ].find((node) => node.textContent === value)!
+  expect(option).toBeDefined()
+  await act(async () => option.click())
+}
+async function search(filter: string, onChange: (query: DirectoryQuery) => void) {
+  await act(async () =>
+    root.render(
+      h(
+        DirectoryCatalogContext.Provider,
+        { value: { groups: capabilities } },
+        h(DirectorySearch, { catalog: 'groups', locale: 'zh', query: { filter }, onChange }),
+      ),
+    ),
+  )
+  await act(async () => host.querySelector<HTMLElement>('.directory-advanced summary')!.click())
+}
+it.each([
+  ['=in=', '等于', '=='],
+  ['=in=', '不等于', '!='],
+  ['=out=', '等于', '=='],
+  ['=out=', '不等于', '!='],
+])(
+  'converts %s to %s with one operand and preserves sibling conditions',
+  async (from, label, to) => {
+    const change = vi.fn()
+    await search(`name${from}('a','b');deleted==false`, change)
+    await choose('条件操作符', label)
+    await act(async () => button('应用').click())
+    expect(parseFilter(change.mock.calls[0]![0].filter)).toEqual({
+      kind: 'and',
+      children: [
+        { kind: 'compare', field: 'name', operator: to, values: ['a'] },
+        { kind: 'compare', field: 'deleted', operator: '==', values: ['false'] },
+      ],
+    })
+  },
+)
+it('keeps an empty set editable, rejects its application and round trips the refilled nested draft', async () => {
+  const change = vi.fn()
+  await search("(name=in=('a'),name=='b');deleted==false", change)
+  await act(async () =>
+    host
+      .querySelector<HTMLElement>('.ant-select-multiple .ant-select-selection-item-remove')!
+      .click(),
+  )
+  expect(host.querySelectorAll('.ant-select-multiple .ant-select-selection-item')).toHaveLength(0)
+  await act(async () => button('应用').click())
+  expect(change).not.toHaveBeenCalled()
+  await act(async () => host.querySelector<HTMLInputElement>('input[value="text"]')!.click())
+  expect(host.querySelector<HTMLInputElement>('input[value="visual"]')!.checked).toBe(true)
+  await fill('.ant-select-multiple input[aria-label="条件值"]', 'next')
+  await act(async () =>
+    host
+      .querySelector('.ant-select-multiple input[aria-label="条件值"]')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true })),
+  )
+  await act(async () => host.querySelector<HTMLInputElement>('input[value="text"]')!.click())
+  const text = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="RSQL"]')!.value
+  await act(async () => host.querySelector<HTMLInputElement>('input[value="visual"]')!.click())
+  await act(async () => button('应用').click())
+  expect(parseFilter(change.mock.calls[0]![0].filter)).toEqual(parseFilter(text))
+  expect(parseFilter(text)).toEqual({
+    kind: 'and',
+    children: [
+      {
+        kind: 'or',
+        children: [
+          { kind: 'compare', field: 'name', operator: '=in=', values: ['next'] },
+          { kind: 'compare', field: 'name', operator: '==', values: ['b'] },
+        ],
+      },
+      { kind: 'compare', field: 'deleted', operator: '==', values: ['false'] },
+    ],
+  })
+})
 it('edits common criteria without dropping nested groups and applies one expression while resetting the cursor', async () => {
   let latest: DirectoryQuery = {
     filter: "(name=='a',name=='b');deleted==false",
