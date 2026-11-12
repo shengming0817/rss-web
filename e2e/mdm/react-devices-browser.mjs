@@ -100,7 +100,7 @@ try {
   const candidateSelect = d.getByLabel('对侧通道候选终端', { exact: true })
   await candidateSelect.click()
   await p.locator('.ant-select-dropdown:visible .ant-select-item-option-content').first().waitFor()
-  // Scroll the virtualized current window before choosing its exact candidate label.
+  // Exercise keyboard navigation within the bounded current candidate window.
   for (
     let index = 0;
     index < candidates.items.findIndex((item) => item.device === f.agent);
@@ -114,7 +114,7 @@ try {
   await d
     .getByLabel('核验证据或撤销理由', { exact: true })
     .fill('Disposable fixture association, independently identified endpoints')
-  await d.getByRole('button', { name: '读取并核对当前注册', exact: true }).click()
+  await d.getByRole('button', { name: '读取并核对当前终端', exact: true }).click()
   await d.getByRole('checkbox', { name: '已核实两端属于同一实际设备', exact: true }).check()
   // Lose an actually committed response. Subsequent explicit replay must keep the whole original tuple.
   let first,

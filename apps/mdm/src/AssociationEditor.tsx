@@ -149,6 +149,7 @@ export function AssociationEditor({
           <Form.Item label={l('对侧通道候选终端', 'Candidate on the other channel')}>
             <Select
               aria-label={l('对侧通道候选终端', 'Candidate on the other channel')}
+              virtual={false}
               value={candidate}
               options={(candidates.value?.items ?? []).map((member) => ({
                 value: member.device,
@@ -200,7 +201,7 @@ export function AssociationEditor({
                   })
               }
             >
-              {l('读取并核对当前注册', 'Read current registrations for verification')}
+              {l('读取并核对当前终端', 'Read current endpoints for verification')}
             </Button>
             {prior && (
               <Button
