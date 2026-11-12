@@ -3,7 +3,6 @@ import { Alert, Button, Card, Select, Space, Tag } from 'antd'
 import { Link } from 'react-router-dom'
 import type { DeviceRef, Page, WindowQuery } from '@rss/mdm-devices'
 import {
-  dimensions,
   type Compliance,
   type Dimension,
   type SoftwareBucket,
@@ -11,7 +10,6 @@ import {
   type SoftwareTask,
 } from '@rss/mdm-inventory'
 import {
-  codeOf,
   CursorControls,
   labels,
   readFailure,
@@ -54,7 +52,6 @@ function ResultPage<T, P extends Page<T>>({
   invalidate,
   children,
   onPage,
-  reopenedDimension = false,
 }: {
   title: string
   locale: Locale
@@ -62,19 +59,10 @@ function ResultPage<T, P extends Page<T>>({
   invalidate: () => void
   children: (page: P) => ReactNode
   onPage?: () => void
-  reopenedDimension?: boolean
 }) {
   const [query, setQuery] = useState<Query>(firstAssetPage),
     read = usePageRead(`software-result/${JSON.stringify(query)}`, (signal) => load(query, signal)),
     failure = readFailure(read.error),
-    unrequested =
-      reopenedDimension &&
-      !query.cursor &&
-      read.error instanceof Error &&
-      read.error.cause === 'wire' &&
-      'status' in read.error &&
-      read.error.status === 400 &&
-      codeOf(read.error) === 'malformed_request',
     invalid =
       failure === 'result' ||
       failure === 'denied' ||
@@ -93,24 +81,7 @@ function ResultPage<T, P extends Page<T>>({
   }
   return (
     <Card size="small" title={title}>
-      {unrequested ? (
-        <Alert
-          type="info"
-          title={labels(locale)(
-            '原任务未请求此分桶维度。',
-            'The original task did not request this breakdown dimension.',
-          )}
-        />
-      ) : (
-        <ReadState
-          locale={locale}
-          busy={read.busy}
-          error={read.error}
-          empty={read.value?.items.length === 0}
-          onRetry={read.reload}
-          onRestart={() => change(firstAssetPage)}
-        />
-      )}
+      <ReadState locale={locale} busy={read.busy} error={read.error} empty={read.value?.items.length === 0} onRetry={read.reload} onRestart={() => change(firstAssetPage)} />
       {read.value && (
         <>
           {children(read.value)}
@@ -131,14 +102,12 @@ export function SoftwareAssetResults({
   assets,
   task,
   locale,
-  requestedDimensions,
   openMapping,
   invalidate,
 }: {
   assets: SoftwareAssetsUseCases
   task: SoftwareTask
   locale: Locale
-  requestedDimensions: readonly Dimension[] | undefined
   openMapping: (id: string) => void
   invalidate: () => void
 }) {
@@ -242,7 +211,6 @@ export function SoftwareAssetResults({
           task={task}
           bucket={bucket}
           locale={locale}
-          requestedDimensions={requestedDimensions}
           invalidate={invalidate}
         />
       )}
@@ -295,14 +263,12 @@ function SoftwareBucketDetail({
   task,
   bucket,
   locale,
-  requestedDimensions,
   invalidate,
 }: {
   assets: SoftwareAssetsUseCases
   task: SoftwareTask
   bucket: SoftwareBucket
   locale: Locale
-  requestedDimensions: readonly Dimension[] | undefined
   invalidate: () => void
 }) {
   const l = labels(locale),
@@ -310,7 +276,7 @@ function SoftwareBucketDetail({
     [object, setObject] = useState<DeviceRef | null>(null)
   return (
     <Card title={bucket.identity.name}>
-      {(requestedDimensions ?? dimensions).length > 0 && (
+      {task.dimensions.length > 0 && (
         <label>
           {l('分桶维度', 'Breakdown dimension')}
           <Select
@@ -318,20 +284,12 @@ function SoftwareBucketDetail({
             value={dimension}
             onChange={setDimension}
             allowClear
-            options={(requestedDimensions ?? dimensions).map((value) => ({
+            options={task.dimensions.map((value) => ({
               value,
               label: dimensionName(value, locale),
             }))}
           />
         </label>
-      )}
-      {!requestedDimensions && (
-        <p>
-          {l(
-            '可选择维度，服务端会核对原任务是否请求该维度。',
-            'Choose a dimension to check whether the original task requested it.',
-          )}
-        </p>
       )}
       {dimension && (
         <ResultPage
@@ -339,7 +297,6 @@ function SoftwareBucketDetail({
           title={dimensionName(dimension, locale)}
           locale={locale}
           invalidate={invalidate}
-          reopenedDimension={!requestedDimensions}
           load={(page, signal) => assets.breakdowns(task, bucket.id, dimension, page, signal)}
         >
           {(page) => (
@@ -454,15 +411,6 @@ function SoftwareBucketDetail({
                     render: (_, row) => (
                       <details>
                         <summary>{l('展开原始记录', 'Inspect original record')}</summary>
-                        {row.precisionLimited && (
-                          <Alert
-                            type="warning"
-                            title={l(
-                              '原始值超出浏览器精度，保留来源和证据坐标。',
-                              'The original value exceeds browser precision. Source and evidence coordinates are retained.',
-                            )}
-                          />
-                        )}
                         <pre>{JSON.stringify(row, null, 2)}</pre>
                       </details>
                     ),

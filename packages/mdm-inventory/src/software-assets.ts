@@ -241,6 +241,7 @@ export function createSoftwareAssets(port: SoftwareAssetsPort) {
       page: WindowQuery,
       signal?: AbortSignal,
     ) {
+      if (!task.dimensions.includes(dimension)) throw new Error('Dimension was not requested by the task')
       return fixed(task, await port.breakdowns(task.task, bucket, dimension, page, signal))
     },
     async devices(task: SoftwareTask, bucket: string, page: WindowQuery, signal?: AbortSignal) {

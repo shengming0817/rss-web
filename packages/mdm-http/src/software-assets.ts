@@ -3,6 +3,7 @@ import { postApiV1SoftwareAssetQueriesBody } from '@rss/api/mdm-schemas'
 import type { HttpTransport } from '@rss/api/mdm'
 import type {
   SoftwareAssetsPort,
+  SoftwareEvidenceValue,
   SoftwareMapping,
   SoftwareRecord,
   StandardSoftware,
@@ -21,6 +22,16 @@ function checkedNumbers(value: unknown): void {
   )
     throw new Error('Unsafe software asset coordinate')
   if (value && typeof value === 'object') Object.values(value).forEach(checkedNumbers)
+}
+/** Integer evidence uses the producer's exact signed 64-bit decimal representation. */
+function validateEvidenceValue(value: SoftwareEvidenceValue): void {
+  if (value.kind === 'integer') {
+    if (!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value.value)) throw new Error('Invalid integer evidence')
+    const integer = BigInt(value.value)
+    if (integer < -9223372036854775808n || integer > 9223372036854775807n) throw new Error('Integer evidence out of range')
+  } else if (value.kind === 'array') value.value.forEach(validateEvidenceValue)
+  else if (value.kind === 'object') Object.values(value.value).forEach(validateEvidenceValue)
+  else if ((value.kind === 'time' || value.kind === 'number') && !Number.isFinite(value.value)) throw new Error('Invalid evidence number')
 }
 function record<T>(value: SoftwareRecord<T>, expected?: string) {
   if (expected && value.id !== expected) throw new Error('Wrong software asset record')
@@ -163,8 +174,8 @@ export function createSoftwareAssetsAdapter(
             throw new Error('Wrong software evidence binding')
           const { items, ...page } = value.asset.response
           checkedNumbers(page)
-          for (const { value: _value, ...fact } of items) {
-            void _value
+          for (const { value: evidenceValue, ...fact } of items) {
+            validateEvidenceValue(evidenceValue)
             checkedNumbers(fact)
           }
           return { ...fixedPage({ ...page, items }), quality: page.quality }
