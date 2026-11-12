@@ -296,18 +296,23 @@ export function DirectorySearch({
         : String(error)
   }
   const parts = tree?.kind === 'and' ? tree.children : tree ? [tree] : []
+  let formatted: string | undefined
+  try {
+    formatted = typeof draft === 'string' ? draft : draft ? formatFilter(draft) : ''
+  } catch {
+    // An incomplete visual draft remains editable until it can be represented as RSQL.
+  }
   function update(next: Filter | null) {
     setDraft(next)
     setError('')
   }
   function changeMode(next: 'visual' | 'text') {
-    try {
-      if (next === 'text' && typeof draft !== 'string') setDraft(draft ? formatFilter(draft) : '')
-      setMode(next)
-      setError('')
-    } catch (error) {
-      setError(error instanceof Error ? error.message : String(error))
+    if (next === 'text') {
+      if (formatted === undefined) return
+      setDraft(formatted)
     }
+    setMode(next)
+    setError('')
   }
   function apply() {
     try {
@@ -395,7 +400,14 @@ export function DirectorySearch({
           onChange={(e) => changeMode(e.target.value as 'visual' | 'text')}
           options={[
             { value: 'visual', label: l('可视条件', 'Visual conditions') },
-            { value: 'text', label: 'RSQL' },
+            {
+              value: 'text',
+              label: 'RSQL',
+              disabled: formatted === undefined,
+              ...(formatted === undefined
+                ? { title: l('请先补全当前条件', 'Complete the current conditions first') }
+                : {}),
+            },
           ]}
         />
         {mode === 'text' ? (

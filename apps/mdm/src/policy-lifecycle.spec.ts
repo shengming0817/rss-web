@@ -486,9 +486,9 @@ it('restores the original failed task after receipt recovery and replaces a prev
   expect(button('重新计算已保存范围').disabled).toBe(false)
   expect(recompute).toHaveBeenCalledTimes(2)
 })
-it.each([[], [id, scope]])(
-  'keeps unknown recomputation locked without exactly one original task: %j',
-  async (executions) => {
+it.each([{ executions: [] }, { executions: [id, scope] }])(
+  'keeps unknown recomputation locked without exactly one original task: $executions',
+  async ({ executions }) => {
     const recompute = vi.fn().mockRejectedValue({ cause: 'transport' }),
       task = vi.fn(),
       operation = vi.fn(async () => ({

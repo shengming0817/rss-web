@@ -132,7 +132,8 @@ it('keeps an empty set editable, rejects its application and round trips the ref
   await act(async () => button('应用').click())
   expect(change).not.toHaveBeenCalled()
   await act(async () => host.querySelector<HTMLInputElement>('input[value="text"]')!.click())
-  expect(host.querySelector<HTMLInputElement>('input[value="visual"]')!.checked).toBe(true)
+  expect(host.querySelector<HTMLInputElement>('input[value="text"]')!.disabled).toBe(true)
+  expect(host.querySelector('textarea[aria-label="RSQL"]')).toBeNull()
   await fill('.ant-select-multiple input[aria-label="条件值"]', 'next')
   await act(async () =>
     host
