@@ -303,8 +303,12 @@ export function DirectorySearch({
     // An incomplete visual draft remains editable until it can be represented as RSQL.
   }
   function update(next: Filter | null) {
-    setDraft(next)
-    setError('')
+    try {
+      setDraft(mode === 'text' ? (next ? formatFilter(next) : '') : next)
+      setError('')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error))
+    }
   }
   function changeMode(next: 'visual' | 'text') {
     if (next === 'text') {
