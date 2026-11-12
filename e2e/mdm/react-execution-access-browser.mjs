@@ -127,7 +127,7 @@ try {
   )
   run.step('original-cancellation-cas-unknown')
   await p
-    .getByRole('checkbox', { name: '我已核对原操作及注册，并明确确认本次恢复', exact: true })
+    .getByRole('checkbox', { name: '我已核对原操作及设备，并明确确认本次恢复', exact: true })
     .check()
   let cancellation
   const path = `/api/v1/devices/${f.mdm}/operations/${original.operationId}/cancel`

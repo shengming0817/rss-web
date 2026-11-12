@@ -150,12 +150,12 @@ export function PolicyNames({
               )}
             </p>
           )}
-          <EntryCopies runtime={runtime} locale={locale} entries={entries} />
           {event && (
             <EventAssociations key={event} event={event} policies={policies} locale={locale} />
           )}
         </>
       )}
+      <EntryCopies runtime={runtime} locale={locale} entries={entries} />
     </Card>
   )
 }

@@ -10,6 +10,7 @@ import { newPolicyAction } from './PolicyActionEditor'
 import { PolicyRolloutEditor } from './PolicyRolloutEditor'
 import { PolicyScope, emptyScope } from './PolicyScope'
 import { ScopeReferences } from './ScopeReferences'
+import { ReadEpoch } from './AdminUi'
 vi.mock('./PolicyNames', () => ({ PolicyNames: () => null }))
 const id = '11111111-1111-4111-8111-111111111111',
   scope = '22222222-2222-4222-8222-222222222222'
@@ -454,4 +455,55 @@ it('keeps a scope picker inside its authority fence and allows only name reads a
   expect(view).toHaveBeenCalledOnce()
   expect(host.textContent).toContain('Office Mac')
   expect(change).not.toHaveBeenCalled()
+})
+
+it('retains an Agent entry selection while URL navigation refreshes its current policy identity', async () => {
+  const { PolicyNames } = await vi.importActual<typeof import('./PolicyNames')>('./PolicyNames')
+  const row = {
+      id,
+      revision: 4,
+      versionId: scope,
+      state: 'disabled',
+      toolName: 'policy.tool',
+      alias: null,
+      customEvent: 'entry.event',
+    },
+    page = { items: [row], nextCursor: null },
+    endpoint = { id: 'pc', channel: 'agent', status: 'active' },
+    devices = {
+      views: async () => ({ items: [{ endpoints: [endpoint] }], nextCursor: null }),
+      endpoint: async () => endpoint,
+    }
+  let hold = false,
+    release!: (value: typeof page) => void
+  const pending = new Promise<typeof page>((resolve) => {
+      release = resolve
+    }),
+    policies = inject({
+      list: async (query: { filter: string }) =>
+        hold && query.filter.startsWith('id==') ? pending : page,
+    }),
+    currentRuntime = inject({ administration: () => ({ devices, binding: 'current-session' }) })
+  const render = (epoch: string) =>
+    root.render(
+      h(
+        MemoryRouter,
+        null,
+        h(
+          ReadEpoch.Provider,
+          { value: epoch },
+          h(PolicyNames, { policies, policy: policy(), locale: 'zh', runtime: currentRuntime }),
+        ),
+      ),
+    )
+  await act(async () => render('initial'))
+  await click('显示 Agent 查看入口')
+  await click('使用此终端')
+  expect(button('复制链接 · 共享事件').disabled).toBe(false)
+  hold = true
+  await act(async () => render('picker-query-navigation'))
+  expect(host.textContent).not.toContain('复制链接 · 共享事件')
+  await act(async () => release(page))
+  expect(button('收起 Agent 查看入口')).toBeDefined()
+  expect(button('复制链接 · 共享事件').disabled).toBe(false)
 })

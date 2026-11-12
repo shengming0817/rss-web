@@ -32,7 +32,7 @@ export function EntryCopies({
     { devices, binding } = useAdministration(runtime),
     delivery = useProtectedDelivery(undefined, open),
     read = usePageRead(
-      `${binding}/agent-entry-device/${open}/${selected ?? ''}`,
+      `${binding}/agent-entry-device/${open}/${selected ?? ''}/${entries.length > 0}`,
       (signal) =>
         open && selected && entries.length
           ? devices.endpoint(selected, signal)
