@@ -133,7 +133,8 @@ def start(binary, initialized, log, expected=200):
         child = subprocess.Popen(args,cwd=BACKEND,stdout=log,stderr=log,env={**os.environ,'RUST_MIN_STACK':str(8*1024*1024)})
         processes.append(child)
         children.append(child)
-    deadline=time.monotonic()+180
+    # The current producer resumes 295 baseline steps and retries contention every 60s.
+    deadline=time.monotonic()+1800
     while True:
         for role, child in zip(('product', 'gateway'), children):
             if child.poll() is not None:
@@ -287,10 +288,6 @@ try:
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
     private(config_path, config)
-    phase = 'seed'
-    seed()
-    if browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
-        execution_access_fixture.seed(environment, execution_access, TENANTS[0], INSTANCE, ADMIN)
     phase = 'readiness'
     audit_journey = browser_module == 'react-audit-webhooks-browser.mjs'
     management_only = audit_journey or browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}
@@ -307,6 +304,10 @@ try:
                 print(json.dumps(dict(phase=phase, path=path.split('?')[0], status=status)), flush=True)
                 raise RuntimeError('management-seam-unavailable')
         print(json.dumps(dict(phase='management-seams', result='passed', readinessStatus=backend_readiness, backendReady=backend_readiness == 200)), flush=True)
+    phase = 'seed'
+    seed()
+    if browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
+        execution_access_fixture.seed(environment, execution_access, TENANTS[0], INSTANCE, ADMIN)
     if browser_module == 'react-assets-browser.mjs':
         phase = 'manual-array-seed'
         # The product owner stores immutable array versions and ordinal indexes atomically.

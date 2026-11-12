@@ -9,6 +9,7 @@ import { Policies } from './Policies'
 import { newPolicyAction } from './PolicyActionEditor'
 import { PolicyRolloutEditor } from './PolicyRolloutEditor'
 import { PolicyScope, emptyScope } from './PolicyScope'
+import { ScopeReferences } from './ScopeReferences'
 vi.mock('./PolicyNames', () => ({ PolicyNames: () => null }))
 const id = '11111111-1111-4111-8111-111111111111',
   scope = '22222222-2222-4222-8222-222222222222'
@@ -407,4 +408,50 @@ it('keeps a scope recomputation owner mounted until an unknown request is resolv
   await act(async () => configurationTab.click())
   expect(host.querySelector<HTMLInputElement>('input[aria-label="策略动作"]')!.disabled).toBe(true)
   expect(done).not.toHaveBeenCalled()
+})
+it('keeps a scope picker inside its authority fence and allows only name reads after editing is disabled', async () => {
+  const change = vi.fn(),
+    view = vi.fn(async () => ({
+      endpoints: [
+        {
+          id: 'pc',
+          displayName: { kind: 'known', value: { kind: 'string', value: 'Office Mac' } },
+        },
+      ],
+    })),
+    devices = inject({ view, views: async () => ({ items: [], nextCursor: null }) })
+  function panel(disabled: boolean, hidden: boolean) {
+    return h(
+      MemoryRouter,
+      null,
+      h(
+        'fieldset',
+        { hidden },
+        h(ScopeReferences, {
+          title: 'Targets',
+          value: [{ kind: 'device', id: 'pc' }],
+          onChange: change,
+          devices,
+          groups: inject({}),
+          locale: 'zh',
+          disabled,
+        }),
+      ),
+    )
+  }
+  await act(async () => root.render(panel(false, false)))
+  await click('添加终端')
+  expect(host.querySelector('[role=dialog]')).not.toBeNull()
+  await act(async () => root.render(panel(true, true)))
+  expect(host.querySelector('[role=dialog]')!.closest('[hidden]')).not.toBeNull()
+  expect(
+    [...host.querySelectorAll('button')].find((node) => node.textContent === '完成选择')!.disabled,
+  ).toBe(true)
+  await act(async () => root.render(panel(true, false)))
+  await click('取消选择')
+  expect(host.querySelector('.ant-tag-close-icon')).toBeNull()
+  await click('读取已选名称')
+  expect(view).toHaveBeenCalledOnce()
+  expect(host.textContent).toContain('Office Mac')
+  expect(change).not.toHaveBeenCalled()
 })

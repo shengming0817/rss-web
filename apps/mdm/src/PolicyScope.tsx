@@ -39,7 +39,7 @@ export function PolicyScope(props: PolicyScopeProps) {
     prefix = `scope.${owner.policyId}.${owner.stageId ?? 'overall'}.`
   return (
     <section aria-label={l('策略范围', 'Policy scope')}>
-      <fieldset className="permission-panel" disabled={disabled}>
+      <fieldset className="permission-panel">
         <p>
           {l(
             '范围与配置一起保存。目标取并集，再与限制相交，最后减去排除对象。',
@@ -50,10 +50,11 @@ export function PolicyScope(props: PolicyScopeProps) {
           title={l('目标（并集）', 'Targets (union)')}
           value={value.targets}
           onChange={(targets) => onChange({ ...value, targets })}
-          {...{ groups, devices, locale }}
+          {...{ groups, devices, locale, disabled }}
           queryPrefix={prefix + 'targets.'}
         />
         <Checkbox
+          disabled={disabled}
           checked={value.limitations !== null}
           onChange={(e) => onChange({ ...value, limitations: e.target.checked ? [] : null })}
         >
@@ -74,7 +75,7 @@ export function PolicyScope(props: PolicyScopeProps) {
             title={l('限制引用', 'Limitation references')}
             value={value.limitations}
             onChange={(limitations) => onChange({ ...value, limitations })}
-            {...{ groups, devices, locale }}
+            {...{ groups, devices, locale, disabled }}
             queryPrefix={prefix + 'limitations.'}
           />
         )}
@@ -82,7 +83,7 @@ export function PolicyScope(props: PolicyScopeProps) {
           title={l('排除（差集）', 'Exclusions (difference)')}
           value={value.exclusions}
           onChange={(exclusions) => onChange({ ...value, exclusions })}
-          {...{ groups, devices, locale }}
+          {...{ groups, devices, locale, disabled }}
           queryPrefix={prefix + 'exclusions.'}
         />
       </fieldset>

@@ -14,6 +14,7 @@ export function ScopeReferences({
   groups,
   locale,
   queryPrefix = 'scopePicker.',
+  disabled = false,
 }: {
   title: string
   value: readonly ScopeReference[]
@@ -22,6 +23,7 @@ export function ScopeReferences({
   groups: GroupsUseCases
   locale: Locale
   queryPrefix?: string
+  disabled?: boolean
 }) {
   const l = labels(locale),
     nameRead = useAction(),
@@ -62,7 +64,7 @@ export function ScopeReferences({
         {value.map((item) => (
           <Tag
             key={`${item.kind}/${item.id}`}
-            closable
+            closable={!disabled}
             onClose={() =>
               onChange(value.filter((other) => other.kind !== item.kind || other.id !== item.id))
             }
@@ -85,6 +87,7 @@ export function ScopeReferences({
         {(['device', 'group'] as const).map((kind) => (
           <Button
             key={kind}
+            disabled={disabled}
             onClick={() => {
               setDraft([...value])
               setPicker(kind)
@@ -95,6 +98,7 @@ export function ScopeReferences({
         ))}
       </Space>
       <Drawer
+        getContainer={false}
         title={`${title} · ${l('选择对象', 'Choose objects')}`}
         open={picker !== null}
         onClose={() => {
@@ -118,6 +122,7 @@ export function ScopeReferences({
             </Button>
             <Button
               type="primary"
+              disabled={disabled}
               onClick={() => {
                 onChange(draft)
                 setPicker(null)
@@ -132,6 +137,7 @@ export function ScopeReferences({
         {picker === 'device' && (
           <EndpointPicker
             devices={devices}
+            disabled={disabled}
             locale={locale}
             selectedIds={draft.filter((item) => item.kind === 'device').map((item) => item.id)}
             queryPrefix={queryPrefix + 'device.'}
@@ -143,6 +149,7 @@ export function ScopeReferences({
             <Select
               aria-label={l('组资产上下文', 'Group asset context')}
               value={context}
+              disabled={disabled}
               options={[
                 { value: 'endpoint', label: l('终端', 'Endpoint') },
                 { value: 'associated_device', label: l('关联设备', 'Associated device') },
@@ -152,6 +159,7 @@ export function ScopeReferences({
             <GroupPicker
               key={context}
               groups={groups}
+              disabled={disabled}
               locale={locale}
               assetContext={context}
               value={null}
@@ -166,7 +174,7 @@ export function ScopeReferences({
           {draft.map((item) => (
             <Tag
               key={`${item.kind}/${item.id}`}
-              closable
+              closable={!disabled}
               onClose={() => toggle(item.kind, item.id)}
             >
               {names[`${item.kind}/${item.id}`] ?? item.id}
