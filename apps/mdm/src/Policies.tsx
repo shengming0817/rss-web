@@ -1,3 +1,4 @@
+import { SecretPanel } from './SecretTabs'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Tag } from 'antd'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -277,6 +278,9 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
             title={l('当前账户没有策略读取权限。', 'Your account cannot read policies.')}
           />
         )}
+        <Button disabled={permissions.busy} onClick={permissions.reload}>
+          {l('读取策略权限', 'Read policy permissions')}
+        </Button>
         {fixedSoftware && (
           <p>
             {l('固定软件资源版本', 'Fixed software resource version')} ·{' '}
@@ -295,21 +299,39 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
           <Link to={returnSource}>{l('返回来源', 'Return to source')}</Link>
         )}
         {selected && (guard.locked || currentSelection) ? (
-          <PolicyEditor
-            key={selected.id}
-            policies={policies}
-            scopes={scopes}
-            resources={resources}
-            {...selected}
-            runtime={runtime}
-            instance={permissions.value?.instanceId ?? ''}
-            locale={locale}
-            canWrite={has('policy_write')}
-            canRerun={has('policy_write')}
-            canInventory={canInventory}
-            canOperations={canOperations}
-            done={close}
-          />
+          <SecretPanel active={canRead || has('policy_write')}>
+            {!canRead && !has('policy_write') && (
+              <Alert
+                type="info"
+                title={l(
+                  '策略权限尚未确认；操作状态保留，重新读取权限后继续。',
+                  'Policy permissions are unconfirmed; operation state is retained until permissions are read again.',
+                )}
+              />
+            )}
+            <fieldset
+              className="permission-panel"
+              hidden={!canRead && !has('policy_write')}
+              disabled={!canRead && !has('policy_write')}
+            >
+              <PolicyEditor
+                key={selected.id}
+                policies={policies}
+                scopes={scopes}
+                resources={resources}
+                {...selected}
+                runtime={runtime}
+                instance={permissions.value?.instanceId ?? ''}
+                locale={locale}
+                canRead={canRead}
+                canWrite={has('policy_write')}
+                canRerun={has('policy_write')}
+                canInventory={canInventory}
+                canOperations={canOperations}
+                done={close}
+              />
+            </fieldset>
+          </SecretPanel>
         ) : policyTarget ? (
           <ReadState
             locale={locale}

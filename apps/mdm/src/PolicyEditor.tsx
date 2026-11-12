@@ -13,7 +13,7 @@ import type { Locale } from './i18n'
 import type { ResourcesUseCases } from './ResourceCommand'
 import type { ScopesUseCases } from './ScopeResults'
 import { codeOf, Failure, isUnknown, labels, useAction, validateInput } from './AdminUi'
-import { usePendingSelection } from './SelectionGuard'
+import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
 import { useAdministration } from './useAdministration'
 import { BooleanField } from './AuthorFields'
 import { newPolicyAction, PolicyActionEditor } from './PolicyActionEditor'
@@ -40,6 +40,7 @@ export function PolicyEditor({
   runtime,
   instance,
   locale,
+  canRead,
   canWrite,
   canRerun,
   canInventory = false,
@@ -55,6 +56,7 @@ export function PolicyEditor({
   runtime: Runtime
   instance: string
   locale: Locale
+  canRead: boolean
   canWrite: boolean
   canRerun: boolean
   canInventory?: boolean
@@ -63,6 +65,7 @@ export function PolicyEditor({
 }) {
   const l = labels(locale),
     action = useAction(),
+    scopeGuard = useSelectionGuard(),
     { devices, groups, operationDiagnostics, policyEvents } = useAdministration(runtime),
     [params, setParams] = useSearchParams(),
     [base, setBase] = useState(baseline),
@@ -92,7 +95,7 @@ export function PolicyEditor({
     dirty =
       JSON.stringify(definition) !== JSON.stringify(base?.definition ?? initial) ||
       enabled !== (base?.state === 'enabled'),
-    blocked = action.busy || pending !== null,
+    blocked = action.busy || pending !== null || scopeGuard.locked,
     mutable = base?.state !== 'archived',
     conflict =
       !unknown &&
@@ -268,6 +271,13 @@ export function PolicyEditor({
                     setPending(null)
                     setConfirmed(true)
                     setBase(result.value)
+                    setDefinition(structuredClone(result.value.definition))
+                    setEnabled(result.value.state === 'enabled')
+                    setObserved(null)
+                    setApproved(false)
+                    setEnableApproved(false)
+                    setArchiveApproved(false)
+                    setRerunApproved(false)
                   }
                 })
             }
@@ -299,6 +309,10 @@ export function PolicyEditor({
       )}
       <SecretTabs
         uiLocale={locale}
+        authorizedKeys={[
+          ...(canRead || canWrite ? ['configuration', 'scope'] : []),
+          ...(canRead ? ['records'] : []),
+        ]}
         activeKey={params.get('tab') ?? 'configuration'}
         onChange={(tab) => {
           const next = new URLSearchParams(params)
@@ -383,7 +397,7 @@ export function PolicyEditor({
             key: 'scope',
             label: l('范围', 'Scope'),
             children: (
-              <>
+              <SelectionGuard.Provider value={scopeGuard.register}>
                 <PolicyScope
                   {...scopeProps}
                   value={definition.scope}
@@ -406,7 +420,7 @@ export function PolicyEditor({
                     }}
                   />
                 )}
-              </>
+              </SelectionGuard.Provider>
             ),
           },
           {

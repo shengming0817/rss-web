@@ -40,13 +40,13 @@ React `/policies` 统一配置、范围和记录。Policy 草稿包含总范围�
 
 资源、设备、组、策略等目录和范围选择器使用正式字段能力构造同一份 RSQL：常用条件与高级 AND/OR 条件、原文编辑、排序、列和分页共享 URL 状态。列表只显示服务端当前页，不本地模拟全集或逐行补详情。设备、关联成员、执行与敏感操作使用 deviceId；绑定代次、因子代次、源 epoch 和凭据保管 epoch 各自保留。软件资产结果的可选维度完全取自任务状态；整数安装证据保持十进制字符串（包括完整 i64 边界），不转换成 JavaScript number。
 
-Policy 的“名称与入口”区分显示名称、稳定工具名、唯一别名和共享事件；清空字段并保存撤回该策略的关联，历史批次成员保持原版本。选择已核对的 Agent 终端后可复制可用的查看链接或等价 `rssmdm open` 命令；原任务链接须匹配 attempt 与注册代次。事件、批次和精确步骤也可复制为只读地址。命令不承载参数、凭据或批准。批次成员可进入原执行、Policy 与活动审计，各页仍按原权限读取。
+Policy 的“名称与入口”区分显示名称、稳定工具名、唯一别名和共享事件；清空字段并保存撤回该策略的关联，历史批次成员保持原版本。选择已核对的 Agent 终端后可复制可用的查看链接或等价 `rssmdm open` 命令；原任务链接须匹配当前设备、attempt 与精确版本。事件、批次和精确步骤也可复制为只读地址。命令不承载参数、凭据或批准。批次成员可进入原执行、Policy 与活动审计，各页仍按原权限读取。
 
 Web 使用 `rssmdm://view/v1` 查看地址。规范向量在 `contracts/agent-entry/v1-vectors.json`，由 Web 自身的入口测试验证。
 
 对应真实 HTTPS Chromium 入口为 `MDM_REACT_POLICY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-policy-browser`，复用设备隔离 fixture、构建租约和独立清理；覆盖范围定义、Policy 管理、原事件身份恢复与公开响应式页面。该入口只证明真实 HTTP/界面接缝，不能代替 Windows/macOS 设备效果验收。
 
-新 React `/telemetry` 可直接定位终端，设备详情的“遥测与采集”复用同一工作区。历史与 latest 查询保留注册、来源、epoch、字段版本和维度；选择实际观察序列后查询服务端聚合。接收健康和设备自报缺口分别读取，空缺口不代表完整覆盖。配置预览读取绑定的精确 Resource 版本与当前 Policy，采样定义在资源库维护，分配在策略维护；刷新只读数据。浏览器拒绝无法精确表示的整数，避免展示舍入结果。
+新 React `/telemetry` 可直接定位终端，设备详情的“遥测与采集”复用同一工作区。历史与 latest 查询保留设备、来源、源 epoch、字段版本和维度；选择实际观察序列后查询服务端聚合。接收健康和设备自报缺口分别读取，空缺口不代表完整覆盖。配置预览读取绑定的精确 Resource 版本与当前 Policy，采样定义在资源库维护，分配在策略维护；刷新只读数据。浏览器拒绝无法精确表示的整数，避免展示舍入结果。
 
 真实 HTTPS Chromium 入口：`MDM_REACT_TELEMETRY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-telemetry-browser`。复用设备隔离环境、构建租约及独立清理，经 Agent mTLS 上报合成观察，验证查询、配置预览、权限拒绝和响应式布局，并输出公开截图。它证明 UI/HTTP 接缝，不替代 Windows/macOS 真机采集效果验收。
 

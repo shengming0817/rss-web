@@ -5,7 +5,7 @@ import { directoryFixtures } from './directory.spec-helper'
 import type { ContentUseCases } from './ContentUpload'
 import { act, createElement, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { Form } from 'antd'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
@@ -861,4 +861,53 @@ it('reruns unavailable fixed results only on explicit action with a new task and
   expect(query.mock.calls[1]![0]).not.toBe(original[0])
   expect(query.mock.calls[1]![1]).toEqual(original[1])
   expect(items.mock.calls[1]![0]).toBe(query.mock.calls[1]![0])
+})
+it('keeps each device directory query through tab changes and restores endpoint paging from URL', async () => {
+  const endpoints = vi.fn<DevicesUseCases['endpoints']>(async () => ({
+      items: [],
+      nextCursor: null,
+    })),
+    views = vi.fn<DevicesUseCases['views']>(async () => ({ items: [], nextCursor: null })),
+    runtime = {
+      administration: () => ({
+        binding: 'query-session',
+        devices: {
+          endpoints,
+          views,
+          viewStatistics: async () => ({
+            statistics: { deviceViewCount: 0, endpointCount: 0 },
+            asOf: 1,
+          }),
+          endpointStatistics: async () => ({ statistics: {}, asOf: 1 }),
+        },
+      }),
+    } as unknown as Runtime
+  function Location() {
+    return createElement('output', { 'data-location': true }, useLocation().search)
+  }
+  const params = new URLSearchParams({
+    tab: 'views',
+    'devices.filter': "search=icontains='Mac'",
+    'devices.cursor': 'views-second',
+    'endpoints.filter': "status=='active'",
+    'endpoints.cursor': 'endpoints-second',
+  })
+  await render(
+    createElement(
+      MemoryRouter,
+      { initialEntries: ['/devices?' + params] },
+      createElement(Location),
+      createElement(Devices, { runtime, locale: 'zh' }),
+    ),
+  )
+  await tab('终端目录')
+  expect(endpoints.mock.calls.at(-1)?.[0]).toMatchObject({
+    filter: "status=='active'",
+    cursor: 'endpoints-second',
+  })
+  await tab('设备视图')
+  const current = new URLSearchParams(host.querySelector('[data-location]')!.textContent!)
+  expect(current.get('devices.filter')).toBe("search=icontains='Mac'")
+  expect(current.get('devices.cursor')).toBe('views-second')
+  expect(current.get('endpoints.cursor')).toBe('endpoints-second')
 })

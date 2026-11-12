@@ -1461,3 +1461,56 @@ it('keeps the original device command locked when an accepted response cannot be
   expect(host.querySelector(`a[href*="operationId=${original}"]`)).not.toBeNull()
   expect(host.textContent).toContain('提交结果未知')
 })
+it.each([false, true])(
+  'maps only a matching original tenant receipt to the current tenant (%s mismatch)',
+  async (mismatch) => {
+    const id = '11111111-1111-4111-8111-111111111111',
+      tenant = '22222222-2222-4222-8222-222222222222',
+      operation = vi.fn(async () => ({
+        operation: { product: 'mdm', owner: 'tenant_administration', operationId: id },
+        originalResult: {
+          availability: 'available',
+          value: {
+            operationId: id,
+            object: tenant,
+            revision: 1,
+            state: 'active',
+            accepted: null,
+            enabled: true,
+            recordedAt: null,
+            completedAt: null,
+            executions: [],
+            stages: [],
+          },
+        },
+        auditEvidence: { availability: 'not_requested' },
+        requestEvidence: { availability: 'not_requested' },
+        executionEvidence: { availability: 'not_requested' },
+        currentResourceUrl: `/api/v1/tenant-administration/tenants/${mismatch ? id : tenant}`,
+      })),
+      runtime = {
+        management: true,
+        administration: () => ({
+          binding: 'tenant-diagnostics',
+          operationDiagnostics: { management: { operation } },
+        }),
+      } as unknown as Runtime
+    await act(async () =>
+      root.render(
+        h(
+          MemoryRouter,
+          {
+            initialEntries: [
+              `/platform/operation-diagnostics?mode=operation&owner=tenant_administration&operationId=${id}&actor=admin&instance=${tenant}`,
+            ],
+          },
+          h(OperationDiagnostics, { runtime, locale: 'zh' }),
+        ),
+      ),
+    )
+    const link = [...host.querySelectorAll('a')].find((node) => node.textContent === '打开当前对象')
+    expect(link?.getAttribute('href') ?? null).toBe(
+      mismatch ? null : `/platform/tenants?tenant=${tenant}`,
+    )
+  },
+)

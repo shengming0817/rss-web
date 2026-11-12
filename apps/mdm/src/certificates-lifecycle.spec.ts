@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom'
 // @vitest-environment jsdom
 import { webcrypto } from 'node:crypto'
 import { act, createElement as h, type ReactNode } from 'react'
@@ -67,7 +68,7 @@ function inject<T>(methods: Partial<T>): T {
   }) as T
 }
 async function render(node: ReactNode) {
-  await act(async () => root.render(node))
+  await act(async () => root.render(h(MemoryRouter, null, node)))
 }
 function button(text: string) {
   const node = [...host.querySelectorAll('button')].find(
@@ -387,4 +388,52 @@ it('forgets a master-password draft when write permission removes its form', asy
       (node) => node.value === 'draft-sensitive-master-password',
     ),
   ).toBe(false)
+})
+it('restores archive filters, projection, ordering and cursor from the URL', async () => {
+  const list = vi.fn<CertificateArchive['list']>(async () => ({
+      tenantId: entryId,
+      asOf: 1,
+      reminderDays: 30,
+      alerts: { expired: 0, expiring: 0, notYetValid: 0 },
+      items: [],
+      nextCursor: null,
+    })),
+    archive = inject<CertificateArchive>({
+      list,
+      vault: async () => ({ initialized: true, generation: 1, unlockedUntil: 1900000000 }),
+      settings: async () => ({ revision: 0, value: { reminderDays: 30, categories: [] } }),
+    }),
+    runtime = {
+      administration: () => ({ binding: 'archive-url', certificateArchive: archive }),
+    } as unknown as Runtime,
+    params = new URLSearchParams({
+      'certificates.filter': "latest.metadata.name=icontains='Corp'",
+      'certificates.sort': '-revision',
+      'certificates.field': 'id',
+      'certificates.limit': '5',
+      'certificates.cursor': 'second',
+    })
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        { initialEntries: ['/certificates?' + params] },
+        h(ArchivePage, {
+          runtime,
+          locale: 'zh',
+          canRead: true,
+          canWrite: false,
+          canUnlock: false,
+          canExport: false,
+        }),
+      ),
+    ),
+  )
+  expect(list.mock.calls[0]?.[0]).toEqual({
+    filter: "latest.metadata.name=icontains='Corp'",
+    sort: ['-revision'],
+    fields: ['id'],
+    limit: 5,
+    cursor: 'second',
+  })
 })

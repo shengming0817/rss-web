@@ -169,7 +169,7 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
 function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useDirectoryQuery('endpoints.'),
     read = useRead(
       `${binding}/endpoints/${JSON.stringify(query)}`,
       (signal) => devices.endpoints(directoryQuery(query, endpointFields), signal),
@@ -521,7 +521,13 @@ export function Devices({ runtime, locale }: { runtime: Runtime; locale: Locale 
       />
       <Tabs
         activeKey={['views', 'endpoints', 'associations'].includes(tab) ? tab : 'views'}
-        onChange={(value) => setParams({ tab: value })}
+        onChange={(value) =>
+          setParams((current) => {
+            const next = new URLSearchParams(current)
+            next.set('tab', value)
+            return next
+          })
+        }
         items={[
           {
             key: 'views',

@@ -109,7 +109,7 @@ def seed():
             sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,device,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.devices WHERE tenant_id='{tenant}' AND id='{device}'")
         if browser_module in {'react-audit-webhooks-browser.mjs', 'react-execution-access-browser.mjs'} and device == 'fixture-mdm':
             # Same controlled Windows capability prerequisite as rss-mdm device/mod.rs; no device effect claim.
-            sql.append(f"INSERT INTO mdm_windows.capabilities(tenant_id,device,protocol_epoch,os_version,edition,session,observed_at) VALUES('{tenant}','{device}',gen_random_uuid(),'10.0.22621.0',48,1,1)")
+            sql.append(f"INSERT INTO mdm_windows.capabilities(tenant_id,device,protocol_epoch,os_version,edition,session,observed_at) SELECT tenant_id,id,epoch,'10.0.22621.0',48,1,1 FROM mdm_access.devices WHERE tenant_id='{tenant}' AND id='{device}'")
         fact=dict(state=dict(kind='known',value=dict(kind='string',value=device)),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,deviceId=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
         sql.append(f"INSERT INTO mdm.manual_assignments(tenant_id,device,field,revision,fact) VALUES('{tenant}','{device}','custom.asset_tag',1,{q(json.dumps(fact))}::jsonb)")
     # Explicit asset scenarios own their disposable array paging data.

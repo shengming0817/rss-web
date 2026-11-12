@@ -249,11 +249,15 @@ function Execution({ value, locale }: { value: ExecutionEvidence; locale: Locale
 function currentResource(detail: OperationDetail): string | null {
   if (detail.originalResult.availability !== 'available' || !detail.currentResourceUrl) return null
   // Translate only declared current API locators. A Scope UUID alone has no Policy owner.
-  const match = /^\/api\/v1\/(resources|policies)\/([^/?#]+)$/.exec(detail.currentResourceUrl)
+  const match = /^\/api\/v1\/(resources|policies|tenant-administration\/tenants)\/([^/?#]+)$/.exec(
+    detail.currentResourceUrl,
+  )
   if (!match) return null
   try {
     const id = decodeURIComponent(match[2]!)
     if (id !== detail.originalResult.value.object) return null
+    if (match[1] === 'tenant-administration/tenants')
+      return `/platform/tenants?${new URLSearchParams({ tenant: id })}`
     return `/${match[1]}?${new URLSearchParams({ [match[1] === 'resources' ? 'resource' : 'policy']: id })}`
   } catch {
     return null

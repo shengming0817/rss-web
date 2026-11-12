@@ -5,6 +5,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Policy, RolloutStage } from '@rss/mdm-policies'
 import { PolicyEditor } from './PolicyEditor'
+import { Policies } from './Policies'
+import { newPolicyAction } from './PolicyActionEditor'
 import { PolicyRolloutEditor } from './PolicyRolloutEditor'
 import { PolicyScope, emptyScope } from './PolicyScope'
 vi.mock('./PolicyNames', () => ({ PolicyNames: () => null }))
@@ -111,6 +113,7 @@ async function editor(methods: object, operation = vi.fn()) {
           runtime: runtime(operation),
           instance: id,
           locale: 'zh',
+          canRead: true,
           canWrite: true,
           canRerun: true,
           done() {},
@@ -256,4 +259,152 @@ it('retains stage identities when reordered or removed and accepts an empty unba
   expect(latest.map((s) => s.id)).toEqual([id])
   await checkbox('分批部署')
   expect(latest).toEqual([])
+})
+it('converges the whole server state after an original enable receipt, including intervening edits', async () => {
+  const current = {
+      ...policy(),
+      revision: 6,
+      state: 'enabled' as const,
+      definition: { ...policy().definition, alias: 'another.admin' },
+    },
+    change = vi.fn().mockRejectedValue({ cause: 'transport' }),
+    read = vi.fn(async () => current),
+    operation = vi.fn()
+  await editor({ change, read }, operation)
+  await checkbox('确认已保存范围与动作后启用')
+  await click('启用策略')
+  operation.mockResolvedValue({
+    originalResult: {
+      availability: 'available',
+      value: { operationId: change.mock.calls[0]![1].operationId, object: id },
+    },
+  })
+  await click('读取原操作回执')
+  expect(host.querySelector<HTMLInputElement>('input[aria-label="唯一别名"]')!.value).toBe(
+    'another.admin',
+  )
+  expect(
+    host
+      .querySelector('[role="switch"][aria-label="保存后启用策略"]')!
+      .getAttribute('aria-checked'),
+  ).toBe('true')
+  expect(host.textContent).not.toContain('确认放弃未保存草稿')
+  await checkbox('确认范围、资源、调度与潜在影响')
+  await click('保存策略定义')
+  expect(change.mock.calls[1]![1]).toMatchObject({
+    expectedRevision: 6,
+    input: { enabled: true, definition: { alias: 'another.admin' } },
+  })
+})
+it('retains a pending owner but hides policy content while permissions refresh or are revoked', async () => {
+  const grants = ['policy_read', 'policy_write'].map((operation) => ({
+      operation,
+      scope: { kind: 'tenant' },
+    })),
+    effective = vi.fn().mockResolvedValue({ grants }),
+    change = vi.fn(),
+    admin = {
+      devices: {},
+      groups: {},
+      operationDiagnostics: {},
+      policyEvents: {},
+      binding: 'same-session',
+      authorization: { effective },
+      policies: {
+        list: async () => ({ items: [], nextCursor: null }),
+        read: async () => policy(),
+        change,
+      },
+      resources: {},
+      scopes: {},
+    },
+    rt = inject({ administration: () => admin })
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        { initialEntries: [`/policies?policy=${id}`] },
+        h(Policies, { runtime: rt, locale: 'zh' }),
+      ),
+    ),
+  )
+  await fill('唯一别名', 'retained.draft')
+  let resolve!: (value: unknown) => void
+  effective.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done
+      }),
+  )
+  await click('读取策略权限')
+  expect(host.querySelector('input[aria-label="唯一别名"]')!.closest('[hidden]')).not.toBeNull()
+  await act(async () => resolve({ grants: [] }))
+  expect(host.querySelector('input[aria-label="唯一别名"]')!.closest('[hidden]')).not.toBeNull()
+  effective.mockResolvedValue({ grants })
+  await click('读取策略权限')
+  const input = host.querySelector<HTMLInputElement>('input[aria-label="唯一别名"]')!
+  expect(input.closest('[hidden]')).toBeNull()
+  expect(input.value).toBe('retained.draft')
+  expect(change).not.toHaveBeenCalled()
+})
+it('keeps a scope recomputation owner mounted until an unknown request is resolved', async () => {
+  const action = newPolicyAction('software'),
+    scopeRead = {
+      id: scope,
+      stage: null,
+      retired: false,
+      task: null,
+      revision: 17,
+      resolution: null,
+      resolutionRevision: 0,
+      definition: emptyScope(),
+    },
+    recompute = vi.fn().mockRejectedValue({ cause: 'transport' }),
+    done = vi.fn()
+  if (action.kind !== 'software') throw new Error('Expected software')
+  const baseline: Policy = {
+    ...policy(),
+    scopes: [scopeRead],
+    definition: {
+      ...policy().definition,
+      action: {
+        ...action,
+        rollout: {
+          stages: [{ id: scope, scope: emptyScope(), opensAt: 0, minimumVerifiedPercent: null }],
+        },
+      },
+    },
+  }
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        { initialEntries: ['/policies?tab=scope'] },
+        h(PolicyEditor, {
+          policies: inject({}),
+          scopes: inject({ read: async () => scopeRead, recompute }),
+          resources: inject({ list: async () => ({ items: [], nextCursor: null }) }),
+          baseline,
+          id,
+          runtime: runtime(),
+          instance: id,
+          locale: 'zh',
+          canRead: true,
+          canWrite: true,
+          canRerun: true,
+          done,
+        }),
+      ),
+    ),
+  )
+  await click('重新计算已保存范围')
+  expect(recompute.mock.calls[0]![1]).toMatchObject({ expectedRevision: 4 })
+  expect(button('返回策略目录').disabled).toBe(true)
+  expect(button('移除此批次').matches(':disabled')).toBe(true)
+  const configurationTab = [...host.querySelectorAll<HTMLElement>('[role=tab]')].find(
+    (node) => node.textContent === '配置',
+  )!
+  await act(async () => configurationTab.click())
+  expect(host.querySelector<HTMLInputElement>('input[aria-label="策略动作"]')!.disabled).toBe(true)
+  expect(done).not.toHaveBeenCalled()
 })
