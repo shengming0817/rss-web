@@ -76,8 +76,26 @@ try {
   )
   await p.getByRole('button', { name: '读取最新设备事实', exact: true }).waitFor()
   await p.getByRole('tab', { name: '终端关联', exact: true }).click()
-  await p.getByRole('button', { name: '关联另一通道终端', exact: true }).click()
+  const candidatesPath = `/api/v1/devices/${f.mdm}/association-candidates`
+  let candidates = await (
+    await run.response(p, 'GET', candidatesPath, () =>
+      p.getByRole('button', { name: '关联另一通道终端', exact: true }).click(),
+    )
+  ).json()
   const d = p.getByRole('dialog', { name: '核验终端关联', exact: true })
+  for (
+    let page = 0;
+    !candidates.items.some((item) => item.device === f.agent) && page < 4;
+    page++
+  ) {
+    assert.ok(candidates.nextCursor, 'target remains discoverable through server candidate pages')
+    candidates = await (
+      await run.response(p, 'GET', candidatesPath, () =>
+        d.getByRole('button', { name: '继续查找候选', exact: true }).click(),
+      )
+    ).json()
+  }
+  assert.ok(candidates.items.some((item) => item.device === f.agent))
   await run.choose(p, d.getByLabel('对侧通道候选终端', { exact: true }), `${f.agent} · agent`)
   await d
     .getByLabel('核验证据或撤销理由', { exact: true })

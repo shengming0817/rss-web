@@ -468,7 +468,10 @@ try {
       )
       await p.getByText('稳定工具名（只读）', { exact: true }).waitFor()
       await button('显示 Agent 查看入口').click()
-      await run.directoryFilter(p, `key=='endpoint:${final.device}'`)
+      await run.directoryFilter(
+        p.getByRole('region', { name: 'Agent 查看入口', exact: true }),
+        `key=='endpoint:${final.device}'`,
+      )
       await p
         .locator('.policy-editor tbody tr')
         .filter({ hasText: final.device })
