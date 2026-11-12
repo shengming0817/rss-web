@@ -116,7 +116,7 @@ def seed():
     if browser_module == 'react-assets-browser.mjs':
         definition=dict(key='custom.browser_list',version=1,valueType=dict(kind='array',items=dict(kind='integer'),maxItems=1000),nullable=True,manual=True,sources=dict(manual=0),platforms=['windows','macos'],sensitivity='standard',unit=None,searchable=True,itemKey=None)
         # Private disposable fixture publication; no user operation or current-state assertion is forged.
-        sql.append(f"INSERT INTO mdm.field_versions(tenant_id,field,version,revision,definition) VALUES('{tenant}','custom.browser_list',1,mdm.record_asset_change('{tenant}'::uuid,'catalog',jsonb_build_object('field','custom.browser_list'),ARRAY['custom.browser_list']),{q(json.dumps(definition))}::jsonb)")
+        sql.append(f"SELECT mdm.append_field_version('{tenant}','custom.browser_list',1,{q(json.dumps(definition))}::jsonb)")
     try:
         environment.sql(';'.join(sql)+';', 'mdm_dev')
     except subprocess.CalledProcessError as error:
@@ -304,6 +304,10 @@ try:
                 print(json.dumps(dict(phase=phase, path=path.split('?')[0], status=status)), flush=True)
                 raise RuntimeError('management-seam-unavailable')
         print(json.dumps(dict(phase='management-seams', result='passed', readinessStatus=backend_readiness, backendReady=backend_readiness == 200)), flush=True)
+    # Cold baseline initialization can outlive the preparation session.
+    phase = 'seed-session'
+    operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
+    operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
     phase = 'seed'
     seed()
     if browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
@@ -318,6 +322,7 @@ try:
                      input=dict(action='set',value=dict(kind='array',value=[dict(kind='integer',value=n) for n in range(count)]))))
             if status != 200:
                 raise RuntimeError('manual-array-seed')
+    phase = 'fixture-authority'
     # Keep the real initializer's rule administration, while the one fixture rule owns business grants.
     status, rules = operator.call('GET', '/api/v1/authorization/rules')
     if status != 200:
