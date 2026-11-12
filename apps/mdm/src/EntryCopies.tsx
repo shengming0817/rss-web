@@ -10,18 +10,8 @@ import { EndpointPicker } from './EndpointPicker'
 import { agentViewEntry, type EntryTarget } from './agent-entry'
 
 export type CopyEntry = { readonly label: string; readonly target: EntryTarget }
-type Registration = { readonly registrationId: string; readonly generation: number }
-function agentRegistration(endpoint: Endpoint | undefined, expected?: Registration) {
-  const active = endpoint?.channels.filter(
-    (channel) => channel.channel === 'agent' && channel.status === 'active',
-  )
-  if (active?.length !== 1) return null
-  const current = active[0]!
-  return !expected ||
-    (current.registrationId === expected.registrationId &&
-      current.generation === expected.generation)
-    ? current
-    : null
+function activeAgent(endpoint: Endpoint | undefined) {
+  return endpoint?.channel === 'agent' && endpoint.status === 'active' ? endpoint : null
 }
 
 export function EntryCopies({
@@ -29,13 +19,11 @@ export function EntryCopies({
   locale,
   entries,
   device,
-  expected,
 }: {
   runtime: Runtime
   locale: Locale
   entries: readonly CopyEntry[]
   device?: string
-  expected?: Registration | undefined
 }) {
   const l = labels(locale),
     [open, setOpen] = useState(false),
@@ -51,10 +39,10 @@ export function EntryCopies({
           : Promise.resolve(undefined),
       { retryReadConflict: true },
     ),
-    current = agentRegistration(read.value, expected),
+    current = activeAgent(read.value),
     copy = useAction(),
     [copied, setCopied] = useState(''),
-    context = JSON.stringify([selected, expected, entries]),
+    context = JSON.stringify([selected, entries]),
     latest = useRef(context),
     copyError = codeOf(copy.error),
     stale = copyError === 'registration_changed' || readFailure(copy.error) === 'denied'
@@ -70,11 +58,10 @@ export function EntryCopies({
     async function verify() {
       if (!selected || !current) throw new Error('Agent registration unavailable')
       const endpoint = await devices.endpoint(selected),
-        registration = agentRegistration(endpoint, expected)
+        registration = activeAgent(endpoint)
       if (
         !registration ||
-        registration.registrationId !== current.registrationId ||
-        registration.generation !== current.generation
+        registration.id !== current.id
       )
         throw { cause: 'client', code: 'registration_changed' }
       if (!stillCurrent()) throw { cause: 'client', code: 'stale' }
@@ -82,8 +69,6 @@ export function EntryCopies({
         instance: runtime.host.serviceId,
         tenant: runtime.tenant,
         device: endpoint.id,
-        registration: registration.registrationId,
-        generation: registration.generation,
       })
       return new Blob([command ? formatted.command : formatted.uri], { type: 'text/plain' })
     }
@@ -118,8 +103,8 @@ export function EntryCopies({
         <>
           <p>
             {l(
-              'Agent 会核对当前租户和注册，再打开查看入口。',
-              'Agent checks the current tenant and registration before opening the view.',
+              'Agent 会核对当前租户和设备，再打开查看入口。',
+              'Agent checks the current tenant and device before opening the view.',
             )}
           </p>
           {!device && (

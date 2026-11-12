@@ -96,10 +96,6 @@ function Bindings({
                   render: (_, row) => `${row.bindingGeneration} / ${row.factorGeneration}`,
                 },
                 {
-                  title: l('注册 / 代次', 'Registration / generation'),
-                  render: (_, row) => `${row.registration} @${row.registrationGeneration}`,
-                },
-                {
                   title: l('期望 / 接收 / 应用版本', 'Desired / received / applied revision'),
                   render: (_, row) =>
                     `${row.revision} / ${row.receivedRevision ?? '—'} / ${row.appliedRevision ?? '—'}`,

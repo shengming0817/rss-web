@@ -206,7 +206,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
           />
           {observation.value && (
             <p>
-              {observation.value.registration} @{observation.value.generation} ·{' '}
+              {observation.value.device} ·{' '}
               {observation.value.state} · {l('目标 / 实际版本', 'Target / actual revision')}:{' '}
               {observation.value.targetRevision ?? '—'} / {observation.value.actualRevision ?? '—'}{' '}
               · {timestamp(locale, observation.value.receivedAt)}

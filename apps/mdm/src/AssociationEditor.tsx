@@ -31,7 +31,7 @@ export function AssociationEditor({
     action = useAction()
   const [open, setOpen] = useState(false),
     [channel, setChannel] = useState<'mdm' | 'agent'>(
-      endpoint.channels.some((c) => c.channel === 'mdm' && c.status === 'active') ? 'mdm' : 'agent',
+      endpoint.channel === 'mdm' && endpoint.status === 'active' ? 'mdm' : 'agent',
     ),
     [cursor, setCursor] = useState<string>(),
     [candidate, setCandidate] = useState<string>(),
@@ -112,8 +112,8 @@ export function AssociationEditor({
         <Alert
           type="info"
           title={l(
-            '确认两端属于同一实际设备。注册代次变化后必须重新核验；关联不会合并终端身份或人员。',
-            'Verify both endpoints are the same physical device. Reverify after registration changes; association does not merge endpoint identities or people.',
+            '确认两端属于同一实际设备。新设备必须重新核验；关联不会合并终端身份或人员。',
+            'Verify both endpoints are the same physical device. Reverify new devices; association does not merge endpoint identities or people.',
           )}
         />
         <Failure error={action.error} locale={locale} />
@@ -122,9 +122,7 @@ export function AssociationEditor({
             <Select
               aria-label={l('当前终端通道', 'Current endpoint channel')}
               value={channel}
-              options={endpoint.channels
-                .filter((c) => c.status === 'active')
-                .map((c) => ({ value: c.channel, label: c.channel === 'mdm' ? 'MDM' : 'Agent' }))}
+              options={endpoint.status === 'active' && endpoint.channel ? [{ value: endpoint.channel, label: endpoint.channel === 'mdm' ? 'MDM' : 'Agent' }] : []}
               onChange={(value: 'mdm' | 'agent') => {
                 setChannel(value)
                 setCursor(undefined)
@@ -145,7 +143,7 @@ export function AssociationEditor({
               value={candidate}
               options={(candidates.value?.items ?? []).map((member) => ({
                 value: member.device,
-                label: `${member.device} · ${member.channel} · ${member.generation}`,
+                label: `${member.device} · ${member.channel}`,
               }))}
               onChange={setCandidate}
             />
@@ -221,9 +219,7 @@ export function AssociationEditor({
                   <dd>
                     <code>{member.device}</code>
                     <br />
-                    {l('注册', 'Registration')} · {member.registrationId}
-                    <br />
-                    {l('代次', 'Generation')} · {member.generation}
+                    {l('通道', 'Channel')} · {member.channel}
                   </dd>
                 </div>
               ))}

@@ -102,6 +102,7 @@ export interface DevicePkiPort {
     input: SigningRecovery,
   ): Promise<{ readonly attempt: string; readonly fingerprint: string }>
   observation(device: string): Promise<Observation | null>
+  registrationRecovery(device: string, operation: string): Promise<GrantReceipt | null>
   recoverRegistration(input: RegistrationRecovery, secret: string): Promise<GrantReceipt>
   recoverIssuance(input: IssuanceRecovery): Promise<IssuanceCandidate>
   issuanceRecovery(

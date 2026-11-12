@@ -100,8 +100,8 @@ export function PolicyAssignments({
                         : l('未知通道', 'Unknown channel')}
                     </p>
                     <details>
-                      <summary>{l('注册坐标', 'Registration coordinates')}</summary>
-                      {row.target ? `${row.target.registrationId} @${row.target.generation}` : '—'}
+                      <summary>{l('设备坐标', 'Device coordinates')}</summary>
+                      {row.target ? `${row.target.device} · ${row.target.channel}` : '—'}
                     </details>
                   </>
                 ),
@@ -229,7 +229,7 @@ export function PolicyAssignments({
                         {source.members
                           .map(
                             (member) =>
-                              `${member.channel}/${member.registrationId}@${member.generation}`,
+                              `${member.channel}/${member.device}`,
                           )
                           .join(' · ')}
                       </p>
@@ -360,8 +360,8 @@ export function PolicyRuns({
                 render: (_, row) => row.state?.cancellation ?? '—',
               },
               {
-                title: l('注册与触发', 'Registration and occurrence'),
-                render: (_, row) => `${row.registrationId}@${row.generation} · ${row.occurrence}`,
+                title: l('设备与触发', 'Device and occurrence'),
+                render: (_, row) => `${row.device} · ${row.occurrence}`,
               },
               {
                 title: l('可执行时间 / 截止时间（UTC 秒）', 'Available / deadline (UTC seconds)'),

@@ -231,11 +231,9 @@ export function AgentConnections({
           <DataTable
             locale={locale}
             dataSource={devices.value.items}
-            rowKey="registration"
+            rowKey="device"
             columns={[
               { title: l('终端', 'Endpoint'), dataIndex: 'device' },
-              { title: l('注册', 'Registration'), dataIndex: 'registration' },
-              { title: l('代次', 'Generation'), dataIndex: 'generation' },
               {
                 title: l('已安装连接版本', 'Installed connection revision'),
                 dataIndex: 'installedRevision',

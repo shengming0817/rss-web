@@ -144,11 +144,10 @@ export function DeviceRetirement({
           <DataTable
             locale={locale}
             dataSource={read.value.channels}
-            rowKey={(row) => `${row.device}/${row.registration}/${row.generation}`}
+            rowKey={(row) => `${row.device}/${row.channel}`}
             columns={[
               { title: l('终端', 'Endpoint'), dataIndex: 'device' },
               { title: l('通道', 'Channel'), dataIndex: 'channel' },
-              { title: l('注册代次', 'Generation'), dataIndex: 'generation' },
               {
                 title: l('阶段', 'Stage'),
                 dataIndex: 'stage',

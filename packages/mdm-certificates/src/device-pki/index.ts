@@ -185,6 +185,7 @@ export function createDevicePki(port: DevicePkiPort, tenant: string, service: st
       return result
     },
     observation: (device: string) => port.observation(identifier(device, 256)),
+    registrationRecovery: (device: string, operation: string) => port.registrationRecovery(identifier(device, 256), uuid(operation)),
     async recoverRegistration(input: RegistrationRecovery, secret: string) {
       validateRegistrationRecovery(input, secret)
       const original = freeze({

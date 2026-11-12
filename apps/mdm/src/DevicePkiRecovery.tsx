@@ -33,17 +33,14 @@ export function DevicePkiObservation({
 }) {
   const l = labels(locale),
     { devicePki, binding } = useAdministration(runtime),
-    registration = endpoint.channels.find(
-      (channel) => channel.channel === 'agent' && channel.status === 'active',
-    ),
+    registration = endpoint.channel === 'agent' && endpoint.status === 'active',
     read = useRead(
-      `${binding}/device-pki-observation/${endpoint.id}/${registration?.registrationId ?? ''}/${registration?.generation ?? ''}/${canRead}`,
+      `${binding}/device-pki-observation/${endpoint.id}/${endpoint.status}/${canRead}`,
       () => (canRead && registration ? devicePki.observation(endpoint.id) : Promise.resolve(null)),
     ),
     current =
       read.value &&
-      read.value.registration === registration?.registrationId &&
-      read.value.generation === registration?.generation
+      read.value.device === endpoint.id && registration
   return (
     <Card title={l('设备公共信任材料观察', 'Device public trust material observation')}>
       <ReadState busy={read.busy} error={read.error} locale={locale} />
@@ -68,20 +65,20 @@ export function DevicePkiObservation({
             title={
               current
                 ? l(
-                    '当前 Agent 注册代次的报告',
-                    'Report for the current Agent registration generation',
+                    '当前 Agent 设备的报告',
+                    'Report for the current Agent device',
                   )
                 : l(
-                    '报告不属于当前注册代次，请重新读取；当前安装未知。',
-                    'Report is from another registration generation. Read again; current installation is unknown.',
+                    '报告不属于当前设备，请重新读取；当前安装未知。',
+                    'Report is from another device. Read again; current installation is unknown.',
                   )
             }
           />
           <dl className="device-facts">
             <div>
-              <dt>{l('注册 / 代次', 'Registration / generation')}</dt>
+              <dt>{l('原设备', 'Original device')}</dt>
               <dd>
-                {read.value.registration} · {read.value.generation}
+                {read.value.device}
               </dd>
             </div>
             <div>
@@ -137,7 +134,6 @@ export function DevicePkiRecovery({
     { devicePki } = useAdministration(runtime),
     action = useAction(),
     [grantForm] = Form.useForm<{
-      registration: string
       platform: 'windows' | 'macos'
       csr: string
       secret: string
@@ -162,11 +158,7 @@ export function DevicePkiRecovery({
       lookupForm.resetFields()
     }, canRecover)
   usePendingSelection(!!grant || !!issuance)
-  const registration = endpoint.channels.find(
-    (channel) => channel.channel === 'agent' && channel.status === 'active',
-  )
   function recoverGrant(value: {
-    registration: string
     platform: 'windows' | 'macos'
     csr: string
     secret: string
@@ -181,7 +173,7 @@ export function DevicePkiRecovery({
         if (!delivery.isCurrent(epoch)) return
         const original = grant ?? {
           intent: freeze({
-            registration: value.registration,
+            device: endpoint.id,
             platform: value.platform,
             operationId: crypto.randomUUID(),
             csr: publicDer(value.csr, 'csr'),
@@ -237,8 +229,8 @@ export function DevicePkiRecovery({
       <Alert
         type="info"
         title={l(
-          '仅恢复既有 Agent 注册及原签发尝试。批准、候选证书与设备激活分别确认；注册目录仍在设备注册入口。',
-          'Recover existing Agent registrations and original signing attempts only. Grant, candidate certificate and device activation are separate facts; registration directories remain in Enrollment.',
+          '仅恢复既有 Agent 注册及原签发尝试。批准、候选证书与设备激活分别确认；协议状态仍在设备注册入口。',
+          'Recover existing Agent registrations and original signing attempts only. Grant, candidate certificate and device activation are separate facts; protocol state remains in Enrollment.',
         )}
       />
       <Failure error={action.error} locale={locale} />
@@ -250,20 +242,10 @@ export function DevicePkiRecovery({
             layout="vertical"
             disabled={!canRecover || action.busy}
             initialValues={{
-              registration: registration?.registrationId ?? '',
-              platform:
-                endpoint.channels.find((channel) => channel.channel === 'agent')?.platform ??
-                'windows',
+              platform: endpoint.platform.state === 'known' ? endpoint.platform.values[0] : 'windows',
             }}
             onFinish={recoverGrant}
           >
-            <Form.Item
-              name="registration"
-              label={l('既有注册 UUID', 'Existing registration UUID')}
-              rules={[{ required: true }]}
-            >
-              <Input disabled={!!grant} />
-            </Form.Item>
             <Form.Item
               name="platform"
               label={l('原请求平台', 'Original request platform')}
@@ -338,12 +320,12 @@ export function DevicePkiRecovery({
                   {l('结束本次注册恢复', 'Finish this registration recovery')}
                 </Button>
               )}
-              <p className="subtitle">
-                {l(
-                  '没有原注册恢复回执查询接口。结果未知时须重新输入同一秘密，保留原 UUID 与 CSR 后显式重提。',
-                  'There is no receipt query for this registration recovery. If unknown, re-enter the same secret and explicitly resubmit the original UUID and CSR.',
-                )}
-              </p>
+              <Button disabled={!canRecover || action.busy} onClick={() => void action.run(async () => {
+                const receipt = await devicePki.registrationRecovery(grant.intent.device, grant.intent.operationId)
+                setGrantReceipt(receipt)
+                if (receipt) setGrantOutcome('confirmed')
+              })}>{l('读取原设备恢复回执', 'Read original device recovery receipt')}</Button>
+              <p className="subtitle">{l('结果未知时读取原回执；显式重提须保持原设备、原操作和 CSR，并重新输入同一秘密。', 'Read the original receipt when unknown. Explicit resubmission keeps the original device, operation and CSR and requires the same secret.')}</p>
             </>
           )}
         </Card>

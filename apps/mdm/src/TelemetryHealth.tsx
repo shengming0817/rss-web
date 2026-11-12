@@ -114,10 +114,10 @@ export function TelemetryHealth({
               dataSource={gaps.value.reports}
               columns={[
                 {
-                  title: l('注册 / 代次', 'Registration / generation'),
+                  title: l('原设备', 'Original device'),
                   render: (_, r) => (
                     <code>
-                      {r.registrationId} / {r.generation}
+                      {r.deviceId}
                     </code>
                   ),
                 },

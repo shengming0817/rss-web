@@ -42,12 +42,12 @@ function AgentObservation({
 }) {
   const l = labels(locale),
     { connections, binding } = useAdministration(runtime),
-    registration = endpoint.channels.find((c) => c.channel === 'agent' && c.status === 'active'),
+    registration = endpoint.channel === 'agent' && endpoint.status === 'active',
     read = useRead(
-      `${binding}/device-connection/${endpoint.id}/${registration?.registrationId ?? ''}/${registration?.generation ?? ''}`,
+      `${binding}/device-connection/${endpoint.id}/${endpoint.status}`,
       () =>
         registration
-          ? connections.agent.observation(endpoint.id, registration)
+          ? connections.agent.observation(endpoint.id)
           : Promise.resolve(null),
     )
   return (
@@ -62,9 +62,9 @@ function AgentObservation({
       {read.value && (
         <dl className="device-facts">
           <div>
-            <dt>{l('注册 / 代次', 'Registration / generation')}</dt>
+            <dt>{l('设备', 'Device')}</dt>
             <dd>
-              {read.value.registration} · {read.value.generation}
+              {read.value.device}
             </dd>
           </div>
           <div>
@@ -249,46 +249,14 @@ function EndpointFacts({
           </div>
         </dl>
       </Card>
-      <Card title={l('注册通道', 'Registration channels')}>
-        <DataTable
-          locale={locale}
-          dataSource={endpoint.channels}
-          rowKey="registrationId"
-          columns={[
-            { title: l('通道', 'Channel'), dataIndex: 'channel' },
-            { title: l('注册标识', 'Registration'), dataIndex: 'registrationId' },
-            { title: l('代次', 'Generation'), dataIndex: 'generation' },
-            {
-              title: l('状态', 'State'),
-              dataIndex: 'status',
-              render: (value) => <Status value={String(value)} locale={locale} />,
-            },
-            { title: l('来源', 'Source'), dataIndex: 'source' },
-            {
-              title: l('最近通信', 'Last communication'),
-              dataIndex: 'lastCommunicationReceivedAt',
-              render: (_, row) => timestamp(locale, row.lastCommunicationReceivedAt),
-            },
-          ]}
-        />
-        {endpoint.channels.map((channel) => (
-          <div key={channel.channel} className="subtitle">
-            {channel.children.map((child) => (
-              <p key={child.registrationId}>
-                {l('子通道', 'Child channel')} · {child.registrationId} ·{' '}
-                {l('父代次', 'Parent generation')} {child.parentGeneration} ·{' '}
-                <Status locale={locale} value={child.status} /> ·{' '}
-                {child.ready ? l('就绪', 'Ready') : l('未就绪', 'Not ready')}
-              </p>
-            ))}
-            {channel.userContext && (
-              <p>
-                {l('用户上下文', 'User context')} · {channel.userContext.id} ·{' '}
-                <Status locale={locale} value={channel.userContext.registrationStatus} />
-              </p>
-            )}
-          </div>
-        ))}
+      <Card title={l('设备通道', 'Device channel')}>
+        <dl className="device-facts">
+          <div><dt>{l('通道', 'Channel')}</dt><dd>{endpoint.channel ?? '—'}</dd></div>
+          <div><dt>{l('来源', 'Source')}</dt><dd>{endpoint.source ?? '—'}</dd></div>
+          <div><dt>{l('首次注册时间', 'First enrollment')}</dt><dd>{timestamp(locale, endpoint.registeredAt)}</dd></div>
+          <div><dt>{l('最近通信', 'Last communication')}</dt><dd>{timestamp(locale, endpoint.lastCommunicationReceivedAt)}</dd></div>
+          <div><dt>{l('注册申请', 'Enrollment request')}</dt><dd>{endpoint.enrollment?.enrollmentId ?? '—'}</dd></div>
+        </dl>
       </Card>
       <Card title={l('当前能力事实', 'Current capability facts')}>
         <ReadState
@@ -346,7 +314,7 @@ function EndpointOverview({
   const { binding, devices } = useAdministration(runtime)
   const active = useSecretVisibility() && !authorityBusy
   const read = useRead(
-    JSON.stringify([binding, endpoint.id, endpoint.primaryMdmRegistration, authorityKey, active]),
+    JSON.stringify([binding, endpoint.id, endpoint.status, authorityKey, active]),
     (signal) => (active ? devices.endpoint(endpoint.id, signal) : Promise.resolve(undefined)),
     { retryReadConflict: true },
   )

@@ -26,7 +26,7 @@ export function QualityRuns({
         locale={locale}
         dataSource={rows}
         rowKey={(row) =>
-          JSON.stringify([row.endpoint, row.registration, row.registrationGeneration, row.runId])
+          JSON.stringify([row.endpoint, row.device, row.epoch, row.runId])
         }
         columns={[
           {
@@ -49,12 +49,12 @@ export function QualityRuns({
             ),
           },
           {
-            title: l('注册 / 代次', 'Registration / generation'),
+            title: l('原设备与来源', 'Original device and source'),
             render: (_, row) => (
               <>
-                {row.registration}
+                {row.device}
                 <p>
-                  {row.registrationGeneration} · {row.epoch} · {row.sequence}
+                  {row.epoch} · {row.sequence}
                 </p>
               </>
             ),
@@ -247,9 +247,9 @@ export function CollectionResults({
               </dd>
             </div>
             <div>
-              <dt>{l('注册 / 代次', 'Registration / generation')}</dt>
+              <dt>{l('原设备与来源', 'Original device and source')}</dt>
               <dd>
-                {read.value.registration} / {read.value.generation}
+                {read.value.device}
               </dd>
             </div>
           </dl>

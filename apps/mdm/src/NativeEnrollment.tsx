@@ -40,12 +40,10 @@ export function EnrollmentFailure({ error, locale }: { error: unknown; locale: L
 export function NativeEnrollment({
   runtime,
   locale,
-  deviceId,
   initialEnrollment = '',
 }: {
   runtime: Runtime
   locale: Locale
-  deviceId?: string
   initialEnrollment?: string
 }) {
   const maintenance = useSelectionGuard()
@@ -120,9 +118,7 @@ export function NativeEnrollment({
     <div className="enrollment-layout">
       <Card
         title={
-          deviceId
-            ? l('为此终端发起原生注册', 'Create native enrollment for this endpoint')
-            : l('注册我的设备', 'Enroll my device')
+          l('注册我的设备', 'Enroll my device')
         }
       >
         <Alert
@@ -275,7 +271,7 @@ export function NativeEnrollment({
                 onClick={() => {
                   const secret = password,
                     original = {
-                      intent: nativeIntent(crypto.randomUUID(), source, windowsProfile, deviceId),
+                      intent: nativeIntent(crypto.randomUUID(), source, windowsProfile),
                       fingerprint,
                     }
                   setPending(original)

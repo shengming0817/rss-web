@@ -185,7 +185,7 @@ export function ComputerWorkspace({
                 {label(computer.platform)} · 最近设备观察 {utc(computer.lastObservedAt)}
               </p>
               <p>
-                Endpoint {computer.id} · 注册 {computer.registration ?? '未观察'}
+                Endpoint {computer.id}
               </p>
             </div>
             {compact && <Button onClick={() => onExpand?.(active)}>打开完整页面</Button>}

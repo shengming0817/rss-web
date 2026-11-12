@@ -86,7 +86,7 @@ function MaterialDialog({
 }) {
   const r = useDa(),
     identity = identityKey(r.session),
-    scope = `${identity}/${device.id}/${m.id}/${m.version}/${m.registration}/${m.generation}/${m.subject.binding}/${m.subject.bindingGeneration}`
+    scope = `${identity}/${device.id}/${m.id}/${m.version}/${m.subject.binding}/${m.subject.bindingGeneration}`
   const live = useRef(scope)
   live.current = scope
   const [mode, setMode] = useState<'inspect' | 'reveal' | 'rotate'>('inspect'),

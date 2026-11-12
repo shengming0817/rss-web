@@ -220,11 +220,9 @@ export function TelemetryConfigurations({
                 <dd>{utcMicros(read.value.evaluatedAtMicros)}</dd>
               </div>
               <div>
-                <dt>{l('注册 / 代次', 'Registration / generation')}</dt>
+                <dt>{l('设备', 'Device')}</dt>
                 <dd>
-                  {read.value.registration
-                    ? `${read.value.registration.id} / ${read.value.registration.generation}`
-                    : l('没有当前注册', 'No current registration')}
+                  {read.value.device}
                 </dd>
               </div>
             </dl>

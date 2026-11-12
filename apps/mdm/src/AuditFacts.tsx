@@ -151,7 +151,6 @@ export function AuditFactView({
             [
               'operationId',
               'requestId',
-              'registrationId',
               'registrationRequestId',
               'instanceId',
             ] as const
@@ -203,9 +202,6 @@ export function ActivityFactView({
     original = {
       ...(fact.links.attempt ? { attempt: fact.links.attempt } : {}),
       ...(fact.links.version ? { version: fact.links.version } : {}),
-      ...(fact.target
-        ? { registration: fact.target.registration, generation: String(fact.target.generation) }
-        : {}),
     },
     dimensions = [
       [l('投递证据', 'Delivery evidence'), fact.delivery],
@@ -231,10 +227,10 @@ export function ActivityFactView({
           {timestamp(locale, fact.observedAt)}
         </Descriptions.Item>
         <Descriptions.Item
-          label={l('原目标通道与注册代次', 'Original channel and registration generation')}
+          label={l('原目标设备', 'Original target device')}
         >
           {fact.target
-            ? `${fact.target.device} · ${fact.target.registration} / ${fact.target.generation}`
+            ? fact.target.device
             : l('父级事实，无设备目标', 'Parent fact without a device target')}
         </Descriptions.Item>
         {dimensions.map(([name, value]) => (

@@ -29,8 +29,6 @@ it('rejects privilege and secret extensions, malformed selectors, and incomplete
   ])
     expect(() => agentViewEntry(invalid as EntryTarget, namespace)).toThrow()
   for (const invalid of [
-    { ...namespace, generation: 0 },
-    { ...namespace, registration: '' },
     { ...namespace, instance: 'https://elsewhere.test' },
     { ...namespace, device: 'device\nsecret' },
     { ...namespace, token: 'secret' },

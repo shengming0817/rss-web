@@ -86,7 +86,7 @@ function candidate(value: unknown, issuance: string): IssuanceCandidate {
 }
 function grant(value: unknown): GrantReceipt {
   if (
-    !schema.postApiV1AgentRegistrationsByIdRecoveryResponse.validateRoot(value) ||
+    !schema.postApiV1DevicesByIdRegistrationRecoveryResponse.validateRoot(value) ||
     value.wireVersion !== 1
   )
     throw new Error('Invalid registration recovery grant')
@@ -186,6 +186,8 @@ export function createDevicePkiAdapter(
         { pathParams: { device } },
         observation,
       ),
+    registrationRecovery: (device, operation) =>
+      api.getApiV1DevicesByIdRegistrationRecoveryOperationsByOperation(transport, { pathParams: { id: device, operation } }, value => value === null ? null : grant(value)),
     recoverRegistration: (input, secret) =>
       api.postApiV1DevicesByIdRegistrationRecovery(
         transport,

@@ -47,9 +47,9 @@ export function EvidenceFacts({ evidence, locale }: { evidence: Evidence; locale
         <dd>{scopeName(evidence.scope)}</dd>
       </div>
       <div>
-        <dt>{l('注册 / 代次', 'Registration / generation')}</dt>
+        <dt>{l('原设备', 'Original device')}</dt>
         <dd>
-          {evidence.registration ?? '—'} / {evidence.registrationGeneration ?? '—'}
+          {evidence.deviceId ?? '—'}
         </dd>
       </div>
       <div>

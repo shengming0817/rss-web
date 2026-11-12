@@ -16,14 +16,14 @@ const discovery = [
   'until',
   'operationId',
 ] as const
-const coordinates = ['actor', 'instance', 'device', 'target', 'registration', 'generation'] as const
+const coordinates = ['actor', 'instance', 'device', 'target'] as const
 
 function fields(params: URLSearchParams, keys: readonly string[]) {
   return Object.fromEntries(
     keys.flatMap<[string, string | number]>((key) => {
       const value = params.get(key)
       if (value === null || value === '') return []
-      if (['from', 'until', 'generation'].includes(key)) {
+      if (['from', 'until'].includes(key)) {
         if (!/^\d+$/.test(value)) throw new Error('Invalid numeric coordinate')
         return [[key, Number(value)]]
       }

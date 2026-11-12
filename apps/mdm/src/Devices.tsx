@@ -23,9 +23,12 @@ const viewFields = ['key', 'reference', 'association', 'endpoints'] as const,
   endpointFields = [
     'id',
     'status',
-    'primaryMdmRegistration',
-    'channels',
-    'enrollments',
+    'registeredAt',
+    'channel',
+    'source',
+    'platform',
+    'lastCommunicationReceivedAt',
+    'enrollment',
     'inventoryAvailable',
   ] as const,
   associationFields = ['id', 'version', 'confirmedAt', 'association'] as const
@@ -252,7 +255,7 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
                             {endpoint.platform.state === 'conflict' && (
                               <Status value="conflict" locale={locale} />
                             )}{' '}
-                            · {endpoint.channels.map((c) => c.channel).join(' + ')}
+                            · {endpoint.channel ?? '—'}
                           </div>
                         )),
                     },
@@ -349,39 +352,11 @@ function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Loca
                     },
                   ]
                 : []),
-              ...(selected.includes('channels')
-                ? [
-                    {
-                      title: l('注册通道', 'Registrations'),
-                      dataIndex: 'channels' as const,
-                      render: (_: unknown, row: EndpointRow) =>
-                        row.channels?.map((c) => (
-                          <div key={c.channel}>
-                            {c.channel} · {l('代次', 'Generation')} {c.generation} ·{' '}
-                            <Status value={c.status} locale={locale} />
-                            <div className="subtitle">
-                              {l('最近通信', 'Last communication')} ·{' '}
-                              {timestamp(locale, c.lastCommunicationReceivedAt)}
-                            </div>
-                          </div>
-                        )),
-                    },
-                  ]
-                : []),
-              ...(selected.includes('enrollments')
-                ? [
-                    {
-                      title: l('注册申请', 'Enrollment requests'),
-                      dataIndex: 'enrollments' as const,
-                      render: (_: unknown, row: EndpointRow) =>
-                        row.enrollments?.map((e) => (
-                          <div key={e.enrollmentId}>
-                            {e.source} · <Status value={e.status} locale={locale} />
-                          </div>
-                        )),
-                    },
-                  ]
-                : []),
+              ...(selected.includes('channel') ? [{ title: l('通道', 'Channel'), dataIndex: 'channel' as const }] : []),
+              ...(selected.includes('source') ? [{ title: l('来源', 'Source'), dataIndex: 'source' as const }] : []),
+              ...(selected.includes('registeredAt') ? [{ title: l('首次注册时间', 'First enrollment'), render: (_: unknown, row: EndpointRow) => timestamp(locale, row.registeredAt) }] : []),
+              ...(selected.includes('lastCommunicationReceivedAt') ? [{ title: l('最近通信', 'Last communication'), render: (_: unknown, row: EndpointRow) => timestamp(locale, row.lastCommunicationReceivedAt) }] : []),
+              ...(selected.includes('enrollment') ? [{ title: l('注册申请', 'Enrollment request'), render: (_: unknown, row: EndpointRow) => row.enrollment?.enrollmentId ?? '—' }] : []),
               ...(selected.includes('inventoryAvailable')
                 ? [
                     {
@@ -588,7 +563,7 @@ function AssociationFacts({ value, locale }: { value: Association; locale: Local
         <p key={member.channel}>
           <Link to={devicePath('endpoint', member.device)}>{member.device}</Link>
           <br />
-          {member.channel} · {member.registrationId} · {l('代次', 'Generation')} {member.generation}
+          {member.channel}
         </p>
       ))}
       <p>{value.evidence}</p>
@@ -610,8 +585,8 @@ export function Devices({ runtime, locale }: { runtime: Runtime; locale: Locale 
       <Heading
         title={l('设备', 'Devices')}
         hint={l(
-          '从设备视图进入详情，保留每个终端、通道与注册代次。',
-          'Explore device views while retaining each endpoint, channel and registration generation.',
+          '从设备视图进入详情，保留每个终端和独立通道身份。',
+          'Explore device views while retaining each endpoint and independent channel identity.',
         )}
         actions={
           <Link className="button-link" to="/enroll">

@@ -68,8 +68,6 @@ function ExecutionFacts({
         originalRunKeys.some((key) => {
           const actual = {
             attempt: observed.attempt,
-            registration: observed.registrationId,
-            generation: observed.generation,
             version: observed.versionId,
           }[key]
           return params.has(key) && (actual === null || String(actual) !== params.get(key))
@@ -91,8 +89,6 @@ function ExecutionFacts({
         device: detail.device,
         id: detail.id,
         revision: detail.revision,
-        registration: item.registrationId,
-        generation: item.generation,
         canReauthorize: detail.reauthorization?.state === 'available',
         confirmationRequired: detail.reauthorization?.confirmationRequired ?? false,
         terminal: ['applied', 'rejected', 'cancelled', 'timed_out', 'superseded'].includes(
@@ -105,9 +101,7 @@ function ExecutionFacts({
   const entries: CopyEntry[] = []
   if (
     detail?.kind === 'run' &&
-    detail.attempt &&
-    detail.registrationId &&
-    detail.generation !== null
+    detail.attempt
   ) {
     const selector = { kind: 'task' as const, task: detail.id, attempt: detail.attempt }
     entries.push({ label: l('原任务', 'Original task'), target: { selector } })
@@ -171,9 +165,9 @@ function ExecutionFacts({
         )}
         {item && !original && (
           <div>
-            <dt>{l('执行注册 / 代次', 'Execution registration / generation')}</dt>
+            <dt>{l('原执行设备', 'Original execution device')}</dt>
             <dd>
-              {item.registrationId} @{item.generation}
+              {item.device}
             </dd>
           </div>
         )}
@@ -234,13 +228,12 @@ function ExecutionFacts({
         </Link>
       )}
       {detail && <ExecutionEvidence detail={detail} locale={locale} />}
-      {detail?.kind === 'run' && detail.registrationId && detail.generation !== null && (
+      {detail?.kind === 'run' && (
         <EntryCopies
           runtime={runtime}
           locale={locale}
           entries={entries}
           device={detail.device}
-          expected={{ registrationId: detail.registrationId, generation: detail.generation }}
         />
       )}
       <Alert
@@ -428,7 +421,6 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
                 title: l('状态', 'State'),
                 render: (_, row) => <Status locale={locale} value={row.status} />,
               },
-              { title: l('注册代次', 'Registration generation'), dataIndex: 'generation' },
               {
                 title: l('截止时间', 'Deadline'),
                 render: (_, row) => timestamp(locale, row.deadline),
