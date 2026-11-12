@@ -4,10 +4,11 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 const run = await realBrowser('MDM_DEVICE_BROWSER_FIXTURE', 'react-devices')
-let failure
+let failure, diagnosticPage
 try {
   const { fixture: f, origin, checks } = run,
     p = await run.page()
+  diagnosticPage = p
   async function openDevice(kind, id, navigate) {
     const path = `/api/v1/device-views/${kind}/${id}`,
       matches = (response) =>
@@ -98,6 +99,7 @@ try {
   assert.ok(candidates.items.some((item) => item.device === f.agent))
   const candidateSelect = d.getByLabel('对侧通道候选终端', { exact: true })
   await candidateSelect.click()
+  await p.locator('.ant-select-dropdown:visible .ant-select-item-option-content').first().waitFor()
   // Scroll the virtualized current window before choosing its exact candidate label.
   for (
     let index = 0;
@@ -112,7 +114,7 @@ try {
   await d
     .getByLabel('核验证据或撤销理由', { exact: true })
     .fill('Disposable fixture association, independently identified endpoints')
-  await d.getByRole('button', { name: '读取并核对当前终端', exact: true }).click()
+  await d.getByRole('button', { name: '读取并核对当前注册', exact: true }).click()
   await d.getByRole('checkbox', { name: '已核实两端属于同一实际设备', exact: true }).check()
   // Lose an actually committed response. Subsequent explicit replay must keep the whole original tuple.
   let first,
@@ -230,5 +232,10 @@ try {
   checks.push('versioned-association-revocation-keeps-endpoints')
 } catch (error) {
   failure = error
+  const directory = mkdtempSync(join(tmpdir(), 'rss-react-devices-failure-'))
+  await diagnosticPage
+    ?.screenshot({ path: join(directory, 'failure.png'), fullPage: true })
+    .catch(() => {})
+  console.error(JSON.stringify({ journey: 'react-devices', diagnosticDirectory: directory }))
 }
 await run.finish(failure)
