@@ -215,7 +215,7 @@ function EventAssociations({
                 title: l('所属策略', 'Owning policy'),
                 render: (_, row) => (
                   <Link
-                    to={`/policies?${new URLSearchParams({ policy: row.id, tab: 'definition', returnTo: location.pathname + location.search })}`}
+                    to={`/policies?${new URLSearchParams({ policy: row.id, tab: 'configuration', returnTo: location.pathname + location.search })}`}
                   >
                     {row.toolName ?? row.id}
                   </Link>

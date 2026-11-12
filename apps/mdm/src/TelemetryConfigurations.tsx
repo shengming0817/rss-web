@@ -138,11 +138,11 @@ function ConfigurationPreview({
           <>
             <Space wrap>
               <Link
-                to={`/policies?${new URLSearchParams({ policy: value.policyId, tab: 'definition' })}`}
+                to={`/policies?${new URLSearchParams({ policy: value.policyId, tab: 'configuration' })}`}
               >
                 {policy.value.definition.alias ?? value.policyId}
               </Link>
-              <Link to={`/scopes?${new URLSearchParams({ scope: policy.value.definition.scope })}`}>
+              <Link to={`/policies?${new URLSearchParams({ policy: policy.value.id, tab: 'scope' })}`}>
                 {l('策略范围', 'Policy scope')}
               </Link>
             </Space>

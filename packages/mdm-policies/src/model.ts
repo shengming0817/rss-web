@@ -230,6 +230,7 @@ export interface PoliciesPort {
     definition: PolicyDefinition,
     scopeResult: string | null,
     query: WindowQuery,
+    signal?: AbortSignal,
   ): Promise<PolicyPreview>
   assignments(id: string, query: WindowQuery, signal?: AbortSignal): Promise<Page<Assignment>>
   runs(id: string, query: WindowQuery, signal?: AbortSignal): Promise<Page<PolicyRun>>

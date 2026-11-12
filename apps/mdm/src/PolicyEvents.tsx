@@ -470,7 +470,7 @@ function EventMembers({
                       row.policyId
                     ) : (
                       <Link
-                        to={`/policies?${new URLSearchParams({ policy: row.policyId, tab: 'definition', returnTo: source })}`}
+                        to={`/policies?${new URLSearchParams({ policy: row.policyId, tab: 'configuration', returnTo: source })}`}
                       >
                         {row.policyId}
                       </Link>

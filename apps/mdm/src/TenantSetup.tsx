@@ -357,7 +357,7 @@ function SetupJourney({
                         ),
                     )}
                     <Link to="/resources">{l('资源库', 'Resources')}</Link>
-                    <Link to="/scopes">{l('范围', 'Scopes')}</Link>
+                    <Link to="/policies">{l('范围', 'Scopes')}</Link>
                     <Link to="/policies">{l('策略', 'Policies')}</Link>
                     <Link to="/enroll">{l('实际设备注册', 'Device enrollment')}</Link>
                     <Link to="/certificates">

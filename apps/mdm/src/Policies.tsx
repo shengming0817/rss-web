@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Collapse, Modal, Segmented, Space, Tag } from 'antd'
+import { Alert, Button, Tag } from 'antd'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { formatFilter } from '@rss/api/mdm-filter'
 import { allOf } from '@rss/api/mdm-query'
@@ -20,11 +20,8 @@ import {
 } from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
-import { SecretTabs } from './SecretTabs'
 import { PolicyEditor } from './PolicyEditor'
-import { PolicyAssignments, PolicyRollout, PolicyRuns } from './PolicyProgress'
 import { resultReturnPath } from './execution-context'
-import { PolicyNames } from './PolicyNames'
 import { PolicyEvents } from './PolicyEvents'
 import { newPolicyAction, policyActionLabel } from './PolicyActionEditor'
 
@@ -65,9 +62,6 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
       ...(params.has('sort') ? { sort: params.getAll('sort') } : {}),
       ...(params.has('field') ? { fields: params.getAll('field') } : {}),
     },
-    state = ['enabled', 'disabled', 'archived'].includes(params.get('state') ?? '')
-      ? params.get('state')!
-      : 'all',
     softwareResource = params.get('softwareResource'),
     softwareVersion = params.get('softwareVersion'),
     softwareVariant = params.get('softwareVariant'),
@@ -99,7 +93,6 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
         return (
           allOf(
             softwareFilter ?? undefined,
-            state === 'all' ? undefined : "state=='" + state + "'",
             query.filter,
           ) ?? ''
         )
@@ -160,7 +153,6 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
       ? draftResource && selected.source === draftSource
       : selected?.id === linkedPolicy,
     policyTarget =
-      params.has('tab') &&
       !softwareVariant &&
       canRead &&
       !guard.locked &&
@@ -191,7 +183,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
   useEffect(() => {
     if (!draft.value || selected?.source === draftSource || guard.locked) return
     const { resource, version, variant } = draft.value
-    const action = newPolicyAction('software', params.get('scope') ?? '')
+    const action = newPolicyAction('software')
     if (action.kind !== 'software') return
     setSelected({
       id: crypto.randomUUID(),
@@ -220,18 +212,19 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
     if (next.cursor) value.set('cursor', next.cursor)
     next.sort?.forEach((item) => value.append('sort', item))
     next.fields?.forEach((item) => value.append('field', item))
-    setParams(value, { replace: true })
+    setParams(value)
   }
   function open(id: string) {
     const next = new URLSearchParams(params)
     next.set('policy', id)
-    next.set('tab', 'definition')
+    next.set('tab', 'configuration')
     next.delete('softwareVariant')
     next.delete('assignmentCursor')
     next.delete('runCursor')
-    setParams(next, { replace: true })
+    setParams(next)
   }
   function close() {
+    setSelected(null)
     if (returnSource && (!fixedSoftware || selected?.baseline === null)) {
       if (new URLSearchParams(returnSource.split('?')[1]).get('policy') === selected?.id)
         setSelected(null)
@@ -252,360 +245,34 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
       'softwareVariant',
     ])
       next.delete(key)
-    setParams(next, { replace: true })
+    setParams(next)
     read.reload()
   }
-  return (
-    <SelectionGuard.Provider value={guard.register}>
-      <div className="policies-page">
-        <Heading
-          title={l('策略与部署', 'Policies and deployments')}
-          hint={l(
-            '定义期望状态，选择精确资源与范围，分别跟踪分配、事件与执行事实。',
-            'Define desired state and exact resource/scope bindings, then track assignment, event and execution facts separately.',
-          )}
-          actions={
-            <Space>
-              <Link to="/scopes">{l('管理策略范围', 'Manage policy scopes')}</Link>
-              {has('policy_write') && (
-                <Button
-                  type="primary"
-                  disabled={guard.locked}
-                  onClick={() => {
-                    const id = crypto.randomUUID()
-                    setSelected({ id, baseline: null })
-                    open(id)
-                  }}
-                >
-                  {l('新建部署', 'New deployment')}
-                </Button>
-              )}
-            </Space>
-          }
-        />
-        {Boolean(permissions.error) && (
-          <Button onClick={permissions.reload}>{l('重试', 'Retry')}</Button>
-        )}
-        {permissions.value && !canRead && (
-          <Alert
-            type="info"
-            title={l('当前账户没有策略读取权限。', 'Your account cannot read policies.')}
-          />
-        )}
-        <ReadState locale={locale} busy={permissions.busy} error={permissions.error} />
-        {fixedSoftware && (
-          <p>
-            {l('固定软件资源版本', 'Fixed software resource version')} ·{' '}
-            <code>
-              {softwareResource} @ {softwareVersion}
-            </code>
-          </p>
-        )}
-        {fixedSoftware && !softwareFilter && (
-          <Alert type="error" title={l('软件版本定位无效', 'Invalid software version locator')} />
-        )}
-        {draftResource && (
-          <ReadState locale={locale} busy={draft.busy} error={draft.error} onRetry={draft.reload} />
-        )}
-        {returnSource && !dialogOpen && (
-          <Link to={returnSource}>{l('返回来源', 'Return to source')}</Link>
-        )}
-        {!selected &&
-          ((!linkedPolicy && params.get('tab') === 'events' && params.get('eventDevice')) ||
-            guard.locked) && (
-            <PolicyEvents
-              events={policyEvents}
-              devices={devices}
-              runtime={runtime}
-              event={null}
-              locale={locale}
-              canSubmit={canRead}
-            />
-          )}
-        <fieldset className="permission-panel" disabled={guard.locked}>
-          {canRead && (
-            <>
-              <div className="policy-toolbar">
-                <Segmented
-                  aria-label={l('策略状态', 'Policy state')}
-                  value={state}
-                  options={[
-                    { value: 'all', label: l('全部策略', 'All policies') },
-                    { value: 'enabled', label: l('已启用', 'Enabled') },
-                    { value: 'disabled', label: l('已停用', 'Disabled') },
-                    { value: 'archived', label: l('已归档', 'Archived') },
-                  ]}
-                  onChange={(value) => {
-                    const next = new URLSearchParams(params)
-                    next.set('state', value)
-                    next.delete('cursor')
-                    setParams(next, { replace: true })
-                  }}
-                />
-                <Button onClick={read.reload}>{l('刷新', 'Refresh')}</Button>
-              </div>
-              <Collapse
-                className="policy-query"
-                items={[
-                  {
-                    key: 'query',
-                    label: l('筛选与排序', 'Filter and sort'),
-                    children: (
-                      <DirectoryControls catalog="policies"
-                        locale={locale}
-                        query={query}
-                        onChange={setQuery}
-                        fields={fields}
-                        sort={['id', 'revision', 'version', 'state', 'action', 'scope']}
-                      />
-                    ),
-                  },
-                ]}
-              />
-              {linkedPolicy && !dialogOpen && (
-                <Button onClick={() => open(linkedPolicy)}>
-                  {l('打开定位策略', 'Open linked policy')}
-                </Button>
-              )}
-              <ReadState
-                locale={locale}
-                busy={read.busy}
-                error={read.error}
-                empty={read.value?.items.length === 0}
-              />
-              {read.value && (
-                <>
-                  <div className="policy-list">
-                    {read.value.items.map((row) => (
-                      <article className="policy-card" key={row.id}>
-                        <span className="policy-icon" aria-hidden="true">
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.4"
-                          >
-                            <path d="m12 3 9 5-9 5-9-5 9-5Z M3 12l9 5 9-5 M3 16l9 5 9-5" />
-                          </svg>
-                        </span>
-                        <div className="policy-card-main">
-                          <Button type="link" className="policy-title" onClick={() => open(row.id)}>
-                            {row.toolName ?? row.id}
-                          </Button>
-                          <div className="policy-meta">
-                            <span>{row.action ? policyActionLabel(row.action, locale) : '—'}</span>
-                            {row.definition?.action.kind === 'software' && (
-                              <span>
-                                <code>
-                                  {row.definition.action.resource.id} @{' '}
-                                  {row.definition.action.resource.version}
-                                </code>
-                              </span>
-                            )}
-                            {row.scope && (
-                              <Link to={`/scopes?scope=${encodeURIComponent(row.scope)}`}>
-                                {l('范围', 'Scope')} · {row.scope}
-                              </Link>
-                            )}
-                            {row.alias && (
-                              <Tag>
-                                {l('唯一别名', 'Unique alias')} · <code>{row.alias}</code>
-                              </Tag>
-                            )}
-                            {row.customEvent && (
-                              <span>
-                                {l('事件', 'Event')} · {row.customEvent}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="policy-versions">
-                          <span>{l('配置 / 执行版本', 'Configuration / execution version')}</span>
-                          <strong>
-                            {row.revision ?? '—'} / {row.version ?? '—'}
-                          </strong>
-                        </div>
-                        <Tag color={row.state === 'enabled' ? 'success' : 'default'}>
-                          {row.state === 'enabled'
-                            ? l('已启用', 'Enabled')
-                            : row.state === 'disabled'
-                              ? l('已停用', 'Disabled')
-                              : row.state === 'archived'
-                                ? l('已归档', 'Archived')
-                                : '—'}
-                        </Tag>
-                        <Button
-                          aria-label={l('查看策略', 'View policy') + ' ' + (row.alias ?? row.id)}
-                          onClick={() => open(row.id)}
-                        >
-                          →
-                        </Button>
-                      </article>
-                    ))}
-                  </div>
-                  <CursorControls
-                    locale={locale}
-                    query={query}
-                    onChange={setQuery}
-                    next={read.value.nextCursor}
-                    count={read.value.items.length}
-                  />
-                </>
-              )}
-            </>
-          )}
-        </fieldset>
-        <Modal
-          rootClassName={`policy-dialog ${dialogOpen ? 'mdm-overlay-open' : ''}`}
-          getContainer={false}
-          destroyOnHidden
-          open={dialogOpen}
-          title={
-            selected?.baseline === null && currentSelection
-              ? l('新建部署', 'New deployment')
-              : l('部署详情', 'Deployment details')
-          }
-          width={880}
-          footer={null}
-          closable={!guard.locked}
-          keyboard={!guard.locked}
-          maskClosable={!guard.locked}
-          onCancel={() => {
-            if (!guard.locked) close()
-          }}
-        >
-          {returnSource && !guard.locked && (
-            <Link to={returnSource}>{l('返回来源', 'Return to source')}</Link>
-          )}
-          {selected && (guard.locked || currentSelection) ? (
-            <SecretTabs
-              key={selected.id}
-              uiLocale={locale}
-              activeKey={params.get('tab') ?? 'definition'}
-              onChange={(tab) => {
-                const next = new URLSearchParams(params)
-                next.set('tab', tab)
-                setParams(next, { replace: true })
-              }}
-              authorizedKeys={[
-                ...(canRead || has('policy_write') ? ['definition'] : []),
-                ...(canRead && canInventory && selected.baseline ? ['assignments'] : []),
-                ...(canRead && canOperations && selected.baseline
-                  ? [
-                      'runs',
-                      ...(selected.baseline.definition.action.kind === 'software'
-                        ? ['rollout']
-                        : []),
-                    ]
-                  : []),
-                ...(canRead ? ['events'] : []),
-                ...(canRead && selected.baseline ? ['names'] : []),
-              ]}
-              items={[
-                {
-                  key: 'definition',
-                  label: l('定义与发布', 'Definition and publication'),
-                  children: (
-                    <PolicyEditor
-                      policies={policies}
-                      scopes={scopes}
-                      resources={resources}
-                      {...selected}
-                      initialScope={params.get('scope') ?? ''}
-                      runtime={runtime}
-                      instance={permissions.value?.instanceId ?? ''}
-                      locale={locale}
-                      canWrite={has('policy_write')}
-                      canRerun={has('policy_write')}
-                      done={close}
-                    />
-                  ),
-                },
-                ...(selected.baseline
-                  ? [
-                      {
-                        key: 'names',
-                        label: l('名称与入口', 'Names and entry points'),
-                        children: (
-                          <PolicyNames
-                            key={selected.id}
-                            policies={policies}
-                            policy={selected.baseline}
-                            locale={locale}
-                            runtime={runtime}
-                          />
-                        ),
-                      },
-                      {
-                        key: 'assignments',
-                        label: l('设备分配', 'Device assignments'),
-                        children: (
-                          <PolicyAssignments
-                            policies={policies}
-                            devices={devices}
-                            policy={selected.baseline}
-                            locale={locale}
-                          />
-                        ),
-                      },
-                      {
-                        key: 'runs',
-                        label: l('执行事实', 'Execution facts'),
-                        children: (
-                          <PolicyRuns
-                            policies={policies}
-                            devices={devices}
-                            policy={selected.baseline}
-                            locale={locale}
-                          />
-                        ),
-                      },
-                      ...(selected.baseline.definition.action.kind === 'software'
-                        ? [
-                            {
-                              key: 'rollout',
-                              label: l('灰度进度', 'Rollout progress'),
-                              children: (
-                                <PolicyRollout
-                                  policies={policies}
-                                  policy={selected.baseline}
-                                  locale={locale}
-                                />
-                              ),
-                            },
-                          ]
-                        : []),
-                    ]
-                  : []),
-                {
-                  key: 'events',
-                  label: l('独立事件', 'Independent events'),
-                  children: (
-                    <PolicyEvents
-                      events={policyEvents}
-                      devices={devices}
-                      runtime={runtime}
-                      ownerPolicy={selected.id}
-                      event={selected.baseline?.definition.customEvent ?? null}
-                      locale={locale}
-                      canSubmit={canRead}
-                    />
-                  ),
-                },
-              ]}
-            />
-          ) : (
-            policyTarget && (
-              <ReadState
-                locale={locale}
-                busy={detail.busy}
-                error={detail.error}
-                onRetry={detail.reload}
-              />
-            )
-          )}
-        </Modal>
-      </div>
-    </SelectionGuard.Provider>
-  )
+  return <SelectionGuard.Provider value={guard.register}>
+    <div className="policies-page">
+      <Heading title={l('策略与部署', 'Policies and deployments')} hint={l('配置与范围作为一个草稿保存，再分别观察分配、事件与执行事实。', 'Save configuration and scope as one draft, then observe assignments, events and execution separately.')} actions={!dialogOpen && has('policy_write') ? <Button type="primary" disabled={guard.locked} onClick={() => { const id = crypto.randomUUID(); setSelected({ id, baseline: null }); open(id) }}>{l('新建部署', 'New deployment')}</Button> : undefined} />
+      <ReadState locale={locale} busy={permissions.busy} error={permissions.error} onRetry={permissions.reload} />
+      {permissions.value && !canRead && <Alert type="info" title={l('当前账户没有策略读取权限。', 'Your account cannot read policies.')} />}
+      {fixedSoftware && <p>{l('固定软件资源版本', 'Fixed software resource version')} · <code>{softwareResource} @ {softwareVersion}</code></p>}
+      {fixedSoftware && !softwareFilter && <Alert type="error" title={l('软件版本定位无效', 'Invalid software version locator')} />}
+      {draftResource && <ReadState locale={locale} busy={draft.busy} error={draft.error} onRetry={draft.reload} />}
+      {returnSource && !dialogOpen && <Link to={returnSource}>{l('返回来源', 'Return to source')}</Link>}
+      {selected && (guard.locked || currentSelection) ? <PolicyEditor key={selected.id} policies={policies} scopes={scopes} resources={resources} {...selected} runtime={runtime} instance={permissions.value?.instanceId ?? ''} locale={locale} canWrite={has('policy_write')} canRerun={has('policy_write')} canInventory={canInventory} canOperations={canOperations} done={close} /> : policyTarget ? <ReadState locale={locale} busy={detail.busy} error={detail.error} onRetry={detail.reload} /> : canRead && <fieldset className="permission-panel" disabled={guard.locked}>
+        <DirectoryControls catalog="policies" locale={locale} query={query} onChange={setQuery} fields={fields} sort={[]} />
+        <Button onClick={read.reload}>{l('刷新', 'Refresh')}</Button>
+        <ReadState locale={locale} busy={read.busy} error={read.error} empty={read.value?.items.length === 0} onRetry={read.reload} />
+        {read.value && <>
+          <div className="policy-list">{read.value.items.map(row => <article className="policy-card" key={row.id}>
+            <div className="policy-card-main"><Button type="link" className="policy-title" onClick={() => open(row.id)}>{row.alias ?? row.toolName ?? row.id}</Button>
+              <div className="policy-meta"><span>{row.action ? policyActionLabel(row.action, locale) : '—'}</span>{row.scope && <Button type="link" onClick={() => { const next = new URLSearchParams(params); next.set('policy', row.id); next.set('tab', 'scope'); setParams(next) }}>{l('查看范围', 'View scope')}</Button>}{row.customEvent && <span>{l('事件', 'Event')} · {row.customEvent}</span>}</div>
+              <details><summary>{l('策略标识', 'Policy identifier')}</summary>{row.id}</details>
+            </div>
+            <span>r{row.revision ?? '—'} / v{row.version ?? '—'}</span><Tag>{row.state ?? '—'}</Tag><Button aria-label={l('查看策略', 'View policy') + ' ' + (row.alias ?? row.id)} onClick={() => open(row.id)}>→</Button>
+          </article>)}</div>
+          <CursorControls locale={locale} query={query} onChange={setQuery} next={read.value.nextCursor} count={read.value.items.length} />
+        </>}
+      </fieldset>}
+      {!selected && !linkedPolicy && params.get('tab') === 'events' && params.get('eventDevice') && <PolicyEvents events={policyEvents} devices={devices} runtime={runtime} event={null} locale={locale} canSubmit={canRead} />}
+    </div>
+  </SelectionGuard.Provider>
 }

@@ -259,7 +259,7 @@ export function ActivityFactView({
         )}
         {fact.links.policy && (
           <Link
-            to={`/policies?${new URLSearchParams({ policy: fact.links.policy, tab: 'definition', returnTo: source })}`}
+            to={`/policies?${new URLSearchParams({ policy: fact.links.policy, tab: 'configuration', returnTo: source })}`}
           >
             {l('查看所属策略', 'View owning policy')}
           </Link>

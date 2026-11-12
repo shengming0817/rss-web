@@ -9,7 +9,6 @@ import { DeviceAccess } from './DeviceAccess'
 import { ReadEpoch } from './AdminUi'
 import { DirectoryCatalogContext } from './DirectorySearch'
 import { Policies } from './Policies'
-import { Scopes } from './Scopes'
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -308,7 +307,6 @@ const featureRoutes: readonly FeatureRoute[] = [
     render: (ui) => <Telemetry {...ui} />,
   },
   { path: '/policies', label: 'policies', realm: 'tenant', render: (ui) => <Policies {...ui} /> },
-  { path: '/scopes', label: 'scopes', realm: 'tenant', render: (ui) => <Scopes {...ui} /> },
   { path: '/groups', label: 'groups', realm: 'tenant', render: (ui) => <GroupsPage {...ui} /> },
   {
     path: '/compliance',

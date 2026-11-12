@@ -1,582 +1,119 @@
 import { useState } from 'react'
-import { Alert, Button, Checkbox, Form, Input, InputNumber, Space, Steps } from 'antd'
+import { Alert, Button, Checkbox, Form, Input, InputNumber, Space } from 'antd'
+import { useSearchParams } from 'react-router-dom'
 import { freeze, operation, type Operation } from '@rss/mdm-inventory'
-import {
-  validateDefinition,
-  type Policy,
-  type PolicyChange,
-  type PolicyDefinition,
-} from '@rss/mdm-policies'
+import { validateDefinition, type Policy, type PolicyChange, type PolicyDefinition } from '@rss/mdm-policies'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import type { ResourcesUseCases } from './ResourceCommand'
 import type { ScopesUseCases } from './ScopeResults'
 import { codeOf, Failure, isUnknown, labels, useAction, validateInput } from './AdminUi'
 import { usePendingSelection } from './SelectionGuard'
+import { useAdministration } from './useAdministration'
 import { BooleanField } from './AuthorFields'
-import { ScopePicker } from './ScopePicker'
-import { newPolicyAction, policyActionLabel, PolicyActionEditor } from './PolicyActionEditor'
+import { newPolicyAction, PolicyActionEditor } from './PolicyActionEditor'
 import { PolicySelfService } from './PolicySelfService'
 import { PolicyPreview, type PoliciesUseCases } from './PolicyPreview'
+import { emptyScope, PolicyScope } from './PolicyScope'
+import { PolicyRolloutEditor } from './PolicyRolloutEditor'
+import { SecretTabs } from './SecretTabs'
+import { PolicyAssignments, PolicyRollout, PolicyRuns } from './PolicyProgress'
+import { PolicyEvents } from './PolicyEvents'
+import { PolicyNames } from './PolicyNames'
 
-type Intent =
-  | { readonly kind: 'change'; readonly change: Operation<PolicyChange> }
-  | { readonly kind: 'archive'; readonly operationId: string; readonly expectedRevision: number }
-  | { readonly kind: 'rerun'; readonly change: Operation<{ readonly deadline: number }> }
-export function PolicyEditor({
-  policies,
-  scopes,
-  resources,
-  baseline,
-  id,
-  initialScope,
-  initialAction,
-  runtime,
-  instance,
-  locale,
-  canWrite,
-  canRerun,
-  done,
-}: {
-  policies: PoliciesUseCases
-  scopes: ScopesUseCases
-  resources: ResourcesUseCases
-  baseline: Policy | null
-  id: string
-  initialScope: string
-  initialAction?: PolicyDefinition['action'] | undefined
-  runtime: Runtime
-  instance: string
-  locale: Locale
-  canWrite: boolean
-  canRerun: boolean
-  done: () => void
+type Intent = { readonly kind: 'change'; readonly change: Operation<PolicyChange> } | { readonly kind: 'archive'; readonly operationId: string; readonly expectedRevision: number } | { readonly kind: 'rerun'; readonly change: Operation<{ readonly deadline: number }> }
+export function PolicyEditor({ policies, scopes, resources, baseline, id, initialAction, runtime, instance, locale, canWrite, canRerun, canInventory = false, canOperations = false, done }: {
+  policies: PoliciesUseCases; scopes: ScopesUseCases; resources: ResourcesUseCases; baseline: Policy | null; id: string;
+  initialAction?: PolicyDefinition['action'] | undefined; runtime: Runtime; instance: string; locale: Locale; canWrite: boolean; canRerun: boolean; canInventory?: boolean; canOperations?: boolean; done(): void
 }) {
-  const l = labels(locale),
-    action = useAction(),
-    [definition, setDefinition] = useState<PolicyDefinition>(() =>
-      structuredClone(
-        baseline?.definition ?? {
-          scope: initialScope,
-          action: initialAction ?? newPolicyAction('execution', initialScope),
-          alias: null,
-          customEvent: null,
-        },
-      ),
-    ),
-    [step, setStep] = useState(0),
-    [observed, setObserved] = useState<Policy | null>(null),
-    [enabled, setEnabled] = useState(baseline?.state === 'enabled'),
-    [pending, setPending] = useState<Intent | null>(null),
-    [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
-    [approve, setApprove] = useState(false),
-    [archiveApproved, setArchiveApproved] = useState(false),
-    [rerunApproved, setRerunApproved] = useState(false),
-    [enableApproved, setEnableApproved] = useState(false),
+  const l = labels(locale), action = useAction(), { devices, groups, operationDiagnostics, policyEvents } = useAdministration(runtime),
+    [params, setParams] = useSearchParams(), [base, setBase] = useState(baseline),
+    [initial] = useState<PolicyDefinition>(() => structuredClone(baseline?.definition ?? { scope: emptyScope(), action: initialAction ?? newPolicyAction('execution'), alias: null, customEvent: null })),
+    [definition, setDefinition] = useState(initial), [enabled, setEnabled] = useState(baseline?.state === 'enabled'),
+    [observed, setObserved] = useState<Policy | null>(null), [pending, setPending] = useState<Intent | null>(null),
+    [unknown, setUnknown] = useState(false), [confirmed, setConfirmed] = useState(false), [approved, setApproved] = useState(false),
+    [retryApproved, setRetryApproved] = useState(false), [discardApproved, setDiscardApproved] = useState(false),
+    [archiveApproved, setArchiveApproved] = useState(false), [rerunApproved, setRerunApproved] = useState(false), [enableApproved, setEnableApproved] = useState(false),
     [deadline, setDeadline] = useState(() => Math.floor(Date.now() / 1000) + 86400),
-    mutable = baseline?.state !== 'archived',
-    blocked = action.busy || pending !== null,
-    dirty = baseline !== null && JSON.stringify(definition) !== JSON.stringify(baseline.definition)
-  usePendingSelection(action.busy || outcome === 'unknown')
+    dirty = JSON.stringify(definition) !== JSON.stringify(base?.definition ?? initial) || enabled !== (base?.state === 'enabled'),
+    blocked = action.busy || pending !== null, mutable = base?.state !== 'archived',
+    conflict = !unknown && ['conflict', 'revision_conflict', 'operation_conflict', 'configuration_changed'].includes(codeOf(action.error)),
+    sameScopes = base !== null && JSON.stringify([definition.scope, definition.action.kind === 'software' ? definition.action.rollout.stages.map(s => [s.id, s.scope]) : []]) === JSON.stringify([base.definition.scope, base.definition.action.kind === 'software' ? base.definition.action.rollout.stages.map(s => [s.id, s.scope]) : []]),
+    scopeProps = { owner: { policyId: id }, policyRevision: base?.revision ?? 0, scopes, groups, devices, runtime, locale, canRecompute: canWrite, disabled: !canWrite || !mutable || blocked }
+  usePendingSelection(dirty || blocked || unknown)
+  function edit(next: PolicyDefinition) { setDefinition(next); setApproved(false); setEnableApproved(false); setRerunApproved(false); setDiscardApproved(false) }
   async function send(intent: Intent) {
     const result = await action.run<Policy | Awaited<ReturnType<PoliciesUseCases['rerun']>>>(() => {
       validateInput(() => {
-        if (intent.kind === 'archive')
-          operation({
-            operationId: intent.operationId,
-            expectedRevision: intent.expectedRevision,
-            input: {},
-          })
-        else {
-          operation<unknown>(intent.change)
-          if (intent.kind === 'change' && intent.change.input.action === 'put')
-            validateDefinition(intent.change.input.definition)
-          if (intent.kind === 'rerun' && !Number.isSafeInteger(intent.change.input.deadline))
-            throw new Error('Invalid deadline')
-        }
+        if (intent.kind === 'archive') operation({ operationId: intent.operationId, expectedRevision: intent.expectedRevision, input: {} })
+        else { operation<unknown>(intent.change); if (intent.kind === 'change' && intent.change.input.action === 'put') validateDefinition(intent.change.input.definition) }
       })
-      return intent.kind === 'change'
-        ? policies.change(id, intent.change)
-        : intent.kind === 'archive'
-          ? policies.archive(id, intent.operationId, intent.expectedRevision)
-          : policies.rerun(id, intent.change)
+      return intent.kind === 'change' ? policies.change(id, intent.change) : intent.kind === 'archive' ? policies.archive(id, intent.operationId, intent.expectedRevision) : policies.rerun(id, intent.change)
     })
-    const next = result.ok
-      ? 'confirmed'
-      : outcome === 'unknown' || isUnknown(result.error)
-        ? 'unknown'
-        : 'rejected'
-    setOutcome(next)
-    if (next === 'rejected') setPending(null)
+    if (result.ok) {
+      setConfirmed(true); setUnknown(false); setPending(null)
+      if (intent.kind !== 'rerun') { const value = result.value as Policy; setBase(value); setDefinition(structuredClone(value.definition)); setEnabled(value.state === 'enabled') }
+    } else if (unknown || isUnknown(result.error)) setUnknown(true)
+    else setPending(null)
   }
-  function updateDefinition(value: PolicyDefinition) {
-    setDefinition(value)
-    setApprove(false)
-    setEnableApproved(false)
-    setRerunApproved(false)
-  }
-
-  function start(intent: Intent) {
-    const fixed = freeze(intent)
-    setPending(fixed)
-    setApprove(false)
-    setArchiveApproved(false)
-    setRerunApproved(false)
-    setEnableApproved(false)
-    void send(fixed)
-  }
-  function change(input: PolicyChange) {
-    start({
-      kind: 'change',
-      change: {
-        operationId: crypto.randomUUID(),
-        expectedRevision: baseline?.revision ?? 0,
-        input,
-      },
-    })
-  }
-  return (
-    <section
-      className="policy-editor"
-      aria-label={baseline ? l('策略详情', 'Policy detail') : l('新建策略', 'New policy')}
-    >
-      {!baseline && (
-        <Steps
-          responsive={false}
-          current={step}
-          size="small"
-          items={[
-            { title: l('配置动作', 'Configure action') },
-            { title: l('选择范围', 'Choose scope') },
-            { title: l('审核部署', 'Review deployment') },
-          ]}
-        />
-      )}
-      <details className="policy-coordinate">
-        <summary>{l('策略标识', 'Policy identifier')}</summary>
-        <code>{id}</code>
-      </details>
-      {baseline && (
-        <dl className="device-facts">
-          <div>
-            <dt>{l('配置修订', 'Configuration revision')}</dt>
-            <dd>{baseline.revision}</dd>
-          </div>
-          <div>
-            <dt>{l('执行版本', 'Execution version')}</dt>
-            <dd>
-              {baseline.version} · {baseline.versionId}
-            </dd>
-          </div>
-          <div>
-            <dt>{l('生命周期', 'Lifecycle')}</dt>
-            <dd>{baseline.state}</dd>
-          </div>
-        </dl>
-      )}
-      <Failure locale={locale} error={action.error} />
-      {outcome === 'rejected' &&
-        ['conflict', 'revision_conflict', 'operation_conflict'].includes(codeOf(action.error)) && (
-          <Alert
-            type="warning"
-            title={l(
-              '保存冲突。请重新读取策略修订；若别名被其他策略占用，请换用可用别名。',
-              'Save conflict. Read the current policy revision; choose another alias if a different policy owns it.',
-            )}
-          />
-        )}
-      {pending && (
-        <p>
-          {l('原操作', 'Original operation')} ·{' '}
-          <code>
-            {pending.kind === 'archive' ? pending.operationId : pending.change.operationId}
-          </code>
-        </p>
-      )}
-      {outcome === 'unknown' && (
-        <Alert
-          type="warning"
-          title={l(
-            '未收到保存结果。请刷新页面查看服务器当前配置，再决定是否继续编辑。',
-            'Save result was not received. Refresh the page to review the current server configuration before editing again.',
-          )}
-        />
-      )}
-      {outcome === 'unknown' && pending && (
-        <>
-          <p className="subtitle">
-            {l(
-              '只读取原策略的当前状态，不能据此确认原操作；新写入保持锁定。',
-              'Read only the original policy’s current state. It cannot confirm the original operation; new writes remain locked.',
-            )}
-          </p>
-          <Button
-            disabled={action.busy}
-            onClick={() =>
-              void action
-                .run(() => policies.read(id))
-                .then((result) => {
-                  if (result.ok) setObserved(result.value)
-                })
-            }
-          >
-            {l('读取原策略当前状态', 'Read original policy current state')}
-          </Button>
-          {observed && (
-            <p>
-              {l('当前配置修订', 'Current configuration revision')} {observed.revision} ·{' '}
-              {l('生命周期', 'Lifecycle')} {observed.state}
-            </p>
-          )}
-        </>
-      )}
-      {outcome === 'confirmed' && (
-        <Alert
-          type="success"
-          title={l(
-            '原操作已确认。请重新读取策略；这不证明设备已执行或效果已核实。',
-            'Original operation confirmed. Re-read the policy; this does not establish device execution or verified effect.',
-          )}
-        />
-      )}
-      <Form layout="vertical" disabled={!canWrite || !mutable || blocked}>
-        <fieldset className="permission-panel" hidden={!baseline && step !== 1}>
-          <ScopePicker
-            scopes={scopes}
-            value={definition.scope}
-            locale={locale}
-            onChange={(scope) => {
-              const action = definition.action,
-                stage =
-                  action.kind === 'software' && action.rollout.stages.length === 1
-                    ? action.rollout.stages[0]
-                    : undefined,
-                followsScope =
-                  stage?.scope === definition.scope &&
-                  stage.opensAt === 0 &&
-                  stage.minimumVerifiedPercent === null
-              updateDefinition({
-                ...definition,
-                scope,
-                action:
-                  action.kind === 'software' && followsScope
-                    ? { ...action, rollout: { stages: [{ ...stage, scope }] } }
-                    : action,
-              })
-            }}
-          />
-          <div className="admin-form-grid">
-            {(['alias', 'customEvent'] as const).map((key) => (
-              <Form.Item
-                key={key}
-                extra={
-                  key === 'alias'
-                    ? l(
-                        '租户内唯一，清空后保存可撤回；不会修改显示名。',
-                        'Unique in this tenant. Clear and save to withdraw it; the display name stays separate.',
-                      )
-                    : l(
-                        '可与多条策略共享；清空后保存仅移除此策略的关联。',
-                        'May be shared by several policies. Clear and save to remove only this policy’s association.',
-                      )
-                }
-                label={
-                  key === 'alias'
-                    ? l('唯一别名', 'Unique alias')
-                    : l('共享事件名', 'Shared event name')
-                }
-              >
-                <Input
-                  aria-label={
-                    key === 'alias'
-                      ? l('唯一别名', 'Unique alias')
-                      : l('共享事件名', 'Shared event name')
-                  }
-                  value={definition[key] ?? ''}
-                  maxLength={64}
-                  onChange={(e) =>
-                    updateDefinition({
-                      ...definition,
-                      [key]: e.target.value.trim().toLowerCase() || null,
-                    })
-                  }
-                />
-              </Form.Item>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset className="permission-panel" hidden={!baseline && step !== 0}>
-          <PolicyActionEditor
-            value={definition.action}
-            scope={definition.scope}
-            resources={resources}
-            scopes={scopes}
-            locale={locale}
-            onChange={(action) =>
-              updateDefinition({
-                ...definition,
-                action,
-                ...(action.kind === 'execution' ||
-                (action.kind === 'software' && action.intent === 'available_install')
-                  ? {}
-                  : { selfService: null }),
-              })
-            }
-          />
-          {(definition.action.kind === 'execution' ||
-            (definition.action.kind === 'software' &&
-              definition.action.intent === 'available_install')) && (
-            <PolicySelfService
-              runtime={runtime}
-              instance={instance}
-              locale={locale}
-              software={definition.action.kind === 'software'}
-              value={definition.selfService ?? null}
-              onChange={(selfService) => updateDefinition({ ...definition, selfService })}
-            />
-          )}
-        </fieldset>
-        <fieldset className="permission-panel" hidden={!baseline && step !== 2}>
-          {!baseline && (
-            <dl className="device-facts">
-              <div>
-                <dt>{l('动作', 'Action')}</dt>
-                <dd>{policyActionLabel(definition.action.kind, locale)}</dd>
-              </div>
-              <div>
-                <dt>{l('范围', 'Scope')}</dt>
-                <dd>
-                  <code>{definition.scope}</code>
-                </dd>
-              </div>
-              {'resource' in definition.action && (
-                <div>
-                  <dt>{l('固定资源', 'Fixed resource')}</dt>
-                  <dd>
-                    <code>
-                      {definition.action.resource.id} @ {definition.action.resource.version}
-                    </code>{' '}
-                    ·{' '}
-                    {'variant' in definition.action.resource
-                      ? `${definition.action.resource.platform}/${definition.action.resource.architecture}/${definition.action.resource.variant}`
-                      : Object.entries(definition.action.resource.variants)
-                          .map(([target, variant]) => `${target}/${variant}`)
-                          .join(' · ')}
-                  </dd>
-                </div>
-              )}
-              {'schedule' in definition.action && (
-                <div>
-                  <dt>{l('触发与有效期', 'Trigger and lifetime')}</dt>
-                  <dd>
-                    {
-                      {
-                        manual: l('手动', 'Manual'),
-                        registration: l('设备注册', 'Registration'),
-                        check_in: l('设备签入', 'Device check-in'),
-                        once: l('指定时间', 'Once'),
-                        interval: l('固定间隔', 'Fixed interval'),
-                        weekly: l('每周', 'Weekly'),
-                      }[definition.action.schedule.trigger.kind]
-                    }
-                    {'at' in definition.action.schedule.trigger &&
-                      ` · ${new Date(definition.action.schedule.trigger.at * 1000).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US', { timeZone: 'UTC', timeZoneName: 'short' })}`}
-                    {'seconds' in definition.action.schedule.trigger &&
-                      ` · ${definition.action.schedule.trigger.seconds}s`}
-                    {'minimumSeconds' in definition.action.schedule.trigger &&
-                      ` · ≥${definition.action.schedule.trigger.minimumSeconds}s`}
-                    {'weekday' in definition.action.schedule.trigger &&
-                      ` · ${definition.action.schedule.trigger.zone} / ${definition.action.schedule.trigger.weekday} / ${definition.action.schedule.trigger.minute}min`}
-                    {` · ${definition.action.runLifetimeSeconds}s`}
-                  </dd>
-                </div>
-              )}
-              {definition.action.kind === 'software' && (
-                <div>
-                  <dt>
-                    {l('灰度阶段 / 开放时间 / 效果门槛', 'Rollout stages / opening / effect gate')}
-                  </dt>
-                  <dd>
-                    {definition.action.rollout.stages.map((stage, index) => (
-                      <p key={index}>
-                        {index + 1} · {stage.scope} ·{' '}
-                        {stage.opensAt === 0
-                          ? l('立即', 'Immediately')
-                          : new Date(stage.opensAt * 1000).toLocaleString(
-                              locale === 'zh' ? 'zh-CN' : 'en-US',
-                              { timeZone: 'UTC', timeZoneName: 'short' },
-                            )}{' '}
-                        ·{' '}
-                        {stage.minimumVerifiedPercent === null
-                          ? l('无门槛', 'No gate')
-                          : `${stage.minimumVerifiedPercent}%`}
-                      </p>
-                    ))}
-                  </dd>
-                </div>
-              )}
-              <div>
-                <dt>{l('别名 / 共享事件', 'Alias / shared event')}</dt>
-                <dd>
-                  {definition.alias ?? '—'} / {definition.customEvent ?? '—'}
-                </dd>
-              </div>
-            </dl>
-          )}
-          <BooleanField
-            label={l('保存后启用策略', 'Enable after saving')}
-            value={enabled}
-            onChange={(enabled) => {
-              setEnabled(enabled)
-              setApprove(false)
-            }}
-          />
-          <Checkbox checked={approve} onChange={(e) => setApprove(e.target.checked)}>
-            {l(
-              '确认范围、资源、调度与潜在影响',
-              'Confirm scope, resources, schedule and potential impact',
-            )}
-          </Checkbox>
-          <Button
-            type="primary"
-            disabled={!approve}
-            onClick={() => change({ action: 'put', definition, enabled })}
-          >
-            {l('保存策略定义', 'Save policy definition')}
-          </Button>
-        </fieldset>
-        {!baseline && (
-          <Space className="policy-step-controls">
-            {step > 0 && <Button onClick={() => setStep(step - 1)}>{l('上一步', 'Back')}</Button>}
-            {step < 2 && (
-              <Button
-                type="primary"
-                disabled={step === 1 && !definition.scope}
-                onClick={() => setStep(step + 1)}
-              >
-                {l('下一步', 'Next')}
-              </Button>
-            )}
-          </Space>
-        )}
-      </Form>
-      {!blocked && mutable && (baseline !== null || step === 2) && (
-        <PolicyPreview policies={policies} definition={definition} locale={locale} />
-      )}
-      {baseline && mutable && (
-        <fieldset className="permission-panel" disabled={blocked}>
-          <Space wrap>
-            {canWrite && baseline.state === 'disabled' && (
-              <>
-                <Alert
-                  type="warning"
-                  title={l('启用以下已保存配置', 'Enable the following saved configuration')}
-                  description={
-                    <>
-                      {policyActionLabel(baseline.definition.action.kind, locale)} ·{' '}
-                      {l('范围', 'Scope')} <code>{baseline.definition.scope}</code> ·{' '}
-                      {l('配置修订', 'Configuration revision')} {baseline.revision}
-                    </>
-                  }
-                />
-                {dirty && (
-                  <Alert
-                    type="info"
-                    title={l(
-                      '草稿已变化，请先保存或放弃草稿，再启用已保存策略。',
-                      'The draft has changed. Save or discard it before enabling the saved policy.',
-                    )}
-                  />
-                )}
-                <Checkbox
-                  checked={enableApproved && !dirty}
-                  disabled={dirty}
-                  onChange={(event) => setEnableApproved(event.target.checked)}
-                >
-                  {l(
-                    '确认已保存范围与动作后启用',
-                    'Confirm saved scope and action before enabling',
-                  )}
-                </Checkbox>
-              </>
-            )}
-            {canWrite && (
-              <Button
-                disabled={baseline.state === 'disabled' && (dirty || !enableApproved)}
-                onClick={() =>
-                  change({ action: baseline.state === 'enabled' ? 'disable' : 'enable' })
-                }
-              >
-                {baseline.state === 'enabled'
-                  ? l('停用策略', 'Disable policy')
-                  : l('启用策略', 'Enable policy')}
-              </Button>
-            )}
-            {canWrite && baseline.state === 'disabled' && (
-              <>
-                <Checkbox
-                  checked={archiveApproved}
-                  onChange={(e) => setArchiveApproved(e.target.checked)}
-                >
-                  {l('确认归档并保留历史', 'Confirm archive and retain history')}
-                </Checkbox>
-                <Button
-                  danger
-                  disabled={!archiveApproved}
-                  onClick={() =>
-                    start({
-                      kind: 'archive',
-                      operationId: crypto.randomUUID(),
-                      expectedRevision: baseline.revision,
-                    })
-                  }
-                >
-                  {l('归档策略', 'Archive policy')}
-                </Button>
-              </>
-            )}
-            {canRerun && (
-              <>
-                <InputNumber
-                  aria-label={l(
-                    '重新执行截止时间（UTC Unix 秒）',
-                    'Rerun deadline (UTC Unix seconds)',
-                  )}
-                  value={deadline}
-                  precision={0}
-                  onChange={(n) => {
-                    if (n !== null) setDeadline(n)
-                  }}
-                />
-                <Checkbox
-                  checked={rerunApproved}
-                  onChange={(e) => setRerunApproved(e.target.checked)}
-                >
-                  {l('确认显式重新执行', 'Confirm explicit rerun')}
-                </Checkbox>
-                <Button
-                  disabled={!rerunApproved}
-                  onClick={() =>
-                    start({
-                      kind: 'rerun',
-                      change: {
-                        operationId: crypto.randomUUID(),
-                        expectedRevision: baseline.revision,
-                        input: { deadline },
-                      },
-                    })
-                  }
-                >
-                  {l('重新执行', 'Rerun')}
-                </Button>
-              </>
-            )}
-          </Space>
-        </fieldset>
-      )}
-      <Button disabled={action.busy || outcome === 'unknown'} onClick={done}>
-        {l('返回并重新读取策略', 'Return and re-read policies')}
-      </Button>
-    </section>
-  )
+  function start(intent: Intent) { const fixed = freeze(intent); setPending(fixed); setConfirmed(false); setApproved(false); setEnableApproved(false); setArchiveApproved(false); setRerunApproved(false); void send(fixed) }
+  function change(input: PolicyChange) { start({ kind: 'change', change: { operationId: crypto.randomUUID(), expectedRevision: base?.revision ?? 0, input } }) }
+  const operationId = pending?.kind === 'archive' ? pending.operationId : pending?.change.operationId
+  return <section className="policy-editor" aria-label={base ? l('策略详情', 'Policy detail') : l('新建策略', 'New policy')}>
+    <details><summary>{l('策略标识与版本', 'Policy identifier and versions')}</summary><p>{id} · r{base?.revision ?? 0} · {base?.version ?? '—'} · {base?.versionId ?? '—'} · {base?.state ?? l('未保存', 'Unsaved')}</p></details>
+    <Failure locale={locale} error={action.error} />
+    {conflict && <Alert type="warning" title={l('保存冲突，草稿已保留。读取最新配置并核对差异后继续。', 'Save conflict; the draft is retained. Read the latest configuration and review differences before continuing.')} />}
+    {(conflict || unknown) && <Button disabled={action.busy} onClick={() => void action.run(() => policies.read(id)).then(result => { if (result.ok) setObserved(result.value) })}>{l('读取原策略当前状态', 'Read original policy current state')}</Button>}
+    {observed && <CardComparison current={observed} draft={definition} locale={locale} canAdopt={!unknown && !blocked && canWrite} adopt={() => { setBase(observed); setObserved(null); action.clear(); setApproved(false) }} />}
+    {unknown && pending && <>
+      <Alert type="warning" title={l('原操作结果未知，新写入保持锁定。当前状态不能确认原操作。', 'The original outcome is unknown; new writes remain locked. Current state cannot confirm the original operation.')} description={operationId} />
+      <Button disabled={action.busy} onClick={() => void action.run(async () => {
+        const detail = await operationDiagnostics.mdm!.operation({ owner: 'policy', operationId: operationId! }), receipt = detail.originalResult
+        if (receipt.availability !== 'available' || receipt.value.operationId !== operationId || receipt.value.object !== id) throw { cause: 'client', code: 'receipt_unavailable' }
+        return policies.read(id)
+      }).then(result => { if (result.ok) { setUnknown(false); setPending(null); setConfirmed(true); setBase(result.value) } })}>{l('读取原操作回执', 'Read original operation receipt')}</Button>
+      <Checkbox checked={retryApproved} onChange={e => setRetryApproved(e.target.checked)}>{l('确认使用原标识和原输入重发', 'Confirm resending the original identity and input')}</Checkbox>
+      <Button disabled={!canWrite || action.busy || !retryApproved} onClick={() => { setRetryApproved(false); void send(pending) }}>{l('重提原操作', 'Resubmit original operation')}</Button>
+    </>}
+    {confirmed && <Alert type="success" title={l('原操作已确认；设备执行与效果需分别核实。', 'Original operation confirmed; verify device execution and effect separately.')} />}
+    <SecretTabs uiLocale={locale} activeKey={params.get('tab') ?? 'configuration'} onChange={tab => { const next = new URLSearchParams(params); next.set('tab', tab); setParams(next) }} items={[
+      { key: 'configuration', label: l('配置', 'Configuration'), children: <>
+        <Form layout="vertical" disabled={!canWrite || !mutable || blocked}>
+          <div className="admin-form-grid">{(['alias', 'customEvent'] as const).map(key => <Form.Item key={key} label={key === 'alias' ? l('唯一别名', 'Unique alias') : l('共享事件名', 'Shared event name')}><Input aria-label={key === 'alias' ? l('唯一别名', 'Unique alias') : l('共享事件名', 'Shared event name')} maxLength={64} value={definition[key] ?? ''} onChange={e => edit({ ...definition, [key]: e.target.value.trim().toLowerCase() || null })} /></Form.Item>)}</div>
+          <PolicyActionEditor value={definition.action} resources={resources} locale={locale} onChange={action => edit({ ...definition, action, ...(action.kind === 'execution' || (action.kind === 'software' && action.intent === 'available_install') ? {} : { selfService: null }) })} />
+          {(definition.action.kind === 'execution' || (definition.action.kind === 'software' && definition.action.intent === 'available_install')) && <PolicySelfService runtime={runtime} instance={instance} locale={locale} software={definition.action.kind === 'software'} value={definition.selfService ?? null} onChange={selfService => edit({ ...definition, selfService })} />}
+        </Form>
+        {base && <PolicyNames policies={policies} policy={base} locale={locale} runtime={runtime} />}
+      </> },
+      { key: 'scope', label: l('范围', 'Scope'), children: <>
+        <PolicyScope {...scopeProps} value={definition.scope} onChange={scope => edit({ ...definition, scope })} saved={base?.scopes.find(scope => scope.stage === null && !scope.retired) ?? null} />
+        {definition.action.kind === 'software' && <PolicyRolloutEditor {...scopeProps} value={definition.action.rollout.stages} savedScopes={base?.scopes ?? []} onChange={stages => { if (definition.action.kind === 'software') edit({ ...definition, action: { ...definition.action, rollout: { stages } } }) }} />}
+      </> },
+      { key: 'records', label: l('记录', 'Records'), children: base ? <SecretTabs uiLocale={locale} items={[
+        ...(canInventory ? [{ key: 'assignments', label: l('设备分配', 'Device assignments'), children: <PolicyAssignments policies={policies} devices={devices} policy={base} locale={locale} /> }] : []),
+        ...(canOperations ? [{ key: 'runs', label: l('执行事实', 'Execution facts'), children: <PolicyRuns policies={policies} devices={devices} policy={base} locale={locale} /> }, ...(base.definition.action.kind === 'software' ? [{ key: 'rollout', label: l('灰度进度', 'Rollout progress'), children: <PolicyRollout policies={policies} policy={base} locale={locale} /> }] : [])] : []),
+        { key: 'events', label: l('独立事件', 'Independent events'), children: <PolicyEvents events={policyEvents} devices={devices} runtime={runtime} ownerPolicy={id} event={base.definition.customEvent} locale={locale} canSubmit={canRerun} /> },
+      ]} /> : <Alert type="info" title={l('保存策略后查看记录。', 'Save the policy to view records.')} /> },
+    ]} />
+    {sameScopes && base ? <PolicyPreview key={JSON.stringify([base.revision, definition])} policies={policies} id={id} expectedRevision={base.revision} definition={definition} locale={locale} /> : <Alert type="info" title={l('资格预览要求先保存当前范围；范围样例可在范围页签直接预览。', 'Save the current scopes before qualification preview. Scope samples are available in the Scope tab.')} />}
+    <fieldset className="asset-editor-section" disabled={!canWrite || !mutable || blocked}>
+      <BooleanField label={l('保存后启用策略', 'Enable after saving')} value={enabled} onChange={value => { setEnabled(value); setApproved(false) }} />
+      <Checkbox checked={approved} onChange={e => setApproved(e.target.checked)}>{l('确认范围、资源、调度与潜在影响', 'Confirm scope, resources, schedule and potential impact')}</Checkbox>
+      <Button type="primary" disabled={!approved || conflict} onClick={() => change({ action: 'put', definition, enabled })}>{l('保存策略定义', 'Save policy definition')}</Button>
+    </fieldset>
+    {base && mutable && <fieldset className="asset-editor-section" disabled={!canWrite || blocked || dirty || conflict}>
+      <Space wrap>
+        {base.state === 'disabled' && <Checkbox checked={enableApproved} onChange={e => setEnableApproved(e.target.checked)}>{l('确认已保存范围与动作后启用', 'Confirm saved scope and action before enabling')}</Checkbox>}
+        <Button disabled={base.state === 'disabled' && !enableApproved} onClick={() => change({ action: base.state === 'enabled' ? 'disable' : 'enable' })}>{base.state === 'enabled' ? l('停用策略', 'Disable policy') : l('启用策略', 'Enable policy')}</Button>
+        {base.state === 'disabled' && <><Checkbox checked={archiveApproved} onChange={e => setArchiveApproved(e.target.checked)}>{l('确认归档并保留历史', 'Confirm archive and retain history')}</Checkbox><Button danger disabled={!archiveApproved} onClick={() => start({ kind: 'archive', operationId: crypto.randomUUID(), expectedRevision: base.revision })}>{l('归档策略', 'Archive policy')}</Button></>}
+        {canRerun && <><InputNumber aria-label={l('重新执行截止时间（UTC Unix 秒）', 'Rerun deadline (UTC Unix seconds)')} value={deadline} precision={0} onChange={n => { if (n !== null) setDeadline(n) }} /><Checkbox checked={rerunApproved} onChange={e => setRerunApproved(e.target.checked)}>{l('确认显式重新执行', 'Confirm explicit rerun')}</Checkbox><Button disabled={!rerunApproved} onClick={() => start({ kind: 'rerun', change: { operationId: crypto.randomUUID(), expectedRevision: base.revision, input: { deadline } } })}>{l('重新执行', 'Rerun')}</Button></>}
+      </Space>
+    </fieldset>}
+    {dirty && <Checkbox checked={discardApproved} onChange={e => setDiscardApproved(e.target.checked)}>{l('确认放弃未保存草稿', 'Confirm discarding the unsaved draft')}</Checkbox>}
+    <Button disabled={blocked || unknown || (dirty && !discardApproved)} onClick={done}>{l('返回策略目录', 'Return to policies')}</Button>
+  </section>
+}
+function CardComparison({ current, draft, locale, canAdopt, adopt }: { current: Policy; draft: PolicyDefinition; locale: Locale; canAdopt: boolean; adopt(): void }) {
+  const l = labels(locale)
+  return <section><p>{l('服务端最新配置修订', 'Latest server configuration revision')} · {current.revision}</p><details><summary>{l('核对服务端配置与当前草稿', 'Compare server configuration and current draft')}</summary><pre>{JSON.stringify({ server: current.definition, draft }, null, 2)}</pre></details><Button disabled={!canAdopt} onClick={adopt}>{l('保留草稿，采用此修订继续编辑', 'Keep draft and continue editing against this revision')}</Button></section>
 }

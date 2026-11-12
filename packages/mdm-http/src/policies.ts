@@ -125,6 +125,7 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         transport,
         {
           pathParams: { policy: uuid(id) },
+          signal,
           body: requestInput(change, schema.postApiV1PoliciesByPolicyBody.validateRoot),
         },
         (value) => policy(value, id),
@@ -134,6 +135,7 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         transport,
         {
           pathParams: { policy: uuid(id) },
+          signal,
           body: requestInput(
             { operationId, expectedRevision },
             schema.deleteApiV1PoliciesByPolicyBody.validateRoot,
@@ -146,6 +148,7 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         transport,
         {
           pathParams: { policy: uuid(id) },
+          signal,
           body: requestInput(change, schema.postApiV1PoliciesByPolicyRerunsBody.validateRoot),
         },
         (value) => {
@@ -163,11 +166,12 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         defaultSoftwareChannel: value.defaultSoftwareChannel,
         mdmSoftwareDistributionEnabled: boolean(value.mdmSoftwareDistributionEnabled),
       })),
-    preview: (id, expectedRevision, input, scopeResult, query) =>
+    preview: (id, expectedRevision, input, scopeResult, query, signal) =>
       api.postApiV1PoliciesByPolicyPreviews(
         transport,
         {
           pathParams: { policy: uuid(id) },
+          signal,
           body: requestInput(
             {
               expectedRevision,

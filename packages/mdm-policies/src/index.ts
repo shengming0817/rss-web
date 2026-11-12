@@ -33,12 +33,13 @@ export function createPolicies(port: PoliciesPort) {
       definition: PolicyDefinition,
       scopeResult: string | null = null,
       query: WindowQuery = {},
+      signal?: AbortSignal,
     ) {
       validateDefinition(definition)
       if (scopeResult !== null) uuid(scopeResult)
       uuid(id)
       if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error('Save the scope before qualification')
-      const value = await port.preview(id, expectedRevision, freeze(definition), scopeResult, query)
+      const value = await port.preview(id, expectedRevision, freeze(definition), scopeResult, query, signal)
       if (scopeResult !== null && value.scopeResult !== scopeResult)
         throw new Error('Wrong preview scope result')
       return value
