@@ -96,7 +96,19 @@ try {
     ).json()
   }
   assert.ok(candidates.items.some((item) => item.device === f.agent))
-  await run.choose(p, d.getByLabel('对侧通道候选终端', { exact: true }), `${f.agent} · agent`)
+  const candidateSelect = d.getByLabel('对侧通道候选终端', { exact: true })
+  await candidateSelect.click()
+  // Scroll the virtualized current window before choosing its exact candidate label.
+  for (
+    let index = 0;
+    index < candidates.items.findIndex((item) => item.device === f.agent);
+    index++
+  )
+    await candidateSelect.press('ArrowDown')
+  await p
+    .locator('.ant-select-dropdown:visible .ant-select-item-option-content')
+    .getByText(`${f.agent} · agent`, { exact: true })
+    .click()
   await d
     .getByLabel('核验证据或撤销理由', { exact: true })
     .fill('Disposable fixture association, independently identified endpoints')
