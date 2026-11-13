@@ -11,12 +11,8 @@ function fixture(value: unknown) {
     transport = { request } as unknown as HttpTransport
   return {
     request,
-    adapter: createDevicePkiAdapter(transport, tenant, service, tenant),
-    core: createDevicePki(
-      createDevicePkiAdapter(transport, tenant, service, tenant),
-      tenant,
-      service,
-    ),
+    adapter: createDevicePkiAdapter(transport, tenant, service),
+    core: createDevicePki(createDevicePkiAdapter(transport, tenant, service), tenant, service),
   }
 }
 const trust = () => ({
@@ -125,7 +121,7 @@ it('retains installation observations separately from ACK and rejects unpaired m
     observation: {
       version: 1,
       operation,
-      deviceId: 'device-a',
+      deviceId: '48ade991-ac14-5214-92fe-7084429906bf',
       sequence: 9,
       target_revision: 2,
       target_digest: 'a'.repeat(64),
@@ -137,7 +133,7 @@ it('retains installation observations separately from ACK and rejects unpaired m
     },
     received_at: 101,
   }
-  const result = await fixture(value).core.observation('device-a')
+  const result = await fixture(value).core.observation('48ade991-ac14-5214-92fe-7084429906bf')
   expect(result).toMatchObject({
     target: { revision: 2 },
     actual: { revision: 1 },
@@ -149,9 +145,9 @@ it('retains installation observations separately from ACK and rejects unpaired m
     fixture({
       ...value,
       observation: { ...value.observation, target_digest: null },
-    }).core.observation('device-a'),
+    }).core.observation('48ade991-ac14-5214-92fe-7084429906bf'),
   ).rejects.toBeDefined()
-  expect(await fixture(null).core.observation('device-a')).toBeNull()
+  expect(await fixture(null).core.observation('48ade991-ac14-5214-92fe-7084429906bf')).toBeNull()
 })
 it('uses all three original Agent recovery routes with distinct administrator and original signing operations', async () => {
   const receipt = {
@@ -163,13 +159,18 @@ it('uses all three original Agent recovery routes with distinct administrator an
     },
     f = fixture(receipt)
   await f.core.recoverRegistration(
-    { device: 'device-a', operationId: operation, platform: 'windows', csr: 'YQ==' },
+    {
+      device: '48ade991-ac14-5214-92fe-7084429906bf',
+      operationId: operation,
+      platform: 'windows',
+      csr: 'YQ==',
+    },
     'A'.repeat(43),
   )
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       path: '/api/v1/devices/{id}/registration/recovery',
-      pathParams: { id: 'device-a' },
+      pathParams: { id: '48ade991-ac14-5214-92fe-7084429906bf' },
       body: {
         wireVersion: 1,
         operationId: operation,
@@ -218,4 +219,35 @@ it('uses all three original Agent recovery routes with distinct administrator an
       query: { actor: 'original-admin', instance: 'original-instance' },
     }),
   )
+})
+
+it('reads the exact rotation and rejects a different purpose or id', async () => {
+  const value = {
+    id: operation,
+    purpose: 'agent',
+    state: 'distributing',
+    distributionRevision: 2,
+    trustRevision: 2,
+    previous: { digest: 'a', state: 'active' },
+    candidate: { digest: 'b', state: 'prepared' },
+    activeIssuer: 'a',
+    action: null,
+    blockers: ['missing_ack'],
+    preconditions: [],
+    providerVerification: 'not_evaluated',
+    operations: [
+      {
+        actor: tenant,
+        instance: service,
+        receipt: { operation, revision: 2, state: 'distributing' },
+      },
+    ],
+    evaluatedAt: 1,
+  }
+  const transport = {
+    request: async (input: RequestOptions<unknown>) => input.decode(value),
+  } as unknown as HttpTransport
+  const adapter = createDevicePkiAdapter(transport, tenant, service)
+  expect((await adapter.rotation('agent', operation)).blockers).toEqual(['missing_ack'])
+  await expect(adapter.rotation('windows', operation)).rejects.toThrow('rotation')
 })

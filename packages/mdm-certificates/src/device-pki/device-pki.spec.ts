@@ -31,6 +31,11 @@ const trust = (): Trust => ({
 })
 function fixture(overrides: Partial<DevicePkiPort> = {}) {
   const port: DevicePkiPort = {
+    latestRotation: vi.fn(async () => null),
+    rotation: vi.fn(async () => {
+      throw new Error('Not found')
+    }),
+    rotationBlockers: vi.fn(async () => ({ items: [], nextCursor: null })),
     trust: vi.fn(async () => trust()),
     prepare: vi.fn(async (input) => ({
       operation: input.id,

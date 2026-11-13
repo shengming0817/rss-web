@@ -1,5 +1,5 @@
 import { useId, useEffect, useState } from 'react'
-import { Alert, Button, Card, Form, Input, Select, Space } from 'antd'
+import { Alert, Button, Card, Descriptions, Form, Input, Space } from 'antd'
 import { freeze } from '@rss/mdm-inventory'
 import {
   validatePrepare,
@@ -12,6 +12,7 @@ import {
   type CrlPublication,
   type Prepare,
   type Purpose,
+  type Rotation,
   type SigningRecovery,
   type Transition,
 } from '@rss/mdm-certificates/device-pki'
@@ -79,7 +80,6 @@ function PurposePanel({
     ),
     action = useAction(),
     [issuerForm] = Form.useForm<IssuerInput>(),
-    [transitionForm] = Form.useForm<{ id: string; action: 'activate' | 'retire' }>(),
     [crlForm] = Form.useForm<{
       publications: { issuer: string; crl: string; rootCrl: string }[]
     }>(),
@@ -90,7 +90,6 @@ function PurposePanel({
     [inspected, setInspected] = useState<string | null>(null),
     delivery = useProtectedDelivery(() => {
       issuerForm.resetFields()
-      transitionForm.resetFields()
       crlForm.resetFields()
       signingForm.resetFields()
     }, canManage)
@@ -286,11 +285,54 @@ function PurposePanel({
             {receipt && ` · ${receipt}`}
           </p>
           <p className="subtitle">
-            {l(
-              '此接口没有原回执查询。结果未确认时，显式重提完全相同的 UUID、版本和公共材料；重新读取当前材料不能确认原操作。',
-              'There is no original-receipt query for this endpoint. If the outcome is unknown, explicitly resubmit the same UUID, revision and public material. A current material read cannot acknowledge the original operation.',
-            )}
+            {pending.kind === 'prepare' || pending.kind === 'transition'
+              ? l(
+                  '可读取原轮换及其精确主体回执；当前信任或最新轮换不能替代原回执。',
+                  'Read the original rotation and its exact actor receipt; current trust or the latest rotation is not the original receipt.',
+                )
+              : l(
+                  '此项操作没有原回执读取；未知结果仅可显式重提同一请求。',
+                  'This operation has no original receipt read; an unknown outcome requires explicit resubmission of the same request.',
+                )}
           </p>
+          {(pending.kind === 'prepare' || pending.kind === 'transition') && (
+            <Button
+              disabled={action.busy || !canManage}
+              onClick={() => {
+                const fixed = pending
+                void action.run(async () => {
+                  const value = await devicePki.rotation(purpose, fixed.input.id),
+                    state = runtime.owner.getSnapshot()
+                  const expectedState =
+                    fixed.kind === 'prepare'
+                      ? 'distributing'
+                      : fixed.input.action === 'activate'
+                        ? 'activated'
+                        : 'retired'
+                  const original = value.operations.find(
+                    (op) =>
+                      op.actor === state.identity?.principalId &&
+                      op.instance === runtime.host.serviceId &&
+                      op.receipt.revision === fixed.input.expectedRevision + 1 &&
+                      op.receipt.state === expectedState,
+                  )
+                  if (!original)
+                    throw new Error(
+                      l(
+                        '未找到匹配的原回执，不能判定写入失败。',
+                        'No matching receipt; this does not prove failure.',
+                      ),
+                    )
+                  setReceipt(
+                    `${original.actor} / ${original.instance} · ${original.receipt.revision} · ${original.receipt.state}`,
+                  )
+                  setOutcome('confirmed')
+                })
+              }}
+            >
+              {l('查询原轮换回执', 'Read original rotation receipt')}
+            </Button>
+          )}
           <Space wrap>
             <Button disabled={action.busy || !canManage} onClick={() => void submit(pending)}>
               {l('显式重提原请求', 'Explicitly resubmit original request')}
@@ -395,54 +437,24 @@ function PurposePanel({
               </Button>
             </Form>
           </Card>
-          <Card title={l('激活与退休', 'Activate and retire')}>
-            <p>
-              {l('当前写入基线', 'Current write revision')} · {read.value.revision}
-            </p>
-            <p className="subtitle">
-              {l(
-                '激活要求设备确认及轮换资格；退休要求旧证书已撤销。服务端未确认前不会切换。',
-                'Activation requires device acknowledgements and rotation eligibility; retirement requires old certificates to be revoked. The server decides when a transition is allowed.',
-              )}
-            </p>
-            <Form
-              name={formPrefix + '-1'}
-              form={transitionForm}
-              layout="vertical"
-              disabled={locked}
-              initialValues={{ action: 'activate' }}
-              onFinish={(value) =>
+          <RotationHistory
+            runtime={runtime}
+            locale={locale}
+            purpose={purpose}
+            enabled={canManage}
+            onContinue={(value) => {
+              if (value.action)
                 start({
                   kind: 'transition',
                   input: {
                     id: value.id,
                     purpose,
-                    expectedRevision: read.value!.revision,
+                    expectedRevision: value.trustRevision,
                     action: value.action,
                   },
                 })
-              }
-            >
-              <Form.Item
-                name="id"
-                label={l('原轮换 UUID', 'Original rotation UUID')}
-                rules={[{ required: true }]}
-              >
-                <Input autoComplete="off" />
-              </Form.Item>
-              <Form.Item name="action" label={l('轮换阶段', 'Rotation phase')}>
-                <Select
-                  options={[
-                    { value: 'activate', label: l('激活新代次', 'Activate new generation') },
-                    { value: 'retire', label: l('退休旧代次', 'Retire old generation') },
-                  ]}
-                />
-              </Form.Item>
-              <Button htmlType="submit" disabled={locked}>
-                {l('提交阶段转换', 'Submit transition')}
-              </Button>
-            </Form>
-          </Card>
+            }}
+          />
           <Card title={l('发布撤销列表', 'Publish revocation lists')}>
             <Form
               name={formPrefix + '-2'}
@@ -547,5 +559,162 @@ function PurposePanel({
         </div>
       )}
     </>
+  )
+}
+
+function RotationHistory({
+  runtime,
+  locale,
+  purpose,
+  enabled,
+  onContinue,
+}: {
+  runtime: Runtime
+  locale: Locale
+  purpose: Purpose
+  enabled: boolean
+  onContinue: (rotation: Rotation) => void
+}) {
+  const l = labels(locale),
+    { devicePki, binding } = useAdministration(runtime),
+    [draft, setDraft] = useState(''),
+    [id, setId] = useState(''),
+    [cursor, setCursor] = useState<string | null>(null)
+  const read = useRead(`${binding}/rotation/${purpose}/${id}/${enabled}`, (signal) =>
+    enabled
+      ? id
+        ? devicePki.rotation(purpose, id, signal)
+        : devicePki.latestRotation(purpose, signal)
+      : Promise.resolve(null),
+  )
+  const blockers = useRead(
+    `${binding}/rotation-blockers/${purpose}/${read.value?.id}/${cursor}`,
+    (signal) =>
+      read.value
+        ? devicePki.rotationBlockers(purpose, read.value.id, cursor, signal)
+        : Promise.resolve(null),
+  )
+  return (
+    <Card title={l('原轮换与阻断', 'Original rotation and blockers')}>
+      <Space wrap>
+        <Input
+          aria-label={l('原轮换 UUID', 'Original rotation UUID')}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <Button
+          disabled={!draft || !enabled}
+          onClick={() => {
+            setCursor(null)
+            setId(draft)
+          }}
+        >
+          {l('读取原轮换', 'Read original rotation')}
+        </Button>
+        <Button
+          disabled={!enabled}
+          onClick={() => {
+            setCursor(null)
+            setId('')
+            read.reload()
+          }}
+        >
+          {l('读取最新轮换', 'Read latest rotation')}
+        </Button>
+      </Space>
+      <ReadState
+        locale={locale}
+        busy={read.busy}
+        error={read.error}
+        empty={read.value === null}
+        onRetry={read.reload}
+      />
+      {read.value && (
+        <>
+          <Descriptions
+            column={1}
+            items={[
+              { key: 'id', label: l('原轮换', 'Original rotation'), children: read.value.id },
+              { key: 'state', label: l('轮换阶段', 'Rotation phase'), children: read.value.state },
+              {
+                key: 'revision',
+                label: l('分发 / 信任修订', 'Distribution / trust revision'),
+                children: `${read.value.distributionRevision} / ${read.value.trustRevision}`,
+              },
+              {
+                key: 'issuer',
+                label: l('旧 / 候选 / 当前签发者', 'Previous / candidate / active issuer'),
+                children: `${read.value.previous.digest} (${read.value.previous.state}) / ${read.value.candidate.digest} (${read.value.candidate.state}) / ${read.value.activeIssuer}`,
+              },
+              {
+                key: 'gate',
+                label: l(
+                  '阻断 / 前置 / 提供方核验',
+                  'Blockers / preconditions / provider verification',
+                ),
+                children: `${read.value.blockers.join(', ') || '—'} / ${read.value.preconditions.join(', ') || '—'} / ${read.value.providerVerification}`,
+              },
+              {
+                key: 'at',
+                label: l('评估时间', 'Evaluated at'),
+                children: String(read.value.evaluatedAt),
+              },
+            ]}
+          />
+          <DataTable
+            locale={locale}
+            rowKey={(row) => `${row.actor}/${row.instance}/${row.receipt.revision}`}
+            dataSource={read.value.operations}
+            columns={[
+              { title: l('原主体', 'Original actor'), dataIndex: 'actor' },
+              { title: 'Instance', dataIndex: 'instance' },
+              {
+                title: l('某次回执', 'Operation receipt'),
+                render: (_, row) =>
+                  `${row.receipt.operation} · ${row.receipt.revision} · ${row.receipt.state}`,
+              },
+            ]}
+          />
+          <Button
+            disabled={!enabled || read.value.action === null}
+            onClick={() => onContinue(read.value!)}
+          >
+            {l('按后端当前阶段显式继续', 'Explicitly continue the current server action')} ·{' '}
+            {read.value.action ?? '—'}
+          </Button>
+          <ReadState
+            locale={locale}
+            busy={blockers.busy}
+            error={blockers.error}
+            onRetry={blockers.reload}
+          />
+          {blockers.value && (
+            <>
+              <DataTable
+                locale={locale}
+                rowKey={(row) => `${row.kind}/${row.id}`}
+                dataSource={blockers.value.items}
+                columns={[
+                  { title: l('原因', 'Reason'), dataIndex: 'kind' },
+                  { title: l('原对象', 'Original object'), dataIndex: 'id' },
+                  { title: l('设备', 'Device'), dataIndex: 'device' },
+                  { title: l('状态', 'State'), dataIndex: 'state' },
+                  { title: l('期限', 'Deadline'), dataIndex: 'deadline' },
+                  { title: l('撤销状态', 'Revocation state'), dataIndex: 'revocationState' },
+                ]}
+              />
+              {blockers.value.nextCursor && (
+                <Button onClick={() => setCursor(blockers.value!.nextCursor)}>
+                  {l('下一页阻断', 'Next blockers')}
+                </Button>
+              )}
+              {cursor && (
+                <Button onClick={() => setCursor(null)}>{l('阻断首页', 'First blockers')}</Button>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </Card>
   )
 }

@@ -93,7 +93,53 @@ export interface IssuanceCandidate {
   readonly certificateChain: readonly string[]
   readonly activateBefore: number
 }
+export type BlockerKind =
+  | 'missing_ack'
+  | 'unresolved_signing'
+  | 'unsettled_bootstrap'
+  | 'unsettled_scep'
+  | 'outstanding_certificate'
+export interface Rotation {
+  readonly id: string
+  readonly purpose: Purpose
+  readonly state: RotationReceipt['state']
+  readonly distributionRevision: number
+  readonly trustRevision: number
+  readonly previous: { readonly digest: string; readonly state: string }
+  readonly candidate: { readonly digest: string; readonly state: string }
+  readonly activeIssuer: string
+  readonly action: 'activate' | 'retire' | null
+  readonly blockers: readonly BlockerKind[]
+  readonly preconditions: readonly ('trust_invalid' | 'provider_not_configured')[]
+  readonly providerVerification: 'not_evaluated' | 'not_applicable'
+  readonly operations: readonly {
+    readonly actor: string
+    readonly instance: string
+    readonly receipt: RotationReceipt
+  }[]
+  readonly evaluatedAt: number
+}
+export interface RotationBlocker {
+  readonly kind: BlockerKind
+  readonly id: string
+  readonly device: string | null
+  readonly state: string
+  readonly deadline: number | null
+  readonly revocationState: string | null
+}
+export interface RecoveryIdentity {
+  readonly actor: string
+  readonly instance: string
+}
 export interface DevicePkiPort {
+  latestRotation(purpose: Purpose, signal?: AbortSignal): Promise<Rotation | null>
+  rotation(purpose: Purpose, id: string, signal?: AbortSignal): Promise<Rotation>
+  rotationBlockers(
+    purpose: Purpose,
+    id: string,
+    cursor: string | null,
+    signal?: AbortSignal,
+  ): Promise<{ readonly items: readonly RotationBlocker[]; readonly nextCursor: string | null }>
   trust(purpose: Purpose): Promise<Trust>
   prepare(input: Prepare): Promise<RotationReceipt>
   transition(input: Transition): Promise<RotationReceipt>
@@ -102,7 +148,11 @@ export interface DevicePkiPort {
     input: SigningRecovery,
   ): Promise<{ readonly attempt: string; readonly fingerprint: string }>
   observation(device: string): Promise<Observation | null>
-  registrationRecovery(device: string, operation: string): Promise<GrantReceipt | null>
+  registrationRecovery(
+    device: string,
+    operation: string,
+    identity: RecoveryIdentity,
+  ): Promise<GrantReceipt | null>
   recoverRegistration(input: RegistrationRecovery, secret: string): Promise<GrantReceipt>
   recoverIssuance(input: IssuanceRecovery): Promise<IssuanceCandidate>
   issuanceRecovery(

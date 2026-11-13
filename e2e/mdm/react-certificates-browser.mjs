@@ -66,7 +66,9 @@ try {
     })
   }
   await run.login(p)
-  await run.nav(p, '/certificates', '证书与设备 PKI')
+  await p.goto(origin + '/certificates')
+  await tab('设备 PKI')
+  await tab('Agent')
   run.step('archive-initialize-and-unlock')
   const initialVault = await api('GET', '/api/v1/certificate-archive/vault')
   assert.equal(initialVault.initialized, false)
@@ -346,13 +348,12 @@ try {
   assert.equal(prepared.revision, trusted.revision + 1)
   await button('结束本次操作并重新读取').click()
   await label('原轮换 UUID').fill(prepared.operation)
-  await run.response(
-    p,
-    'POST',
-    '/api/v1/pki/agent/rotations',
-    () => button('提交阶段转换').click(),
-    409,
+  await run.response(p, 'GET', `/api/v1/pki/agent/rotations/${prepared.operation}`, () =>
+    button('读取原轮换').click(),
   )
+  await p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).waitFor()
+  assert.equal(await p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).isDisabled(), true)
+  await p.getByRole('cell', { name: 'missing_ack', exact: true }).first().waitFor()
   const ack = await runPkiCollector(process.env.MDM_ENROLLMENT_BROWSER_FIXTURE, {
     onChild: (_child, terminate) => {
       activeCollector = terminate
@@ -364,9 +365,10 @@ try {
     interrupted: () => interrupted,
   })
   assert.equal(ack.status, 0)
+  await button('读取原轮换').click()
   const activated = await (
     await run.response(p, 'POST', '/api/v1/pki/agent/rotations', () =>
-      button('显式重提原请求').click(),
+      p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).click(),
     )
   ).json()
   assert.equal(activated.operation, prepared.operation)
@@ -374,6 +376,23 @@ try {
   await button('结束本次操作并重新读取').click()
   await run.response(p, 'POST', '/api/v1/pki/crls', () => button('发布这些撤销列表').click(), 204)
   await button('结束本次操作并重新读取').click()
+  const originalDevice = f.collector.runtime.deviceId
+  await p.goto(origin + `/devices/endpoint/${originalDevice}?tab=registration`)
+  await p.getByRole('button', { name: '读取最新设备事实', exact: true }).waitFor()
+  const originalResponse = await p.request.get(
+    origin + `/api/v1/devices/${originalDevice}/agent-requests`,
+  )
+  assert.equal(originalResponse.status(), 200)
+  const originalRequests = await originalResponse.json()
+  assert.ok(originalRequests.items.length > 0)
+  const originalRequest = originalRequests.items[0]
+  await run.response(p, 'GET', `/api/v1/agent-requests/${originalRequest.id}`, () =>
+    p.getByRole('button', { name: originalRequest.id, exact: true }).click(),
+  )
+  checks.push('real-device-agent-original-request-detail-and-requirements')
+  await p.goto(origin + '/certificates')
+  await tab('设备 PKI')
+  await tab('Agent')
   checks.push('real-ca-preparation-missing-ack-conflict-mtls-ack-activation-and-crl-publication')
 
   run.step('agent-original-issuance-and-registration-recovery')
@@ -411,7 +430,9 @@ try {
   )
 
   run.step('certificate-public-design-screenshots')
-  await run.nav(p, '/certificates', '证书与设备 PKI')
+  await p.goto(origin + '/certificates')
+  await tab('设备 PKI')
+  await tab('Agent')
   await button('Edited ' + caName).waitFor()
   await p.waitForFunction(() => !document.querySelector('.ant-spin-spinning'))
   assert.equal(Math.round((await p.locator('aside.sidebar').boundingBox()).width), 218)
