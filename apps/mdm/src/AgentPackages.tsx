@@ -57,6 +57,12 @@ export function AgentPackages({
       source?: OwnedMaterialSource
     } | null>(null),
     source = useRef<OwnedMaterialSource | null>(null)
+  const [saveForm] = Form.useForm<{
+    version?: string
+    platform: 'windows' | 'macos'
+    architecture: 'x86_64' | 'aarch64'
+  }>()
+  const [uploadConfirmed, setUploadConfirmed] = useState(false)
   const delivery = useProtectedDelivery(() => {
     source.current?.release()
     source.current = null
@@ -84,6 +90,7 @@ export function AgentPackages({
         if (!delivery.isCurrent(generation)) return
         const material = source.current
         source.current = null
+        setUploadConfirmed(false)
         setPackageId(prepared.packageId)
         setUpload({
           intent: content.prepared(prepared.upload, session.target),
@@ -238,20 +245,46 @@ export function AgentPackages({
           initialSession={upload.session}
           {...(upload.source ? { initialSource: upload.source } : {})}
           canWrite={canPrepare}
+          confirmed={() => {
+            setUploadConfirmed(true)
+            setUpload((current) =>
+              current ? { intent: current.intent, session: current.session } : null,
+            )
+          }}
           locale={locale}
         />
       )}
+      <Card title={l('原包定位', 'Original package locator')}>
+        <Input
+          aria-label={l('原包 UUID', 'Original package UUID')}
+          value={packageId}
+          disabled={locked || (upload !== null && !uploadConfirmed)}
+          onChange={(event) => {
+            setPackageId(event.target.value)
+            setInspection(null)
+          }}
+        />
+      </Card>
+      {uploadConfirmed && (
+        <Button
+          disabled={locked || unknown}
+          onClick={() => {
+            source.current?.release()
+            source.current = null
+            setUpload(null)
+            setUploadConfirmed(false)
+            setPackageId('')
+            setInspection(null)
+            setBehavior(null)
+            setReceipt(null)
+            saveForm.resetFields()
+          }}
+        >
+          {l('结束此包，准备另一包', 'Finish this package and prepare another')}
+        </Button>
+      )}
       {canPrepare && (
         <Card title={l('解析与保存软件定义', 'Inspect and save software definition')}>
-          <Input
-            aria-label={l('原包 UUID', 'Original package UUID')}
-            value={packageId}
-            disabled={locked}
-            onChange={(e) => {
-              setPackageId(e.target.value)
-              setInspection(null)
-            }}
-          />
           <Space wrap>
             <Button disabled={!packageId || action.busy} onClick={() => void readInspection(false)}>
               {l('读取持久解析', 'Read persisted inspection')}
@@ -262,6 +295,7 @@ export function AgentPackages({
           </Space>
           {inspection && <pre className="public-json">{JSON.stringify(inspection, null, 2)}</pre>}
           <Form
+            form={saveForm}
             layout="vertical"
             disabled={locked}
             onFinish={(value: {

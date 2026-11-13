@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 // Reuse the real device and enrollment hosts with the explicit React composition.
 import { executeBounded } from '../identity/process.mjs'
 import { resolve, dirname } from 'node:path'
@@ -84,11 +85,32 @@ try {
       }
     }
     if (!failure && journey === 'enrollment') {
-      phase = 'signed-configuration'
+      const installation = resolve(root, 'e2e/mdm/enrollment-installation-fixture.py')
+      phase = 'cleanup'
       try {
-        await leased([resolve(root, 'e2e/mdm/enrollment-installation-fixture.py'), root], 3600000)
+        await leased([installation, root, '--cleanup'], 660000)
+        phase = 'signed-configuration'
+        await leased([installation, root], 3600000)
       } catch (error) {
         failure = error
+      } finally {
+        phase = 'cleanup'
+        try {
+          await leased([installation, root, '--cleanup'], 660000)
+        } catch {
+          console.error(
+            JSON.stringify({
+              phase: 'signed-configuration-cleanup',
+              result: 'failed',
+              recoveryDirectory: resolve(
+                backend,
+                'artifacts/dev-environment',
+                'web-signed-' + createHash('sha256').update(root).digest('hex').slice(0, 16),
+              ),
+            }),
+          )
+          failure = new Error('cleanup-unconfirmed')
+        }
       }
     }
     if (failure) {

@@ -25,7 +25,7 @@ export function numericText(value: Numeric): string {
 export function fractionText(value: Numeric, denominator: string, scale = 1n): string {
   const d = BigInt(positiveText(denominator))
   if (value.type === 'f64')
-    return `≈ ${(value.value * Number(scale)) / Number(d)} (${value.value} × ${scale} / ${denominator})`
+    return `≈ ${value.value * (Number(scale) / Number(d))} (${value.value} × ${scale} / ${denominator})`
   const n = BigInt(value.value) * scale,
     negative = n < 0n,
     magnitude = negative ? -n : n

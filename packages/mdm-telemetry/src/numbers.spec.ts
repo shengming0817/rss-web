@@ -25,3 +25,12 @@ it('retains sufficient statistics when formatting means and per-second rates', (
   ).toContain('(18446744073709551615000000 / 1000000)')
   expect(fractionText({ type: 'i128', value: '-1' }, '3')).toContain('≈ -0.333333')
 })
+
+it('formats finite f64 rates without overflowing the intermediate product', () => {
+  expect(fractionText({ type: 'f64', value: Number.MAX_VALUE }, '1000000', 1000000n)).toContain(
+    `≈ ${Number.MAX_VALUE} (`,
+  )
+  expect(fractionText({ type: 'f64', value: Number.MIN_VALUE }, '1000000', 1000000n)).toContain(
+    `≈ ${Number.MIN_VALUE} (`,
+  )
+})

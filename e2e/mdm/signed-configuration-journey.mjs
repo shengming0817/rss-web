@@ -10,7 +10,7 @@ function signature(bytes, signature, publicKey) {
   )
 }
 export async function signedConfigurationJourney(run, admin, verificationKeys) {
-  const { checks } = run
+  const { checks, origin } = run
   await run.nav(admin, '/enroll', '设备注册')
   await admin.getByRole('tab', { name: '管理员安装配置', exact: true }).click()
   await admin.getByRole('button', { name: '生成管理员安装配置', exact: true }).click()

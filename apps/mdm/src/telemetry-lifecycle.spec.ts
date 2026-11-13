@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { HistoryPage, HistoryQuery } from '@rss/mdm-telemetry'
 import type { Runtime } from './runtime'
+import { TelemetryChart } from './TelemetryChart'
 import { TelemetryResults } from './TelemetryResults'
 import { TelemetryWorkspace } from './Telemetry'
 let host: HTMLDivElement, root: Root
@@ -258,4 +259,24 @@ it('does not use the current field revision to suppress valid frozen historical 
     }),
   ).toEqual(['mean'])
   expect(queryAggregations(row, { version: 2, definition: null })).toContain('min')
+})
+
+it.each([
+  [0, Number.MIN_VALUE],
+  [-Number.MAX_VALUE, Number.MAX_VALUE],
+])('separates finite f64 chart endpoints %s and %s', async (low, high) => {
+  const rows = [low, high].map((value, i) => ({
+    ...page.rows[0]!,
+    sample: {
+      ...page.rows[0]!.sample,
+      observedAt: String(i),
+      reading: { quality: 'valid' as const, value: { type: 'f64' as const, value } },
+    },
+  }))
+  await act(async () => root.render(h(TelemetryChart, { rows, locale: 'en' })))
+  expect([...host.querySelectorAll('circle')].map((point) => point.getAttribute('cy'))).toEqual([
+    '150',
+    '25',
+  ])
+  expect(host.querySelector('svg')?.textContent).toContain(String(high))
 })

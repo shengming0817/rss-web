@@ -153,6 +153,7 @@ function PurposePanel({
       })
   }
   function start(change: Pending) {
+    if (action.busy || pending || !canManage) return
     const epoch = delivery.capture()
     void action
       .run(async () => {
@@ -442,6 +443,7 @@ function PurposePanel({
             locale={locale}
             purpose={purpose}
             enabled={canManage}
+            canContinue={!locked}
             onContinue={(value) => {
               if (value.action)
                 start({
@@ -567,12 +569,14 @@ function RotationHistory({
   locale,
   purpose,
   enabled,
+  canContinue,
   onContinue,
 }: {
   runtime: Runtime
   locale: Locale
   purpose: Purpose
   enabled: boolean
+  canContinue: boolean
   onContinue: (rotation: Rotation) => void
 }) {
   const l = labels(locale),
@@ -676,7 +680,7 @@ function RotationHistory({
             ]}
           />
           <Button
-            disabled={!enabled || read.value.action === null}
+            disabled={!canContinue || read.value.action === null}
             onClick={() => onContinue(read.value!)}
           >
             {l('按后端当前阶段显式继续', 'Explicitly continue the current server action')} ·{' '}

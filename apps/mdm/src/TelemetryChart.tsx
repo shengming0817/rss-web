@@ -28,11 +28,17 @@ export function TelemetryChart({ rows, locale }: { rows: readonly Observation[];
   const from = points.reduce((a, b) => (a < b.at ? a : b.at), points[0]!.at),
     until = points.reduce((a, b) => (a > b.at ? a : b.at), from)
   const ratio = (n: bigint, d: bigint) => (d === 0n ? 0 : Number((n * 1000000n) / d) / 1000000)
-  const y = (value: Numeric) =>
-    float
-      ? (Number(value.value) / 2 - Number(low.value) / 2) /
-        (Number(high.value) / 2 - Number(low.value) / 2 || 1)
-      : ratio(BigInt(value.value) - BigInt(low.value), BigInt(high.value) - BigInt(low.value))
+  const y = (value: Numeric) => {
+    if (!float)
+      return ratio(BigInt(value.value) - BigInt(low.value), BigInt(high.value) - BigInt(low.value))
+    const span = Number(high.value) - Number(low.value)
+    if (span === 0) return 0
+    return Number.isFinite(span)
+      ? (Number(value.value) - Number(low.value)) / span
+      : (Number(value.value) / 2 - Number(low.value) / 2) /
+          (Number(high.value) / 2 - Number(low.value) / 2)
+  }
+
   const unit = rows[0]?.sample.series.definition.unit ?? ''
   return (
     <figure className="telemetry-chart">

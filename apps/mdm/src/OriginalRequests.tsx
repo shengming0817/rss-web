@@ -29,9 +29,14 @@ export function OriginalRequests({
     [selected, setSelected] = useState(''),
     [recoveryCursor, setRecoveryCursor] = useState<string | null>(null),
     action = useAction(),
-    [receipt, setReceipt] = useState<unknown>(null)
+    [receipt, setReceipt] = useState<{
+      selection: string
+      operation: RecoveryOperation
+      value: unknown
+    } | null>(null)
   const windows = endpoint.source === 'mdm.windows',
-    device = endpoint.id
+    device = endpoint.id,
+    selectionKey = `${binding}/${device}/${selected}`
   const permission = useRead(`${binding}/original-requests-permission`, authorization.effective)
   const canRecover = devicePermission(permission.value?.grants ?? [], device, 'credentials')
   const page = useRead<Page<AgentRequest | WindowsRequest>>(
@@ -204,7 +209,11 @@ export function OriginalRequests({
                   <Button
                     onClick={() =>
                       void action.run(async () =>
-                        setReceipt(await requestHistory.windowsRecovery(device, selected, row)),
+                        setReceipt({
+                          selection: selectionKey,
+                          operation: row,
+                          value: await requestHistory.windowsRecovery(device, selected, row),
+                        }),
                       )
                     }
                   >
@@ -226,12 +235,18 @@ export function OriginalRequests({
           layout="vertical"
           onFinish={(value: { operation: string; actor: string; instance: string }) =>
             void action.run(async () =>
-              setReceipt(
-                await devicePki.registrationRecovery(device, value.operation, {
+              setReceipt({
+                selection: selectionKey,
+                operation: {
+                  actor: value.actor,
+                  instance: value.instance,
+                  operationId: value.operation,
+                },
+                value: await devicePki.registrationRecovery(device, value.operation, {
                   actor: value.actor,
                   instance: value.instance,
                 }),
-              ),
+              }),
             )
           }
         >
@@ -262,7 +277,9 @@ export function OriginalRequests({
         </Form>
       )}
       <Failure locale={locale} error={action.error} kind="read" />
-      {receipt !== null && <pre className="public-json">{JSON.stringify(receipt, null, 2)}</pre>}
+      {receipt !== null && receipt.selection === selectionKey && (
+        <pre className="public-json">{JSON.stringify(receipt, null, 2)}</pre>
+      )}
       {!windows && detail.value && 'issuance' in detail.value && detail.value.issuance && (
         <DevicePkiRecovery
           key={selected}

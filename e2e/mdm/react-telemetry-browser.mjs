@@ -137,6 +137,7 @@ try {
       properties: {
         gauge: { type: 'integer' },
         counter: { type: 'integer' },
+        integer: { type: 'integer' },
         state: { type: 'string' },
       },
       required: ['gauge', 'counter', 'state', 'integer'],

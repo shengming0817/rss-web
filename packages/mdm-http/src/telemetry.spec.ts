@@ -164,3 +164,40 @@ it('reads fixed configuration bindings and registration without substituting act
     }),
   )
 })
+
+it('preserves positive u64 aggregate coordinates and signed timestamp responses', async () => {
+  const u64 = '18446744073709551615',
+    f = fixture({
+      buckets: [
+        {
+          window: { start: '-100', end: '0' },
+          value: { Transitions: [{ at: '-50', from: { Bool: false }, to: { Bool: true } }] },
+          valid_samples: '1',
+          covered_micros: '100',
+          completeness: [],
+        },
+      ],
+      unavailable: [],
+      resolutionMicros: u64,
+      refreshedThrough: '-1',
+      next: null,
+    }),
+    input = {
+      query: { ...query, startMicros: '-100', endMicros: '100' },
+      definitionVersion: u64,
+      resolutionMicros: u64,
+      source: 'agent.script' as const,
+      epoch,
+      dimensions: {},
+      operation: 'transitions' as const,
+      maxGapMicros: u64,
+      coverage: { coverage: 'holdLast' as const, maxHoldMicros: u64 },
+    }
+  const result = await f.telemetry.aggregate(input)
+  expect(result.refreshedThrough).toBe('-1')
+  expect(result.buckets[0]?.value).toEqual({
+    kind: 'transitions',
+    transitions: [{ at: '-50', from: false, to: true }],
+  })
+  expect(f.request).toHaveBeenCalledWith(expect.objectContaining({ body: input }))
+})

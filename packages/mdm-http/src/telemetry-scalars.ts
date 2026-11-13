@@ -36,9 +36,6 @@ import { integerText } from '@rss/mdm-telemetry'
 export function wireCount(value: unknown): string {
   return integerText(value, 'u64')
 }
-export function decimal(value: string): string {
-  return integerText(value)
-}
 /** Only endpoints whose formal carrier is a JSON number use this checked conversion. */
 export function wireNumber(value: string): number {
   const n = Number(integerText(value))

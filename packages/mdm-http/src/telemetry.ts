@@ -8,9 +8,8 @@ import {
   uuid,
   positive,
   exactResource,
-  decimal,
+  wireInteger,
   wirePositive,
-  wireCount,
   wireNumber,
 } from './telemetry-scalars'
 import type { TelemetryPort } from '@rss/mdm-telemetry'
@@ -74,8 +73,8 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
         {
           body: {
             ...query,
-            startMicros: decimal(query.startMicros),
-            endMicros: decimal(query.endMicros),
+            startMicros: wireInteger(query.startMicros),
+            endMicros: wireInteger(query.endMicros),
           },
         },
         (value) => {
@@ -111,15 +110,18 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
             ...request,
             query: {
               ...request.query,
-              startMicros: decimal(request.query.startMicros),
-              endMicros: decimal(request.query.endMicros),
+              startMicros: wireInteger(request.query.startMicros),
+              endMicros: wireInteger(request.query.endMicros),
             },
-            definitionVersion: decimal(request.definitionVersion),
-            resolutionMicros: decimal(request.resolutionMicros),
-            maxGapMicros: request.maxGapMicros === null ? null : decimal(request.maxGapMicros),
+            definitionVersion: wirePositive(request.definitionVersion),
+            resolutionMicros: wirePositive(request.resolutionMicros),
+            maxGapMicros: request.maxGapMicros === null ? null : wirePositive(request.maxGapMicros),
             coverage:
               request.coverage.coverage === 'holdLast'
-                ? { coverage: 'holdLast', maxHoldMicros: decimal(request.coverage.maxHoldMicros) }
+                ? {
+                    coverage: 'holdLast',
+                    maxHoldMicros: wirePositive(request.coverage.maxHoldMicros),
+                  }
                 : request.coverage,
           },
         },
@@ -141,7 +143,7 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
             buckets,
             unavailable: unavailable(v['unavailable'], tenant),
             resolutionMicros: wirePositive(v['resolutionMicros']),
-            refreshedThrough: nullable(v['refreshedThrough'], wireCount),
+            refreshedThrough: nullable(v['refreshedThrough'], wireInteger),
             next: opaque(v['next']),
           }
         },

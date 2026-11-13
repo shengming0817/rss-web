@@ -214,7 +214,7 @@ function aggregateValue(value: AggregateWire): AggregateValue {
     return {
       kind: 'transitions',
       transitions: value.Transitions.map((x) => ({
-        at: wireCount(x.at),
+        at: wireInteger(x.at),
         from: stateValue(x.from),
         to: stateValue(x.to),
       })),

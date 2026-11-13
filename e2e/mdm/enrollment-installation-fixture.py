@@ -2,6 +2,8 @@
 from contextlib import ExitStack
 import importlib.util
 import json
+import hashlib
+import re
 import os
 from pathlib import Path
 import shutil
@@ -22,12 +24,49 @@ from dev_environment import private
 from ingress_network import Ingress
 from gateway_fixture import Gateway
 from pki_fixtures import running
+RECOVERY = BACKEND/'artifacts/dev-environment'/('web-signed-'+hashlib.sha256(str(WEB).encode()).hexdigest()[:16])
+MARKER = RECOVERY/'owner.json'
+def cleanup():
+    if not MARKER.exists(): return
+    saved=json.loads(MARKER.read_text()); root=Path(saved['root'])
+    if saved['web'] != str(WEB) or not root.name.startswith('rss-web-enrollment-installation-') or not re.fullmatch(r'mdm-web-install-[0-9a-f]{12}',saved['project']):
+        raise RuntimeError('foreign signed installation owner')
+    failures=[]
+    def attempt(work):
+        try: work()
+        except Exception: failures.append(True)
+    if (root/'.env').is_file() and (root/'production.compose.yaml').is_file():
+        owner=Installation(root,root/'production.compose.yaml',saved['project'])
+        if (root/'gateway-ports.compose.yaml').is_file(): owner.ports_file=root/'gateway-ports.compose.yaml'
+        attempt(owner.cleanup)
+    from pki_ca import Provider
+    provider=Provider(root/'pki/pki/agent',saved['pkiCase'])
+    if provider.owner.root.exists(): attempt(provider.reset)
+    network=Ingress(root,saved['project'],saved['project'])
+    if network.record.exists(): attempt(network.release)
+    for kind,command in [('container',['ps','-a','-q']),('volume',['volume','ls','-q'])]:
+        try:
+            remaining=subprocess.check_output(['docker',*command,'--filter','label=com.docker.compose.project='+saved['project']],text=True,timeout=30).strip()
+            if remaining: failures.append(True)
+        except Exception: failures.append(True)
+    if failures:
+        print(json.dumps(dict(phase='signed-configuration-cleanup',result='failed',recoveryDirectory=str(RECOVERY))),flush=True)
+        raise RuntimeError('cleanup-unconfirmed')
+    if root.exists(): shutil.rmtree(root)
+    MARKER.unlink()
+    print(json.dumps(dict(phase='signed-configuration-cleanup',result='passed')),flush=True)
+if '--cleanup' in sys.argv[2:]:
+    cleanup(); sys.exit(0)
+if MARKER.exists(): raise RuntimeError('signed installation requires its independent cleanup first')
 candidate = Path(os.environ['MDM_ENROLLMENT_CANDIDATE']).resolve()
 manifest = verify_candidate(candidate)
 ui = load_ui(candidate, manifest['ui'])
 def interrupted(*_args): raise KeyboardInterrupt()
 for item in (signal.SIGINT, signal.SIGTERM): signal.signal(item, interrupted)
 temporary = tempfile.mkdtemp(prefix='rss-web-enrollment-installation-')
+project='mdm-web-install-'+uuid.uuid4().hex[:12]
+RECOVERY.mkdir(parents=True,exist_ok=True,mode=0o700)
+private(MARKER,dict(web=str(WEB),root=temporary,project=project,pkiCase=hashlib.sha256((project+':agent').encode()).hexdigest()[:20]))
 with ExitStack() as providers:
     root = Path(temporary); inputs = root/'inputs'; inputs.mkdir(mode=0o700); tls(inputs)
     # Formal runtime probes verify the localhost identity used by the browser.
@@ -36,13 +75,12 @@ with ExitStack() as providers:
     subprocess.run(['openssl','x509','-req','-in',str(inputs/'gateway.csr'),'-CA',str(inputs/'ca.crt'),'-CAkey',str(inputs/'ca.key'),'-CAcreateserial','-days','2','-extfile',str(inputs/'gateway.ext'),'-out',str(inputs/'gateway.crt')],check=True,capture_output=True,timeout=30)
     for file in inputs.iterdir(): file.chmod(0o600)
     with socket.socket() as listener: listener.bind(('127.0.0.1',0)); port=listener.getsockname()[1]
-    origin=f'https://localhost:{port}'; project='mdm-web-install-'+uuid.uuid4().hex[:12]
+    origin=f'https://localhost:{port}'
     network=Ingress(root,project,project); allocation=network.allocate(); providers.callback(network.release)
     values=dict(MDM_POSTGRES_IMAGE=manifest['providers']['postgres'],MDM_GATEWAY_IMAGE=manifest['providers']['nginx'],MDM_SERVER_IMAGE=image_identity(manifest['image'])['id'],MDM_INSTALLER_IMAGE=image_identity(manifest['installer']['image'])['id'],MDM_WEB_IMAGE=ui['id'],MDM_INPUT_DIRECTORY=str(inputs),MDM_PRODUCT_ORIGIN=origin,MDM_PG_MAX_CONNECTIONS=160,MDM_GATEWAY_BIND_IP='127.0.0.1',**allocation)
     private(root/'.env',''.join(f'{key}={value}\n' for key,value in values.items()))
     for name in ('production.compose.yaml','render_gateway.py'): shutil.copy(candidate/'deployment'/name,root/name)
     owner=Installation(root,root/'production.compose.yaml',project)
-    cleanup=False
     try:
         owner.compose('up','-d','postgres'); owner.compose('run','--rm','init')
         owner.ports_file=root/'gateway-ports.compose.yaml'; owner.ports_file.write_text(owner.read('/var/lib/rss-mdm/runtime/gateway/gateway-ports.compose.yaml'))
@@ -88,7 +126,6 @@ with ExitStack() as providers:
         child=subprocess.run(['node',str(WEB/'e2e/mdm/react-signed-configuration-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds(),timeout=780)
         if child.returncode: raise RuntimeError('signed-configuration-browser')
     finally:
-        owner.cleanup(); cleanup=True
-        print(json.dumps(dict(phase='signed-configuration-cleanup',result='passed' if cleanup else 'failed')),flush=True)
+        owner.cleanup()
 
-shutil.rmtree(temporary)
+# The runner owns independent cleanup and removes the recorded private root after confirmation.
