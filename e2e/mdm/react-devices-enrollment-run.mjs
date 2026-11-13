@@ -77,6 +77,7 @@ async function installedJourney() {
     }
   }
   if (failure) throw failure
+  if (interrupted) throw new Error('interrupted')
 }
 try {
   if (selected === 'installation') await installedJourney()

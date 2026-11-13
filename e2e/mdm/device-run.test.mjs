@@ -389,17 +389,18 @@ class Environment:
 })
 
 for (const selection of ['enrollment', 'installation'])
-  test(
-    `signed installation keeps an independent cleanup owner after its fixture is killed (${selection})`,
-    { timeout: 30000 },
-    async () => {
-      const backend = mkdtempSync(resolve(tmpdir(), 'mdm-signed-run-')),
-        bin = resolve(backend, 'bin')
-      mkdirSync(bin)
-      writeFileSync(resolve(bin, 'pnpm'), '#!/bin/sh\nexit 0\n', { mode: 0o700 })
-      writeFileSync(
-        resolve(bin, 'python3'),
-        `#!/usr/bin/env node
+  for (const cancellation of ['fixture', 'cleanup'])
+    test(
+      `signed installation keeps cleanup and reports cancellation during ${cancellation} (${selection})`,
+      { timeout: 30000 },
+      async () => {
+        const backend = mkdtempSync(resolve(tmpdir(), 'mdm-signed-run-')),
+          bin = resolve(backend, 'bin')
+        mkdirSync(bin)
+        writeFileSync(resolve(bin, 'pnpm'), '#!/bin/sh\nexit 0\n', { mode: 0o700 })
+        writeFileSync(
+          resolve(bin, 'python3'),
+          `#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path'),base=process.env.MDM_REACT_DEVICES_BACKEND,args=process.argv.slice(2)
 if (!args.some(arg=>arg.endsWith('/enrollment-installation-fixture.py'))) process.exit(0)
 if(args.includes('--cleanup')) {
@@ -408,47 +409,51 @@ if(args.includes('--cleanup')) {
   setTimeout(()=>{fs.rmSync(path.join(base,'installed'));fs.writeFileSync(path.join(base,'cleanup-finished'),'');process.exit(0)},700)
 } else {
   fs.writeFileSync(path.join(base,'installed'),'')
+  if ('${cancellation}' === 'cleanup') process.exit(0)
   process.on('SIGTERM',()=>process.exit(2));setInterval(()=>{},1000)
 }
 `,
-        { mode: 0o700 },
-      )
-      const child = spawn(
-        process.execPath,
-        [fileURLToPath(new URL('./react-devices-enrollment-run.mjs', import.meta.url)), selection],
-        {
-          env: {
-            ...process.env,
-            MDM_REACT_DEVICES_BACKEND: backend,
-            PATH: bin + ':' + process.env.PATH,
+          { mode: 0o700 },
+        )
+        const child = spawn(
+          process.execPath,
+          [
+            fileURLToPath(new URL('./react-devices-enrollment-run.mjs', import.meta.url)),
+            selection,
+          ],
+          {
+            env: {
+              ...process.env,
+              MDM_REACT_DEVICES_BACKEND: backend,
+              PATH: bin + ':' + process.env.PATH,
+            },
+            stdio: ['ignore', 'pipe', 'pipe'],
+            detached: process.platform !== 'win32',
           },
-          stdio: ['ignore', 'pipe', 'pipe'],
-          detached: process.platform !== 'win32',
-        },
-      )
-      let output = ''
-      child.stdout.on('data', (chunk) => (output += chunk))
-      child.stderr.on('data', (chunk) => (output += chunk))
-      const closed = new Promise((done, reject) => {
-        child.once('error', reject)
-        child.once('close', done)
-      })
-      try {
-        await waitFor(() => existsSync(resolve(backend, 'installed')))
-        child.kill('SIGTERM')
-        await waitFor(() => existsSync(resolve(backend, 'cleanup-start')))
-        child.kill('SIGTERM')
-        assert.equal(await closed, 1)
-        assert.ok(existsSync(resolve(backend, 'cleanup-finished')))
-        assert.equal(existsSync(resolve(backend, 'installed')), false)
-        assert.ok(output.includes('interrupted'))
-      } finally {
-        if (child.exitCode === null) {
-          if (process.platform === 'win32') child.kill('SIGKILL')
-          else process.kill(-child.pid, 'SIGKILL')
+        )
+        let output = ''
+        child.stdout.on('data', (chunk) => (output += chunk))
+        child.stderr.on('data', (chunk) => (output += chunk))
+        const closed = new Promise((done, reject) => {
+          child.once('error', reject)
+          child.once('close', done)
+        })
+        try {
+          await waitFor(() => existsSync(resolve(backend, 'installed')))
+          if (cancellation === 'fixture') child.kill('SIGTERM')
+          await waitFor(() => existsSync(resolve(backend, 'cleanup-start')))
+          child.kill('SIGTERM')
+          assert.equal(await closed, 1)
+          assert.ok(existsSync(resolve(backend, 'cleanup-finished')))
+          assert.equal(existsSync(resolve(backend, 'installed')), false)
+          assert.ok(output.includes('interrupted'))
+        } finally {
+          if (child.exitCode === null) {
+            if (process.platform === 'win32') child.kill('SIGKILL')
+            else process.kill(-child.pid, 'SIGKILL')
+          }
+          await closed
+          rmSync(backend, { recursive: true, force: true })
         }
-        await closed
-        rmSync(backend, { recursive: true, force: true })
-      }
-    },
-  )
+      },
+    )

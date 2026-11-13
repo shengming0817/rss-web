@@ -74,6 +74,8 @@ export function AgentPackages({
   const detail = useRead(`${binding}/agent-package/${selected}/${canRead}`, (signal) =>
     canRead && selected ? agentPackages.read(selected, signal) : Promise.resolve(null),
   )
+  const original = useRef({ binding, pending, operation })
+  original.current = { binding, pending, operation }
   usePendingSelection(action.busy || unknown)
   async function submit(intent: Pending) {
     const generation = delivery.capture()
@@ -125,6 +127,35 @@ export function AgentPackages({
         await (parse ? agentPackages.parse(packageId) : agentPackages.inspect(packageId)),
       ),
     )
+  }
+  async function readOperation() {
+    const coordinate = original.current
+    const result = await action.run(() => agentPackages.operation(coordinate.operation))
+    if (
+      !result.ok ||
+      original.current.binding !== coordinate.binding ||
+      original.current.operation !== coordinate.operation
+    )
+      return
+    const value = result.value,
+      intent = coordinate.pending
+    setReceipt(value)
+    if (
+      value &&
+      intent &&
+      intent === original.current.pending &&
+      coordinate.operation ===
+        ('input' in intent ? intent.input.operationId : intent.operationId) &&
+      ((intent.kind === 'save' &&
+        'packageId' in value &&
+        value.packageId === intent.input.packageId) ||
+        (intent.kind === 'publish' && 'releaseId' in value) ||
+        (intent.kind === 'withdraw' && 'withdrawn' in value && value.withdrawn === intent.id))
+    ) {
+      setUnknown(false)
+      page.reload()
+      detail.reload()
+    }
   }
   const locked = action.busy || pending !== null
   return (
@@ -382,26 +413,22 @@ export function AgentPackages({
         <Input
           aria-label={l('原包操作 UUID', 'Original package operation UUID')}
           value={operation}
+          disabled={action.busy}
           onChange={(e) => setOperation(e.target.value)}
         />
-        <Button
-          disabled={!operation || action.busy}
-          onClick={() =>
-            void action.run(async () => setReceipt(await agentPackages.operation(operation)))
-          }
-        >
+        <Button disabled={!operation || action.busy} onClick={() => void readOperation()}>
           {l('读取原包操作', 'Read original package operation')}
         </Button>
       </Space>
       {pending && (
         <Card title={l('保留原操作', 'Retained original operation')}>
-          <code>{operation}</code>
+          <code>{'input' in pending ? pending.input.operationId : pending.operationId}</code>
           <Button disabled={action.busy} onClick={() => void submit(pending)}>
             {l('显式重提完全相同请求', 'Explicitly resubmit the identical request')}
           </Button>
           {!unknown && (
-            <Button onClick={() => setPending(null)}>
-              {l('结束已拒绝或未提交意图', 'Finish rejected or unsubmitted intent')}
+            <Button disabled={action.busy} onClick={() => setPending(null)}>
+              {l('结束此操作', 'Finish this operation')}
             </Button>
           )}
         </Card>

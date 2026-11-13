@@ -24,6 +24,7 @@ import {
   queryAggregations,
   seriesLabel,
   utcMicros,
+  secondsMicros,
 } from './telemetry-format'
 import { TelemetryChart } from './TelemetryChart'
 
@@ -201,9 +202,9 @@ export function TelemetryResults({
     ),
     [selection, setSelection] = useState(''),
     [operation, setOperation] = useState<AggregateQuery['operation']>('mean'),
-    [resolution, setResolution] = useState(300),
-    [gap, setGap] = useState<number | null>(300),
-    [hold, setHold] = useState<number | null>(null),
+    [resolution, setResolution] = useState('300'),
+    [gap, setGap] = useState<string | null>('300'),
+    [hold, setHold] = useState<string | null>(null),
     [aggregate, setAggregate] = useState<AggregateQuery | null>(null),
     [error, setError] = useState<unknown>(null),
     rows = read.value?.rows ?? [],
@@ -378,10 +379,10 @@ export function TelemetryResults({
                         query,
                         selected,
                         selectedOperation!,
-                        String(BigInt(resolution) * 1000000n),
-                        isCounter && gap !== null ? String(BigInt(gap) * 1000000n) : null,
+                        secondsMicros(resolution),
+                        isCounter && gap !== null ? secondsMicros(gap) : null,
                         isState && hold !== null
-                          ? { coverage: 'holdLast', maxHoldMicros: String(BigInt(hold) * 1000000n) }
+                          ? { coverage: 'holdLast', maxHoldMicros: secondsMicros(hold) }
                           : { coverage: 'observedOnly' },
                       )
                     })
@@ -418,10 +419,12 @@ export function TelemetryResults({
                   </Form.Item>
                   <Form.Item label={l('分辨率（秒）', 'Resolution (seconds)')}>
                     <InputNumber
-                      min={1}
+                      stringMode
+                      min="1"
+                      aria-label={l('分辨率（秒）', 'Resolution (seconds)')}
                       value={resolution}
                       onChange={(v) => {
-                        setResolution(v ?? 300)
+                        setResolution(v ?? '300')
                         setAggregate(null)
                       }}
                     />
@@ -434,7 +437,12 @@ export function TelemetryResults({
                       )}
                     >
                       <InputNumber
-                        min={1}
+                        stringMode
+                        min="1"
+                        aria-label={l(
+                          '最大连续间隔（秒，计数器必填）',
+                          'Maximum gap (seconds, required for counters)',
+                        )}
                         value={gap}
                         onChange={(v) => {
                           setGap(v)
@@ -457,7 +465,7 @@ export function TelemetryResults({
                             },
                           ]}
                           onChange={(v) => {
-                            setHold(v === 'hold' ? 300 : null)
+                            setHold(v === 'hold' ? '300' : null)
                             setAggregate(null)
                           }}
                         />
@@ -465,10 +473,12 @@ export function TelemetryResults({
                       {hold !== null && (
                         <Form.Item label={l('最长保持时长（秒）', 'Maximum hold (seconds)')}>
                           <InputNumber
-                            min={1}
+                            stringMode
+                            min="1"
+                            aria-label={l('最长保持时长（秒）', 'Maximum hold (seconds)')}
                             value={hold}
                             onChange={(v) => {
-                              setHold(v ?? 300)
+                              setHold(v ?? '300')
                               setAggregate(null)
                             }}
                           />

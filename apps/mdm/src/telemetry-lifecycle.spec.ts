@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { queryAggregations, utcMicros } from './telemetry-format'
+import { queryAggregations, secondsMicros, utcMicros } from './telemetry-format'
 import { act, createElement as h } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
@@ -190,6 +190,17 @@ it('gates device data using exact device grants', async () => {
 it('preserves microsecond observation coordinates in UTC display', () => {
   expect(utcMicros(20)).toBe('1970-01-01T00:00:00.000020Z')
 })
+it.each([
+  ['1.5', '1500000'],
+  ['1.000001', '1000001'],
+  ['9007199254740.993001', '9007199254740993001'],
+])('preserves exact decimal seconds %s as %s microseconds', (seconds, micros) => {
+  expect(secondsMicros(seconds)).toBe(micros)
+})
+it.each(['0', '-1', 'NaN', '1.0000001'])(
+  'rejects a duration without a positive exact microsecond value: %s',
+  (seconds) => expect(() => secondsMicros(seconds)).toThrow('Invalid microsecond duration'),
+)
 
 async function submitQuery() {
   for (const [label, value] of [

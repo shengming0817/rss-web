@@ -96,14 +96,40 @@ export async function agentPackagesJourney(run, page, anonymous) {
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.getByRole('button', { name: '中文', exact: true }).press('Enter')
   run.checks.push('agent-package-mobile-and-english-keyboard-authoring:' + screenshots)
-  const saved = await run.response(page, 'POST', '/api/v1/agent-packages/save', () =>
+  let original,
+    savedWrites = 0
+  const beforeSave = run.count(page, 'POST', '/api/v1/agent-packages/save')
+  await page.route('**/api/v1/agent-packages/save', async (route) => {
+    savedWrites++
+    original = route.request().postDataJSON().operationId
+    const actual = await route.fetch()
+    assert.equal(actual.status(), 200)
+    assert.equal((await actual.json()).packageId, preparation.packageId)
+    await route.abort('failed')
+  })
+  await Promise.all([
+    page.waitForEvent(
+      'requestfailed',
+      (request) =>
+        request.method() === 'POST' && request.url().endsWith('/api/v1/agent-packages/save'),
+    ),
     page.getByRole('button', { name: '明确保存软件定义', exact: true }).click(),
+  ])
+  await page.getByRole('button', { name: '显式重提完全相同请求', exact: true }).waitFor()
+  await page
+    .getByRole('button', { name: '读取原包操作', exact: true })
+    .waitFor({ state: 'visible' })
+  assert.equal(
+    await page.getByRole('button', { name: '明确发布已保存软件', exact: true }).isDisabled(),
+    true,
   )
-  assert.equal((await saved.json()).packageId, preparation.packageId)
-  const original = saved.request().postDataJSON().operationId
+  await page.unroute('**/api/v1/agent-packages/save')
   await run.response(page, 'GET', '/api/v1/agent-packages/operations/' + original, () =>
     page.getByRole('button', { name: '读取原包操作', exact: true }).click(),
   )
+  await page.getByRole('button', { name: '结束此操作', exact: true }).click()
+  assert.equal(savedWrites, 1)
+  assert.equal(run.count(page, 'POST', '/api/v1/agent-packages/save'), beforeSave + 1)
   const release = await (
     await run.response(page, 'POST', '/api/v1/agent-packages', () =>
       page.getByRole('button', { name: '明确发布已保存软件', exact: true }).click(),

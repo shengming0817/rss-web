@@ -378,9 +378,11 @@ try {
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option').first().click()
   await page.locator('.telemetry-chart svg').waitFor()
   assert.equal(await page.locator('.telemetry-point').count(), 10)
+  await label('分辨率（秒）').fill('300.5')
   const aggregateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
     button('查询聚合').click(),
   )
+  assert.equal(aggregateResponse.request().postDataJSON().resolutionMicros, '300500000')
   const aggregatePage = await aggregateResponse.json(),
     gaugeBucket = aggregatePage.buckets.find(
       (b) => b.value && typeof b.value === 'object' && 'Number' in b.value,
@@ -437,6 +439,7 @@ try {
   await queryField('custom.browser.counter')
   await selectSeries()
   await run.choose(page, label('聚合含义'), '每秒速率')
+  await label('最大连续间隔（秒，计数器必填）').fill('300.5')
   const rateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
       button('查询聚合').click(),
     ),
@@ -445,6 +448,7 @@ try {
       (b) => b.value && typeof b.value === 'object' && 'Rate' in b.value,
     )
   assert.ok(rateBucket, 'counter rate bucket')
+  assert.equal(rateResponse.request().postDataJSON().maxGapMicros, '300500000')
   const rate = rateBucket.value.Rate,
     increase = Object.values(rate.increase)[0]
   await page
@@ -483,6 +487,7 @@ try {
   await queryField('custom.browser.state')
   await selectSeries()
   await run.choose(page, label('状态覆盖策略'), '有界保持上一状态')
+  await label('最长保持时长（秒）').fill('300.5')
   assert.equal(
     await page.locator('.telemetry-chart').count(),
     0,
@@ -496,6 +501,7 @@ try {
       (b) => b.value && typeof b.value === 'object' && b.value.StateSegments?.length,
     )
   assert.ok(stateBucket, 'state timeline bucket')
+  assert.equal(stateResponse.request().postDataJSON().coverage.maxHoldMicros, '300500000')
   await page
     .locator('.telemetry-aggregate')
     .getByRole('cell')

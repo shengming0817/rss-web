@@ -137,6 +137,61 @@ it('lets a publish-only operator locate and publish a saved package', async () =
   expect(publish).toHaveBeenCalledWith(expect.any(String), 'saved-package')
   expect(host.textContent).toContain('published')
 })
+it('confirms an unknown package write only from its matching original receipt, without resubmitting', async () => {
+  const publish = vi.fn().mockRejectedValue({ status: 503, code: 'unavailable' }),
+    operation = vi.fn(),
+    r = runtime({ agentPackages: { publish, operation }, content: {} })
+  await render(
+    h(AgentPackages, {
+      runtime: r,
+      locale: 'en',
+      canRead: false,
+      canPrepare: false,
+      canPublish: true,
+      canWithdraw: false,
+    }),
+  )
+  const packageInput = host.querySelector<HTMLInputElement>(
+      'input[aria-label="Original package UUID"]',
+    )!,
+    operationInput = host.querySelector<HTMLInputElement>(
+      'input[aria-label="Original package operation UUID"]',
+    )!
+  async function fill(input: HTMLInputElement, value: string) {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+  await fill(packageInput, 'saved-package')
+  await click('Explicitly publish saved software')
+  const original = publish.mock.calls[0]![0]
+  async function read(value: unknown) {
+    operation.mockResolvedValueOnce(value)
+    await click('Read original package operation')
+  }
+  function canFinish() {
+    return [...host.querySelectorAll('button')].some(
+      (node) => node.textContent === 'Finish this operation',
+    )
+  }
+  await read(null)
+  expect(canFinish()).toBe(false)
+  await read({ withdrawn: 'saved-package' })
+  expect(canFinish()).toBe(false)
+  await fill(operationInput, 'another-operation')
+  expect([...host.querySelectorAll('code')].map((node) => node.textContent)).toContain(original)
+  await read({ releaseId: 'another-release' })
+  expect(canFinish()).toBe(false)
+  await fill(operationInput, original)
+  await read({ releaseId: 'confirmed-original-release' })
+  expect(canFinish()).toBe(true)
+  expect(packageInput.disabled).toBe(true)
+  await click('Finish this operation')
+  expect(packageInput.disabled).toBe(false)
+  expect(publish).toHaveBeenCalledOnce()
+  expect(operation).toHaveBeenLastCalledWith(original)
+})
 it('releases a confirmed package task so another original installer can be selected', async () => {
   const target = {
       resource: 'resource',

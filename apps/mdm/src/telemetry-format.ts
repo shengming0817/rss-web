@@ -13,6 +13,13 @@ export function parseUtc(value: string): string {
   if (!Number.isSafeInteger(millis)) throw new Error('Invalid UTC time')
   return String(BigInt(millis) * 1000n)
 }
+export function secondsMicros(value: string): string {
+  const parts = /^(\d+)(?:\.(\d{1,6}))?$/.exec(value)
+  if (!parts) throw new Error('Invalid microsecond duration')
+  const micros = BigInt(parts[1]!) * 1000000n + BigInt((parts[2] ?? '').padEnd(6, '0'))
+  if (micros <= 0n) throw new Error('Invalid microsecond duration')
+  return String(micros)
+}
 export function allowedAggregations(row: Observation): readonly Aggregation[] {
   const metric = row.sample.series.definition.metric
   return metric.kind === 'bool' || metric.kind === 'state'
