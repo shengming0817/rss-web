@@ -7,7 +7,7 @@ const row = {
   evidence: null,
   id,
   kind: 'command',
-  device: 'pc',
+  device: '54a2df5e-528c-5a64-a3d8-be0e4859f63b',
   origin: 'direct',
   policy: null,
   deadline: 100,
@@ -22,7 +22,9 @@ function fixture(reply: unknown) {
 }
 it('requests the complete identity projection and rejects omitted identities and duplicate rows', async () => {
   const f = fixture({ items: [row], nextCursor: 'YQ' })
-  expect((await f.adapter.list({ filter: "device=='pc'" })).nextCursor).toBe('YQ')
+  expect(
+    (await f.adapter.list({ filter: "device=='54a2df5e-528c-5a64-a3d8-be0e4859f63b'" })).nextCursor,
+  ).toBe('YQ')
   expect(f.request.mock.calls[0]![0].query?.['fields']).toContain('device')
   await expect(fixture({ items: [{ id }], nextCursor: null }).adapter.list({})).rejects.toThrow()
   await expect(fixture({ items: [row, row], nextCursor: null }).adapter.list({})).rejects.toThrow(
@@ -51,7 +53,9 @@ it('preserves native effect waiting even when the command is applied and rejects
       effect: 'waiting',
     },
   }
-  expect(await fixture(detail).adapter.command('pc', id)).toMatchObject({
+  expect(
+    await fixture(detail).adapter.command('54a2df5e-528c-5a64-a3d8-be0e4859f63b', id),
+  ).toMatchObject({
     delivery: 'applied',
     kind: 'command',
     inputVersion: 'v1',
@@ -59,7 +63,10 @@ it('preserves native effect waiting even when the command is applied and rejects
     authorization: detail.authorization,
   })
   await expect(
-    fixture({ ...detail, commandId: registrationId }).adapter.command('pc', id),
+    fixture({ ...detail, commandId: registrationId }).adapter.command(
+      '54a2df5e-528c-5a64-a3d8-be0e4859f63b',
+      id,
+    ),
   ).rejects.toThrow('Wrong command')
 })
 it('reads script runs directly from the policy contract with exact task and policy coordinates', async () => {
@@ -68,7 +75,7 @@ it('reads script runs directly from the policy contract with exact task and poli
     taskId: id,
     policyId: registrationId,
     versionId: id,
-    device: 'pc',
+    device: '54a2df5e-528c-5a64-a3d8-be0e4859f63b',
     occurrence: 'o',
     availableAt: 1,
     deadline: 100,
@@ -122,7 +129,7 @@ it('preserves DA result effects instead of mistaking the missing top-level field
     taskId: id,
     policyId: registrationId,
     versionId: id,
-    device: 'pc',
+    device: '54a2df5e-528c-5a64-a3d8-be0e4859f63b',
     occurrence: 'o',
     availableAt: 1,
     deadline: 100,
@@ -161,7 +168,9 @@ it('binds trust to the current tenant and service and carries the original idemp
   await expect(fixture({ ...trust, version: 2 }).adapter.trust()).rejects.toThrow(
     'Wrong task signing',
   )
-  expect(await fixture(null).adapter.trustObservation('device')).toBeNull()
+  expect(
+    await fixture(null).adapter.trustObservation('7f408d60-f79e-504d-8fdc-35d425b1946a'),
+  ).toBeNull()
 })
 
 it('projects the exact software attempt step digest from the formal 32-byte wire field', async () => {
@@ -170,7 +179,7 @@ it('projects the exact software attempt step digest from the formal 32-byte wire
     kind: 'software',
     taskId: id,
     policyId: registrationId,
-    device: 'pc',
+    device: '54a2df5e-528c-5a64-a3d8-be0e4859f63b',
     attemptId: id,
     availableAt: 1,
     deadline: 100,
