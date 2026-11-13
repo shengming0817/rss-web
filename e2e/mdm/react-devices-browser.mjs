@@ -230,6 +230,30 @@ try {
   assert.equal(revoked.state, 'revoked')
   assert.equal(revoked.version, 2)
   checks.push('versioned-association-revocation-keeps-endpoints')
+  const windowsRead = p.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === `/api/v1/devices/${f.mdm}/windows-certificate-requests`,
+  )
+  await openDevice('endpoint', f.mdm, () =>
+    p.goto(origin + `/devices/endpoint/${f.mdm}?tab=registration`),
+  )
+  assert.ok(Array.isArray((await (await windowsRead).json()).items))
+  run.checks.push('real-device-context-windows-original-request-directory')
+  const apple = 'd8befebe-00eb-524f-a5c4-81613bb0a344'
+  const ddmRead = p.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === `/api/v1/devices/${apple}/ddm`,
+  )
+  await openDevice('endpoint', apple, () =>
+    p.goto(origin + `/devices/endpoint/${apple}?tab=registration`),
+  )
+  const ddm = await (await ddmRead).json()
+  assert.equal(ddm.effect, 'unverified')
+  assert.equal(ddm.compliance, 'unknown')
+  await p.getByText('发布或同步不证明设备设置生效、合规或已卸载。', { exact: true }).waitFor()
+  run.checks.push('real-current-registration-ddm-window-and-effect-boundary')
 } catch (error) {
   failure = error
   const directory = mkdtempSync(join(tmpdir(), 'rss-react-devices-failure-'))

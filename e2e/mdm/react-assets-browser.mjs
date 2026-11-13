@@ -141,7 +141,9 @@ try {
 
   run.step('fixed-query-and-live-facts')
   await run.nav(p, '/inventory', '资产查询')
-  await visibleLabel('服务端 RSQL 条件').fill("custom.asset_tag=='fixture-mdm'")
+  await visibleLabel('服务端 RSQL 条件').fill(
+    "custom.asset_tag=='4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8'",
+  )
   const accepted = (
     await (
       await run.response(

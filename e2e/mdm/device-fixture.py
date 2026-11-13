@@ -91,8 +91,8 @@ def seed_authority():
 def seed():
     tenant = TENANTS[0]
     sql = [installation_sql(), f"SET rss.tenant_id = '{tenant}'"]
-    devices = [('fixture-mdm','mdm','mdm.windows'), ('fixture-agent','agent','agent.builtin'), ('fixture-alone','mdm','mdm.windows')]
-    if browser_module in {'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}: devices.append(('fixture-mac','mdm','mdm.apple'))
+    devices = [('4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8','mdm','mdm.windows'), ('d452e3d0-e318-53fa-84f0-10447d70893a','agent','agent.builtin'), ('ce1bacfb-5e6f-54bf-875e-a40f1f598569','mdm','mdm.windows')]
+    if browser_module in {'react-devices-browser.mjs', 'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}: devices.append(('d8befebe-00eb-524f-a5c4-81613bb0a344','mdm','mdm.apple'))
     devices += [(f'extra-{index:02}', 'agent', 'agent.builtin') for index in range(24)]
     for device, channel, source in devices:
         grant, request, credential = [str(uuid.uuid4()) for _ in range(3)]
@@ -107,7 +107,7 @@ def seed():
                 f"INSERT INTO mdm_access.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES('{tenant}','{credential}','{device}','primary','{channel}',md5('{credential}')||md5('{device}'),'active')"]
         if channel == 'mdm':
             sql.append(f"INSERT INTO mdm_access.report_sources(tenant_id,device,source,epoch,enabled) SELECT tenant_id,id,'{source}',epoch,true FROM mdm_access.devices WHERE tenant_id='{tenant}' AND id='{device}'")
-        if browser_module in {'react-audit-webhooks-browser.mjs', 'react-execution-access-browser.mjs'} and device == 'fixture-mdm':
+        if browser_module in {'react-audit-webhooks-browser.mjs', 'react-execution-access-browser.mjs'} and device == '4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8':
             # Same controlled Windows capability prerequisite as rss-mdm device/mod.rs; no device effect claim.
             sql.append(f"INSERT INTO mdm_windows.capabilities(tenant_id,device,protocol_epoch,os_version,edition,session,observed_at) SELECT tenant_id,id,epoch,'10.0.22621.0',48,1,1 FROM mdm_access.devices WHERE tenant_id='{tenant}' AND id='{device}'")
         fact=dict(state=dict(kind='known',value=dict(kind='string',value=device)),lastKnown=None,evidence=dict(scope=dict(kind='device'),source='manual',dataset=None,deviceId=None,epoch=None,snapshotId=str(uuid.uuid4()),observedAt=1,receivedAt=2,actor=ADMIN))
@@ -318,7 +318,7 @@ try:
     if browser_module == 'react-assets-browser.mjs':
         phase = 'manual-array-seed'
         # The product owner stores immutable array versions and ordinal indexes atomically.
-        for device, count in [('fixture-mdm',25),('fixture-agent',3),('fixture-alone',25)]:
+        for device, count in [('4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8',25),('d452e3d0-e318-53fa-84f0-10447d70893a',3),('ce1bacfb-5e6f-54bf-875e-a40f1f598569',25)]:
             time.sleep(.2)  # Keep fixture writes below the unchanged gateway request budget.
             status, _ = operator.call('PUT', f'/api/v1/devices/{device}/manual-fields/custom.browser_list',
                 dict(operationId=str(uuid.uuid4()),expectedRevision=0,
@@ -346,7 +346,7 @@ try:
         if status != 200: raise RuntimeError('personnel-profile-read')
         status, _ = operator.call('PUT', profile_path, dict(operationId=str(uuid.uuid4()),expectedRevision=profile['revision'],value=dict(displayName='Device Browser Person',username='person-source-alias',email=None,extensions={},maxAgeSeconds=14400)))
         if status != 200: raise RuntimeError('personnel-profile-write')
-        status, _ = operator.call('PUT', '/api/v1/devices/fixture-mdm/registration-user', dict(expectedRevision=0,user=dict(tenantId=TENANTS[0],instanceId=INSTANCE,principalId=ADMIN)), operation=str(uuid.uuid4()))
+        status, _ = operator.call('PUT', '/api/v1/devices/4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8/registration-user', dict(expectedRevision=0,user=dict(tenantId=TENANTS[0],instanceId=INSTANCE,principalId=ADMIN)), operation=str(uuid.uuid4()))
         if status != 200: raise RuntimeError('personnel-owner-write')
     if browser_module == 'react-audit-webhooks-browser.mjs':
         phase = 'console-prerequisites'
@@ -375,7 +375,7 @@ try:
         # A real different tenant owns this endpoint; ordinary tenant-scoped UI cannot read it.
         environment.sql(installation_sql()+f"SELECT public.create_new_tenant('{TENANTS[1]}',1,NULL,NULL) WHERE NOT EXISTS (SELECT 1 FROM public.mdm_tenants WHERE tenant_id='{TENANTS[1]}')", 'mdm_dev')
         foreign_grant = str(uuid.uuid4())
-        environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','foreign-assets-endpoint','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','foreign-assets-endpoint','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
+        environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','316fdd38-45b8-529e-b278-8baccd6aa0e2','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','316fdd38-45b8-529e-b278-8baccd6aa0e2','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
     phase = 'collector-registration'
     module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
     collector = importlib.util.module_from_spec(module)
@@ -384,7 +384,7 @@ try:
     if browser_module == 'react-recovery-browser.mjs':
         phase = 'recovery-prerequisites'
         recovery_fixture.prepare(operator, recovery, environment, private)
-    fixture=private(environment.root/'browser.json',dict(executionAccess=execution_access,recovery=recovery,otherTenant=TENANTS[1], foreignDevice='foreign-assets-endpoint' if browser_module == 'react-assets-browser.mjs' else None, personB=person_b, console=console, backendRevision=backend_revision, devices=['fixture-agent','fixture-alone'], target='internal', upstream=upstream if browser_module == 'react-software-browser.mjs' else None, collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='fixture-mdm',agent='fixture-agent',alone='fixture-alone',ruleId=rule_id,rule=rule))
+    fixture=private(environment.root/'browser.json',dict(executionAccess=execution_access,recovery=recovery,otherTenant=TENANTS[1], foreignDevice='316fdd38-45b8-529e-b278-8baccd6aa0e2' if browser_module == 'react-assets-browser.mjs' else None, personB=person_b, console=console, backendRevision=backend_revision, devices=['d452e3d0-e318-53fa-84f0-10447d70893a','ce1bacfb-5e6f-54bf-875e-a40f1f598569'], target='internal', upstream=upstream if browser_module == 'react-software-browser.mjs' else None, collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8',agent='d452e3d0-e318-53fa-84f0-10447d70893a',alone='ce1bacfb-5e6f-54bf-875e-a40f1f598569',ruleId=rule_id,rule=rule))
     phase='browser'
     browser=subprocess.run(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')
@@ -404,7 +404,7 @@ except BaseException as error:
                 print(json.dumps(dict(phase='readiness-components', components=[{key: component[key] for key in ('name','readiness','health','reasons')} for component in diagnostic_snapshot['components']])), flush=True)
         except Exception:
             print(json.dumps(dict(phase='readiness-components', result='unavailable')), flush=True)
-    if browser_module in {'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs', 'react-telemetry-browser.mjs'}:
+    if browser_module in {'react-devices-browser.mjs', 'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs', 'react-telemetry-browser.mjs'}:
         diagnostics = subprocess.run(['docker', 'logs', environment.container()], capture_output=True, text=True, timeout=10, pass_fds=lease_fds())
         for line in (diagnostics.stdout + diagnostics.stderr).splitlines():
             if 'ERROR:' not in line:

@@ -1,3 +1,4 @@
+import { agentPackagesJourney } from './agent-packages-journey.mjs'
 import { realBrowser } from './react-mdm-browser.mjs'
 import assert from 'node:assert/strict'
 import { createHash, randomUUID } from 'node:crypto'
@@ -36,6 +37,7 @@ try {
   checks.push('anonymous-fixed-installer-catalog-and-present-package-bytes')
   const admin = await run.page()
   await run.login(admin)
+  await agentPackagesJourney(run, admin, anonymous)
   const api = async (method, path, data) => {
     await new Promise((done) => setTimeout(done, 200))
     let headers
@@ -194,75 +196,6 @@ try {
   assert.equal(replayCancellation, originalCancellation)
   await employee.unroute(origin + cancellationPath)
   checks.push('unknown-native-maintenance-retains-original-request-and-fences-enrollment-selection')
-
-  await run.nav(admin, '/enroll', '设备注册')
-  await admin.getByRole('tab', { name: '管理员安装配置', exact: true }).click()
-  await admin.getByRole('button', { name: '生成管理员安装配置', exact: true }).click()
-  const dialog = admin.getByRole('dialog', { name: '交付管理员安装配置', exact: true })
-  await dialog.getByRole('checkbox', { name: '通过受保护渠道交付此秘密 JSON', exact: true }).check()
-  const configurationPath = '/api/v1/agent-configurations'
-  const delivered = await run.response(admin, 'POST', configurationPath, () =>
-    dialog.getByRole('button', { name: '签发并准备下载 JSON', exact: true }).click(),
-  )
-  const originalBytes = await delivered.body(),
-    document = JSON.parse(originalBytes.toString('utf8'))
-  assert.ok(document.configuration && document.secret && document.signature)
-  const download = admin.waitForEvent('download')
-  await dialog.getByRole('link', { name: '下载 rss-agent-enrollment.json', exact: true }).click()
-  const file = await download
-  let received = Buffer.alloc(0)
-  for await (const chunk of await file.createReadStream())
-    received = Buffer.concat([received, chunk])
-  assert.equal(received.equals(originalBytes), true)
-  received.fill(0)
-  originalBytes.fill(0)
-  document.secret = ''
-  await file.delete()
-  const issuedCount = run.count(admin, 'POST', configurationPath)
-  await admin.evaluate(() => {
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
-    document.dispatchEvent(new Event('visibilitychange'))
-    delete document.visibilityState
-  })
-  await dialog
-    .getByRole('link', { name: '下载 rss-agent-enrollment.json', exact: true })
-    .waitFor({ state: 'hidden' })
-  assert.equal(run.count(admin, 'POST', configurationPath), issuedCount)
-  await dialog.locator('.ant-modal-close').click()
-  checks.push('single-json-exact-bytes-secret-clears-on-hide-no-automatic-issuance')
-
-  await admin.getByRole('button', { name: '生成管理员安装配置', exact: true }).click()
-  await dialog.getByRole('checkbox', { name: '通过受保护渠道交付此秘密 JSON', exact: true }).check()
-  let lostOperation
-  const pattern = origin + configurationPath
-  await admin.route(pattern, async (route) => {
-    if (route.request().method() !== 'POST') return route.continue()
-    lostOperation = route.request().postDataJSON().operationId
-    const response = await route.fetch()
-    assert.equal(response.status(), 200)
-    await route.abort('failed')
-  })
-  await dialog.getByRole('button', { name: '签发并准备下载 JSON', exact: true }).click()
-  await dialog.getByRole('button', { name: '查询原签发操作', exact: true }).waitFor()
-  const lostCount = run.count(admin, 'POST', configurationPath)
-  await run.response(admin, 'GET', `/api/v1/agent-configuration-operations/${lostOperation}`, () =>
-    dialog.getByRole('button', { name: '查询原签发操作', exact: true }).click(),
-  )
-  await dialog
-    .getByText('原配置已找到，秘密文件不能恢复。请在详情确认撤销后，再显式开始新签发。', {
-      exact: true,
-    })
-    .waitFor()
-  assert.equal(await dialog.locator('a[download]').count(), 0)
-  assert.equal(run.count(admin, 'POST', configurationPath), lostCount)
-  await dialog.getByRole('button', { name: '确认撤销原安装配置', exact: true }).click()
-  await dialog.getByRole('button', { name: '配置已撤销，准备新签发', exact: true }).waitFor()
-  await admin.unroute(pattern)
-  await dialog.locator('.ant-modal-close').click()
-  await admin.reload()
-  await admin.getByRole('heading', { name: '设备注册', exact: true }).waitFor()
-  assert.equal(run.count(admin, 'POST', configurationPath), lostCount)
-  checks.push('committed-json-loss-original-metadata-only-revoke-before-new-no-refresh-reissue')
 
   await run.nav(admin, '/connections', '连接配置')
   await admin.getByRole('tab', { name: '存储', exact: true }).click()

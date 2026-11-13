@@ -40,7 +40,9 @@ export interface ScopeTask {
   readonly replacementTask: string | null
 }
 export interface ScopeSource {
-  readonly reference: ScopeReference
+  readonly reference:
+    | { readonly kind: 'direct'; readonly object: DeviceRef }
+    | { readonly kind: 'group'; readonly id: string }
   readonly version: number
 }
 export interface ScopeDecision {

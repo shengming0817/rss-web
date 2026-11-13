@@ -1,0 +1,94 @@
+"""Disposable ordinary installed candidate for signed JSON delivery; no observation seeds."""
+from contextlib import ExitStack
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import socket
+import subprocess
+import sys
+import signal
+import tempfile
+import uuid
+WEB = Path(sys.argv[1]).resolve()
+BACKEND = Path.cwd()
+sys.path.insert(0, str(BACKEND/'hack'))
+from build_run import lease_fds
+from candidate_installation import tls
+from candidate_installation_driver import Installation, Browser, until, observe_runtime
+from candidate_runtime import verify_candidate, image_identity, load_ui
+from dev_environment import private
+from ingress_network import Ingress
+from gateway_fixture import Gateway
+from pki_fixtures import running
+candidate = Path(os.environ['MDM_ENROLLMENT_CANDIDATE']).resolve()
+manifest = verify_candidate(candidate)
+ui = load_ui(candidate, manifest['ui'])
+def interrupted(*_args): raise KeyboardInterrupt()
+for item in (signal.SIGINT, signal.SIGTERM): signal.signal(item, interrupted)
+temporary = tempfile.mkdtemp(prefix='rss-web-enrollment-installation-')
+with ExitStack() as providers:
+    root = Path(temporary); inputs = root/'inputs'; inputs.mkdir(mode=0o700); tls(inputs)
+    # Formal runtime probes verify the localhost identity used by the browser.
+    (inputs/'gateway.ext').write_text('subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost\n')
+    subprocess.run(['openssl','req','-new','-newkey','rsa:2048','-nodes','-subj','/CN=localhost','-keyout',str(inputs/'gateway.key'),'-out',str(inputs/'gateway.csr')],check=True,capture_output=True,timeout=30)
+    subprocess.run(['openssl','x509','-req','-in',str(inputs/'gateway.csr'),'-CA',str(inputs/'ca.crt'),'-CAkey',str(inputs/'ca.key'),'-CAcreateserial','-days','2','-extfile',str(inputs/'gateway.ext'),'-out',str(inputs/'gateway.crt')],check=True,capture_output=True,timeout=30)
+    for file in inputs.iterdir(): file.chmod(0o600)
+    with socket.socket() as listener: listener.bind(('127.0.0.1',0)); port=listener.getsockname()[1]
+    origin=f'https://localhost:{port}'; project='mdm-web-install-'+uuid.uuid4().hex[:12]
+    network=Ingress(root,project,project); allocation=network.allocate(); providers.callback(network.release)
+    values=dict(MDM_POSTGRES_IMAGE=manifest['providers']['postgres'],MDM_GATEWAY_IMAGE=manifest['providers']['nginx'],MDM_SERVER_IMAGE=image_identity(manifest['image'])['id'],MDM_INSTALLER_IMAGE=image_identity(manifest['installer']['image'])['id'],MDM_WEB_IMAGE=ui['id'],MDM_INPUT_DIRECTORY=str(inputs),MDM_PRODUCT_ORIGIN=origin,MDM_PG_MAX_CONNECTIONS=160,MDM_GATEWAY_BIND_IP='127.0.0.1',**allocation)
+    private(root/'.env',''.join(f'{key}={value}\n' for key,value in values.items()))
+    for name in ('production.compose.yaml','render_gateway.py'): shutil.copy(candidate/'deployment'/name,root/name)
+    owner=Installation(root,root/'production.compose.yaml',project)
+    cleanup=False
+    try:
+        owner.compose('up','-d','postgres'); owner.compose('run','--rm','init')
+        owner.ports_file=root/'gateway-ports.compose.yaml'; owner.ports_file.write_text(owner.read('/var/lib/rss-mdm/runtime/gateway/gateway-ports.compose.yaml'))
+        model=json.loads(owner.compose('config','--format','json'))
+        spec=importlib.util.spec_from_file_location('enrollment_gateway_renderer',root/'render_gateway.py'); renderer=importlib.util.module_from_spec(spec); spec.loader.exec_module(renderer)
+        Gateway('',model['services']['gateway']['ports'],renderer).publish(owner.ports_file,isolated=True,published={port:port})
+        owner.compose('up','-d')
+        runtime=json.loads(owner.read('/var/lib/rss-mdm/runtime/primary/server/runtime.json'))
+        tenant=runtime['identity']['tenant_id']; service=runtime['identity']['instance_id']
+        native=root/'pki'; native.mkdir(mode=0o700)
+        for source,target in [('ca.crt','ca.crt'),('ca.key','ca.key'),('gateway.crt','server.crt'),('gateway.key','server.key')]: shutil.copy(inputs/source,native/target); (native/target).chmod(0o600)
+        private(native/'case.json',dict(tenant=tenant))
+        provider=providers.enter_context(running(native,dict(os.environ),case=project,agent=True,agent_origin=origin,instance_id=service))
+        def mounted(value):
+            if isinstance(value,dict): return {key: mount_file(item) if key.endswith('_file') else mounted(item) for key,item in value.items()}
+            if isinstance(value,list): return [mounted(item) for item in value]
+            return value
+        def mount_file(value):
+            source=Path(value); name=uuid.uuid4().hex+'-'+source.name; target=inputs/name; shutil.copy(source,target); target.chmod(0o600); return '/var/lib/rss-mdm/inputs/'+name
+        agent=mounted(json.loads((native/'agent-pki.json').read_text()))
+        configured=mounted(json.loads((native/'device-pki.json').read_text()))
+        for entry in configured: entry['origin']='https://'+provider.internal_host+':19443'
+        installation=json.loads(owner.read('/var/lib/rss-mdm/installation-input.json'))
+        change=dict(installation=installation,operation_id=str(uuid.uuid4()),host_id=runtime['runtime_binding']['host_id'],expected_revision=runtime['runtime_binding']['revision'],change=dict(kind='channels',settings=dict(windows=None,apple=None,agent=agent,providers=configured,apple_material_roots=[])))
+        private(inputs/'channels.json',change)
+        owner.product('configure-host','/var/lib/rss-mdm/inputs/channels.json')
+        owner.product('prepare-hosts')
+        owner.compose('create','--force-recreate','server')
+        server=owner.compose('ps','-a','-q','server')
+        subprocess.run(['docker','network','connect',provider.owner.project+'_default',server],check=True,capture_output=True,timeout=30)
+        owner.compose('start','server')
+        owner.compose('exec','-T','gateway','nginx','-t','-c','/run/gateway/nginx.conf'); owner.compose('exec','-T','gateway','nginx','-s','reload','-c','/run/gateway/nginx.conf')
+        operator=Browser(origin,inputs/'gateway-ca.crt',port)
+        until(lambda: operator.call('GET','/readyz')[0]==200)
+        operator.login(tenant,'administrator',(inputs/'administrator-password').read_text().strip())
+        status,draft=operator.call('PUT','/api/v1/agent-connections',dict(operationId=str(uuid.uuid4()),expectedRevision=0,preferredOrigin=origin,origins=[origin]))
+        if status!=200: raise RuntimeError('installation-connection-draft')
+        owner.product('prepare-hosts')
+        runtime=json.loads(owner.read('/var/lib/rss-mdm/runtime/primary/server/runtime.json')); observe_runtime(operator,runtime)
+        status,state=operator.call('GET','/api/v1/agent-connections')
+        if status!=200 or not state['deployments']: raise RuntimeError('installation-deployment-observation')
+        fixture=private(root/'browser.json',dict(origin=origin,tenant=tenant,serviceId=service,admin=dict(login='administrator',passwordFile=str(inputs/'administrator-password')),verificationKeys=state['verificationKeys']))
+        child=subprocess.run(['node',str(WEB/'e2e/mdm/react-signed-configuration-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds(),timeout=780)
+        if child.returncode: raise RuntimeError('signed-configuration-browser')
+    finally:
+        owner.cleanup(); cleanup=True
+        print(json.dumps(dict(phase='signed-configuration-cleanup',result='passed' if cleanup else 'failed')),flush=True)
+
+shutil.rmtree(temporary)

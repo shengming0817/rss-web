@@ -5,7 +5,7 @@ import { createRecoveryCredentialsAdapter } from './recovery-credentials'
 const id = '11111111-1111-4111-8111-111111111111',
   operationId = '22222222-2222-4222-8222-222222222222',
   custody = '44444444-4444-4444-8444-444444444444',
-  device = 'device-a'
+  device = '48ade991-ac14-5214-92fe-7084429906bf'
 const target = { device, id, version: 2 }
 const material = (subject: Subject = { kind: 'recovery_lock' }) => ({
   id,
@@ -120,10 +120,10 @@ it('keeps FileVault selection, collection CAS and custody link on their formal r
       recipientId: 'escrow-recipient',
     },
   })
-  await f.core.link(device, operationId, 'device-b')
+  await f.core.link(device, operationId, '99b35d85-275f-534b-b34c-608698cb583a')
   expect(f.request.mock.calls[2]![0]).toMatchObject({
     path: '/api/v1/devices/{device}/recovery-credentials/filevault/link',
-    body: { operationId, otherDevice: 'device-b' },
+    body: { operationId, otherDevice: '99b35d85-275f-534b-b34c-608698cb583a' },
   })
   expect(configuration().revision).not.toBe(configuration().materialRevision)
 })

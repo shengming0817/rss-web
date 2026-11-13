@@ -223,10 +223,20 @@ try {
     animations: 'disabled',
   })
   await page.setViewportSize({ width: 1440, height: 960 })
-  await run.nav(page, '/diagnostics', '运行诊断')
-  await page.getByText('按组件所属模块拆分的诊断尚未就绪', { exact: true }).waitFor()
-  assert.equal(run.count(page, 'GET', '/api/v1/runtime/diagnostics'), 0)
-  checks.push('production-explicit-contract-gap-no-retired-dto', 'responsive-public-layouts')
+  const diagnosticResponse = run.response(page, 'GET', '/api/v1/runtime/diagnostics', () =>
+    run.nav(page, '/diagnostics', '运行诊断'),
+  )
+  const diagnostic = await (await diagnosticResponse).json()
+  assert.ok(diagnostic.components.length >= 21)
+  for (const component of diagnostic.components)
+    await page.locator(`[data-diagnostic-owner="${component.name}"]`).waitFor()
+  assert.ok(
+    !diagnostic.components.some((component) =>
+      ['automation', 'execution_recovery'].includes(component.name),
+    ),
+  )
+  await page.getByRole('heading', { name: '首次使用意图', exact: true }).waitFor()
+  checks.push('production-current-owner-diagnostics-and-first-use', 'responsive-public-layouts')
   // Revoke configuration permissions through the existing formal rule owner.
   const rule = {
     ...fixture.rule,

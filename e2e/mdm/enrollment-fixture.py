@@ -153,10 +153,10 @@ try:
     tenant = TENANTS[0]
     registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
     environment.sql(installation_sql()+f"SET rss.tenant_id='{tenant}';"
-        f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','enrollment-existing','enrollment','consumed',clock_timestamp()+interval '2 minutes');"
-        f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile,state,expires_at,issuance_operation,password_digest,password_version,credential_ref) VALUES('{tenant}','{request}','enrollment-existing','{grant}','mdm.windows','Device','bound',clock_timestamp()+interval '1 hour',gen_random_uuid(),repeat('0',64),1,'{credential}');"
-        f"INSERT INTO mdm_access.devices(tenant_id,id,channel,request_id,state,purpose,epoch,first_authenticated_at) VALUES('{tenant}','enrollment-existing','mdm','{request}','active','primary',gen_random_uuid(),clock_timestamp());"
-        f"INSERT INTO mdm_access.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES('{tenant}','{credential}','enrollment-existing','primary','mdm',md5('{credential}')||md5('{registration}'),'active');", 'mdm_dev')
+        f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','63804753-e02e-5502-943a-8c4050b5c7fc','enrollment','consumed',clock_timestamp()+interval '2 minutes');"
+        f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile,state,expires_at,issuance_operation,password_digest,password_version,credential_ref) VALUES('{tenant}','{request}','63804753-e02e-5502-943a-8c4050b5c7fc','{grant}','mdm.windows','Device','bound',clock_timestamp()+interval '1 hour',gen_random_uuid(),repeat('0',64),1,'{credential}');"
+        f"INSERT INTO mdm_access.devices(tenant_id,id,channel,request_id,state,purpose,epoch,first_authenticated_at) VALUES('{tenant}','63804753-e02e-5502-943a-8c4050b5c7fc','mdm','{request}','active','primary',gen_random_uuid(),clock_timestamp());"
+        f"INSERT INTO mdm_access.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES('{tenant}','{credential}','63804753-e02e-5502-943a-8c4050b5c7fc','primary','mdm',md5('{credential}')||md5('{registration}'),'active');", 'mdm_dev')
     log_path = private(environment.root/'product.log', '')
     with log_path.open('w') as log:
         phase = 'signer'
@@ -203,21 +203,13 @@ try:
                 value['grants'] = [grant for grant in value['grants'] if grant['operation'] not in archive_permissions]
                 status, _ = operator.call('PUT', '/api/v1/authorization/rules/'+existing['id'], dict(operationId=str(uuid.uuid4()),expectedRevision=existing['revision'],value=value))
                 if status != 200: raise RuntimeError('certificate-authority-scope')
-        if browser_module == 'react-enrollment-browser.mjs':
-            # Publish through the current product owner after verifying the disposable deployed host.
-            connection_origin = agent['endpoint']['origin']
-            status, draft = operator.call('PUT', '/api/v1/agent-connections', dict(operationId=str(uuid.uuid4()), expectedRevision=0, preferredOrigin=connection_origin, origins=[connection_origin]))
-            if status != 200: raise RuntimeError('fixture-agent-connection-save')
-            # Deployment observations belong to the installer/prepare-hosts owner (#3144).
-            phase = 'agent-connection-publish'
-            status, _ = operator.call('POST', '/api/v1/agent-connections/publish', dict(operationId=str(uuid.uuid4()), expectedRevision=draft['configuration']['revision']))
-            if status != 200:
-                print(json.dumps(dict(phase=phase, status=status, blockedBy=3144)), flush=True)
-                raise RuntimeError('fixture-agent-connection-publish')
         installer_release = None
+        installer_file = None
         if browser_module == 'react-enrollment-browser.mjs':
-            from agent_installer_fixture import publish
+            from agent_installer_fixture import publish, installer_bytes
             installer_release = publish(operator)
+            installer_file = private(environment.root/'installer.exe', '')
+            installer_file.write_bytes(installer_bytes())
         module = importlib.util.spec_from_file_location('enrollment_device_agent',WEB/'e2e/mdm/device-agent.py')
         collector = importlib.util.module_from_spec(module); module.loader.exec_module(collector)
         agent_fixture = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0])
@@ -233,7 +225,7 @@ try:
             origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,ruleId=rule_id,rule=authority_rule,
             admin=dict(login='admin',passwordFile=str(environment.root/'account-password')),
             reader=dict(login='reader',passwordFile=str(reader_password)),
-            installerRelease=installer_release, existingDevice='enrollment-existing'))
+            installerFile=str(installer_file) if installer_file else None, installerRelease=installer_release, existingDevice='63804753-e02e-5502-943a-8c4050b5c7fc'))
         browser = subprocess.Popen(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,
             env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
         processes.append(browser)

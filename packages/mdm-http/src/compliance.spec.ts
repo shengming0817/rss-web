@@ -47,19 +47,24 @@ it('decodes flattened history entries while validating strict assessment facts s
     f = fixture({ items: [value], nextCursor: 'b3BhcXVl' }),
     client = createComplianceAdapter(f.transport)
   expect(
-    await client.history('endpoint', { from: 0, until: 100, cursor: 'cHJldmlvdXM', limit: 1 }),
+    await client.history('0ecbfa6c-9a99-5881-83ed-2059142c94d9', {
+      from: 0,
+      until: 100,
+      cursor: 'cHJldmlvdXM',
+      limit: 1,
+    }),
   ).toEqual({ items: [value], nextCursor: 'b3BhcXVl' })
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       path: '/api/v1/devices/{id}/compliance/history',
-      pathParams: { id: 'endpoint' },
+      pathParams: { id: '0ecbfa6c-9a99-5881-83ed-2059142c94d9' },
       query: { from: 0, until: 100, cursor: 'cHJldmlvdXM', limit: 1 },
     }),
   )
 })
 it('keeps pending current=null and a previous assessment without promoting historical evidence', async () => {
   const value = {
-      device: 'endpoint',
+      device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
       status: 'pending',
       reason: null,
       rules: [
@@ -67,8 +72,12 @@ it('keeps pending current=null and a previous assessment without promoting histo
       ],
     },
     f = fixture(value)
-  expect(await createComplianceAdapter(f.transport).current('endpoint')).toEqual(value)
-  await expect(createComplianceAdapter(f.transport).current('other-endpoint')).rejects.toThrow()
+  expect(
+    await createComplianceAdapter(f.transport).current('0ecbfa6c-9a99-5881-83ed-2059142c94d9'),
+  ).toEqual(value)
+  await expect(
+    createComplianceAdapter(f.transport).current('5f3fffc1-bd48-5095-890d-011848ab3dd9'),
+  ).rejects.toThrow()
 })
 it('allows all applicability observations while retaining the per-field two-source evidence budget', async () => {
   const sources = [id, task, other].map((registration, i) => ({
@@ -79,8 +88,8 @@ it('allows all applicability observations while retaining the per-field two-sour
     value = { ...assessment(), applicability: { ...assessment().applicability, sources } },
     f = fixture({ items: [{ ...value, task, disposition: 'published' }], nextCursor: null })
   expect(
-    (await createComplianceAdapter(f.transport).history('endpoint', {})).items[0]?.applicability
-      .sources,
+    (await createComplianceAdapter(f.transport).history('0ecbfa6c-9a99-5881-83ed-2059142c94d9', {}))
+      .items[0]?.applicability.sources,
   ).toHaveLength(3)
 })
 it('binds a task to its requested rule without assuming task equals the original operation', async () => {

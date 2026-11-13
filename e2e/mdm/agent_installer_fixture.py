@@ -12,7 +12,7 @@ import uuid
 from urllib.parse import urlsplit
 
 
-def publish(operator):
+def installer_bytes():
     body = bytearray(128 * 1024 + 3)
     body[:2] = b'MZ'
     struct.pack_into('<I', body, 0x3c, 0x80)
@@ -28,6 +28,12 @@ def publish(operator):
     body[512] = 0xc3
     body.extend(b'fixture-http-only')
 
+    return bytes(body)
+
+
+def publish(operator):
+    body = installer_bytes()
+
     def call(method, path, data=None, expected=200):
         time.sleep(.2)
         status, value = operator.call(method, path, data)
@@ -36,7 +42,7 @@ def publish(operator):
         return value
 
     started = call('POST', '/api/v1/agent-packages/uploads', dict(operationId=str(uuid.uuid4()),
-        filename='fixture-agent.exe', length=len(body), sha256=list(hashlib.sha256(body).digest())))
+        filename='d452e3d0-e318-53fa-84f0-10447d70893a.exe', length=len(body), sha256=list(hashlib.sha256(body).digest())))
     href = started['href']
     if not href.startswith('/') or href.startswith('//') or urlsplit(href).netloc:
         raise RuntimeError('unexpected installer upload locator')

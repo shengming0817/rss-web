@@ -10,11 +10,13 @@ MDM 的宿主、部署、回退和验收入口见 [MDM 与 Identity 独立前端
 
 新 React 授权、租户和资料的真实 HTTPS Chromium 验证：`MDM_REACT_ADMIN_BACKEND=/absolute/rss-mdm IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:mdm:react-administration-browser`。复用现有资料 fixture 的隔离 PG、Keycloak、MDM 宿主、构建租约与清理，以新应用运行代表旅程；不代替业务租户宿主完整启用或设备实际效果验收。
 
+设备注册详情可读取 Agent 原申请与 Windows 证书申请及恢复历史；Apple 设备显示 DDM 声明与原生观察，发布与设备效果分别确认。`/enroll` 的 Agent 包管理复用 Content 上传、软件定义与原操作查询，提供解析、保存、发布和撤回。
+
 新 React 的 `/devices` 保留终端与关联身份，`/devices/:kind/:id` 提供人员、注册、关系和退管事实；`/enroll` 管理原生注册、通道准入、配额、Apple 组织、Entra 和管理员 Agent 安装配置；`/connections` 分别管理存储、邮件、WNS、Apple 材料与 Agent 连接。匿名固定安装包入口为 `/downloads/agent`，Windows 系统条款入口为 `/enrollment/windows/entra/terms`，均不要求控制台登录。
 
 管理员安装配置只交付一份 `rss-agent-enrollment.json`；隐藏、关闭或离开页面会清除秘密下载。签发结果未知时查询原操作元数据，不能恢复秘密文件；确认撤销后才能显式开始新的签发。刷新和重认证不会自动重放写入。配额和通道读取仅供展示，新注册是否准入由服务端决定；暂停不停止已有设备维护或公开下载。
 
-签名 Agent 安装 JSON 的真实交付需要受控宿主部署观察；当前源码隔离 fixture 在连接发布处被正式前提拒绝，由 #3144 跟踪。保留现有安装配置 HTTP mock/组件覆盖，不能用已删除的私有 integration seed 代替正式部署回执。
+签名 Agent 安装 JSON 的真实交付使用正式安装候选和受控宿主部署观察。运行注册旅程时设置 `MDM_ENROLLMENT_CANDIDATE` 指向包含当前 Web 镜像的固定候选；runner 分别验证普通注册和正式 Compose 安装后的连接发布、JSON 签名及秘密清理。
 
 新设备、注册与连接代表旅程：`MDM_REACT_DEVICES_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-devices-enrollment-browser`。入口构建新应用，复用既有设备与注册 HTTPS 夹具、构建租约和隔离清理。浏览器覆盖目录、关联原请求恢复、后台准入拒绝、单 JSON 交付及连接版本观察；输出无秘密的桌面、移动和暗色页面截图目录。合成注册与测试 PKI 只证明 HTTP 接缝；真实 Windows/macOS 安装、ADE/Entra 组织资格及设备效果分别验收。
 
@@ -46,7 +48,7 @@ Web 使用 `rssmdm://view/v1` 查看地址。规范向量在 `contracts/agent-en
 
 对应真实 HTTPS Chromium 入口为 `MDM_REACT_POLICY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-policy-browser`，复用设备隔离 fixture、构建租约和独立清理；覆盖范围定义、Policy 管理、原事件身份恢复与公开响应式页面。该入口只证明真实 HTTP/界面接缝，不能代替 Windows/macOS 设备效果验收。
 
-新 React `/telemetry` 可直接定位终端，设备详情的“遥测与采集”复用同一工作区。历史与 latest 查询保留设备、来源、源 epoch、字段版本和维度；选择实际观察序列后查询服务端聚合。接收健康和设备自报缺口分别读取，空缺口不代表完整覆盖。配置预览读取绑定的精确 Resource 版本与当前 Policy，采样定义在资源库维护，分配在策略维护；刷新只读数据。浏览器拒绝无法精确表示的整数，避免展示舍入结果。
+新 React `/telemetry` 可直接定位终端，设备详情的“遥测与采集”复用同一工作区。历史与 latest 查询保留设备、来源、源 epoch、字段版本和维度；选择实际观察序列后查询服务端聚合。接收健康和设备自报缺口分别读取，空缺口不代表完整覆盖。配置预览读取绑定的精确 Resource 版本与当前 Policy，采样定义在资源库维护，分配在策略维护；刷新只读数据。整数读数、时间和聚合保留正式十进制文本，图表仅对有界绘图比例取近似；平均值和速率保留充分统计。
 
 真实 HTTPS Chromium 入口：`MDM_REACT_TELEMETRY_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-telemetry-browser`。复用设备隔离环境、构建租约及独立清理，经 Agent mTLS 上报合成观察，验证查询、配置预览、权限拒绝和响应式布局，并输出公开截图。它证明 UI/HTTP 接缝，不替代 Windows/macOS 真机采集效果验收。
 
@@ -54,7 +56,7 @@ Web 使用 `rssmdm://view/v1` 查看地址。规范向量在 `contracts/agent-en
 
 操作排障位于 `/operation-diagnostics`，平台管理使用 `/platform/operation-diagnostics`。可用 HTTP 请求编号、原操作定位或对象、设备、主体及记录时间发现证据。原回执、请求尝试、审计和设备执行分别展示。DA 排障使用业务会话中的 Device Access 上下文。设备动作在输入 PIN 或确认前显示当前产品支持、设备前提与权限。排障和动作预览的真实 HTTPS Chromium 证据由执行、审计及管理旅程覆盖，真机效果单独验收。
 
-`/diagnostics` 使用独立运行诊断权限。当前后端仍输出旧中央聚合，正式入口明确显示新合同尚未就绪，缺口登记为 #3140。`pnpm dev:mdm:diagnostics:demo` 在 loopback 启动显式模拟页面，展示候选 owner 的健康、队列及恢复进度；该入口只演示诊断，不提供登录或产品服务，不进入生产构建。`pnpm test:mdm:react-diagnostics-demo-browser` 验证模拟页面；`MDM_REACT_SETUP_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-setup-browser` 验证真实初始化 HTTP/UI 接缝并确认隔离清理。模拟结果不证明实际后端健康或 Windows/macOS 设备效果。
+`/diagnostics` 使用独立运行诊断权限。正式入口读取当前后端实际 owner 的任务、队列、恢复、分发及健康观察，首次使用意图独立展示。`pnpm dev:mdm:diagnostics:demo` 在 loopback 启动显式模拟页面，展示当前 owner 模型的健康、队列及恢复进度；该入口只演示诊断，不提供登录或产品服务，不进入生产构建。`pnpm test:mdm:react-diagnostics-demo-browser` 验证模拟页面；`MDM_REACT_SETUP_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-setup-browser` 验证真实初始化 HTTP/UI 接缝并确认隔离清理。模拟结果不证明实际后端健康或 Windows/macOS 设备效果。
 
 ## Web 组件开发
 

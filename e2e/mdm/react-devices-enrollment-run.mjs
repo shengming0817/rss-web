@@ -83,6 +83,14 @@ try {
         console.log(JSON.stringify({ phase, result: 'passed', journey }))
       }
     }
+    if (!failure && journey === 'enrollment') {
+      phase = 'signed-configuration'
+      try {
+        await leased([resolve(root, 'e2e/mdm/enrollment-installation-fixture.py'), root], 3600000)
+      } catch (error) {
+        failure = error
+      }
+    }
     if (failure) {
       console.error(
         JSON.stringify({ phase: journey, result: 'failed', classification: failure.message }),

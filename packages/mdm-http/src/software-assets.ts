@@ -165,10 +165,10 @@ export function createSoftwareAssetsAdapter(
         (value) => fixedPage(response(value, 'devices')),
       ),
     evidence: (id, bucket, object, page, signal) =>
-      api.getApiV1SoftwareAssetQueriesByIdSoftwareByBucketDevicesByObjectEvidence(
+      api.getApiV1SoftwareAssetQueriesByIdSoftwareByBucketDevicesByObjectKindByObjectIdEvidence(
         transport,
         {
-          pathParams: { id, bucket, object: `${object.kind}:${object.id}` },
+          pathParams: { id, bucket, object_kind: object.kind, object_id: object.id },
           query: query(page),
           signal,
         },
