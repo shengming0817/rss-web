@@ -9,15 +9,15 @@ function row(): Observation {
     device: 'device-a',
     epoch,
     source: 'agent.script',
-    receivedAt: 30,
+    receivedAt: '30',
     liveSource: true,
     sourceConflict: false,
     sample: {
       id: 'sample',
-      sequence: 1,
-      observedAt: 20,
+      sequence: '1',
+      observedAt: '20',
       interval: null,
-      reading: { quality: 'valid', value: -12.5 },
+      reading: { quality: 'valid', value: { type: 'f64', value: -12.5 } },
       stream: {
         scope: { tenant, namespace: 'mdm.telemetry' },
         source: 'device-a' + ':agent.script',
@@ -27,7 +27,7 @@ function row(): Observation {
         definition: {
           scope: { tenant, namespace: 'mdm.telemetry' },
           key: 'custom.gauge',
-          version: 2,
+          version: '2',
           unit: 'degree',
           metric: { kind: 'gauge', number: 'f64' },
           dimensions: {
@@ -49,8 +49,8 @@ const query: HistoryQuery = {
   device: 'device-a',
   field: 'custom.gauge',
   resource: 'device',
-  startMicros: 0,
-  endMicros: 100,
+  startMicros: '0',
+  endMicros: '100',
   maxPoints: 10,
   mode: 'history',
   after: null,
@@ -60,7 +60,7 @@ function fixture(value: HistoryPage) {
     aggregate = vi.fn(async () => ({
       buckets: [],
       unavailable: [],
-      resolutionMicros: 10,
+      resolutionMicros: '10',
       refreshedThrough: null,
       next: null,
     }))
@@ -72,14 +72,14 @@ function fixture(value: HistoryPage) {
 }
 it('retains real source/epoch/definition/dimensions for aggregate selection', async () => {
   const observation = row(),
-    request = aggregateSelection(query, observation, 'mean', 10, null),
+    request = aggregateSelection(query, observation, 'mean', '10', null),
     f = fixture({ rows: [observation], unavailable: [], next: null, retired: false })
   await f.telemetry.aggregate(request)
   expect(f.aggregate).toHaveBeenCalledWith(
     expect.objectContaining({
       epoch,
       source: 'agent.script',
-      definitionVersion: 2,
+      definitionVersion: '2',
       dimensions: { disk: 'system' },
       coverage: { coverage: 'observedOnly' },
       query: { ...query, mode: 'history', after: null },
@@ -87,7 +87,7 @@ it('retains real source/epoch/definition/dimensions for aggregate selection', as
   )
   expect(seriesKey(observation)).not.toBe(seriesKey({ ...observation, epoch: registration }))
   expect(() =>
-    aggregateSelection({ ...query, device: 'device-b' }, observation, 'mean', 10, null),
+    aggregateSelection({ ...query, device: 'device-b' }, observation, 'mean', '10', null),
   ).toThrow()
 })
 it.each(['tenant', 'device', 'field', 'resource', 'time'] as const)(
@@ -98,7 +98,7 @@ it.each(['tenant', 'device', 'field', 'resource', 'time'] as const)(
       sample: {
         stream: { scope: { tenant: string } }
         series: { subject: string; resource: string; definition: { key: string } }
-        observedAt: number
+        observedAt: string
       }
     }
     if (kind === 'tenant') changed.sample.stream.scope.tenant = registration
@@ -118,7 +118,7 @@ it.each(['tenant', 'device', 'field', 'resource', 'time'] as const)(
 it('rejects latest continuation and invalid windows before calling a port', async () => {
   const f = fixture({ rows: [], unavailable: [], next: null, retired: false })
   await expect(f.telemetry.history({ ...query, mode: 'latest', after: 'cursor' })).rejects.toThrow()
-  await expect(f.telemetry.history({ ...query, endMicros: 0 })).rejects.toThrow()
+  await expect(f.telemetry.history({ ...query, endMicros: '0' })).rejects.toThrow()
   expect(f.history).not.toHaveBeenCalled()
 })
 it('keeps no data distinct from unavailable intervals and rejects foreign unavailable facts', async () => {
@@ -133,7 +133,7 @@ it('keeps no data distinct from unavailable intervals and rejects foreign unavai
             subject: 'device-a',
             scope: { tenant, namespace: 'mdm.telemetry' },
           },
-          window: { start: 0, end: 50 },
+          window: { start: '0', end: '50' },
           reason: 'retention',
         },
       ],
@@ -155,20 +155,20 @@ it('rejects overlapping aggregate windows and preserves coverage information', a
   f.aggregate.mockResolvedValueOnce({
     buckets: [
       {
-        window: { start: 0, end: 10 },
-        coveredMicros: 11,
-        validSamples: 1,
+        window: { start: '0', end: '10' },
+        coveredMicros: '11',
+        validSamples: '1',
         completeness: [],
         value: { kind: 'number', value: 4 },
       },
     ],
     unavailable: [],
-    resolutionMicros: 10,
+    resolutionMicros: '10',
     refreshedThrough: null,
     next: null,
   } as never)
   await expect(
-    f.telemetry.aggregate(aggregateSelection(query, row(), 'mean', 10, null)),
+    f.telemetry.aggregate(aggregateSelection(query, row(), 'mean', '10', null)),
   ).rejects.toThrow('window')
 })
 
@@ -187,9 +187,9 @@ it('uses counter gap and explicit state hold semantics without inventing coverag
         },
       },
     } as Observation
-  expect(aggregateSelection(query, gauge, 'mean', 10, 300).maxGapMicros).toBeNull()
-  expect(() => aggregateSelection(query, counter, 'rate', 10, null)).toThrow('gap required')
-  expect(aggregateSelection(query, counter, 'rate', 10, 300).maxGapMicros).toBe(300)
+  expect(aggregateSelection(query, gauge, 'mean', '10', '300').maxGapMicros).toBeNull()
+  expect(() => aggregateSelection(query, counter, 'rate', '10', null)).toThrow('gap required')
+  expect(aggregateSelection(query, counter, 'rate', '10', '300').maxGapMicros).toBe('300')
   const state = {
     ...gauge,
     sample: {
@@ -203,11 +203,11 @@ it('uses counter gap and explicit state hold semantics without inventing coverag
       },
     },
   } as Observation
-  expect(() => aggregateSelection(query, state, 'coverage', 10, null)).toThrow('coverage')
+  expect(() => aggregateSelection(query, state, 'coverage', '10', null)).toThrow('coverage')
   expect(
-    aggregateSelection(query, state, 'coverage', 10, null, {
+    aggregateSelection(query, state, 'coverage', '10', null, {
       coverage: 'holdLast',
-      maxHoldMicros: 300,
+      maxHoldMicros: '300',
     }).coverage,
-  ).toEqual({ coverage: 'holdLast', maxHoldMicros: 300 })
+  ).toEqual({ coverage: 'holdLast', maxHoldMicros: '300' })
 })

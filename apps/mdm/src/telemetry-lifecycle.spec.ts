@@ -43,8 +43,8 @@ const query: HistoryQuery = {
   device: 'device-a',
   field: 'custom.gauge',
   resource: 'device',
-  startMicros: 0,
-  endMicros: 100,
+  startMicros: '0',
+  endMicros: '100',
   maxPoints: 10,
   mode: 'history',
   after: null,
@@ -55,15 +55,15 @@ const page: HistoryPage = {
       device: 'reg',
       source: 'agent.script',
       epoch: 'epoch',
-      receivedAt: 30,
+      receivedAt: '30',
       liveSource: false,
       sourceConflict: false,
       sample: {
         id: 'sample',
-        sequence: 1,
-        observedAt: 20,
+        sequence: '1',
+        observedAt: '20',
         interval: null,
-        reading: { quality: 'valid', value: -12.5 },
+        reading: { quality: 'valid', value: { type: 'f64', value: -12.5 } },
         stream: {
           scope: { tenant: 'tenant', namespace: 'mdm.telemetry' },
           source: 'reg:agent.script',
@@ -73,7 +73,7 @@ const page: HistoryPage = {
           definition: {
             scope: { tenant: 'tenant', namespace: 'mdm.telemetry' },
             key: 'custom.gauge',
-            version: 1,
+            version: '1',
             unit: 'degree',
             metric: { kind: 'gauge', number: 'f64' },
             dimensions: {
@@ -118,7 +118,7 @@ function runtime(
     inventory: {
       fields: async () => ({ items: [], nextCursor: null, dictionary: 'catalog' }),
       field: async () => ({
-        version: 1,
+        version: '1',
         definition: { timeSeries: { aggregations: ['min', 'mean'] } },
       }),
     },
@@ -252,7 +252,10 @@ it('removes previously visible observations when the document is hidden', async 
 it('does not use the current field revision to suppress valid frozen historical aggregates', () => {
   const row = page.rows[0]!
   expect(
-    queryAggregations(row, { version: 1, definition: { timeSeries: { aggregations: ['mean'] } } }),
+    queryAggregations(row, {
+      version: 1,
+      definition: { timeSeries: { aggregations: ['mean'] } },
+    }),
   ).toEqual(['mean'])
   expect(queryAggregations(row, { version: 2, definition: null })).toContain('min')
 })

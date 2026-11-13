@@ -51,6 +51,7 @@ try {
   })
   for (const [name, kind, valueType, unit] of [
     ['gauge', 'gauge', { kind: 'number' }, 'degree'],
+    ['integer', 'gauge', { kind: 'integer' }, 'unit'],
     ['counter', 'cumulative_counter', { kind: 'integer' }, 'byte'],
     ['state', 'state', { kind: 'enum', values: ['running', 'stopped'] }, 'state'],
   ]) {
@@ -74,7 +75,7 @@ try {
         dimensions: {},
         aggregations:
           kind === 'gauge'
-            ? ['min', 'max', 'mean', 'count']
+            ? ['min', 'max', 'sum', 'mean', 'count']
             : kind === 'state'
               ? ['timeline', 'transitions', 'coverage']
               : ['increase', 'rate'],
@@ -138,7 +139,7 @@ try {
         counter: { type: 'integer' },
         state: { type: 'string' },
       },
-      required: ['gauge', 'counter', 'state'],
+      required: ['gauge', 'counter', 'state', 'integer'],
       additionalProperties: false,
     },
     purpose: {
@@ -153,7 +154,7 @@ try {
         capabilities: [],
       },
       mappings: Object.fromEntries(
-        ['gauge', 'counter', 'state'].map((k) => [
+        ['gauge', 'counter', 'state', 'integer'].map((k) => [
           `custom.browser.${k}`,
           { pointer: '/' + k, conversion: { kind: 'identity' }, columns: {} },
         ]),
@@ -207,7 +208,7 @@ try {
         architecture: 'aarch64',
       },
       parameters: {},
-      fields: ['gauge', 'counter', 'state'].map((key) => ({
+      fields: ['gauge', 'counter', 'state', 'integer'].map((key) => ({
         key: 'custom.browser.' + key,
         version: 1,
       })),
@@ -443,12 +444,44 @@ try {
     )
   assert.ok(rateBucket, 'counter rate bucket')
   const rate = rateBucket.value.Rate,
-    increase = Object.values(rate.increase)[0],
-    expectedRate = increase / (rate.duration_micros / 1_000_000)
+    increase = Object.values(rate.increase)[0]
   await page
     .locator('.telemetry-aggregate')
-    .getByRole('cell', { name: String(expectedRate) + ' byte/s', exact: true })
+    .getByText(new RegExp(`\\(${BigInt(increase) * 1000000n} / ${rate.duration_micros}\\)`))
     .waitFor()
+  await queryField('custom.browser.integer')
+  const integerResponse = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+    button('查询已上报数据').click(),
+  )
+  const integers = (await integerResponse.json()).rows.filter(
+    (row) => row.sample.reading.quality === 'valid',
+  )
+  const exactValues = integers.map((row) => row.sample.reading.value.value.value)
+  assert.ok(exactValues.includes('-9223372036854775808'))
+  assert.ok(exactValues.includes('9223372036854775807'))
+  for (const value of ['9007199254740992', '9007199254740993']) {
+    assert.ok(exactValues.includes(value))
+    await page
+      .getByRole('cell', { name: value + ' unit', exact: true })
+      .first()
+      .waitFor()
+  }
+  await selectSeries()
+  await run.choose(page, label('聚合含义'), '合计')
+  const sumResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
+    button('查询聚合').click(),
+  )
+  const sums = (await sumResponse.json()).buckets.filter(
+    (bucket) => typeof bucket.value === 'object' && bucket.value && 'Sum' in bucket.value,
+  )
+  assert.ok(
+    sums.some(
+      (bucket) =>
+        BigInt(Object.values(bucket.value.Sum)[0]) > 9007199254740991n ||
+        BigInt(Object.values(bucket.value.Sum)[0]) < -9007199254740991n,
+    ),
+  )
+  coverage.push('real-mtls-i64-extremes-adjacent-large-integers-and-i128-aggregate')
   await queryField('custom.browser.state')
   await selectSeries()
   await run.choose(page, label('状态覆盖策略'), '有界保持上一状态')
@@ -472,7 +505,7 @@ try {
     .first()
     .waitFor()
   coverage.push('counter-rate-from-formal-statistics-and-discrete-state-timeline')
-  run.step('no-data-and-unsafe-integer-fixture')
+  run.step('no-data-and-malformed-integer-rejection')
   await label('字段键').fill(query.field)
   await label('序列资源').fill('device')
   await label('开始时间（UTC）').fill(new Date(Date.now() - 86_400_000).toISOString().slice(0, 16))
@@ -491,7 +524,7 @@ try {
   unsafeRow.sample.series.definition.metric = { kind: 'gauge', number: 'i64' }
   unsafeRow.sample.reading.value = {
     type: 'number',
-    value: { type: 'i64', value: '9007199254740992' },
+    value: { type: 'i64', value: '01' },
   }
   await page.route(
     '**/api/v1/telemetry/history',
@@ -507,7 +540,7 @@ try {
     .getByText('无法读取当前数据，请检查查询或连接后重新读取。', { exact: true })
     .waitFor()
   assert.equal(await page.locator('.telemetry-results table tbody tr').count(), 0)
-  coverage.push('real-empty-query-distinct-from-explicit-unsafe-integer-fixture-failure-gap-3139')
+  coverage.push('real-empty-query-distinct-from-malformed-integer-rejection')
   await run.choose(page, label('查询模式'), '最新有效来源')
   await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
     button('查询已上报数据').click(),

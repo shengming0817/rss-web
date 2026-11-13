@@ -11,6 +11,7 @@ import {
   decimal,
   wirePositive,
   wireCount,
+  wireNumber,
 } from './telemetry-scalars'
 import type { TelemetryPort } from '@rss/mdm-telemetry'
 import { sources as sourceIds } from '@rss/mdm-telemetry'
@@ -87,8 +88,8 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
               s.series.subject !== query.device ||
               s.series.resource !== query.resource ||
               s.series.definition.key !== query.field ||
-              s.observedAt < query.startMicros ||
-              s.observedAt >= query.endMicros
+              BigInt(s.observedAt) < BigInt(query.startMicros) ||
+              BigInt(s.observedAt) >= BigInt(query.endMicros)
             )
               throw new Error('Wrong telemetry selection')
           }
@@ -129,10 +130,10 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
             wirePositive(v['resolutionMicros']) !== request.resolutionMicros ||
             buckets.some(
               (b, i) =>
-                b.window.end <= request.query.startMicros ||
-                b.window.start >= request.query.endMicros ||
-                b.window.end - b.window.start > request.resolutionMicros ||
-                (i > 0 && buckets[i - 1]!.window.end > b.window.start),
+                BigInt(b.window.end) <= BigInt(request.query.startMicros) ||
+                BigInt(b.window.start) >= BigInt(request.query.endMicros) ||
+                BigInt(b.window.end) - BigInt(b.window.start) > BigInt(request.resolutionMicros) ||
+                (i > 0 && BigInt(buckets[i - 1]!.window.end) > BigInt(b.window.start)),
             )
           )
             throw new Error('Wrong aggregate window')
@@ -148,24 +149,40 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
     health: (
       device: string,
       field: string,
-      receivedFrom: number,
-      receivedUntil: number,
+      receivedFrom: string,
+      receivedUntil: string,
       maxBatches = 64,
     ) =>
       api.postApiV1TelemetryHealth(
         transport,
-        { body: { device, field, receivedFrom, receivedUntil, maxBatches } },
+        {
+          body: {
+            device,
+            field,
+            receivedFrom: wireNumber(receivedFrom),
+            receivedUntil: wireNumber(receivedUntil),
+            maxBatches,
+          },
+        },
         health,
       ),
     gaps: (
       device: string,
-      receivedFrom: number,
-      receivedUntil: number,
+      receivedFrom: string,
+      receivedUntil: string,
       after: ReturnType<typeof gapCursor> = null,
     ) =>
       api.postApiV1TelemetryGapsQuery(
         transport,
-        { body: { device, receivedFrom, receivedUntil, limit: 64, after } },
+        {
+          body: {
+            device,
+            receivedFrom: wireNumber(receivedFrom),
+            receivedUntil: wireNumber(receivedUntil),
+            limit: 64,
+            after,
+          },
+        },
         (value) => gaps(value, device),
       ),
   }

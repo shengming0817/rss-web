@@ -1,3 +1,4 @@
+import type { Numeric } from './numbers'
 export const sources = [
   'manual',
   'mdm.windows',
@@ -8,7 +9,7 @@ export const sources = [
   'agent.osquery',
 ] as const
 export type Source = (typeof sources)[number]
-export type Window = { readonly start: number; readonly end: number }
+export type Window = { readonly start: string; readonly end: string }
 export type Metric =
   | { readonly kind: 'gauge'; readonly number: 'i64' | 'u64' | 'f64' }
   | {
@@ -21,7 +22,7 @@ export type Metric =
 export interface Definition {
   readonly scope: { readonly tenant: string; readonly namespace: string }
   readonly key: string
-  readonly version: number
+  readonly version: string
   readonly unit: string
   readonly metric: Metric
   readonly dimensions: {
@@ -34,18 +35,18 @@ export interface Definition {
 }
 export type Reading =
   | { readonly quality: 'missing' | 'failed' }
-  | { readonly quality: 'valid'; readonly value: number | boolean | string }
+  | { readonly quality: 'valid'; readonly value: Numeric | boolean | string }
 export interface Observation {
   readonly device: string
   readonly source: Source
   readonly epoch: string
-  readonly receivedAt: number
+  readonly receivedAt: string
   readonly liveSource: boolean
   readonly sourceConflict: boolean
   readonly sample: {
     readonly id: string
-    readonly sequence: number
-    readonly observedAt: number
+    readonly sequence: string
+    readonly observedAt: string
     readonly interval: Window | null
     readonly reading: Reading
     readonly stream: {
@@ -65,8 +66,8 @@ export interface HistoryQuery {
   readonly device: string
   readonly field: string
   readonly resource: string
-  readonly startMicros: number
-  readonly endMicros: number
+  readonly startMicros: string
+  readonly endMicros: string
   readonly maxPoints: number
   readonly mode: 'history' | 'latest'
   readonly after: string | null
@@ -86,16 +87,16 @@ export const operations = [
 export type Aggregation = (typeof operations)[number]
 export interface AggregateQuery {
   readonly query: HistoryQuery
-  readonly definitionVersion: number
+  readonly definitionVersion: string
   readonly source: Source
   readonly epoch: string
   readonly dimensions: Readonly<Record<string, string>>
-  readonly resolutionMicros: number
+  readonly resolutionMicros: string
   readonly operation: Aggregation
   readonly coverage:
     | { readonly coverage: 'observedOnly' }
-    | { readonly coverage: 'holdLast'; readonly maxHoldMicros: number }
-  readonly maxGapMicros: number | null
+    | { readonly coverage: 'holdLast'; readonly maxHoldMicros: string }
+  readonly maxGapMicros: string | null
 }
 export interface Unavailable {
   readonly selection:
@@ -115,7 +116,11 @@ export interface Unavailable {
   readonly reason: string
 }
 export type AggregateValue =
-  | { readonly kind: 'number'; readonly value: number }
+  | { readonly kind: 'number'; readonly value: Numeric }
+  | { readonly kind: 'sum'; readonly value: Numeric }
+  | { readonly kind: 'count'; readonly value: string }
+  | { readonly kind: 'mean'; readonly sum: Numeric; readonly count: string }
+  | { readonly kind: 'rate'; readonly increase: Numeric; readonly durationMicros: string }
   | { readonly kind: 'missing' }
   | {
       readonly kind: 'timeline'
@@ -124,20 +129,20 @@ export type AggregateValue =
   | {
       readonly kind: 'transitions'
       readonly transitions: readonly {
-        readonly at: number
+        readonly at: string
         readonly from: boolean | string
         readonly to: boolean | string
       }[]
     }
   | {
       readonly kind: 'coverage'
-      readonly durations: readonly { readonly value: boolean | string; readonly micros: number }[]
+      readonly durations: readonly { readonly value: boolean | string; readonly micros: string }[]
     }
 export interface Bucket {
   readonly window: Window
   readonly value: AggregateValue
-  readonly validSamples: number
-  readonly coveredMicros: number
+  readonly validSamples: string
+  readonly coveredMicros: string
   readonly completeness: readonly string[]
 }
 export interface HistoryPage {
@@ -149,8 +154,8 @@ export interface HistoryPage {
 export interface AggregatePage {
   readonly buckets: readonly Bucket[]
   readonly unavailable: readonly Unavailable[]
-  readonly resolutionMicros: number
-  readonly refreshedThrough: number | null
+  readonly resolutionMicros: string
+  readonly refreshedThrough: string | null
   readonly next: string | null
 }
 export interface Configuration {
@@ -226,6 +231,6 @@ export interface TelemetryPort {
   }>
   history(query: HistoryQuery): Promise<HistoryPage>
   aggregate(query: AggregateQuery): Promise<AggregatePage>
-  health(device: string, field: string, from: number, until: number): Promise<Health>
-  gaps(device: string, from: number, until: number, after: GapCursor): Promise<GapPage>
+  health(device: string, field: string, from: string, until: string): Promise<Health>
+  gaps(device: string, from: string, until: string, after: GapCursor): Promise<GapPage>
 }

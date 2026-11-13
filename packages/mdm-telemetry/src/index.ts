@@ -1,3 +1,6 @@
+export { integerText, positiveText, numericText, fractionText } from './numbers'
+export type { Numeric, IntegerKind } from './numbers'
+import { integerText, positiveText } from './numbers'
 export type * from './model'
 export { operations, sources } from './model'
 import { operations, sources } from './model'
@@ -23,8 +26,8 @@ export function seriesKey(row: Observation): string {
     Object.entries(row.sample.series.dimensions).sort(([a], [b]) => a.localeCompare(b)),
   ])
 }
-export function windowRange(from: number, until: number): void {
-  if (![from, until].every((n) => Number.isSafeInteger(n) && n >= 0) || until <= from)
+export function windowRange(from: string, until: string): void {
+  if (BigInt(integerText(until)) <= BigInt(integerText(from)))
     throw new Error('Invalid telemetry window')
 }
 export function validateHistory(query: HistoryQuery): void {
@@ -54,8 +57,8 @@ export function aggregateSelection(
   query: HistoryQuery,
   row: Observation,
   operation: AggregateQuery['operation'],
-  resolutionMicros: number,
-  maxGapMicros: number | null,
+  resolutionMicros: string,
+  maxGapMicros: string | null,
   coverage: AggregateQuery['coverage'] = { coverage: 'observedOnly' },
 ): AggregateQuery {
   if (
@@ -66,9 +69,8 @@ export function aggregateSelection(
     throw new Error('Wrong series selection')
   if (
     !operations.includes(operation) ||
-    !Number.isSafeInteger(resolutionMicros) ||
-    resolutionMicros < 1 ||
-    (maxGapMicros !== null && (!Number.isSafeInteger(maxGapMicros) || maxGapMicros < 1))
+    !positiveText(resolutionMicros) ||
+    (maxGapMicros !== null && !positiveText(maxGapMicros))
   )
     throw new Error('Invalid aggregate selection')
   const metric = row.sample.series.definition.metric
@@ -116,8 +118,8 @@ export function createTelemetry(port: TelemetryPort, tenant: string) {
           sample.series.subject !== query.device ||
           sample.series.resource !== query.resource ||
           sample.series.definition.key !== query.field ||
-          sample.observedAt < query.startMicros ||
-          sample.observedAt >= query.endMicros
+          BigInt(sample.observedAt) < BigInt(query.startMicros) ||
+          BigInt(sample.observedAt) >= BigInt(query.endMicros)
         )
           throw new Error('Wrong telemetry coordinates')
       }
@@ -131,16 +133,12 @@ export function createTelemetry(port: TelemetryPort, tenant: string) {
         !sources.includes(request.source) ||
         !operations.includes(request.operation) ||
         request.query.mode !== 'history' ||
-        !Number.isSafeInteger(request.definitionVersion) ||
-        request.definitionVersion < 1 ||
-        !Number.isSafeInteger(request.resolutionMicros) ||
-        request.resolutionMicros < 1 ||
+        !positiveText(request.definitionVersion) ||
+        !positiveText(request.resolutionMicros) ||
         !['observedOnly', 'holdLast'].includes(request.coverage.coverage) ||
         (request.coverage.coverage === 'holdLast' &&
-          (!Number.isSafeInteger(request.coverage.maxHoldMicros) ||
-            request.coverage.maxHoldMicros < 1)) ||
-        (request.maxGapMicros !== null &&
-          (!Number.isSafeInteger(request.maxGapMicros) || request.maxGapMicros < 1))
+          !positiveText(request.coverage.maxHoldMicros)) ||
+        (request.maxGapMicros !== null && !positiveText(request.maxGapMicros))
       )
         throw new Error('Invalid aggregation')
       const value = await port.aggregate(freeze(request))
@@ -148,23 +146,23 @@ export function createTelemetry(port: TelemetryPort, tenant: string) {
         value.resolutionMicros !== request.resolutionMicros ||
         value.buckets.some(
           (b, i) =>
-            b.window.start >= b.window.end ||
-            b.window.end <= request.query.startMicros ||
-            b.window.start >= request.query.endMicros ||
-            b.window.end - b.window.start > request.resolutionMicros ||
-            b.coveredMicros > b.window.end - b.window.start ||
-            (i > 0 && value.buckets[i - 1]!.window.end > b.window.start),
+            BigInt(b.window.start) >= BigInt(b.window.end) ||
+            BigInt(b.window.end) <= BigInt(request.query.startMicros) ||
+            BigInt(b.window.start) >= BigInt(request.query.endMicros) ||
+            BigInt(b.window.end) - BigInt(b.window.start) > BigInt(request.resolutionMicros) ||
+            BigInt(b.coveredMicros) > BigInt(b.window.end) - BigInt(b.window.start) ||
+            (i > 0 && BigInt(value.buckets[i - 1]!.window.end) > BigInt(b.window.start)),
         )
       )
         throw new Error('Wrong aggregate window')
       validateUnavailable(value.unavailable, request.query, tenant)
       return value
     },
-    health(device: string, field: string, from: number, until: number) {
+    health(device: string, field: string, from: string, until: string) {
       windowRange(from, until)
       return port.health(identifier(device), identifier(field), from, until)
     },
-    gaps(device: string, from: number, until: number, after: GapCursor = null) {
+    gaps(device: string, from: string, until: string, after: GapCursor = null) {
       windowRange(from, until)
       return port.gaps(identifier(device), from, until, after)
     },

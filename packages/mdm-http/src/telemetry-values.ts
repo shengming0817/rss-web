@@ -5,6 +5,7 @@ import type {
   Bucket,
   Health,
   GapPage,
+  Numeric,
 } from '@rss/mdm-telemetry'
 type SampleWire = wireSchemas.postApiV1TelemetryHistoryResponse.HistoryRow['sample']
 type DefinitionWire = SampleWire['series']['definition']
@@ -31,6 +32,7 @@ import {
   finite,
   positive,
 } from './telemetry-scalars'
+import { integerText } from '@rss/mdm-telemetry'
 import { sources as sourceIds } from '@rss/mdm-telemetry'
 export function telemetryId(value: unknown) {
   const s = string(value)
@@ -40,9 +42,9 @@ export function telemetryId(value: unknown) {
 }
 export function interval(value: IntervalWire) {
   const v = value,
-    start = wireCount(v['start']),
-    end = wireCount(v['end'])
-  if (end < start) throw new Error('Invalid window')
+    start = wireInteger(v['start']),
+    end = wireInteger(v['end'])
+  if (BigInt(end) < BigInt(start)) throw new Error('Invalid window')
   return { start, end }
 }
 function scope(value: SampleWire['stream']['scope'], tenant: string) {
@@ -72,15 +74,12 @@ function definition(value: DefinitionWire, tenant: string) {
     },
   }
 }
-export function numeric(value: NumericWire): number {
-  const v = value,
-    kind = v['type']
-  return kind === 'f64'
-    ? finite(v['value'])
-    : kind === 'u64'
-      ? wireCount(v['value'])
-      : wireInteger(v['value'])
+export function numeric(value: NumericWire): Numeric {
+  return value.type === 'f64'
+    ? { type: 'f64', value: finite(value.value) }
+    : { type: value.type, value: integerText(value.value, value.type) }
 }
+
 function reading(value: SampleWire['reading'], expected: ReturnType<typeof metric>): Reading {
   const quality = value['quality']
   if (quality !== 'valid') {
@@ -102,7 +101,9 @@ function reading(value: SampleWire['reading'], expected: ReturnType<typeof metri
         ? type !== 'state' || !expected.members.includes(String(result))
         : type !== 'number' ||
           item['value']['type'] !== expected.number ||
-          (expected.kind === 'counter' && Number(result) < 0)
+          (expected.kind === 'counter' &&
+            typeof result === 'object' &&
+            (result.type === 'f64' ? result.value < 0 : BigInt(result.value) < 0n))
   )
     throw new Error('Reading disagrees with definition')
   return { quality, value: result }
@@ -131,7 +132,7 @@ export function observation(
     sample: {
       id: telemetryId(s['id']),
       sequence: wireCount(s['sequence']),
-      observedAt: wireCount(s['observedAt']),
+      observedAt: wireInteger(s['observedAt']),
       interval: nullable(s['interval'], interval),
       reading: reading(s['reading'], snapshot.metric),
       stream: {
@@ -151,7 +152,7 @@ export function observation(
     device,
     source: origin,
     epoch: uuid(stream['generation']),
-    receivedAt: wireCount(v['receivedAt']),
+    receivedAt: wireInteger(v['receivedAt']),
     liveSource: 'liveSource' in v ? v.liveSource : v.effectiveSource,
     sourceConflict: 'sourceConflict' in v ? v.sourceConflict : false,
   }
@@ -177,27 +178,29 @@ export function unavailable(value: unknown, tenant: string) {
     }
   })
 }
-function sum(value: SumWire) {
+function sum(value: SumWire): Numeric {
   return 'F64' in value
-    ? finite(value.F64)
+    ? { type: 'f64', value: finite(value.F64) }
     : 'U128' in value
-      ? wireCount(value.U128)
-      : wireInteger(value.I128)
+      ? { type: 'u128', value: integerText(value.U128, 'u128') }
+      : { type: 'i128', value: integerText(value.I128, 'i128') }
 }
+
 function stateValue(value: StateValueWire): boolean | string {
   return 'Bool' in value ? value.Bool : telemetryId(value.State)
 }
 function aggregateValue(value: AggregateWire): AggregateValue {
   if (value === 'Missing') return { kind: 'missing' }
   if ('Number' in value) return { kind: 'number', value: numeric(value.Number) }
-  if ('Sum' in value) return { kind: 'number', value: sum(value.Sum) }
-  if ('Count' in value) return { kind: 'number', value: wireCount(value.Count) }
+  if ('Sum' in value) return { kind: 'sum', value: sum(value.Sum) }
+  if ('Count' in value) return { kind: 'count', value: wireCount(value.Count) }
   if ('Mean' in value)
-    return { kind: 'number', value: sum(value.Mean.sum) / wirePositive(value.Mean.count) }
+    return { kind: 'mean', sum: sum(value.Mean.sum), count: wirePositive(value.Mean.count) }
   if ('Rate' in value)
     return {
-      kind: 'number',
-      value: sum(value.Rate.increase) / (wirePositive(value.Rate.duration_micros) / 1_000_000),
+      kind: 'rate',
+      increase: sum(value.Rate.increase),
+      durationMicros: wirePositive(value.Rate.duration_micros),
     }
   if ('StateSegments' in value)
     return {
@@ -228,7 +231,8 @@ export function bucket(value: BucketWire): Bucket {
   const v = value
   const window = interval(v['window']),
     coveredMicros = wireCount(v['covered_micros'])
-  if (coveredMicros > window.end - window.start) throw new Error('Invalid coverage')
+  if (BigInt(coveredMicros) > BigInt(window.end) - BigInt(window.start))
+    throw new Error('Invalid coverage')
   return {
     window,
     value: aggregateValue(v['value']),
