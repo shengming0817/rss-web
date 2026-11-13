@@ -1,3 +1,7 @@
+import { createAgentPackages } from '@rss/mdm-software/agent-packages'
+import { createAgentPackagesAdapter } from '@rss/mdm-http/agent-packages'
+import { createRequestHistory } from '@rss/mdm-enrollment/requests'
+import { createRequestHistoryAdapter } from '@rss/mdm-http/enrollment-requests'
 import { directoryCapabilities } from '@rss/mdm-http/directories'
 import { createOperationDiagnostics, createAudit, createAuditPolicyLookup } from '@rss/mdm-audit'
 import { createOperationDiagnosticsAdapter } from '@rss/mdm-http/operation-diagnostics'
@@ -141,7 +145,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
       return Object.freeze({
         tenantSetup: setup,
         settingsCatalog: createCatalogAdapter(transport, management),
-        diagnostics: createRuntimeDiagnostics(createRuntimeDiagnosticsAdapter()),
+        diagnostics: createRuntimeDiagnostics(createRuntimeDiagnosticsAdapter(transport)),
         operationDiagnostics: management
           ? {
               management: createOperationDiagnostics(
@@ -170,6 +174,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         resources: createResources(createResourcesAdapter(transport)),
         content,
         mappings: createMappings(createResourceMappingsAdapter(transport, content)),
+        agentPackages: createAgentPackages(createAgentPackagesAdapter(transport), tenant),
         software: createSoftware(createSoftwareAdapter(transport)),
         softwareSnapshots: createSoftwareSnapshots(createSoftwareSnapshotsAdapter(transport)),
         publications: createPublications(createPublicationsAdapter(transport)),
@@ -181,7 +186,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         groups: createGroups(createGroupsAdapter(transport)),
         compliance: createCompliance(createComplianceAdapter(transport)),
         devicePki: createDevicePki(
-          createDevicePkiAdapter(transport, tenant, host.serviceId, state.identity.principalId),
+          createDevicePkiAdapter(transport, tenant, host.serviceId),
           tenant,
           host.serviceId,
         ),
@@ -195,6 +200,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
         auditPolicyLookup: createAuditPolicyLookup(
           createAuditPolicyLookupAdapter(transport, tenant, host.serviceId),
         ),
+        requestHistory: createRequestHistory(createRequestHistoryAdapter(transport)),
         enrollment: createEnrollment(
           createEnrollmentAdapter(transport, mdm, tenant, host.serviceId),
           tenant,

@@ -106,7 +106,7 @@ function fixture() {
     settingsCatalog: port.catalog,
     diagnostics: createRuntimeDiagnostics({
       snapshot: async () => ({
-        source: 'mock',
+        firstUse: null,
         alive: true,
         ready: true,
         channels: [],
@@ -188,13 +188,16 @@ it('does not re-open first setup after previously confirmed intent degrades', as
 it('clears diagnostic snapshot while refreshing and after an independent permission revocation', async () => {
   const f = fixture(),
     snapshot: Snapshot = {
-      source: 'mock',
+      firstUse: null,
       alive: true,
       ready: true,
       channels: [],
       components: [
         {
-          owner: 'policy',
+          name: 'policy',
+          mounted: true,
+          phases: [],
+          dispatch: null,
           health: 'degraded',
           readiness: 'ready',
           task: 'failed',
@@ -202,7 +205,7 @@ it('clears diagnostic snapshot while refreshing and after an independent permiss
           dependencies: [],
           queues: [{ name: 'private-work', count: null, truncated: null }],
           progress: null,
-          recovery: null,
+          runner: null,
         },
       ],
     }

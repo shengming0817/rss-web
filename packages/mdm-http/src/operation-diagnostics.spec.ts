@@ -40,7 +40,12 @@ it.each([
   )
   const base = prefix + '/operation-diagnostics'
   const signal = new AbortController().signal
-  expect(await client.search({ device: 'endpoint', from: 1, until: 2 }, signal)).toEqual(empty)
+  expect(
+    await client.search(
+      { device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9', from: 1, until: 2 },
+      signal,
+    ),
+  ).toEqual(empty)
   await client.request(id, {})
   const result = await client.operation(
     { owner, operationId: id },
@@ -72,7 +77,7 @@ it('retains delivery, asynchronous progress and effect from the generated RunSta
         operationId: id,
         actor: null,
         instance: null,
-        device: 'endpoint',
+        device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
         target: null,
       },
       originalResult: { availability: 'not_found' },
@@ -101,8 +106,13 @@ it('retains delivery, asynchronous progress and effect from the generated RunSta
     createOperationDiagnosticsAdapter({ request } as unknown as HttpTransport, 'mdm'),
   )
   expect(
-    (await client.operation({ owner: 'device_action', operationId: id, device: 'endpoint' }))
-      .executionEvidence,
+    (
+      await client.operation({
+        owner: 'device_action',
+        operationId: id,
+        device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
+      })
+    ).executionEvidence,
   ).toEqual({
     availability: 'available',
     value: {
@@ -124,7 +134,7 @@ it('preserves a sealed partial native collection report separately from delivery
         operationId: id,
         actor: null,
         instance: null,
-        device: 'endpoint',
+        device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
         target: null,
       },
       originalResult: { availability: 'not_found' },
@@ -138,7 +148,7 @@ it('preserves a sealed partial native collection report separately from delivery
           taskId: id,
           policyId: id,
           versionId: id,
-          device: 'endpoint',
+          device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
           occurrence: 'one',
           availableAt: 2,
           deadline: 10,
@@ -164,8 +174,13 @@ it('preserves a sealed partial native collection report separately from delivery
   ).rejects.toThrow('Missing required operation coordinate')
   expect(request).not.toHaveBeenCalled()
   expect(
-    (await client.operation({ owner: 'collection_execution', operationId: id, device: 'endpoint' }))
-      .executionEvidence,
+    (
+      await client.operation({
+        owner: 'collection_execution',
+        operationId: id,
+        device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
+      })
+    ).executionEvidence,
   ).toEqual({
     availability: 'available',
     value: {

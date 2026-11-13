@@ -2,7 +2,6 @@ import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
 import { createTenantSetup } from '@rss/mdm-tenant-setup'
 import { createCatalogAdapter, createTenantSetupAdapter } from './tenant-setup'
-import { createRuntimeDiagnosticsAdapter } from './runtime-diagnostics'
 const tenant = '11111111-1111-4111-8111-111111111111',
   operationId = '22222222-2222-4222-8222-222222222222'
 const selection = { channels: ['agent'] as const, capabilities: {}, completionRequested: false }
@@ -64,9 +63,4 @@ it('uses separate permission-filtered business and platform catalog operations',
   expect(f.request).toHaveBeenLastCalledWith(
     expect.objectContaining({ path: '/api/v1/tenant-administration/settings/catalog' }),
   )
-})
-it('refuses the retired aggregated runtime endpoint rather than presenting it as owner health', async () => {
-  await expect(createRuntimeDiagnosticsAdapter().snapshot()).rejects.toMatchObject({
-    code: 'diagnostics_contract_unavailable',
-  })
 })
