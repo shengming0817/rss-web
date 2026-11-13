@@ -442,8 +442,10 @@ if(args.includes('--cleanup')) {
       assert.equal(existsSync(resolve(backend, 'installed')), false)
       assert.ok(output.includes('interrupted'))
     } finally {
-      if (child.exitCode === null)
-        process.platform === 'win32' ? child.kill('SIGKILL') : process.kill(-child.pid, 'SIGKILL')
+      if (child.exitCode === null) {
+        if (process.platform === 'win32') child.kill('SIGKILL')
+        else process.kill(-child.pid, 'SIGKILL')
+      }
       await closed
       rmSync(backend, { recursive: true, force: true })
     }

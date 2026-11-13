@@ -32,8 +32,7 @@ import {
   finite,
   positive,
 } from './telemetry-scalars'
-import { integerText } from '@rss/mdm-telemetry'
-import { sources as sourceIds } from '@rss/mdm-telemetry'
+import { integerText, sources as sourceIds } from '@rss/mdm-telemetry'
 export function telemetryId(value: unknown) {
   const s = string(value)
   if (!s || new TextEncoder().encode(s).byteLength > 256 || /\p{Cc}/u.test(s))

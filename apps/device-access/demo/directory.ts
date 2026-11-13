@@ -4,7 +4,6 @@ import { parseFilter, type Filter } from '@rss/api/mdm-filter'
 import type { Application, Binding, Computer, Material } from '@rss/device-access/model'
 const fixtureId = '44444444-4444-4444-8444-444444444444'
 export const computerRecord = (v: Computer) => ({
-  key: 'endpoint:' + v.id,
   reference: { kind: 'endpoint', id: v.id },
   association: null,
   endpoints: [
@@ -116,6 +115,8 @@ export function directoryPage(
     throw new Error('Invalid fields')
   function value(row: Record<string, unknown>, key: string): unknown {
     if (key in row) return row[key]
+    if (key === 'reference.kind' || key === 'reference.id')
+      return (row['reference'] as Record<string, unknown> | undefined)?.[key.slice(10)]
     const app = row['value'] as Record<string, unknown> | undefined
     if (app && key in app) return app[key]
     const endpoints = row['endpoints'] as Record<string, unknown>[] | undefined
@@ -158,9 +159,12 @@ export function directoryPage(
   }
   const filter = query.get('filter')
   const rows = filter ? items.filter((v) => matches(v, parseFilter(filter))) : [...items]
-  const sort = query.get('sort')?.split(',') ?? [available.includes('key') ? 'key' : 'id']
+  const identityFields = available.includes('reference')
+    ? ['reference.kind', 'reference.id']
+    : ['id']
+  const sort = query.get('sort')?.split(',') ?? identityFields
   rows.sort((a, b) => {
-    for (const term of [...sort, 'id' in (a ?? {}) ? 'id' : 'key']) {
+    for (const term of [...sort, ...identityFields]) {
       const key = term.replace(/^-/, '')
       const x = value(a, key),
         y = value(b, key)

@@ -8,7 +8,7 @@ const id = '11111111-1111-4111-8111-111111111111',
 const signal = new AbortController().signal
 function endpoint() {
   return {
-    id: 'pc',
+    id: '33333333-3333-4333-8333-333333333333',
     status: 'active',
     assetState: 'active',
     platform: { state: 'known', values: ['windows'] },
@@ -41,7 +41,7 @@ function binding() {
       mac: null,
       windows: { kind: 'rss_factor', accounts: ['local'] },
     },
-    device: 'pc',
+    device: '33333333-3333-4333-8333-333333333333',
     revision: 2,
     principal: id,
     instance: other,
@@ -58,7 +58,7 @@ function material() {
   return {
     id,
     binding: {
-      device: 'pc',
+      device: '33333333-3333-4333-8333-333333333333',
 
       subject: { kind: 'rss_login', binding: id, bindingGeneration: 1, sid: 'S-1-5-21-1' },
     },
@@ -100,13 +100,11 @@ describe('native public DA adapters', () => {
       items: [
         {
           association: null,
-          key: 'endpoint:pc',
-          reference: { kind: 'endpoint', id: 'pc' },
+          reference: { kind: 'endpoint', id: '33333333-3333-4333-8333-333333333333' },
           endpoints: [endpoint()],
         },
         {
           association: null,
-          key: 'association:a',
           reference: { kind: 'association', id },
           endpoints: [endpoint()],
         },
@@ -119,14 +117,16 @@ describe('native public DA adapters', () => {
     expect(p.nextCursor).toBe('bmV4dA')
     expect(f.requests[0]?.query?.['fields']).toBeUndefined()
     f.replies.push({
-      reference: { kind: 'endpoint', id: 'pc' },
+      reference: { kind: 'endpoint', id: '33333333-3333-4333-8333-333333333333' },
       endpoints: [endpoint()],
       association: null,
       fields: {},
       lists: {},
       inventorySources: [],
     })
-    expect((await f.client.computer('pc', signal)).id).toBe('pc')
+    expect((await f.client.computer('33333333-3333-4333-8333-333333333333', signal)).id).toBe(
+      '33333333-3333-4333-8333-333333333333',
+    )
     f.replies.push({
       reference: { kind: 'association', id },
       endpoints: [endpoint()],
@@ -135,7 +135,9 @@ describe('native public DA adapters', () => {
       lists: {},
       inventorySources: [],
     })
-    await expect(f.client.computer('pc', signal)).rejects.toThrow('Mismatched')
+    await expect(f.client.computer('33333333-3333-4333-8333-333333333333', signal)).rejects.toThrow(
+      'Mismatched',
+    )
   })
   it('never infers platform or application success from partial observations', () => {
     expect(
@@ -145,7 +147,11 @@ describe('native public DA adapters', () => {
         lastCommunicationReceivedAt: null,
         displayName: undefined,
       }),
-    ).toMatchObject({ name: 'pc', platform: 'unknown', lastObservedAt: null })
+    ).toMatchObject({
+      name: '33333333-3333-4333-8333-333333333333',
+      platform: 'unknown',
+      lastObservedAt: null,
+    })
     expect(() =>
       nativeComputer({ ...endpoint(), platform: { state: 'known', values: [] } }),
     ).toThrow()
@@ -155,13 +161,15 @@ describe('native public DA adapters', () => {
         platform: { state: 'conflict', values: ['windows', 'macos'] },
       }).platform,
     ).toBe('unknown')
-    const b = nativeBinding(binding(), 'pc')
+    const b = nativeBinding(binding(), '33333333-3333-4333-8333-333333333333')
     expect(b.appliedRevision).toBe(1)
     expect(b.observations).toEqual([])
     expect(() => nativeBinding(binding(), 'other')).toThrow()
     expect(
-      nativeBinding({ ...binding(), account: null, effect: { state: 'unknown' } }, 'pc')
-        .observations[0]?.state,
+      nativeBinding(
+        { ...binding(), account: null, effect: { state: 'unknown' } },
+        '33333333-3333-4333-8333-333333333333',
+      ).observations[0]?.state,
     ).toBe('unknown')
   })
   it('keeps Apple facts independent and rejects unrecognized effect enums', () => {
@@ -188,15 +196,22 @@ describe('native public DA adapters', () => {
           windows: null,
         },
       },
-      'pc',
+      '33333333-3333-4333-8333-333333333333',
     )
     expect(b.observations.find((o) => o.key === 'filevaultUnlock')?.state).toBe('pending')
     expect(b.observations.find((o) => o.key === 'userRegistered')?.value).toBe('absent')
     expect(
-      nativeBinding({ ...binding(), effect: { state: 'failed', reason: 'needs_user' } }, 'pc')
-        .observations,
+      nativeBinding(
+        { ...binding(), effect: { state: 'failed', reason: 'needs_user' } },
+        '33333333-3333-4333-8333-333333333333',
+      ).observations,
     ).toHaveLength(2)
-    expect(() => nativeBinding({ ...binding(), effect: { state: 'success' } }, 'pc')).toThrow()
+    expect(() =>
+      nativeBinding(
+        { ...binding(), effect: { state: 'success' } },
+        '33333333-3333-4333-8333-333333333333',
+      ),
+    ).toThrow()
     expect(
       nativeBinding(
         {
@@ -209,7 +224,7 @@ describe('native public DA adapters', () => {
             windows: null,
           },
         },
-        'pc',
+        '33333333-3333-4333-8333-333333333333',
       ).observations,
     ).toHaveLength(2)
   })
@@ -217,29 +232,45 @@ describe('native public DA adapters', () => {
     const f = setup(),
       input = { operationId: id, expectedRevision: 1, action: { kind: 'reset_factors' as const } }
     f.replies.push({ items: [binding()], nextCursor: null }, binding(), binding(), binding())
-    expect((await f.client.bindings('pc', { cursor: 'YWJj' }, signal)).items).toHaveLength(1)
-    await f.client.changeBinding('pc', id, input, signal)
+    expect(
+      (await f.client.bindings('33333333-3333-4333-8333-333333333333', { cursor: 'YWJj' }, signal))
+        .items,
+    ).toHaveLength(1)
+    await f.client.changeBinding('33333333-3333-4333-8333-333333333333', id, input, signal)
     expect(f.requests[1]?.body).toEqual(input)
-    await f.client.bindingOperation('pc', id, signal)
-    await expect(f.client.changeBinding('pc', other, input, signal)).rejects.toThrow()
+    await f.client.bindingOperation('33333333-3333-4333-8333-333333333333', id, signal)
+    await expect(
+      f.client.changeBinding('33333333-3333-4333-8333-333333333333', other, input, signal),
+    ).rejects.toThrow()
     f.replies.push(binding())
     await expect(
-      f.client.changeBinding('pc', id, { ...input, expectedRevision: 2 }, signal),
+      f.client.changeBinding(
+        '33333333-3333-4333-8333-333333333333',
+        id,
+        { ...input, expectedRevision: 2 },
+        signal,
+      ),
     ).rejects.toThrow('revision')
   })
   it('discloses only exact DA materials via the dedicated POST endpoint', async () => {
     const f = setup(),
-      m = nativeMaterial(material(), 'pc')
+      m = nativeMaterial(material(), '33333333-3333-4333-8333-333333333333')
     f.replies.push(
       { items: [material()], nextCursor: null },
       { material: material(), secret: 'sensitive fixture' },
       { material: { ...material(), version: 5 }, secret: 'wrong' },
     )
-    expect((await f.client.materials('pc', {}, signal)).summaries?.[0]).toEqual(m)
-    expect(await f.client.reveal('pc', m, id, signal)).toBe('sensitive fixture')
+    expect(
+      (await f.client.materials('33333333-3333-4333-8333-333333333333', {}, signal)).summaries?.[0],
+    ).toEqual(m)
+    expect(await f.client.reveal('33333333-3333-4333-8333-333333333333', m, id, signal)).toBe(
+      'sensitive fixture',
+    )
     expect(f.requests[1]?.method).toBe('POST')
     expect(f.requests[1]?.path).toContain('/device-access/materials/')
-    await expect(f.client.reveal('pc', m, id, signal)).rejects.toThrow()
+    await expect(
+      f.client.reveal('33333333-3333-4333-8333-333333333333', m, id, signal),
+    ).rejects.toThrow()
     expect(() => nativeMaterial(material(), 'other')).toThrow()
     expect(
       nativeMaterial(
@@ -247,27 +278,32 @@ describe('native public DA adapters', () => {
           ...material(),
           binding: { ...material().binding, subject: { kind: 'filevault', custody: id, epoch: 1 } },
         },
-        'pc',
+        '33333333-3333-4333-8333-333333333333',
       ).subject.binding,
     ).toBeNull()
     await expect(
-      f.client.reveal('pc', { ...m, subject: { ...m.subject, kind: 'filevault' } }, id, signal),
+      f.client.reveal(
+        '33333333-3333-4333-8333-333333333333',
+        { ...m, subject: { ...m.subject, kind: 'filevault' } },
+        id,
+        signal,
+      ),
     ).rejects.toBeInstanceOf(CapabilityUnavailable)
   })
   it('never sends speculative rotation, assignment, Passkey or configuration requests', async () => {
     const f = setup(),
-      m = nativeMaterial(material(), 'pc')
+      m = nativeMaterial(material(), '33333333-3333-4333-8333-333333333333')
     const calls = [
-      () => f.client.rotate('pc', m, id, signal),
-      () => f.client.assignment('pc', signal),
+      () => f.client.rotate('33333333-3333-4333-8333-333333333333', m, id, signal),
+      () => f.client.assignment('33333333-3333-4333-8333-333333333333', signal),
       () => f.client.people(signal),
       () =>
         f.client.assign(
-          'pc',
+          '33333333-3333-4333-8333-333333333333',
           { operationId: id, expectedRevision: 1, assignee: null, owner: null },
           signal,
         ),
-      () => f.client.passkeys('pc', null, signal),
+      () => f.client.passkeys('33333333-3333-4333-8333-333333333333', null, signal),
       () => f.client.configurations(null, signal),
       () => f.client.scopes(signal),
       () =>
@@ -329,12 +365,17 @@ describe('native public DA adapters', () => {
     expect(f.client.capabilities.applicationWrite.available).toBe(false)
     expect(f.requests).toHaveLength(1)
     await f.client.bindingChallenge(
-      'pc',
+      '33333333-3333-4333-8333-333333333333',
       id,
       { operationId: id, expectedRevision: 1, action: { kind: 'reset_factors' } },
       signal,
     )
-    await f.client.materialChallenge('pc', nativeMaterial(material(), 'pc'), id, signal)
+    await f.client.materialChallenge(
+      '33333333-3333-4333-8333-333333333333',
+      nativeMaterial(material(), '33333333-3333-4333-8333-333333333333'),
+      id,
+      signal,
+    )
     expect(application(rp()).capabilities).toEqual(['native_key'])
     for (const callback of ['http://x.test', 'https://user@x.test', 'https://x.test/?secret=x'])
       expect(() => application({ ...rp(), callback })).toThrow()
@@ -371,7 +412,7 @@ describe('native public DA adapters', () => {
             position: 1,
             actorKind: 'user',
             observedAt: 11,
-            target: { type: 'device', id: 'pc' },
+            target: { type: 'device', id: '33333333-3333-4333-8333-333333333333' },
             operationId: null,
             relatedOperationIds: [],
             requestId: null,
@@ -387,7 +428,7 @@ describe('native public DA adapters', () => {
             recordedAt: 10,
             actor: 'user',
             action: 'read',
-            deviceId: 'pc',
+            deviceId: '33333333-3333-4333-8333-333333333333',
             auditOutcome: 'succeeded',
             phase: 'accepted',
           },
@@ -397,31 +438,40 @@ describe('native public DA adapters', () => {
       },
       { items: [], nextCursor: null, coverage: { complete: true } },
     )
-    expect(await f.client.operation('pc', id, signal)).toMatchObject({
+    expect(
+      await f.client.operation('33333333-3333-4333-8333-333333333333', id, signal),
+    ).toMatchObject({
       state: 'pending',
       observations: [{ value: 'applied' }],
     })
-    expect((await f.client.audit('pc', null, signal)).items[0]?.device).toBe('pc')
+    expect(
+      (await f.client.audit('33333333-3333-4333-8333-333333333333', null, signal)).items[0]?.device,
+    ).toBe('33333333-3333-4333-8333-333333333333')
     await f.client.audit(null, 'cursor', signal)
     expect(f.requests[2]?.path).toBe('/api/v1/audit-events')
   })
 })
 it('bounds candidate view models and rejects cross-device data and personal records', () => {
   const c = d.computerView({
-    id: 'pc',
+    id: '33333333-3333-4333-8333-333333333333',
     name: 'Computer',
     platform: 'windows',
 
     status: 'active',
     lastObservedAt: null,
   })
-  expect(c.id).toBe('pc')
-  const a = { device: 'pc', revision: 1, assignee: { id, label: 'A' }, owner: null }
-  expect(d.assignmentView(a, 'pc').assignee?.label).toBe('A')
+  expect(c.id).toBe('33333333-3333-4333-8333-333333333333')
+  const a = {
+    device: '33333333-3333-4333-8333-333333333333',
+    revision: 1,
+    assignee: { id, label: 'A' },
+    owner: null,
+  }
+  expect(d.assignmentView(a, '33333333-3333-4333-8333-333333333333').assignee?.label).toBe('A')
   expect(() => d.assignmentView(a, 'other')).toThrow()
   const p = {
     id,
-    device: 'pc',
+    device: '33333333-3333-4333-8333-333333333333',
     rp: 'app.test',
     account: 'user',
     label: 'key',
@@ -429,17 +479,25 @@ it('bounds candidate view models and rejects cross-device data and personal reco
     state: 'synced',
     lastObservedAt: null,
   }
-  expect(d.passkeyView(p, 'pc').state).toBe('synced')
-  expect(() => d.passkeyView({ ...p, scope: 'personal' }, 'pc')).toThrow()
+  expect(d.passkeyView(p, '33333333-3333-4333-8333-333333333333').state).toBe('synced')
+  expect(() =>
+    d.passkeyView({ ...p, scope: 'personal' }, '33333333-3333-4333-8333-333333333333'),
+  ).toThrow()
   expect(() => d.passkeyView(p, 'other')).toThrow()
-  const m = nativeMaterial(material(), 'pc')
-  expect(d.materialView(m, 'pc')).toEqual(m)
-  const b = nativeBinding(binding(), 'pc')
-  expect(d.bindingView(b, 'pc')).toEqual(b)
+  const m = nativeMaterial(material(), '33333333-3333-4333-8333-333333333333')
+  expect(d.materialView(m, '33333333-3333-4333-8333-333333333333')).toEqual(m)
+  const b = nativeBinding(binding(), '33333333-3333-4333-8333-333333333333')
+  expect(d.bindingView(b, '33333333-3333-4333-8333-333333333333')).toEqual(b)
   expect(
     d.operationView(
-      { id, device: 'pc', kind: 'rotation', state: 'accepted', observations: [] },
-      'pc',
+      {
+        id,
+        device: '33333333-3333-4333-8333-333333333333',
+        kind: 'rotation',
+        state: 'accepted',
+        observations: [],
+      },
+      '33333333-3333-4333-8333-333333333333',
       id,
     ).state,
   ).toBe('accepted')

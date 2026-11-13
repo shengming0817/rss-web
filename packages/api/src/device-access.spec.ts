@@ -11,8 +11,15 @@ it('separates public DA routes from explicit demo and credential transports', as
     transport = createDeviceAccessTransport()
   spy.mockRestore()
   mock.onAny().reply(200, { items: [], nextCursor: null }, { 'Content-Type': 'application/json' })
-  await getApiV1DevicesByDeviceDeviceAccess(transport, { pathParams: { device: 'space device' } })
-  expect(mock.history.get[0]?.url).toBe('/api/v1/devices/space%20device/device-access')
+  await getApiV1DevicesByDeviceDeviceAccess(transport, {
+    pathParams: { device: '33333333-3333-4333-8333-333333333333' },
+  })
+  expect(mock.history.get[0]?.url).toBe(
+    '/api/v1/devices/33333333-3333-4333-8333-333333333333/device-access',
+  )
+  await expect(
+    getApiV1DevicesByDeviceDeviceAccess(transport, { pathParams: { device: 'space device' } }),
+  ).rejects.toMatchObject({ cause: 'client' })
   for (const path of [
     '/api/da-demo/computers',
     '/api/v1/identity/tenants/a/login',

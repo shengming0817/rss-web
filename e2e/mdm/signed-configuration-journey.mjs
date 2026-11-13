@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 import { createPublicKey, verify } from 'node:crypto'
 // ref: nodejs/node lib/internal/crypto/sig.js@v24.14.0 (verifyOneShot).

@@ -113,7 +113,7 @@ export function createAgentPackages(port: AgentPackagesPort, tenant: string) {
       uuid(input.operationId)
       if (
         !input.filename ||
-        /[\/\\\p{Cc}]/u.test(input.filename) ||
+        /[/\\\p{Cc}]/u.test(input.filename) ||
         !Number.isSafeInteger(input.length) ||
         input.length < 1 ||
         input.sha256.length !== 32 ||

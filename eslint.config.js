@@ -541,7 +541,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$|api/))',
+              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment(?:/requests)?$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/(?:publications|agent-packages))?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$|api/))',
             message: 'Adapters depend only on core ports and the API executor.',
           },
         ],
@@ -571,7 +571,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:@rss/(?!api/(?:mdm-filter|mdm-query)$|auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/publications)?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$))',
+              '^(?:@rss/(?!api/(?:mdm-filter|mdm-query)$|auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment(?:/requests)?$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/(?:publications|agent-packages))?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$))',
             message: 'Feature pages consume domain use cases; only runtime assembles adapters.',
           },
         ],
