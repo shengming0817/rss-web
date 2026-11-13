@@ -1,11 +1,13 @@
 import type { MaterialTarget, SoftwareFormat, SoftwareSource } from '@rss/mdm-resources'
 
 export const chunkBytes = 4 * 1024 * 1024
-export interface UploadIntent {
+export interface ResourceUploadIntent {
+  readonly purpose: 'resource'
   readonly id: string
   readonly target: MaterialTarget
 }
-export interface UploadSession {
+export interface ResourceUploadSession {
+  readonly purpose: 'resource'
   readonly id: string
   readonly target: MaterialTarget
   readonly resourceDigest: readonly number[]
@@ -19,6 +21,24 @@ export interface UploadSession {
   /** Storage frontier only; not a durable business binding or software admission. */
   readonly complete: boolean
 }
+export interface SoftwareUploadTarget {
+  readonly resource: string
+  readonly filename: string
+  readonly artifact: MaterialTarget['artifact']
+}
+export interface SoftwareUploadIntent {
+  readonly purpose: 'software'
+  readonly id: string
+  readonly target: SoftwareUploadTarget
+}
+export interface SoftwareUploadSession extends SoftwareUploadIntent {
+  readonly actor: string
+  readonly offset: number
+  readonly expires: number
+  readonly complete: boolean
+}
+export type UploadIntent = ResourceUploadIntent | SoftwareUploadIntent
+export type UploadSession = ResourceUploadSession | SoftwareUploadSession
 export interface ContentReceipt {
   readonly operationId: string
   readonly resource: string
@@ -50,7 +70,7 @@ export interface DownloadSink {
   abort(): Promise<void>
 }
 export interface ContentPort {
-  begin(intent: UploadIntent, signal?: AbortSignal): Promise<UploadSession>
+  begin(intent: ResourceUploadIntent, signal?: AbortSignal): Promise<ResourceUploadSession>
   read(resource: string, upload: string, signal?: AbortSignal): Promise<UploadSession>
   append(
     intent: UploadIntent,

@@ -8,7 +8,7 @@ import {
   type PreparedResourceVersion,
   type Resource,
 } from '@rss/mdm-resources'
-import type { UploadIntent } from '@rss/mdm-content'
+import type { ResourceUploadIntent } from '@rss/mdm-content'
 import { ContentDownload } from './ContentDownload'
 import { ContentUpload, type ContentUseCases } from './ContentUpload'
 import { bufferedMaterial, type OwnedMaterialSource } from './MaterialSource'
@@ -58,7 +58,7 @@ export function ResourceContentBatch({
   const l = labels(locale),
     [materials] = useState(() => {
       const targets: {
-        intent: UploadIntent
+        intent: ResourceUploadIntent
         kind: Declaration['kind']
         source?: OwnedMaterialSource
       }[] = []
@@ -148,7 +148,7 @@ export function ResourceMaterialUpload({
   const l = labels(locale),
     artifacts = declarationMaterials(variant.declaration),
     [reference, setReference] = useState(artifacts[0]?.reference ?? ''),
-    [intent, setIntent] = useState<UploadIntent | null>(null),
+    [intent, setIntent] = useState<ResourceUploadIntent | null>(null),
     [finished, setFinished] = useState(false)
   const restore = intent
     ? reconstruct(resources, content, intent.target, variant.declaration.kind)
@@ -237,7 +237,7 @@ export function ResourceContentRecovery({
     [resource, setResource] = useState(''),
     [operation, setOperation] = useState(''),
     [original, setOriginal] = useState<{
-      intent: UploadIntent
+      intent: ResourceUploadIntent
       session: Awaited<ReturnType<ContentUseCases['read']>>
       kind: Declaration['kind']
     } | null>(null),
@@ -253,8 +253,9 @@ export function ResourceContentRecovery({
         disabled={action.busy || original !== null}
         onFinish={() =>
           void action.run(async () => {
-            const session = await content.read(resource, operation),
-              exact = await resources.read(resource),
+            const session = await content.read(resource, operation)
+            if (session.purpose !== 'resource') throw new Error('Wrong Resource upload purpose')
+            const exact = await resources.read(resource),
               variant = exact.versions
                 .find((version) => version.id === session.target.version)
                 ?.variants.find(

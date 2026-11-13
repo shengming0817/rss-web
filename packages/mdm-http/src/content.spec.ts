@@ -1,13 +1,14 @@
 import { expect, it, vi } from 'vitest'
 import type { BinaryResponse, HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createContent, type UploadIntent } from '@rss/mdm-content'
+import { createContent, type ResourceUploadIntent } from '@rss/mdm-content'
 import { createContentAdapter } from './content'
 
 const id = '11111111-1111-4111-8111-111111111111',
   hash = () => Array<number>(32).fill(9),
   etag = '"' + '09'.repeat(32) + '"'
-function intent(): UploadIntent {
+function intent(): ResourceUploadIntent {
   return {
+    purpose: 'resource',
     id,
     target: {
       resource: 'company/app',

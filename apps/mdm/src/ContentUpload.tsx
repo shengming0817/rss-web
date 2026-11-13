@@ -102,6 +102,8 @@ export function ContentUpload({
     transfer.current = controller
     const result = await action.run(async () => {
       if (kind === 'receipt') {
+        if (intent.purpose !== 'resource')
+          throw new Error('Software commit receipts belong to Software')
         await content.receipt(intent)
         return null
       }
@@ -113,9 +115,15 @@ export function ContentUpload({
         kind === 'read'
           ? await content.read(intent.target.resource, intent.id, controller.signal)
           : kind === 'begin'
-            ? await content.begin(intent, controller.signal)
+            ? intent.purpose === 'resource'
+              ? await content.begin(intent, controller.signal)
+              : await content.read(intent.target.resource, intent.id, controller.signal)
             : await content.append(intent, session!, source.current!.source, controller.signal)
-      if (!sameDefinition(value.target, intent.target))
+      if (
+        value.purpose !== intent.purpose ||
+        (session && value.actor !== session.actor) ||
+        !sameDefinition(value.target, intent.target)
+      )
         throw { cause: 'client', code: 'input_changed' }
       return value
     })
@@ -145,7 +153,11 @@ export function ContentUpload({
     <Card
       className="mapping-upload"
       size="small"
-      title={`${intent.target.platform} / ${intent.target.architecture} / ${intent.target.variant}`}
+      title={
+        intent.purpose === 'resource'
+          ? `${intent.target.platform} / ${intent.target.architecture} / ${intent.target.variant}`
+          : intent.target.filename
+      }
     >
       <dl className="device-facts">
         <div>
@@ -157,7 +169,10 @@ export function ContentUpload({
         <div>
           <dt>{l('资源 / 固定版本', 'Resource / fixed version')}</dt>
           <dd>
-            {intent.target.resource} / {intent.target.version}
+            {intent.target.resource} /{' '}
+            {intent.purpose === 'resource'
+              ? intent.target.version
+              : l('待保存软件定义', 'Software definition pending')}
           </dd>
         </div>
         <div>
@@ -185,7 +200,14 @@ export function ContentUpload({
       {committed ? (
         <Alert
           type="success"
-          title={l('原内容提交回执已确认。', 'Original content commit acknowledged.')}
+          title={
+            intent.purpose === 'software'
+              ? l(
+                  '原文件存储已完成；软件保存与发布分别确认。',
+                  'Original file stored; software save and publication are separate.',
+                )
+              : l('原内容提交回执已确认。', 'Original content commit acknowledged.')
+          }
         />
       ) : (
         <>
@@ -260,7 +282,9 @@ export function ContentUpload({
               {l('校验原材料长度与摘要', 'Verify original material length and digest')}
             </Button>
             <Button
-              disabled={!canWrite || action.busy || session !== null}
+              disabled={
+                !canWrite || action.busy || session !== null || intent.purpose !== 'resource'
+              }
               onClick={() => void advance('begin')}
             >
               {needsRead
@@ -297,7 +321,11 @@ export function ContentUpload({
             >
               {l('完成原上传', 'Complete original upload')}
             </Button>
-            <Button disabled={action.busy} onClick={() => void advance('receipt')}>
+            <Button
+              disabled={action.busy}
+              hidden={intent.purpose !== 'resource'}
+              onClick={() => void advance('receipt')}
+            >
               {l('查询原内容回执', 'Read original content receipt')}
             </Button>
           </Space>

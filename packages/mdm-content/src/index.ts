@@ -19,6 +19,9 @@ import {
   type DownloadSink,
   type MaterialSource,
   type UploadIntent,
+  type ResourceUploadIntent,
+  type SoftwareUploadIntent,
+  type SoftwareUploadTarget,
   type UploadSession,
 } from './model'
 
@@ -38,18 +41,17 @@ function target(value: MaterialTarget): void {
 }
 function intent(value: UploadIntent): void {
   uuid(value.id)
-  target(value.target)
+  if (value.purpose === 'resource') target(value.target)
+  else {
+    resourceId(value.target.resource)
+    if (!value.target.filename) throw new Error('Missing original filename')
+    validateArtifact(value.target.artifact)
+  }
 }
-function equalTarget(a: MaterialTarget, b: MaterialTarget): boolean {
-  return (
-    a.resource === b.resource &&
-    a.version === b.version &&
-    a.variant === b.variant &&
-    a.platform === b.platform &&
-    a.architecture === b.architecture &&
-    sameArtifact(a.artifact, b.artifact)
-  )
+function equalTarget(a: UploadIntent['target'], b: UploadIntent['target']): boolean {
+  return sameDefinition(a, b)
 }
+
 function observed(
   intent: UploadIntent,
   value: UploadSession,
@@ -57,6 +59,7 @@ function observed(
 ): UploadSession {
   if (
     value.id !== intent.id ||
+    value.purpose !== intent.purpose ||
     !equalTarget(value.target, intent.target) ||
     !Number.isSafeInteger(value.offset) ||
     value.offset < 0 ||
@@ -66,21 +69,29 @@ function observed(
     !value.actor
   )
     throw new Error('Wrong original upload session')
-  digest(value.resourceDigest)
+  if (value.purpose === 'resource') digest(value.resourceDigest)
   if (
     previous &&
     (value.actor !== previous.actor ||
-      value.storageClass !== previous.storageClass ||
-      !sameDefinition(
-        [value.inspection, value.source, value.origin],
-        [previous.inspection, previous.source, previous.origin],
-      ) ||
-      !value.resourceDigest.every((byte, index) => byte === previous.resourceDigest[index]))
+      value.purpose !== previous.purpose ||
+      (value.purpose === 'resource' &&
+        previous.purpose === 'resource' &&
+        !sameDefinition(
+          [value.storageClass, value.inspection, value.source, value.origin, value.resourceDigest],
+          [
+            previous.storageClass,
+            previous.inspection,
+            previous.source,
+            previous.origin,
+            previous.resourceDigest,
+          ],
+        )))
   )
     throw new Error('Upload binding changed')
+
   return freeze(value)
 }
-function receipt(intent: UploadIntent, value: ContentReceipt): ContentReceipt {
+function receipt(intent: ResourceUploadIntent, value: ContentReceipt): ContentReceipt {
   if (
     value.operationId !== intent.id ||
     value.resource !== intent.target.resource ||
@@ -177,8 +188,9 @@ async function downloadToSink(
 /** Every write is explicit. An unacknowledged chunk requires a new observed frontier. */
 export function createContent(port: ContentPort) {
   return Object.freeze({
-    intent(id: string, selection: MaterialTarget): UploadIntent {
-      const value = {
+    intent(id: string, selection: MaterialTarget): ResourceUploadIntent {
+      const value: ResourceUploadIntent = {
+        purpose: 'resource',
         id,
         target: {
           resource: selection.resource,
@@ -196,8 +208,17 @@ export function createContent(port: ContentPort) {
       intent(value)
       return freeze(value)
     },
-    async verify(source: MaterialSource, selection: MaterialTarget, signal?: AbortSignal) {
-      target(selection)
+    prepared(id: string, selection: SoftwareUploadTarget): SoftwareUploadIntent {
+      const value: SoftwareUploadIntent = { purpose: 'software', id, target: selection }
+      intent(value)
+      return freeze(value)
+    },
+    async verify(
+      source: MaterialSource,
+      selection: { readonly artifact: MaterialTarget['artifact'] },
+      signal?: AbortSignal,
+    ) {
+      validateArtifact(selection.artifact)
       if (source.length !== selection.artifact.length)
         throw new Error('Wrong original material length')
       const fixed = freeze(selection),
@@ -205,18 +226,20 @@ export function createContent(port: ContentPort) {
       if (!hash.every((byte, index) => byte === fixed.artifact.sha256[index]))
         throw new Error('Wrong original material digest')
     },
-    async begin(value: UploadIntent, signal?: AbortSignal) {
+    async begin(value: ResourceUploadIntent, signal?: AbortSignal) {
       intent(value)
       current(signal)
       const original = freeze(value)
-      return observed(original, await port.begin(original, signal))
+      const session = observed(original, await port.begin(original, signal))
+      if (session.purpose !== 'resource') throw new Error('Wrong upload purpose')
+      return session
     },
     async read(resource: string, upload: string, signal?: AbortSignal) {
       resourceId(resource)
       uuid(upload)
       current(signal)
       const value = await port.read(resource, upload, signal)
-      const original = { id: upload, target: value.target }
+      const original: UploadIntent = value
       intent(original)
       if (value.target.resource !== resource) throw new Error('Wrong upload resource')
       return observed(original, value)
@@ -262,7 +285,7 @@ export function createContent(port: ContentPort) {
       current(signal)
       await port.complete(freeze(value), signal)
     },
-    async receipt(value: UploadIntent) {
+    async receipt(value: ResourceUploadIntent) {
       intent(value)
       const original = freeze(value)
       return receipt(original, await port.receipt(original.target.resource, original.id))

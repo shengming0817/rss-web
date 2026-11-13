@@ -7,6 +7,7 @@ import {
   type ContentPort,
   type DownloadChunk,
   type UploadSession,
+  type ResourceUploadSession,
 } from '@rss/mdm-content'
 import { resourceId } from '@rss/mdm-resources'
 import { identifier } from '@rss/mdm-inventory'
@@ -17,7 +18,29 @@ function uploadSession(value: unknown, resource: string, upload: string): Upload
   if (!schema.getApiV1ResourcesByIdUploadsByUploadResponse.validateRoot(value))
     throw new Error('Invalid upload session')
   const binding = value.binding
-  if (binding.purpose.kind !== 'resource') throw new Error('Wrong upload purpose')
+  if (binding.purpose.kind === 'software') {
+    if (
+      value.id !== upload ||
+      binding.purpose.binding.resource !== resource ||
+      !binding.length ||
+      value.offset > binding.length ||
+      (value.complete && value.offset !== binding.length)
+    )
+      throw new Error('Wrong software upload binding')
+    return {
+      purpose: 'software',
+      id: uuid(value.id),
+      target: {
+        resource,
+        filename: binding.purpose.binding.filename,
+        artifact: { reference: binding.reference, length: binding.length, sha256: binding.sha256 },
+      },
+      actor: binding.actor,
+      offset: value.offset,
+      expires: value.expires,
+      complete: value.complete,
+    }
+  }
   const selected = binding.purpose.binding,
     length = count(binding.length),
     offset = count(value.offset)
@@ -30,6 +53,7 @@ function uploadSession(value: unknown, resource: string, upload: string): Upload
   )
     throw new Error('Wrong upload binding')
   return {
+    purpose: 'resource',
     id: uuid(value.id),
     target: {
       resource: resourceId(selected.resource),
@@ -108,6 +132,15 @@ function downloadChunk(
 }
 /** The sole content adapter uses the application's session-bound executor. */
 export function createContentAdapter(transport: HttpTransport): ContentPort {
+  function originalResource(
+    value: unknown,
+    resource: string,
+    upload: string,
+  ): ResourceUploadSession {
+    const session = uploadSession(value, resource, upload)
+    if (session.purpose !== 'resource') throw new Error('Wrong original Resource upload')
+    return session
+  }
   return {
     begin: (intent, signal) =>
       api.postApiV1ResourcesByIdUploadsByUpload(
@@ -123,7 +156,7 @@ export function createContentAdapter(transport: HttpTransport): ContentPort {
           },
           ...(signal ? { signal } : {}),
         },
-        (value) => uploadSession(value, intent.target.resource, intent.id),
+        (value) => originalResource(value, intent.target.resource, intent.id),
       ),
     read: (resource, upload, signal) =>
       api.getApiV1ResourcesByIdUploadsByUpload(

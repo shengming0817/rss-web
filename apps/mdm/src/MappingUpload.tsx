@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { createMappings, PreparedMaterial } from '@rss/mdm-resources'
-import type { UploadIntent, UploadSession } from '@rss/mdm-content'
+import type { ResourceUploadIntent, ResourceUploadSession } from '@rss/mdm-content'
 import { ContentUpload, type ContentUseCases } from './ContentUpload'
 import { bufferedMaterial } from './MaterialSource'
 import type { Locale } from './i18n'
@@ -22,8 +22,8 @@ export function MappingUpload({
   mappings: MappingUseCases
   content: ContentUseCases
   upload: PreparedMaterial
-  intent: UploadIntent
-  initialSession?: UploadSession
+  intent: ResourceUploadIntent
+  initialSession?: ResourceUploadSession
   scriptSourceVersion?: string
   locale: Locale
   canWrite: boolean
