@@ -93,7 +93,7 @@ def seed():
     sql = [installation_sql(), f"SET rss.tenant_id = '{tenant}'"]
     devices = [('4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8','mdm','mdm.windows'), ('d452e3d0-e318-53fa-84f0-10447d70893a','agent','agent.builtin'), ('ce1bacfb-5e6f-54bf-875e-a40f1f598569','mdm','mdm.windows')]
     if browser_module in {'react-devices-browser.mjs', 'react-recovery-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}: devices.append(('d8befebe-00eb-524f-a5c4-81613bb0a344','mdm','mdm.apple'))
-    devices += [(f'extra-{index:02}', 'agent', 'agent.builtin') for index in range(24)]
+    devices += [(str(uuid.uuid5(uuid.NAMESPACE_URL, f'rss-web/device-browser/extra-{index:02}')), 'agent', 'agent.builtin') for index in range(24)]
     for device, channel, source in devices:
         grant, request, credential = [str(uuid.uuid4()) for _ in range(3)]
         if channel == 'mdm':

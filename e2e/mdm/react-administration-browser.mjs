@@ -374,6 +374,8 @@ try {
     await e.getByLabel('账户主体标识', { exact: true }).fill(principalId)
     await e.getByRole('button', { name: '添加权限', exact: true }).click()
     await choose(admin, e.getByLabel('权限', { exact: true }), permission)
+    await e.getByRole('button', { name: '添加权限', exact: true }).click()
+    await choose(admin, e.getByLabel('权限', { exact: true }).last(), 'inventory_software_write')
     const response = admin.waitForResponse(
       (r) =>
         r.request().method() === 'PUT' &&
@@ -383,6 +385,15 @@ try {
     const r = await response
     assert.equal(r.status(), 200)
     const saved = await r.json()
+    const persistedRule = await (
+      await admin.request.get(origin + '/api/v1/authorization/rules/' + saved.id)
+    ).json()
+    assert.ok(
+      persistedRule.value.grants.some(
+        (grant) => grant.operation === 'inventory_software_write' && grant.scope.kind === 'tenant',
+      ),
+    )
+    checks.push('formal-rule-editor-preserves-inventory-software-write-grant')
     await e.waitFor({ state: 'hidden' })
     return saved.id
   }
@@ -466,9 +477,19 @@ try {
   d = dialog(admin, 'API Key 详情')
   await d.getByLabel('名称', { exact: true }).fill('React program')
   await d.getByRole('button', { name: '添加权限', exact: true }).click()
+  await choose(admin, d.getByLabel('权限', { exact: true }), 'inventory_software_write')
   const key = await result(admin, 'POST', '/api/v1/api-keys', () =>
     d.getByRole('button', { name: '创建 API Key', exact: true }).click(),
   )
+  const persistedKey = await (
+    await admin.request.get(origin + '/api/v1/api-keys/' + key.receipt.id)
+  ).json()
+  assert.ok(
+    persistedKey.metadata.grants.some(
+      (grant) => grant.operation === 'inventory_software_write' && grant.scope.kind === 'tenant',
+    ),
+  )
+  checks.push('formal-api-key-editor-preserves-inventory-software-write-grant')
   assert.equal(typeof key.secret, 'string')
   assert.ok(key.secret.length > 20)
   await dialog(admin, 'API Key 操作已确认').locator('.api-secret').waitFor()

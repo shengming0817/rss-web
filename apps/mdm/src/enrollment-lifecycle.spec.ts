@@ -223,7 +223,7 @@ it('retains an unknown PKI transition and blocks starting another server action'
     candidate: { digest: 'new', state: 'prepared' },
     activeIssuer: 'old',
     action: 'activate',
-    blockers: [],
+    blockers: ['missing_ack'],
     preconditions: [],
     providerVerification: 'not_evaluated',
     operations: [],
@@ -245,7 +245,14 @@ it('retains an unknown PKI transition and blocks starting another server action'
       },
     })
   await render(h(DevicePki, { runtime: r, locale: 'en', canManage: true }))
-  const current = [...host.querySelectorAll('button')].find((node) =>
+  let current = [...host.querySelectorAll('button')].find((node) =>
+    node.textContent?.startsWith('Explicitly continue the current server action'),
+  )!
+  expect(current.disabled).toBe(true)
+  expect(transition).not.toHaveBeenCalled()
+  rotation.blockers = []
+  await click('Read latest rotation')
+  current = [...host.querySelectorAll('button')].find((node) =>
     node.textContent?.startsWith('Explicitly continue the current server action'),
   )!
   await act(async () => current.click())

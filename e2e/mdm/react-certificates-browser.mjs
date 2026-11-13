@@ -67,8 +67,7 @@ try {
   }
   await run.login(p)
   await p.goto(origin + '/certificates')
-  await tab('设备 PKI')
-  await tab('Agent')
+  await tab('证书档案')
   run.step('archive-initialize-and-unlock')
   const initialVault = await api('GET', '/api/v1/certificate-archive/vault')
   assert.equal(initialVault.initialized, false)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Alert, Button, Card, Descriptions, Form, Input } from 'antd'
 import type { ViewEndpoint } from '@rss/mdm-devices'
 import type {
@@ -23,6 +23,7 @@ export function OriginalRequests({
   locale: Locale
   endpoint: ViewEndpoint
 }) {
+  const formId = useId()
   const l = labels(locale),
     { requestHistory, devicePki, authorization, binding } = useAdministration(runtime),
     [cursor, setCursor] = useState<string | null>(null),
@@ -232,6 +233,7 @@ export function OriginalRequests({
       )}
       {!windows && selected && (
         <Form
+          name={formId}
           layout="vertical"
           onFinish={(value: { operation: string; actor: string; instance: string }) =>
             void action.run(async () =>

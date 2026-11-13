@@ -84,7 +84,7 @@ try {
         console.log(JSON.stringify({ phase, result: 'passed', journey }))
       }
     }
-    if (!failure && journey === 'enrollment') {
+    if (!interrupted && journey === 'enrollment') {
       const installation = resolve(root, 'e2e/mdm/enrollment-installation-fixture.py')
       phase = 'cleanup'
       try {

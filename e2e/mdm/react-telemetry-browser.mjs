@@ -216,7 +216,7 @@ try {
       projection: 'both',
       sampleMillis: 5000,
       uploadMillis: 10000,
-      budget: { points: 256, bytes: 65536, resources: 3, executionMillis: 1000, outputBytes: 4096 },
+      budget: { points: 256, bytes: 65536, resources: 4, executionMillis: 1000, outputBytes: 4096 },
       boost: null,
       backfillSeconds: 86400,
     },

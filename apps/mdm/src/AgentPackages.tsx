@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space } from 'antd'
 import { Link } from 'react-router-dom'
 import { hashMaterial, type SoftwareUploadIntent, type UploadSession } from '@rss/mdm-content'
@@ -39,6 +39,7 @@ export function AgentPackages({
   canPublish: boolean
   canWithdraw: boolean
 }) {
+  const formId = useId()
   const l = labels(locale),
     { agentPackages, content, binding } = useAdministration(runtime),
     action = useAction(),
@@ -295,6 +296,7 @@ export function AgentPackages({
           </Space>
           {inspection && <pre className="public-json">{JSON.stringify(inspection, null, 2)}</pre>}
           <Form
+            name={formId}
             form={saveForm}
             layout="vertical"
             disabled={locked}

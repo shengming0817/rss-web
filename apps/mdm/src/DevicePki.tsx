@@ -680,7 +680,12 @@ function RotationHistory({
             ]}
           />
           <Button
-            disabled={!canContinue || read.value.action === null}
+            disabled={
+              !canContinue ||
+              read.value.action === null ||
+              read.value.blockers.length > 0 ||
+              read.value.preconditions.length > 0
+            }
             onClick={() => onContinue(read.value!)}
           >
             {l('按后端当前阶段显式继续', 'Explicitly continue the current server action')} ·{' '}

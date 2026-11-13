@@ -15,6 +15,7 @@ import tempfile
 import uuid
 WEB = Path(sys.argv[1]).resolve()
 BACKEND = Path.cwd()
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(BACKEND/'hack'))
 from build_run import lease_fds
 from candidate_installation import tls
