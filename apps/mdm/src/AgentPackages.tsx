@@ -128,7 +128,7 @@ export function AgentPackages({
   }
   const locked = action.busy || pending !== null
   return (
-    <div className="admin-stack">
+    <div className="admin-stack agent-packages">
       <Alert
         type="info"
         title={l(
@@ -173,7 +173,7 @@ export function AgentPackages({
       <ReadState locale={locale} busy={detail.busy} error={detail.error} />
       {detail.value && (
         <Card title={l('固定包详情', 'Fixed package details')}>
-          <pre className="public-json">{JSON.stringify(detail.value, null, 2)}</pre>
+          <pre className="definition-preview">{JSON.stringify(detail.value, null, 2)}</pre>
           <Button
             danger
             disabled={!canWithdraw || locked || detail.value.state === 'withdrawn'}
@@ -294,7 +294,9 @@ export function AgentPackages({
               {l('明确解析原上传', 'Explicitly inspect original upload')}
             </Button>
           </Space>
-          {inspection && <pre className="public-json">{JSON.stringify(inspection, null, 2)}</pre>}
+          {inspection && (
+            <pre className="definition-preview">{JSON.stringify(inspection, null, 2)}</pre>
+          )}
           <Form
             name={formId}
             form={saveForm}
@@ -304,7 +306,8 @@ export function AgentPackages({
               version?: string
               platform: 'windows' | 'macos'
               architecture: 'x86_64' | 'aarch64'
-            }) =>
+            }) => {
+              if (behavior === null) return
               start({
                 kind: 'save',
                 input: {
@@ -315,7 +318,7 @@ export function AgentPackages({
                   behavior,
                 },
               })
-            }
+            }}
           >
             <Form.Item
               name="version"
@@ -349,9 +352,18 @@ export function AgentPackages({
               {l('提供完整安装定义', 'Provide complete installation definition')}
             </Checkbox>
             {behavior && (
+              <Alert
+                type="info"
+                title={l(
+                  '原文件的安装材料键为 package；EXE 布局需包含该材料。',
+                  'The original installer material key is package; include it in the EXE layout.',
+                )}
+              />
+            )}
+            {behavior && (
               <SoftwareBehaviorAuthor value={behavior} onChange={setBehavior} locale={locale} />
             )}
-            <Button htmlType="submit" disabled={!packageId || locked}>
+            <Button htmlType="submit" disabled={!packageId || locked || behavior === null}>
               {l('明确保存软件定义', 'Explicitly save software definition')}
             </Button>
           </Form>
@@ -394,7 +406,7 @@ export function AgentPackages({
           )}
         </Card>
       )}
-      {receipt && <pre className="public-json">{JSON.stringify(receipt, null, 2)}</pre>}
+      {receipt && <pre className="definition-preview">{JSON.stringify(receipt, null, 2)}</pre>}
       <Failure locale={locale} error={action.error} />
     </div>
   )

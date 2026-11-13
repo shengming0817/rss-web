@@ -14,7 +14,10 @@ const backend = resolve(process.env.MDM_REACT_DEVICES_BACKEND),
     MDM_ENROLLMENT_BROWSER_MODULE: 'react-enrollment-browser.mjs',
   }
 const selected = process.argv[2] ?? 'all'
-assert.ok(['all', 'device', 'enrollment'].includes(selected), 'Select all, device or enrollment')
+assert.ok(
+  ['all', 'device', 'enrollment', 'installation'].includes(selected),
+  'Select all, device, enrollment or installation',
+)
 let active,
   interrupted = false,
   phase = 'build'
@@ -44,9 +47,45 @@ async function run(command, args, cwd, timeoutMs) {
 }
 const leased = (args, timeout = 180000) =>
   run('python3', ['hack/build_run.py', '--', 'python3', ...args], backend, timeout)
+async function installedJourney() {
+  let failure
+  const installation = resolve(root, 'e2e/mdm/enrollment-installation-fixture.py')
+  phase = 'cleanup'
+  try {
+    await leased([installation, root, '--cleanup'], 660000)
+    phase = 'signed-configuration'
+    await leased([installation, root], 3600000)
+  } catch (error) {
+    failure = error
+  } finally {
+    phase = 'cleanup'
+    try {
+      await leased([installation, root, '--cleanup'], 660000)
+    } catch {
+      console.error(
+        JSON.stringify({
+          phase: 'signed-configuration-cleanup',
+          result: 'failed',
+          recoveryDirectory: resolve(
+            backend,
+            'artifacts/dev-environment',
+            'web-signed-' + createHash('sha256').update(root).digest('hex').slice(0, 16),
+          ),
+        }),
+      )
+      failure = new Error('cleanup-unconfirmed')
+    }
+  }
+  if (failure) throw failure
+}
 try {
-  await run('pnpm', ['build:mdm'], root, 600000)
-  for (const journey of selected === 'all' ? ['device', 'enrollment'] : [selected]) {
+  if (selected === 'installation') await installedJourney()
+  else await run('pnpm', ['build:mdm'], root, 600000)
+  for (const journey of selected === 'installation'
+    ? []
+    : selected === 'all'
+      ? ['device', 'enrollment']
+      : [selected]) {
     phase = journey
     let failure
     try {
@@ -85,32 +124,10 @@ try {
       }
     }
     if (!interrupted && journey === 'enrollment') {
-      const installation = resolve(root, 'e2e/mdm/enrollment-installation-fixture.py')
-      phase = 'cleanup'
       try {
-        await leased([installation, root, '--cleanup'], 660000)
-        phase = 'signed-configuration'
-        await leased([installation, root], 3600000)
+        await installedJourney()
       } catch (error) {
         failure = error
-      } finally {
-        phase = 'cleanup'
-        try {
-          await leased([installation, root, '--cleanup'], 660000)
-        } catch {
-          console.error(
-            JSON.stringify({
-              phase: 'signed-configuration-cleanup',
-              result: 'failed',
-              recoveryDirectory: resolve(
-                backend,
-                'artifacts/dev-environment',
-                'web-signed-' + createHash('sha256').update(root).digest('hex').slice(0, 16),
-              ),
-            }),
-          )
-          failure = new Error('cleanup-unconfirmed')
-        }
       }
     }
     if (failure) {

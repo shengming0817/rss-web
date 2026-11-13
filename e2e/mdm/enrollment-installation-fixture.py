@@ -82,15 +82,35 @@ with ExitStack() as providers:
     private(root/'.env',''.join(f'{key}={value}\n' for key,value in values.items()))
     for name in ('production.compose.yaml','render_gateway.py'): shutil.copy(candidate/'deployment'/name,root/name)
     owner=Installation(root,root/'production.compose.yaml',project)
+    def owned_file(name, data):
+        target='/var/lib/rss-mdm/browser-inputs/'+name
+        owner.script('from pathlib import Path;p=Path('+repr(target)+');p.parent.mkdir(mode=0o700,parents=True,exist_ok=True);p.write_bytes(bytes.fromhex('+repr(data.hex())+'));p.chmod(0o600)')
+        return target
+    def product(command,path='/var/lib/rss-mdm/installation-input.json'):
+        args=['/usr/local/bin/rss-mdm-installer',command,'--config',path]
+        program='import subprocess,json,re;result=subprocess.run('+repr(args)+',capture_output=True,text=True);print(json.dumps(dict(status=result.returncode,diagnostics=re.findall(r"[a-z_]+(?:[.][a-z_]+)*: [a-z_]+",result.stderr))))'
+        result=json.loads(owner.script(program))
+        if result['status']:
+            print(json.dumps(dict(phase='installed-command',command=command,**result)),flush=True)
+            raise RuntimeError('installed-'+command)
     try:
         owner.compose('up','-d','postgres'); owner.compose('run','--rm','init')
-        owner.ports_file=root/'gateway-ports.compose.yaml'; owner.ports_file.write_text(owner.read('/var/lib/rss-mdm/runtime/gateway/gateway-ports.compose.yaml'))
+        exported=owner.read('/var/lib/rss-mdm/runtime/gateway/gateway-ports.compose.yaml')
+        owner.ports_file=root/'gateway-ports.compose.yaml'; owner.ports_file.write_text(exported)
         model=json.loads(owner.compose('config','--format','json'))
         spec=importlib.util.spec_from_file_location('enrollment_gateway_renderer',root/'render_gateway.py'); renderer=importlib.util.module_from_spec(spec); spec.loader.exec_module(renderer)
         Gateway('',model['services']['gateway']['ports'],renderer).publish(owner.ports_file,isolated=True,published={port:port})
         owner.compose('up','-d')
         runtime=json.loads(owner.read('/var/lib/rss-mdm/runtime/primary/server/runtime.json'))
         tenant=runtime['identity']['tenant_id']; service=runtime['identity']['instance_id']
+        operator=Browser(origin,inputs/'gateway-ca.crt',port)
+        until(lambda: operator.call('GET','/readyz')[0]==200)
+        operator.login(tenant,'administrator',(inputs/'administrator-password').read_text().strip())
+        observe_runtime(operator,runtime)
+        product('prepare-hosts')
+        status,signer=operator.call('POST','/api/v1/task-signing/trust',dict(action='prepare',expectedRevision=0),str(uuid.uuid4()))
+        if status!=200 or signer['revision']!=1: raise RuntimeError('installation-task-signing')
+        runtime=json.loads(owner.read('/var/lib/rss-mdm/runtime/primary/server/runtime.json'))
         native=root/'pki'; native.mkdir(mode=0o700)
         for source,target in [('ca.crt','ca.crt'),('ca.key','ca.key'),('gateway.crt','server.crt'),('gateway.key','server.key')]: shutil.copy(inputs/source,native/target); (native/target).chmod(0o600)
         private(native/'case.json',dict(tenant=tenant))
@@ -100,26 +120,26 @@ with ExitStack() as providers:
             if isinstance(value,list): return [mounted(item) for item in value]
             return value
         def mount_file(value):
-            source=Path(value); name=uuid.uuid4().hex+'-'+source.name; target=inputs/name; shutil.copy(source,target); target.chmod(0o600); return '/var/lib/rss-mdm/inputs/'+name
+            source=Path(value); return owned_file(uuid.uuid4().hex+'-'+source.name,source.read_bytes())
         agent=mounted(json.loads((native/'agent-pki.json').read_text()))
         configured=mounted(json.loads((native/'device-pki.json').read_text()))
         for entry in configured: entry['origin']='https://'+provider.internal_host+':19443'
         installation=json.loads(owner.read('/var/lib/rss-mdm/installation-input.json'))
         change=dict(installation=installation,operation_id=str(uuid.uuid4()),host_id=runtime['runtime_binding']['host_id'],expected_revision=runtime['runtime_binding']['revision'],change=dict(kind='channels',settings=dict(windows=None,apple=None,agent=agent,providers=configured,apple_material_roots=[])))
-        private(inputs/'channels.json',change)
-        owner.product('configure-host','/var/lib/rss-mdm/inputs/channels.json')
-        owner.product('prepare-hosts')
+        channels_file=owned_file('channels.json',json.dumps(change).encode())
+        product('configure-host',channels_file)
+        product('prepare-hosts')
         owner.compose('create','--force-recreate','server')
         server=owner.compose('ps','-a','-q','server')
         subprocess.run(['docker','network','connect',provider.owner.project+'_default',server],check=True,capture_output=True,timeout=30)
         owner.compose('start','server')
         owner.compose('exec','-T','gateway','nginx','-t','-c','/run/gateway/nginx.conf'); owner.compose('exec','-T','gateway','nginx','-s','reload','-c','/run/gateway/nginx.conf')
-        operator=Browser(origin,inputs/'gateway-ca.crt',port)
         until(lambda: operator.call('GET','/readyz')[0]==200)
-        operator.login(tenant,'administrator',(inputs/'administrator-password').read_text().strip())
+        product('prepare-hosts')
+        product('configure-host',channels_file)
         status,draft=operator.call('PUT','/api/v1/agent-connections',dict(operationId=str(uuid.uuid4()),expectedRevision=0,preferredOrigin=origin,origins=[origin]))
         if status!=200: raise RuntimeError('installation-connection-draft')
-        owner.product('prepare-hosts')
+        product('prepare-hosts')
         runtime=json.loads(owner.read('/var/lib/rss-mdm/runtime/primary/server/runtime.json')); observe_runtime(operator,runtime)
         status,state=operator.call('GET','/api/v1/agent-connections')
         if status!=200 or not state['deployments']: raise RuntimeError('installation-deployment-observation')

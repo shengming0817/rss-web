@@ -428,10 +428,11 @@ try {
   async function queryField(field) {
     await label('字段键').fill(field)
     await label('序列资源').fill('device')
-    await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+    const response = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
       button('查询已上报数据').click(),
     )
     await page.locator('.telemetry-results table tbody tr').first().waitFor()
+    return response.json()
   }
   await queryField('custom.browser.counter')
   await selectSeries()
@@ -450,11 +451,7 @@ try {
     .locator('.telemetry-aggregate')
     .getByText(new RegExp(`\\(${BigInt(increase) * 1000000n} / ${rate.duration_micros}\\)`))
     .waitFor()
-  await queryField('custom.browser.integer')
-  const integerResponse = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
-    button('查询已上报数据').click(),
-  )
-  const integers = (await integerResponse.json()).rows.filter(
+  const integers = (await queryField('custom.browser.integer')).rows.filter(
     (row) => row.sample.reading.quality === 'valid',
   )
   const exactValues = integers.map((row) => row.sample.reading.value.value.value)
@@ -549,7 +546,28 @@ try {
   assert.equal(await button('下一页观察').count(), 0)
   coverage.push('latest-server-selected-source-without-continuation')
   run.step('configuration-preview-and-links')
+  const configurationPath = `/api/v1/devices/${device}/telemetry-configurations`
+  const configurationResponse = () =>
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        new URL(response.url()).pathname === configurationPath,
+    )
+  let waiting = configurationResponse()
   await page.getByRole('tab', { name: '配置发现与预览', exact: true }).click()
+  let discoveredResponse = await waiting
+  for (let attempt = 0; discoveredResponse.status() === 503 && attempt < 6; attempt++) {
+    await new Promise((done) => setTimeout(done, 500))
+    waiting = configurationResponse()
+    await button('重新读取配置').click()
+    discoveredResponse = await waiting
+  }
+  assert.equal(discoveredResponse.status(), 200, 'real current configuration discovery')
+  const discovered = await discoveredResponse.json()
+  assert.ok(
+    discovered.configurations.some((row) => row.resource.id === profile),
+    'current server-discovered profile',
+  )
   await page
     .getByRole('row')
     .filter({ hasText: profile })

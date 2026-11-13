@@ -220,7 +220,7 @@ try:
         recovery_input = private(environment.root/'recovery-input.json',dict(wireVersion=1,operationId=str(uuid.uuid4()),secret=secrets.token_urlsafe(32),platform='macos',csr=base64.b64encode((root/'pki/agent/agent.der').read_bytes()).decode()))
         backend_revision = subprocess.run(['/usr/bin/git','rev-parse','HEAD'],cwd=BACKEND,check=True,capture_output=True,text=True).stdout.strip()
         print(json.dumps(dict(phase='backend-baseline',revision=backend_revision)),flush=True)
-        fixture = private(environment.root/'browser.json',dict(backendRevision=backend_revision,collector=agent_fixture,pki=dict(candidateTrust=candidate_trust,recoveryCandidate=recovery_candidate,recoveryInputFile=str(recovery_input)),
+        fixture = private(environment.root/'browser.json',dict(backendRevision=backend_revision,collector=agent_fixture,pki=dict(candidateTrust=candidate_trust,recoveryCandidate=recovery_candidate,recoveryInputFile=str(recovery_input),reload=dict(request=str(environment.root/'pki-reload-request.json'),response=str(environment.root/'pki-reload-response.json'))),
 
             origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,ruleId=rule_id,rule=authority_rule,
             admin=dict(login='admin',passwordFile=str(environment.root/'account-password')),
@@ -229,8 +229,29 @@ try:
         browser = subprocess.Popen(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,
             env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
         processes.append(browser)
-        if browser.wait(timeout=780 if browser_module in {'react-enrollment-browser.mjs', 'react-certificates-browser.mjs'} else 360):
-            raise RuntimeError('browser')
+        deadline=time.monotonic()+(780 if browser_module in {'react-enrollment-browser.mjs','react-certificates-browser.mjs'} else 360)
+        reload_request=environment.root/'pki-reload-request.json'
+        while browser.poll() is None:
+            if reload_request.exists():
+                request=json.loads(reload_request.read_text())
+                uuid.UUID(request['operation'])
+                if browser_module != 'react-certificates-browser.mjs' or type(request['revision']) is not int or request['revision'] < 1:
+                    raise RuntimeError('pki-reload-request')
+                # Read the real desired owner record, load it into the fixture's existing process,
+                # then let the real mTLS participant acknowledge that exact revision.
+                body=environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';SELECT convert_from(body,'UTF8') FROM mdm_pki.trust WHERE tenant_id='{TENANTS[0]}' AND purpose='agent'",'mdm_dev')
+                desired=json.loads(body)
+                if desired['revision'] != request['revision'] or desired['tenant'] != TENANTS[0] or desired['purpose'] != 'agent':
+                    raise RuntimeError('pki-reload-binding')
+                private(Path(agent['trust_file']),desired)
+                shutdown([child for child in processes if child is not browser and child.poll() is None])
+                start(binary,initialized,log)
+                response=private(environment.root/'pki-reload-response.tmp',dict(operation=request['operation'],revision=desired['revision']))
+                response.replace(environment.root/'pki-reload-response.json')
+                reload_request.unlink()
+            if time.monotonic()>deadline: raise TimeoutError('browser-deadline')
+            time.sleep(.1)
+        if browser.returncode: raise RuntimeError('browser')
     result = 'passed'
 except BaseException as error:
     import traceback

@@ -354,6 +354,7 @@ try {
   assert.equal(await p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).isDisabled(), true)
   await p.getByRole('cell', { name: 'missing_ack', exact: true }).first().waitFor()
   const ack = await runPkiCollector(process.env.MDM_ENROLLMENT_BROWSER_FIXTURE, {
+    revision: prepared.revision,
     onChild: (_child, terminate) => {
       activeCollector = terminate
       if (interrupted) terminate()
@@ -364,7 +365,13 @@ try {
     interrupted: () => interrupted,
   })
   assert.equal(ack.status, 0)
-  await button('读取原轮换').click()
+  const loaded = await (
+    await run.response(p, 'GET', `/api/v1/pki/agent/rotations/${prepared.operation}`, () =>
+      button('读取原轮换').click(),
+    )
+  ).json()
+  assert.deepEqual(loaded.blockers, [])
+  assert.deepEqual(loaded.preconditions, [])
   const activated = await (
     await run.response(p, 'POST', '/api/v1/pki/agent/rotations', () =>
       p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).click(),
@@ -430,8 +437,7 @@ try {
 
   run.step('certificate-public-design-screenshots')
   await p.goto(origin + '/certificates')
-  await tab('设备 PKI')
-  await tab('Agent')
+  await tab('证书档案')
   await button('Edited ' + caName).waitFor()
   await p.waitForFunction(() => !document.querySelector('.ant-spin-spinning'))
   assert.equal(Math.round((await p.locator('aside.sidebar').boundingBox()).width), 218)
@@ -451,6 +457,75 @@ try {
     })
   }
   await p.setViewportSize({ width: 1440, height: 960 })
+  await tab('设备 PKI')
+  await tab('Agent')
+  await button('读取最新轮换').waitFor()
+  await p.setViewportSize({ width: 390, height: 844 })
+  const pkiFits = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
+  if (!pkiFits)
+    console.error(
+      JSON.stringify({
+        phase: 'pki-layout',
+        screenshots,
+        overflow: await p.locator('main *').evaluateAll((nodes) =>
+          nodes
+            .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+            .slice(0, 25)
+            .map((node) => ({
+              tag: node.tagName,
+              class: node.className,
+              width: Math.round(node.getBoundingClientRect().width),
+              right: Math.round(node.getBoundingClientRect().right),
+            })),
+        ),
+      }),
+    )
+  await p.screenshot({
+    path: join(screenshots, 'pki-mobile.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  assert.equal(pkiFits, true)
+  await p.setViewportSize({ width: 1440, height: 960 })
+  await button('English').press('Enter')
+  await run.response(p, 'GET', '/api/v1/pki/agent/rotations/latest', () =>
+    button('Read latest rotation').press('Enter'),
+  )
+  await p.screenshot({
+    path: join(screenshots, 'pki-en-desktop.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  await p.setViewportSize({ width: 390, height: 844 })
+  const englishFits = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
+  if (!englishFits)
+    console.error(
+      JSON.stringify({
+        phase: 'pki-en-layout',
+        screenshots,
+        overflow: await p.locator('main *').evaluateAll((nodes) =>
+          nodes
+            .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+            .slice(0, 25)
+            .map((node) => ({
+              tag: node.tagName,
+              class: node.className,
+              width: Math.round(node.getBoundingClientRect().width),
+              right: Math.round(node.getBoundingClientRect().right),
+            })),
+        ),
+      }),
+    )
+  await p.screenshot({
+    path: join(screenshots, 'pki-en-mobile.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  assert.equal(englishFits, true)
+  await p.setViewportSize({ width: 1440, height: 960 })
+  await button('中文').press('Enter')
+  await tab('证书档案')
+  checks.push('current-pki-mobile-and-english-keyboard-read')
   await button('新建档案材料').click()
   await label('证书名称').waitFor()
   assert.equal(await label('证书名称').inputValue(), '')

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OriginalRequests } from './OriginalRequests'
 import { AgentPackages } from './AgentPackages'
 import { DevicePki } from './DevicePki'
+import { SelectionGuard } from './SelectionGuard'
 import type { Runtime } from './runtime'
 import type { ViewEndpoint } from '@rss/mdm-devices'
 let host: HTMLDivElement, root: Root
@@ -229,6 +230,7 @@ it('retains an unknown PKI transition and blocks starting another server action'
     operations: [],
     evaluatedAt: 1,
   }
+  const readRotation = vi.fn(async () => rotation)
   const transition = vi.fn().mockRejectedValue({ status: 503, code: 'operation_unknown' }),
     r = runtime({
       devicePki: {
@@ -240,6 +242,7 @@ it('retains an unknown PKI transition and blocks starting another server action'
           origin: 'https://mdm.test',
         }),
         latestRotation: async () => rotation,
+        rotation: readRotation,
         rotationBlockers: async () => ({ items: [], nextCursor: null }),
         transition,
       },
@@ -250,8 +253,21 @@ it('retains an unknown PKI transition and blocks starting another server action'
   )!
   expect(current.disabled).toBe(true)
   expect(transition).not.toHaveBeenCalled()
+  const locator = host.querySelector<HTMLInputElement>(
+    'input[aria-label="Original rotation UUID"]',
+  )!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+      locator,
+      rotation.id,
+    )
+    locator.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await click('Read original rotation')
+  expect(readRotation).toHaveBeenCalledOnce()
   rotation.blockers = []
-  await click('Read latest rotation')
+  await click('Read original rotation')
+  expect(readRotation).toHaveBeenCalledTimes(2)
   current = [...host.querySelectorAll('button')].find((node) =>
     node.textContent?.startsWith('Explicitly continue the current server action'),
   )!
@@ -261,4 +277,80 @@ it('retains an unknown PKI transition and blocks starting another server action'
   await act(async () => current.click())
   expect(transition).toHaveBeenCalledOnce()
   expect(host.textContent).toContain('Original operation')
+})
+
+it('keeps the original request and outer device selection fenced while a real recovery owner is unknown', async () => {
+  const device = '33333333-3333-4333-8333-333333333333',
+    a = '11111111-1111-4111-8111-111111111111',
+    b = '22222222-2222-4222-8222-222222222222'
+  const requests = [a, b].map((id) => ({
+    id,
+    device,
+    operationId: id,
+    state: 'authorized',
+    activated: false,
+    requirements: [],
+    issuance: id,
+    actor: 'actor',
+    instance: 'instance',
+  }))
+  const recoverIssuance = vi.fn().mockRejectedValue({ status: 503, code: 'operation_unknown' }),
+    outer = vi.fn()
+  const r = runtime({
+    requestHistory: {
+      agents: async () => ({ items: requests, nextCursor: 'next' }),
+      agent: async (_device: string, id: string) => requests.find((row) => row.id === id),
+    },
+    devicePki: { recoverIssuance },
+    authorization: {
+      effective: async () => ({
+        grants: [{ operation: 'credentials', scope: { kind: 'device', id: device } }],
+      }),
+    },
+  })
+  await render(
+    h(
+      SelectionGuard.Provider,
+      { value: outer },
+      h(OriginalRequests, {
+        runtime: r,
+        locale: 'en',
+        endpoint: {
+          id: device,
+          source: 'agent.builtin',
+          channel: 'agent',
+          platform: { state: 'known', values: ['macos'] },
+          status: 'active',
+          assetState: 'active',
+          registeredAt: null,
+          lastCommunicationReceivedAt: null,
+          enrollment: null,
+        },
+      }),
+    ),
+  )
+  await click(a)
+  const label = [...host.querySelectorAll('label')].find(
+    (node) => node.textContent === 'Certificate chain signed by the original CA',
+  )!
+  const chain = document.getElementById(label.htmlFor) as HTMLTextAreaElement
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+      chain,
+      'AQID',
+    )
+    chain.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => {
+    button('Link original signing result')
+      .closest('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  })
+  expect(recoverIssuance).toHaveBeenCalledWith(expect.objectContaining({ issuance: a }))
+  expect(button(b).disabled).toBe(true)
+  expect(button('Next requests').disabled).toBe(true)
+  await click(b)
+  expect(host.textContent).toContain('Administrator recovery operation')
+  expect(outer.mock.calls.some((call) => call[1] === true)).toBe(true)
+  expect(recoverIssuance).toHaveBeenCalledOnce()
 })

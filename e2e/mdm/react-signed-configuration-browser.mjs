@@ -16,7 +16,7 @@ try {
   assert.equal(value.configuration.tenantId, run.fixture.tenant)
   assert.ok(value.configuration.origins.includes(run.origin))
   run.checks.push('formal-installer-observation-and-real-connection-publication')
-  await signedConfigurationJourney(run, page, run.fixture.verificationKeys)
+  await signedConfigurationJourney(run, page, run.fixture.verificationKeys, value.configuration)
 } catch (error) {
   failure = error
 }

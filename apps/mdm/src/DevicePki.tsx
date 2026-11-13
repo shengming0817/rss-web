@@ -49,6 +49,7 @@ export function DevicePki({
 }) {
   return (
     <SecretTabs
+      className="device-pki"
       uiLocale={locale}
       items={purposes.map((purpose) => ({
         key: purpose,
@@ -598,6 +599,13 @@ function RotationHistory({
         ? devicePki.rotationBlockers(purpose, read.value.id, cursor, signal)
         : Promise.resolve(null),
   )
+  function select(nextId: string) {
+    setCursor(null)
+    if (id === nextId) {
+      read.reload()
+      blockers.reload()
+    } else setId(nextId)
+  }
   return (
     <Card title={l('原轮换与阻断', 'Original rotation and blockers')}>
       <Space wrap>
@@ -606,23 +614,10 @@ function RotationHistory({
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
         />
-        <Button
-          disabled={!draft || !enabled}
-          onClick={() => {
-            setCursor(null)
-            setId(draft)
-          }}
-        >
+        <Button disabled={!draft || !enabled} onClick={() => select(draft)}>
           {l('读取原轮换', 'Read original rotation')}
         </Button>
-        <Button
-          disabled={!enabled}
-          onClick={() => {
-            setCursor(null)
-            setId('')
-            read.reload()
-          }}
-        >
+        <Button disabled={!enabled} onClick={() => select('')}>
           {l('读取最新轮换', 'Read latest rotation')}
         </Button>
       </Space>
@@ -636,6 +631,7 @@ function RotationHistory({
       {read.value && (
         <>
           <Descriptions
+            layout="vertical"
             column={1}
             items={[
               { key: 'id', label: l('原轮换', 'Original rotation'), children: read.value.id },

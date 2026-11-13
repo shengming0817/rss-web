@@ -1,3 +1,8 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 export async function agentPackagesJourney(run, page, anonymous) {
   const { origin, fixture } = run
@@ -28,8 +33,69 @@ export async function agentPackagesJourney(run, page, anonymous) {
   await page
     .getByLabel('明确产品版本（留空仅使用正式解析结果）', { exact: true })
     .fill('3148-browser')
-  await run.choose(page, page.getByRole('combobox', { name: '目标系统', exact: true }), 'windows')
-  await run.choose(page, page.getByRole('combobox', { name: '原生架构', exact: true }), 'x86_64')
+  await run.choose(page, page.getByLabel('目标系统', { exact: true }), 'windows')
+  await run.choose(page, page.getByLabel('原生架构', { exact: true }), 'x86_64')
+  await page.getByRole('checkbox', { name: '提供完整安装定义', exact: true }).check()
+  await page.getByLabel('安装器材料键', { exact: true }).fill('package')
+  const layout = page
+    .locator('.ant-card')
+    .filter({ has: page.getByLabel('EXE 文件布局 新键', { exact: true }) })
+    .last()
+  await page.getByLabel('EXE 文件布局 新键', { exact: true }).fill('agent.exe')
+  await layout.getByRole('button', { name: '添加', exact: true }).click()
+  await page.getByLabel('EXE 文件布局.agent.exe', { exact: true }).fill('package')
+  await page.getByRole('button', { name: '添加 安装调用 参数', exact: true }).click()
+  await page.getByLabel('安装调用 参数 1', { exact: true }).fill('/quiet')
+  await page.getByRole('button', { name: '添加 升级调用 参数', exact: true }).click()
+  await page.getByLabel('升级调用 参数 1', { exact: true }).fill('/quiet')
+  await page
+    .getByLabel('MSI 产品代码', { exact: true })
+    .fill('{11111111-1111-4111-8111-111111111111}')
+  await page.getByLabel('检测软件版本', { exact: true }).fill('3148-browser')
+  const screenshots = mkdtempSync(join(tmpdir(), 'rss-react-agent-packages-'))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({
+    path: join(screenshots, 'packages-mobile.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  const fits = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
+  if (!fits)
+    console.error(
+      JSON.stringify({
+        phase: 'agent-packages-layout',
+        screenshots,
+        overflow: await page.locator('main *').evaluateAll((nodes) =>
+          nodes
+            .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+            .slice(0, 20)
+            .map((node) => ({
+              tag: node.tagName,
+              class: node.className,
+              right: Math.round(node.getBoundingClientRect().right),
+            })),
+        ),
+      }),
+    )
+  assert.equal(fits, true)
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.getByRole('button', { name: 'English', exact: true }).press('Enter')
+  await page.getByLabel('Original package UUID', { exact: true }).waitFor()
+  await page.screenshot({
+    path: join(screenshots, 'packages-en-desktop.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({
+    path: join(screenshots, 'packages-en-mobile.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.getByRole('button', { name: '中文', exact: true }).press('Enter')
+  run.checks.push('agent-package-mobile-and-english-keyboard-authoring:' + screenshots)
   const saved = await run.response(page, 'POST', '/api/v1/agent-packages/save', () =>
     page.getByRole('button', { name: '明确保存软件定义', exact: true }).click(),
   )
@@ -44,11 +110,29 @@ export async function agentPackagesJourney(run, page, anonymous) {
     )
   ).json()
   assert.equal(release.version, '3148-browser')
-  assert.ok(
-    (await (await anonymous.request.get(origin + '/api/v1/agent/enroll/packages')).json()).some(
-      (row) => row.releaseId === release.releaseId,
-    ),
-  )
+  const catalog = await (
+    await anonymous.request.get(origin + '/api/v1/agent/enroll/packages')
+  ).json()
+  const presented = catalog.find((row) => row.releaseId === release.releaseId)
+  assert.ok(presented)
+  await anonymous.reload()
+  const [downloaded] = await Promise.all([
+    anonymous.waitForEvent('download'),
+    anonymous
+      .locator(`tr[data-row-key="${release.releaseId}"]`)
+      .getByRole('link', { name: '下载安装包', exact: true })
+      .click(),
+  ])
+  let actual = Buffer.alloc(0)
+  try {
+    for await (const chunk of await downloaded.createReadStream())
+      actual = Buffer.concat([actual, chunk])
+    assert.equal(actual.length, release.length)
+    assert.deepEqual([...createHash('sha256').update(actual).digest()], release.installerSha256)
+  } finally {
+    actual.fill(0)
+    await downloaded.delete()
+  }
   await page.getByRole('button', { name: release.releaseId, exact: true }).click()
   await run.response(
     page,
@@ -63,6 +147,6 @@ export async function agentPackagesJourney(run, page, anonymous) {
     ),
   )
   run.checks.push(
-    'real-agent-package-upload-inspect-save-original-receipt-publish-public-discovery-withdraw',
+    'real-agent-package-upload-inspect-save-original-receipt-publish-download-withdraw',
   )
 }

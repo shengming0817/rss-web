@@ -10,7 +10,12 @@ function signature(bytes, signature, publicKey) {
     Buffer.from(signature, 'base64url'),
   )
 }
-export async function signedConfigurationJourney(run, admin, verificationKeys) {
+export async function signedConfigurationJourney(
+  run,
+  admin,
+  verificationKeys,
+  publishedConfiguration,
+) {
   const { checks, origin } = run
   await run.nav(admin, '/enroll', '设备注册')
   await admin.getByRole('tab', { name: '管理员安装配置', exact: true }).click()
@@ -24,6 +29,9 @@ export async function signedConfigurationJourney(run, admin, verificationKeys) {
   const originalBytes = await delivered.body(),
     document = JSON.parse(originalBytes.toString('utf8'))
   const nested = document.configuration.connections
+  assert.deepEqual(nested.configuration, publishedConfiguration)
+  assert.equal(nested.configuration.preferredOrigin, origin)
+  assert.ok(nested.configuration.revision > 0)
   assert.equal(nested.configuration.serviceId, run.fixture.serviceId)
   assert.equal(document.configuration.tenantId, run.fixture.tenant)
   assert.equal(nested.configuration.tenantId, run.fixture.tenant)
@@ -108,9 +116,20 @@ export async function signedConfigurationJourney(run, admin, verificationKeys) {
   await dialog.getByRole('button', { name: '确认撤销原安装配置', exact: true }).click()
   await dialog.getByRole('button', { name: '配置已撤销，准备新签发', exact: true }).waitFor()
   await admin.unroute(pattern)
+  await dialog.getByRole('button', { name: '配置已撤销，准备新签发', exact: true }).click()
+  assert.equal(run.count(admin, 'POST', configurationPath), lostCount)
+  await dialog.getByRole('checkbox', { name: '通过受保护渠道交付此秘密 JSON', exact: true }).check()
+  const reissued = await run.response(admin, 'POST', configurationPath, () =>
+    dialog.getByRole('button', { name: '签发并准备下载 JSON', exact: true }).click(),
+  )
+  assert.notEqual(reissued.request().postDataJSON().operationId, lostOperation)
+  await dialog.getByRole('link', { name: '下载 rss-agent-enrollment.json', exact: true }).waitFor()
+  assert.equal(run.count(admin, 'POST', configurationPath), lostCount + 1)
   await dialog.locator('.ant-modal-close').click()
   await admin.reload()
   await admin.getByRole('heading', { name: '设备注册', exact: true }).waitFor()
-  assert.equal(run.count(admin, 'POST', configurationPath), lostCount)
-  checks.push('committed-json-loss-original-metadata-only-revoke-before-new-no-refresh-reissue')
+  assert.equal(run.count(admin, 'POST', configurationPath), lostCount + 1)
+  checks.push(
+    'committed-json-loss-original-metadata-revoke-explicit-new-issuance-no-refresh-replay',
+  )
 }

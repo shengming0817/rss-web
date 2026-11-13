@@ -13,6 +13,7 @@ import { Failure, labels, ReadState, useAction, useRead } from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { DataTable } from './DataTable'
 import { DevicePkiRecovery } from './DevicePkiRecovery'
+import { SelectionGuard, useSelectionGuard, usePendingSelection } from './SelectionGuard'
 import { devicePermission } from './DeviceSecurity'
 export function OriginalRequests({
   runtime,
@@ -23,7 +24,9 @@ export function OriginalRequests({
   locale: Locale
   endpoint: ViewEndpoint
 }) {
-  const formId = useId()
+  const formId = useId(),
+    selection = useSelectionGuard()
+  usePendingSelection(selection.locked)
   const l = labels(locale),
     { requestHistory, devicePki, authorization, binding } = useAdministration(runtime),
     [cursor, setCursor] = useState<string | null>(null),
@@ -64,235 +67,254 @@ export function OriginalRequests({
         : Promise.resolve(null),
   )
   return (
-    <Card title={l('原申请与恢复结果', 'Original requests and recovery results')}>
-      <Alert
-        type="info"
-        title={l(
-          '已关联、恢复已提交与设备领取/激活分别观察；缺少回执不能证明失败。',
-          'Linkage, recovery submission and device collection/activation are separate observations; an absent receipt does not prove failure.',
-        )}
-      />
-      <ReadState locale={locale} busy={page.busy} error={page.error} onRetry={page.reload} />
-      {page.value && (
-        <>
-          <DataTable<AgentRequest | WindowsRequest>
-            locale={locale}
-            dataSource={page.value.items}
-            rowKey={(row) => ('attempt' in row ? row.attempt : row.id)}
-            columns={[
-              {
-                title: l('原申请', 'Original request'),
-                render: (_, row) => {
-                  const id = 'attempt' in row ? row.attempt : row.id
-                  return (
-                    <Button
-                      type="link"
-                      onClick={() => {
-                        setSelected(id)
-                        setRecoveryCursor(null)
-                        setReceipt(null)
-                        action.clear()
-                      }}
-                    >
-                      {id}
-                    </Button>
-                  )
-                },
-              },
-              { title: l('原操作', 'Original operation'), dataIndex: 'operationId' },
-              {
-                title: l('要求', 'Requirements'),
-                render: (_, row) =>
-                  row.requirements.map((value) => requirementText(value, locale)).join(' · ') ||
-                  '—',
-              },
-              {
-                title: l('设备已激活', 'Device activated'),
-                render: (_, row) => String(row.activated),
-              },
-            ]}
-          />
-          {page.value.nextCursor && (
-            <Button
-              onClick={() => {
-                setSelected('')
-                setCursor(page.value!.nextCursor)
-              }}
-            >
-              {l('下一页原申请', 'Next requests')}
-            </Button>
+    <SelectionGuard.Provider value={selection.register}>
+      <Card title={l('原申请与恢复结果', 'Original requests and recovery results')}>
+        <Alert
+          type="info"
+          title={l(
+            '已关联、恢复已提交与设备领取/激活分别观察；缺少回执不能证明失败。',
+            'Linkage, recovery submission and device collection/activation are separate observations; an absent receipt does not prove failure.',
           )}
-          {cursor && (
-            <Button
-              onClick={() => {
-                setSelected('')
-                setCursor(null)
-              }}
-            >
-              {l('原申请首页', 'First requests')}
-            </Button>
-          )}
-        </>
-      )}
-      <ReadState locale={locale} busy={detail.busy} error={detail.error} onRetry={detail.reload} />
-      {detail.value && (
-        <Descriptions
-          column={1}
-          items={[
-            {
-              key: 'request',
-              label: l('原申请', 'Original request'),
-              children: 'attempt' in detail.value ? detail.value.attempt : detail.value.id,
-            },
-            {
-              key: 'operation',
-              label: l('原申请操作', 'Original request operation'),
-              children: detail.value.operationId,
-            },
-            {
-              key: 'state',
-              label: l('申请 / 注册状态', 'Request / registration state'),
-              children: `${'signing' in detail.value ? detail.value.signing.state : detail.value.state} / ${detail.value.registrationState ?? '—'}`,
-            },
-            {
-              key: 'actor',
-              label: l('原主体 / Instance', 'Original actor / instance'),
-              children:
-                'actor' in detail.value
-                  ? `${detail.value.actor ?? '—'} / ${detail.value.instance ?? '—'}`
-                  : l('按恢复目录的精确主体读取', 'Read using the recovery directory identity'),
-            },
-            {
-              key: 'signing',
-              label: l('签发关联 / 签发者', 'Issuance link / issuer'),
-              children:
-                'issuance' in detail.value
-                  ? `${detail.value.issuance ?? '—'} / ${detail.value.issuanceState ?? '—'} / ${detail.value.issuer ?? '—'}`
-                  : `${detail.value.signing.attempt} / ${detail.value.signing.issuer}`,
-            },
-            {
-              key: 'predecessor',
-              label: l('前序身份', 'Predecessor'),
-              children: detail.value.predecessor ?? '—',
-            },
-            {
-              key: 'activation',
-              label: l('设备已激活', 'Device activated'),
-              children: l(
-                detail.value.activated ? '是' : '否',
-                detail.value.activated ? 'Yes' : 'No',
-              ),
-            },
-            {
-              key: 'requirements',
-              label: l('继续所需条件', 'Continuation requirements'),
-              children:
-                detail.value.requirements
-                  .map((value) => requirementText(value, locale))
-                  .join(' · ') || '—',
-            },
-          ]}
         />
-      )}
-      <ReadState locale={locale} busy={recoveries.busy} error={recoveries.error} />
-      {recoveries.value && (
-        <>
-          <DataTable<RecoveryOperation>
-            locale={locale}
-            rowKey={(row) => `${row.actor}/${row.instance}/${row.operationId}`}
-            dataSource={recoveries.value.items}
-            columns={[
-              { title: l('原主体', 'Original actor'), dataIndex: 'actor' },
-              { title: 'Instance', dataIndex: 'instance' },
+        {selection.locked && (
+          <Alert
+            type="warning"
+            title={l(
+              '原恢复操作尚未结束；请先处理原回执并明确结束，再切换申请。',
+              'The original recovery is unfinished. Resolve its receipt and explicitly finish before selecting another request.',
+            )}
+          />
+        )}
+        <ReadState locale={locale} busy={page.busy} error={page.error} onRetry={page.reload} />
+        {page.value && (
+          <>
+            <DataTable<AgentRequest | WindowsRequest>
+              locale={locale}
+              dataSource={page.value.items}
+              rowKey={(row) => ('attempt' in row ? row.attempt : row.id)}
+              columns={[
+                {
+                  title: l('原申请', 'Original request'),
+                  render: (_, row) => {
+                    const id = 'attempt' in row ? row.attempt : row.id
+                    return (
+                      <Button
+                        type="link"
+                        disabled={selection.locked}
+                        onClick={() => {
+                          setSelected(id)
+                          setRecoveryCursor(null)
+                          setReceipt(null)
+                          action.clear()
+                        }}
+                      >
+                        {id}
+                      </Button>
+                    )
+                  },
+                },
+                { title: l('原操作', 'Original operation'), dataIndex: 'operationId' },
+                {
+                  title: l('要求', 'Requirements'),
+                  render: (_, row) =>
+                    row.requirements.map((value) => requirementText(value, locale)).join(' · ') ||
+                    '—',
+                },
+                {
+                  title: l('设备已激活', 'Device activated'),
+                  render: (_, row) => String(row.activated),
+                },
+              ]}
+            />
+            {page.value.nextCursor && (
+              <Button
+                disabled={selection.locked}
+                onClick={() => {
+                  setSelected('')
+                  setCursor(page.value!.nextCursor)
+                }}
+              >
+                {l('下一页原申请', 'Next requests')}
+              </Button>
+            )}
+            {cursor && (
+              <Button
+                disabled={selection.locked}
+                onClick={() => {
+                  setSelected('')
+                  setCursor(null)
+                }}
+              >
+                {l('原申请首页', 'First requests')}
+              </Button>
+            )}
+          </>
+        )}
+        <ReadState
+          locale={locale}
+          busy={detail.busy}
+          error={detail.error}
+          onRetry={detail.reload}
+        />
+        {detail.value && (
+          <Descriptions
+            column={1}
+            items={[
               {
-                title: l('原恢复操作', 'Original recovery operation'),
-                render: (_, row: RecoveryOperation) => (
-                  <Button
-                    onClick={() =>
-                      void action.run(async () =>
-                        setReceipt({
-                          selection: selectionKey,
-                          operation: row,
-                          value: await requestHistory.windowsRecovery(device, selected, row),
-                        }),
-                      )
-                    }
-                  >
-                    {row.operationId}
-                  </Button>
+                key: 'request',
+                label: l('原申请', 'Original request'),
+                children: 'attempt' in detail.value ? detail.value.attempt : detail.value.id,
+              },
+              {
+                key: 'operation',
+                label: l('原申请操作', 'Original request operation'),
+                children: detail.value.operationId,
+              },
+              {
+                key: 'state',
+                label: l('申请 / 注册状态', 'Request / registration state'),
+                children: `${'signing' in detail.value ? detail.value.signing.state : detail.value.state} / ${detail.value.registrationState ?? '—'}`,
+              },
+              {
+                key: 'actor',
+                label: l('原主体 / Instance', 'Original actor / instance'),
+                children:
+                  'actor' in detail.value
+                    ? `${detail.value.actor ?? '—'} / ${detail.value.instance ?? '—'}`
+                    : l('按恢复目录的精确主体读取', 'Read using the recovery directory identity'),
+              },
+              {
+                key: 'signing',
+                label: l('签发关联 / 签发者', 'Issuance link / issuer'),
+                children:
+                  'issuance' in detail.value
+                    ? `${detail.value.issuance ?? '—'} / ${detail.value.issuanceState ?? '—'} / ${detail.value.issuer ?? '—'}`
+                    : `${detail.value.signing.attempt} / ${detail.value.signing.issuer}`,
+              },
+              {
+                key: 'predecessor',
+                label: l('前序身份', 'Predecessor'),
+                children: detail.value.predecessor ?? '—',
+              },
+              {
+                key: 'activation',
+                label: l('设备已激活', 'Device activated'),
+                children: l(
+                  detail.value.activated ? '是' : '否',
+                  detail.value.activated ? 'Yes' : 'No',
                 ),
               },
+              {
+                key: 'requirements',
+                label: l('继续所需条件', 'Continuation requirements'),
+                children:
+                  detail.value.requirements
+                    .map((value) => requirementText(value, locale))
+                    .join(' · ') || '—',
+              },
             ]}
           />
-          {recoveries.value.nextCursor && (
-            <Button onClick={() => setRecoveryCursor(recoveries.value!.nextCursor)}>
-              {l('下一页恢复操作', 'Next recovery operations')}
-            </Button>
-          )}
-        </>
-      )}
-      {!windows && selected && (
-        <Form
-          name={formId}
-          layout="vertical"
-          onFinish={(value: { operation: string; actor: string; instance: string }) =>
-            void action.run(async () =>
-              setReceipt({
-                selection: selectionKey,
-                operation: {
-                  actor: value.actor,
-                  instance: value.instance,
-                  operationId: value.operation,
+        )}
+        <ReadState locale={locale} busy={recoveries.busy} error={recoveries.error} />
+        {recoveries.value && (
+          <>
+            <DataTable<RecoveryOperation>
+              locale={locale}
+              rowKey={(row) => `${row.actor}/${row.instance}/${row.operationId}`}
+              dataSource={recoveries.value.items}
+              columns={[
+                { title: l('原主体', 'Original actor'), dataIndex: 'actor' },
+                { title: 'Instance', dataIndex: 'instance' },
+                {
+                  title: l('原恢复操作', 'Original recovery operation'),
+                  render: (_, row: RecoveryOperation) => (
+                    <Button
+                      onClick={() =>
+                        void action.run(async () =>
+                          setReceipt({
+                            selection: selectionKey,
+                            operation: row,
+                            value: await requestHistory.windowsRecovery(device, selected, row),
+                          }),
+                        )
+                      }
+                    >
+                      {row.operationId}
+                    </Button>
+                  ),
                 },
-                value: await devicePki.registrationRecovery(device, value.operation, {
-                  actor: value.actor,
-                  instance: value.instance,
+              ]}
+            />
+            {recoveries.value.nextCursor && (
+              <Button onClick={() => setRecoveryCursor(recoveries.value!.nextCursor)}>
+                {l('下一页恢复操作', 'Next recovery operations')}
+              </Button>
+            )}
+          </>
+        )}
+        {!windows && selected && (
+          <Form
+            name={formId}
+            layout="vertical"
+            onFinish={(value: { operation: string; actor: string; instance: string }) =>
+              void action.run(async () =>
+                setReceipt({
+                  selection: selectionKey,
+                  operation: {
+                    actor: value.actor,
+                    instance: value.instance,
+                    operationId: value.operation,
+                  },
+                  value: await devicePki.registrationRecovery(device, value.operation, {
+                    actor: value.actor,
+                    instance: value.instance,
+                  }),
                 }),
-              }),
-            )
-          }
-        >
-          <Form.Item
-            name="operation"
-            label={l('原登记恢复操作 UUID', 'Original registration recovery operation UUID')}
-            rules={[{ required: true }]}
+              )
+            }
           >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="actor"
-            label={l('原恢复主体', 'Original recovery actor')}
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="instance"
-            label={l('原恢复 Instance', 'Original recovery instance')}
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
-          <Button htmlType="submit" disabled={action.busy}>
-            {l('读取精确原回执', 'Read exact original receipt')}
-          </Button>
-        </Form>
-      )}
-      <Failure locale={locale} error={action.error} kind="read" />
-      {receipt !== null && receipt.selection === selectionKey && (
-        <pre className="public-json">{JSON.stringify(receipt, null, 2)}</pre>
-      )}
-      {!windows && detail.value && 'issuance' in detail.value && detail.value.issuance && (
-        <DevicePkiRecovery
-          key={selected}
-          runtime={runtime}
-          locale={locale}
-          endpoint={endpoint}
-          canRecover={canRecover}
-          originalIssuance={detail.value.issuance}
-        />
-      )}
-    </Card>
+            <Form.Item
+              name="operation"
+              label={l('原登记恢复操作 UUID', 'Original registration recovery operation UUID')}
+              rules={[{ required: true }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item
+              name="actor"
+              label={l('原恢复主体', 'Original recovery actor')}
+              rules={[{ required: true }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item
+              name="instance"
+              label={l('原恢复 Instance', 'Original recovery instance')}
+              rules={[{ required: true }]}
+            >
+              <Input />
+            </Form.Item>
+            <Button htmlType="submit" disabled={action.busy}>
+              {l('读取精确原回执', 'Read exact original receipt')}
+            </Button>
+          </Form>
+        )}
+        <Failure locale={locale} error={action.error} kind="read" />
+        {receipt !== null && receipt.selection === selectionKey && (
+          <pre className="definition-preview">{JSON.stringify(receipt, null, 2)}</pre>
+        )}
+        {!windows && detail.value && 'issuance' in detail.value && detail.value.issuance && (
+          <DevicePkiRecovery
+            key={selected}
+            runtime={runtime}
+            locale={locale}
+            endpoint={endpoint}
+            canRecover={canRecover}
+            originalIssuance={detail.value.issuance}
+          />
+        )}
+      </Card>
+    </SelectionGuard.Provider>
   )
 }
 

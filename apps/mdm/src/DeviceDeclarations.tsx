@@ -84,7 +84,9 @@ export function DeviceDeclarations({
                 render: (_, row) => (
                   <details>
                     <summary>{l('查看原生观察', 'View native observation')}</summary>
-                    <pre className="public-json">{JSON.stringify(row.observation, null, 2)}</pre>
+                    <pre className="definition-preview">
+                      {JSON.stringify(row.observation, null, 2)}
+                    </pre>
                   </details>
                 ),
               },
