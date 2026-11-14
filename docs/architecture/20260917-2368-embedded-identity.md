@@ -93,7 +93,7 @@ rm /tmp/rss-identity-web-dev.yaml
 
 会话签发时间为 issuedAt；security.authentication.source 显式区分 local_password/oidc/platform，authTime 只表示真实认证时间，可为 null。共享账户页面通过独立资料管理权限读取／编辑本地 authority，邮箱验证状态不开放本地编辑。编辑使用 expectedRevision、operationId 和显式 value:null 删除；响应丢失查询原回执，409 重新读取后编辑，不自动重放。修改资料不会更新会话认证时间或生成登录观察，下次成功登录才采集。
 
-固定身份、会话及资料包络严格解码。只有普通扩展和业务属性值允许动态 JSON，预算为 64 KiB、256 个成员、深度 8、单数组 128 项，数值有限且整数在浏览器安全范围内。
+固定身份、会话及资料包络严格解码。只有普通扩展和业务属性值允许动态 JSON，预算为 64 KiB、1024 个成员、深度 8、单数组 1024 项，数值有限且整数在浏览器安全范围内。
 
 ## 展示与主题
 

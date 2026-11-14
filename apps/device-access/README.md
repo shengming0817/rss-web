@@ -56,4 +56,4 @@ pnpm build:device-access
 
 上游参考：React v19.2.0 `packages/use-sync-external-store/src/useSyncExternalStoreShimClient.js`、Ant Design 6.0.0 `components/modal/Modal.tsx`；W3C WebAuthn Level 3（2026-08-25）§5.1.8–§5.1.10。不复制认证器密码学。
 
-计算机、账户绑定、恢复材料和企业应用目录消费真实 filter/sort/fields/limit/cursor，默认每页 50、最多 100；查询草稿不影响续页，成功读取后提交首页／上一页／下一页位置。部分投影只展示返回字段，操作前读取完整详情；恢复材料通过精确 id/version 目录读取完整元数据。计算机筛选由服务端执行，返回目录行数不等于端点或组织总量。版本历史、审计和候选配置仍遵守各自的固定窗口。刷新目录不会解锁 Unknown 写入。演示入口在专属 HTTP scenario server 中执行查询，正式请求失败不切换演示数据。
+计算机、账户绑定、恢复材料和企业应用目录消费真实 filter/sort/fields/limit/cursor，默认每页 100、最多 100；查询草稿不影响续页，成功读取后提交首页／上一页／下一页位置。部分投影只展示返回字段，操作前读取完整详情；恢复材料通过精确 id/version 目录读取完整元数据。计算机筛选由服务端执行，返回目录行数不等于端点或组织总量。版本历史、审计和候选配置仍遵守各自的固定窗口。刷新目录不会解锁 Unknown 写入。演示入口在专属 HTTP scenario server 中执行查询，正式请求失败不切换演示数据。
