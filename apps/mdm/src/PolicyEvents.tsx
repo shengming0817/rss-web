@@ -127,7 +127,7 @@ function DeviceEvents({
     [params, setParams] = useSearchParams(),
     selected = params.get('batch'),
     cursor = params.get('batchCursor'),
-    query = { limit: 20, ...(cursor ? { cursor } : {}) },
+    query = { limit: 100, ...(cursor ? { cursor } : {}) },
     read = usePageRead(
       `policy-event-batches/${device}/${JSON.stringify(query)}`,
       (signal) => events.batches(device, query, signal),
@@ -331,7 +331,7 @@ function EventMembers({
     source = location.pathname + location.search,
     member = params.get('member'),
     cursor = params.get('memberCursor'),
-    query = { limit: 20, ...(cursor ? { cursor } : {}) },
+    query = { limit: 100, ...(cursor ? { cursor } : {}) },
     detail = usePageRead(
       `policy-event/${device}/${batch}`,
       (signal) => events.batch(device, batch, signal),

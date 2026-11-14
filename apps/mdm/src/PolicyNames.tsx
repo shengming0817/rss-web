@@ -171,7 +171,7 @@ function EventAssociations({
 }) {
   const l = labels(locale),
     location = useLocation(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = usePageRead(
       `event-associations/${event}/${query.cursor ?? ''}`,
       async (signal) => {

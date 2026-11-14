@@ -10,9 +10,9 @@ export interface CatalogLocation {
 }
 
 export function catalogQuery(params: URLSearchParams, prefix = ''): Query {
-  const limit = Number(params.get(prefix + 'limit') ?? 20)
+  const limit = Number(params.get(prefix + 'limit') ?? 100)
   return {
-    limit: Number.isSafeInteger(limit) && limit >= 1 && limit <= 1000 ? limit : 20,
+    limit: Number.isSafeInteger(limit) && limit >= 1 && limit <= 1000 ? limit : 100,
     ...(params.get(prefix + 'filter') ? { filter: params.get(prefix + 'filter')! } : {}),
     ...(params.get(prefix + 'cursor') ? { cursor: params.get(prefix + 'cursor')! } : {}),
     ...(params.has(prefix + 'sort') ? { sort: params.getAll(prefix + 'sort') } : {}),
@@ -33,7 +33,7 @@ export function writeCatalogQuery(params: URLSearchParams, query: Query, prefix 
 
 export function useDirectoryQuery(
   prefix: string,
-  initial: Query = { limit: 20 },
+  initial: Query = { limit: 100 },
 ): readonly [Query, (query: Query) => void] {
   const [params, setParams] = useSearchParams()
   const hasQuery = ['filter', 'sort', 'field', 'limit', 'cursor'].some((key) =>

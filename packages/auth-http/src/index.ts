@@ -128,8 +128,8 @@ export function createAuthPort(transport: HttpTransport): AuthPort {
         { returnTarget: 'resume', password },
         (value) => redirect(value, 'authorizationUrl'),
       ),
-    sessions: (tenant, cursor, limit = 50) => {
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    sessions: (tenant, cursor, limit = 100) => {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
         throw new Error('Invalid session page size')
       return transport.request({
         method: 'GET',
@@ -140,7 +140,7 @@ export function createAuthPort(transport: HttpTransport): AuthPort {
         decode(value) {
           const v = object(value, ['sessions', 'nextCursor'])
           return {
-            sessions: list(v['sessions'], session),
+            sessions: list(v['sessions'], session, 1000),
             next: v['nextCursor'] === null ? null : uuid(v['nextCursor']),
           }
         },

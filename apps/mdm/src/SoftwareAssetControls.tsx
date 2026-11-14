@@ -24,7 +24,7 @@ import { usePendingSelection } from './SelectionGuard'
 import type { Locale } from './i18n'
 
 export type SoftwareAssetsUseCases = ReturnType<typeof createSoftwareAssets>
-export const firstAssetPage = { limit: 20 }
+export const firstAssetPage = { limit: 100 }
 export const assetContexts = ['associated_device', 'endpoint'] as const
 export function contextName(context: AssetContext, locale: Locale) {
   const l = labels(locale)

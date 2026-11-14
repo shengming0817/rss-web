@@ -200,7 +200,7 @@ export function accountQuery(query: AccountQuery): Record<string, string> {
     }
   }
   if (query.limit !== undefined) {
-    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 100)
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 1000)
       throw new Error('Invalid account page size')
     result['limit'] = String(query.limit)
   }
@@ -219,7 +219,7 @@ export function accounts<F extends keyof AccountRow = keyof Account>(
       AccountRow,
       F
     >
-  })
+  }, 1000)
   if (projected.includes('principalId' as never)) {
     const ids = items.map((item) => Reflect.get(item, 'principalId'))
     if (new Set(ids).size !== ids.length) throw new Error('Duplicate account')

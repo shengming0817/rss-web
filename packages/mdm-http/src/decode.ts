@@ -33,8 +33,9 @@ export function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid object')
   return value as Record<string, unknown>
 }
-export function list<T>(value: unknown, project: (v: unknown) => T, maximum = 1000): T[] {
-  if (!Array.isArray(value) || value.length > maximum) throw new Error('Invalid list')
+export function list<T>(value: unknown, project: (v: unknown) => T, maximum?: number): T[] {
+  if (!Array.isArray(value) || (maximum !== undefined && value.length > maximum))
+    throw new Error('Invalid list')
   return value.map(project)
 }
 export function enumeration<T extends string>(value: unknown, choices: readonly T[]): T {

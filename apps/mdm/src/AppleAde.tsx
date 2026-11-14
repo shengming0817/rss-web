@@ -56,7 +56,7 @@ export function AppleAde({
     action = useAction(),
     [localCreating, setLocalCreating] = useState(false),
     [profileQuery, setProfileQuery] = useDirectoryQuery(`ade.${organizationId}.`),
-    [deviceQuery, setDeviceQuery] = useState<Query>({ limit: 20 }),
+    [deviceQuery, setDeviceQuery] = useState<Query>({ limit: 100 }),
     [selectedProfile, setSelectedProfile] = useState<AdeProfile | null>(null),
     [newProfile, setNewProfile] = useState<string>(),
     [pending, setPending] = useState<Pending | null>(null),

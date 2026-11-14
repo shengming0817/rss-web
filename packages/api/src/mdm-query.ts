@@ -16,7 +16,7 @@ function closed(
   return row
 }
 function array<T>(value: unknown, decode: (item: unknown) => T): T[] {
-  if (!Array.isArray(value) || value.length > 1000) throw new Error('Invalid list')
+  if (!Array.isArray(value)) throw new Error('Invalid list')
   return value.map(decode)
 }
 
@@ -45,7 +45,7 @@ export function nextCursor(value: unknown): string | null {
 
 export function queryParameters(query: DirectoryQuery = {}) {
   closed(query, [], ['filter', 'sort', 'fields', 'limit', 'cursor'])
-  const result: Record<string, string | number> = {}
+  const result: Record<string, string | number> = { limit: 100 }
   if (query.filter !== undefined) {
     if (!query.filter || new TextEncoder().encode(query.filter).length > 8192)
       throw new Error('Invalid filter')
@@ -72,7 +72,7 @@ export function queryParameters(query: DirectoryQuery = {}) {
     }
   }
   if (query.limit !== undefined) {
-    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 65535)
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 1000)
       throw new Error('Invalid page size')
     result['limit'] = query.limit
   }
@@ -150,7 +150,7 @@ export type WindowQuery = Pick<DirectoryQuery, 'limit' | 'cursor'>
 export function windowParameters(query: WindowQuery = {}, maximum = 200) {
   closed(query, [], ['limit', 'cursor'])
   if (query.limit !== undefined && query.limit > maximum) throw new Error('Invalid page size')
-  return queryParameters(query)
+  return queryParameters({ limit: Math.min(100, maximum), ...query })
 }
 export function windowPage<V, T>(
   value: { items: readonly V[]; nextCursor: string | null },

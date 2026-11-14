@@ -24,7 +24,7 @@ export function webhookDirectory(
   owner: 'subscription' | 'delivery',
 ): Query {
   const prefix = owner + '.',
-    query: Query = { limit: 32 }
+    query: Query = { limit: 100 }
   const filter = params.get(prefix + 'filter'),
     fields = params.get(prefix + 'fields'),
     sort = params.get(prefix + 'sort'),

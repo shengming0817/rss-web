@@ -37,7 +37,7 @@ function Bindings({
     ),
     guard = useSelectionGuard(),
     [selected, setSelected] = useState<{ id: string; isNew: boolean } | null>(null),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [original, setOriginal] = useState(''),
     [operation, setOperation] = useState(''),
     read = usePageRead(
@@ -195,7 +195,7 @@ export function DeviceAccess({ runtime, locale }: { runtime: Runtime; locale: Lo
     [params, setParams] = useSearchParams(),
     device = params.get('device') ?? '',
     [draft, setDraft] = useState(device),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [enterprise, setEnterprise] = useState<{ id: string | null; key: number } | null>(null),
     enterpriseGuard = useSelectionGuard(),
     read = usePageRead(
@@ -294,7 +294,7 @@ export function DeviceAccess({ runtime, locale }: { runtime: Runtime; locale: Lo
               locale={locale}
               id={enterprise.id}
               onChanged={() => {
-                setQuery({ limit: 20 })
+                setQuery({ limit: 100 })
                 read.reload()
               }}
             />

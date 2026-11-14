@@ -52,7 +52,7 @@ export function UserPicker({
         'memberActive',
         ...(source ? (['displayName', 'email'] as const) : []),
       ],
-      limit: 20,
+      limit: 100,
       ...(source ? { source } : {}),
       ...(cursor ? { cursor } : {}),
     }),

@@ -98,7 +98,6 @@ export function createResourcesAdapter(transport: HttpTransport): ResourcesPort 
         {
           signal,
           query: queryParameters({
-            limit: 20,
             ...query,
             fields: projection,
             ...(kind === undefined ? {} : { filter: allOf(`kind==${kind}`, query.filter) }),

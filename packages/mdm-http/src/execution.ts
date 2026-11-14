@@ -45,7 +45,7 @@ export function createExecutionAdapter(
         transport,
         {
           pathParams: { device },
-          query: { limit: 50, ...(cursor ? { cursor } : {}) },
+          query: { limit: 100, ...(cursor ? { cursor } : {}) },
           ...(signal ? { signal } : {}),
         },
         (value) => ({
@@ -148,7 +148,7 @@ export function createExecutionAdapter(
     list: (query, signal) =>
       api.getApiV1Operations(
         transport,
-        { signal, query: queryParameters({ limit: 20, ...query, fields }) },
+        { signal, query: queryParameters({ limit: 100, ...query, fields }) },
         (value) => {
           const items: Execution[] = value.items.map((item) => ({
             id: uuid(item.id),

@@ -173,7 +173,7 @@ export function createRecoveryCredentialsAdapter(
     list: (device, query, signal) =>
       api.getApiV1DevicesByDeviceRecoveryCredentials(
         transport,
-        { signal, pathParams: { device }, query: queryParameters({ limit: 64, ...query }) },
+        { signal, pathParams: { device }, query: queryParameters(query) },
         (value) => {
           const page = projectedPage(value, fields(device), query.fields, ['id', 'version'])
           if (page.items.length > 100) throw new Error('Recovery material page exceeds budget')

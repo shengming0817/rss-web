@@ -132,7 +132,7 @@ export function ProviderConnections({
     [form] = Form.useForm<Values>(),
     [recoveryForm] = Form.useForm<Values>(),
     sourceKind = Form.useWatch('sourceKind', form) ?? 'generate',
-    [historyQuery, setHistoryQuery] = useState<Query>({ limit: 20 }),
+    [historyQuery, setHistoryQuery] = useState<Query>({ limit: 100 }),
     [operationId, setOperationId] = useState(''),
     [operationDraft, setOperationDraft] = useState(''),
     [pending, setPending] = useState<Pending | null>(null),

@@ -98,7 +98,7 @@ export function createPublicationsAdapter(transport: HttpTransport): Publication
           query: queryParameters({
             ...query,
             filter: comparison('operationId', '==', operation),
-            limit: query.limit ?? 20,
+            limit: query.limit ?? 100,
           }),
         },
         (value) => projectedPage(value, fields, undefined, ['id']),
@@ -106,13 +106,13 @@ export function createPublicationsAdapter(transport: HttpTransport): Publication
     targets: (query) =>
       api.getApiV1SoftwarePublicationTargets(
         transport,
-        { query: queryParameters({ limit: 20, ...query }) },
+        { query: queryParameters(query) },
         (value) => projectedPage(value, targetFields, query.fields, ['id']),
       ),
     list: (query) =>
       api.getApiV1SoftwarePublications(
         transport,
-        { query: queryParameters({ limit: 20, ...query }) },
+        { query: queryParameters(query) },
         (value) => projectedPage(value, fields, query.fields, ['id']),
       ),
     read: (id) =>

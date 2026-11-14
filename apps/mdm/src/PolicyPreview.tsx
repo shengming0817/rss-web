@@ -24,7 +24,7 @@ export function PolicyPreview({
     active = useSecretVisibility(),
     [requested, setRequested] = useState(0),
     [basis, setBasis] = useState<string | null>(null),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = usePageRead(
       `qualification/${id}/${expectedRevision}/${active}/${requested}/${JSON.stringify(query)}`,
       (signal) =>
@@ -45,7 +45,7 @@ export function PolicyPreview({
         disabled={read.busy}
         onClick={() => {
           setBasis(null)
-          setQuery({ limit: 20 })
+          setQuery({ limit: 100 })
           setRequested((n) => n + 1)
         }}
       >

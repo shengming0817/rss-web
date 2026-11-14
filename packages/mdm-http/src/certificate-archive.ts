@@ -213,7 +213,7 @@ export function createCertificateArchiveAdapter(
     list: (query) =>
       api.getApiV1CertificateArchiveEntries(
         transport,
-        { query: queryParameters({ limit: 50, ...query }) },
+        { query: queryParameters(query) },
         (value) => {
           const page = record(value)
           if (
@@ -260,7 +260,7 @@ export function createCertificateArchiveAdapter(
     history: (id, query) =>
       api.getApiV1CertificateArchiveEntriesByEntryVersions(
         transport,
-        { pathParams: { entry: id }, query: windowParameters({ limit: 50, ...query }) },
+        { pathParams: { entry: id }, query: windowParameters(query) },
         (value) => {
           const page = windowPage(value, version)
           if (page.items.some((item) => item.entryId !== id))

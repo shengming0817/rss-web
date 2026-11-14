@@ -93,7 +93,7 @@ export function createProfilesAdapter(transport: HttpTransport): ProfilesPort {
     definitions: (query = {}) =>
       api.getApiV1UserAttributeDefinitions(
         transport,
-        { query: queryParameters({ limit: 20, ...query }) },
+        { query: queryParameters(query) },
         (v) => {
           const items = v.items.map((item) => projectedRow(item, definitionFields, query.fields))
           if (!query.fields || query.fields.includes('fieldId' as never)) {

@@ -31,7 +31,7 @@ export function TelemetryQuery({
     [resourceAfter, setResourceAfter] = useState<string | null>(null),
     fields = useTelemetryRead(`${binding}/telemetry-fields/${visible}/${catalogAfter}`, () =>
       visible && canFields
-        ? inventory.fields({ limit: 50, ...(catalogAfter ? { cursor: catalogAfter } : {}) })
+        ? inventory.fields({ limit: 100, ...(catalogAfter ? { cursor: catalogAfter } : {}) })
         : Promise.resolve(null),
     ),
     resources = useTelemetryRead(

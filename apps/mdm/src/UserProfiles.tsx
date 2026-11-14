@@ -321,7 +321,7 @@ function Definitions(props: Props) {
     l = labels(locale),
     { profiles, binding } = useAdministration(runtime),
     action = useAction()
-  const [query, setQuery] = useState<Query>({ limit: 20 }),
+  const [query, setQuery] = useState<Query>({ limit: 100 }),
     [id, setId] = useState<string | null>(null),
     [fresh, setFresh] = useState<Definition | null>(null)
   const [deleting, setDeleting] = useState<Definition | null>(null),

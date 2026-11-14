@@ -132,7 +132,7 @@ export function createWebhooksAdapter(transport: HttpTransport): WebhooksPort {
     subscriptions: (query) =>
       api.getApiV1WebhooksSubscriptions(
         transport,
-        { query: queryParameters({ limit: 32, ...query }) },
+        { query: queryParameters(query) },
         (value) => projectedPage(value, subscriptionFields, query.fields, ['id']),
       ),
     subscription: (id) =>
@@ -182,7 +182,7 @@ export function createWebhooksAdapter(transport: HttpTransport): WebhooksPort {
     deliveries: (query) =>
       api.getApiV1WebhooksDeliveries(
         transport,
-        { query: queryParameters({ limit: 32, ...query }) },
+        { query: queryParameters(query) },
         (value) => projectedPage(value, deliveryFields, query.fields, ['id']),
       ),
     delivery: (id) =>

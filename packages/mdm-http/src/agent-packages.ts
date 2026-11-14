@@ -29,7 +29,7 @@ export function createAgentPackagesAdapter(transport: HttpTransport): AgentPacka
       api.getApiV1AgentPackages(
         transport,
         {
-          query: queryParameters({ limit: 50, ...(cursor ? { cursor } : {}) }),
+          query: queryParameters({ limit: 100, ...(cursor ? { cursor } : {}) }),
           ...(signal ? { signal } : {}),
         },
         (value) => ({ items: value.items.map(managed), nextCursor: nextCursor(value.nextCursor) }),

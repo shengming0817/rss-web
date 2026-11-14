@@ -103,7 +103,7 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
     list: (query = {}, signal) =>
       api.getApiV1Policies(
         transport,
-        { signal, query: queryParameters({ limit: 20, ...query }) },
+        { signal, query: queryParameters(query) },
         (value) => {
           if (query.fields && !query.fields.includes('id'))
             throw new Error('Policy identity required')

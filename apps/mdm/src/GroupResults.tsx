@@ -25,7 +25,7 @@ export function GroupResults({
 }) {
   const l = labels(locale),
     [kind, setKind] = useState<ResultKind>('members'),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = useRead(`group-result/${id}/${result}/${kind}/${JSON.stringify(query)}`, () =>
       groups.result(id, result, kind, query),
     )

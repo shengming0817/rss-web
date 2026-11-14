@@ -255,7 +255,7 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
     filter = params.get('filter') ?? '',
     cursor = params.get('cursor'),
     [draft, setDraft] = useState(filter),
-    query: Query = { limit: 20, ...(filter ? { filter } : {}), ...(cursor ? { cursor } : {}) },
+    query: Query = { limit: 100, ...(filter ? { filter } : {}), ...(cursor ? { cursor } : {}) },
     read = usePageRead(
       `${binding}/executions/${JSON.stringify(query)}`,
       (signal) => execution.list(query, signal),
@@ -333,7 +333,7 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
       <Form
         className="admin-toolbar"
         layout="inline"
-        onFinish={() => changeQuery({ limit: 20, filter: draft })}
+        onFinish={() => changeQuery({ limit: 100, filter: draft })}
       >
         <Form.Item label={l('服务端筛选', 'Server filter')}>
           <Input

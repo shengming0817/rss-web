@@ -238,7 +238,7 @@ function TargetDirectory({
   select: (id: string) => void
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = useRead(`publication-targets/${JSON.stringify(query)}`, () =>
       publications.targets(directoryQuery(query, targetFields)),
     )
@@ -482,7 +482,7 @@ function PublicationDirectory({
   const l = labels(locale),
     guard = useSelectionGuard(),
     action = useAction(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [selected, setSelected] = useState<Publication | null>(null),
     [id, setId] = useState(''),
     read = useRead(`publication-records/${JSON.stringify(query)}`, () =>
@@ -589,7 +589,7 @@ function OriginalResults({
   operation: string
   locale: Locale
 }) {
-  const [query, setQuery] = useState<{ limit: number; cursor?: string }>({ limit: 20 }),
+  const [query, setQuery] = useState<{ limit: number; cursor?: string }>({ limit: 100 }),
     read = useRead(`original-publication/${operation}/${JSON.stringify(query)}`, () =>
       publications.original(operation, query),
     )

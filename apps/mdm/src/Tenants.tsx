@@ -639,7 +639,7 @@ function Registry(props: Props) {
     { tenants, binding } = useAdministration(runtime)
   const [params, setParams] = useSearchParams()
   const linked = params.get('tenant')
-  const [query, setQuery] = useState<Query>({ limit: 20 }),
+  const [query, setQuery] = useState<Query>({ limit: 100 }),
     [selected, setId] = useState<string | null>(null),
     [create, setCreate] = useState(false)
   const id = selected ?? linked
@@ -757,7 +757,7 @@ function Provisionings(props: Props) {
   const { runtime, locale } = props,
     l = labels(locale),
     { tenants, binding } = useAdministration(runtime)
-  const [query, setQuery] = useState<Query>({ limit: 20 }),
+  const [query, setQuery] = useState<Query>({ limit: 100 }),
     [id, setId] = useState<string | null>(null)
   const fields: (keyof ProvisionRow)[] = ['operationId', 'action', 'result']
   const page = useRead(`${binding}/provisionings/${JSON.stringify(query)}`, () =>

@@ -7,7 +7,7 @@ export function validateWindow(
 ): void {
   if (
     query.limit !== undefined &&
-    (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 200)
+    (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 1000)
   )
     throw new Error('Invalid audit page size')
   if (query.cursor !== undefined && !query.cursor) throw new Error('Invalid audit cursor')
@@ -32,6 +32,7 @@ export function validateAuditQuery(query: AuditQuery): void {
 }
 export function validateActivityQuery(query: ActivityQuery): void {
   validateWindow(query)
+  if (query.limit !== undefined && query.limit > 200) throw new Error('Invalid activity page size')
   for (const value of [query.source, query.kind, query.status, query.related])
     if (value !== undefined) identifier(value, 256)
   for (const value of [query.policy, query.request, query.batch, query.task, query.operation])

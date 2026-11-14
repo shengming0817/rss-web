@@ -136,7 +136,7 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
       if (query.fields && !query.fields.includes('key')) throw new Error('Field identity required')
       return api.getApiV1AssetFields(
         transport,
-        { query: queryParameters({ limit: 50, ...query }) },
+        { query: queryParameters(query) },
         (value) => {
           if (value.tenantId !== tenant || value.asset.kind !== 'field_list')
             throw new Error('Wrong field directory binding')
@@ -298,7 +298,7 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         throw new Error('Saved query identity required')
       return api.getApiV1SavedQueries(
         transport,
-        { query: queryParameters({ limit: 20, ...query }) },
+        { query: queryParameters(query) },
         (value) => {
           if (value.tenantId !== tenant || value.asset.kind !== 'saved_list')
             throw new Error('Wrong saved query directory binding')
@@ -351,7 +351,7 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
     scopes: (id, query = {}) =>
       api.postApiV1DevicesByIdInventoryScopes(
         transport,
-        { pathParams: { id }, body: { limit: query.limit ?? 20, cursor: query.cursor } },
+        { pathParams: { id }, body: { limit: query.limit ?? 100, cursor: query.cursor } },
         (value) => {
           const result = asset(value, tenant, 'inventory_scopes')
           if (result.device !== id) throw new Error('Wrong namespace directory')
@@ -436,7 +436,7 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
             {
               signal,
               pathParams: { ...query.reference, field: query.field },
-              query: { cursor: query.cursor, limit: query.limit ?? 50 },
+              query: { cursor: query.cursor, limit: query.limit ?? 100 },
             },
             (value) => {
               if (
@@ -469,7 +469,7 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
                   schema.postApiV1DevicesByIdInventoryListsByFieldBody.validateCollectionScope,
                 ),
                 cursor: query.cursor,
-                limit: query.limit ?? 50,
+                limit: query.limit ?? 100,
               },
             },
             (value) => {

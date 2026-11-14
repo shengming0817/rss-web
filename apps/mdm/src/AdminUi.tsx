@@ -485,7 +485,7 @@ export function DirectoryControls({
             aria-label={l('每页', 'Page size')}
             min={1}
             max={capabilities?.maximum ?? maximum}
-            value={query.limit ?? 20}
+            value={query.limit ?? 100}
             onChange={(limit) => {
               if (limit) {
                 const rest = firstPage(query)

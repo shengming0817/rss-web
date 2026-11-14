@@ -294,7 +294,7 @@ function Accounts(props: Props) {
   const { runtime, locale } = props,
     l = labels(locale),
     { identity, binding } = useAdministration(runtime)
-  const [query, setQuery] = useState<Query>({ limit: 20 }),
+  const [query, setQuery] = useState<Query>({ limit: 100 }),
     [source, setSource] = useState<string | undefined>(),
     [sourceDraft, setSourceDraft] = useState('')
   const [selected, setSelected] = useState<string | null>(null),
@@ -363,7 +363,7 @@ function Accounts(props: Props) {
         onChange={setQuery}
         fields={fields}
         required="principalId"
-        maximum={100}
+        maximum={1000}
         sort={fields.filter((f) => f !== 'departmentSnapshot')}
       />
       <ReadState busy={page.busy} error={page.error} locale={locale} />

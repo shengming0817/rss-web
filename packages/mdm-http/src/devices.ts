@@ -174,7 +174,7 @@ function directory(query: DirectoryQuery, identity: string, maximum: number) {
   if (query.fields && !query.fields.includes(identity))
     throw new Error('Directory identity required')
   if (query.limit !== undefined && query.limit > maximum) throw new Error('Invalid directory limit')
-  return queryParameters({ limit: 20, ...query })
+  return queryParameters(query)
 }
 /** Current generated protocol only, over the application's existing session-bound executor. */
 export function createDevicesAdapter(transport: HttpTransport, tenant: string): DevicesPort {

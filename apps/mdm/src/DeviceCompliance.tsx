@@ -78,8 +78,8 @@ function ComplianceHistory({
   const l = labels(locale),
     [from, setFrom] = useState<number | null>(null),
     [until, setUntil] = useState<number | null>(null),
-    [limit, setLimit] = useState(20),
-    [query, setQuery] = useState<HistoryQuery>({ limit: 20 }),
+    [limit, setLimit] = useState(100),
+    [query, setQuery] = useState<HistoryQuery>({ limit: 100 }),
     read = useRead(`compliance-history/${device}/${JSON.stringify(query)}`, () =>
       compliance.history(device, query),
     )
