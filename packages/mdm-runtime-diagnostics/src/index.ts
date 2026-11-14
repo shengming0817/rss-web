@@ -16,19 +16,27 @@ export function queueText(queue: Queue): string {
 /** This core never derives health from readiness, loaded materials or queue emptiness. */
 export function createRuntimeDiagnostics(port: DiagnosticsPort) {
   return Object.freeze({
-    async snapshot() {
-      const result = await port.snapshot()
-      unique(result.components.map((c) => c.owner))
+    async snapshot(signal?: AbortSignal) {
+      const result = await port.snapshot(signal)
+      unique(result.components.map((c) => c.name))
       unique(result.channels.map((c) => c.name))
       for (const c of result.components) {
-        if (!owners.includes(c.owner)) throw new Error('Unknown diagnostic owner')
+        if (!owners.includes(c.name)) throw new Error('Unknown diagnostic owner')
         unique(c.queues.map((q) => q.name))
         unique(c.dependencies.map((d) => d.name))
         for (const q of c.queues) count(q.count)
         if (c.progress)
-          for (const n of [c.progress.confirmedPosition, c.progress.sourceHead, c.progress.applied])
+          for (const n of [
+            c.progress.confirmedPosition,
+            c.progress.sourceHead,
+            c.progress.applied,
+            c.progress.invocationAgeMs,
+            c.progress.completedPassAgeMs,
+            c.progress.sourceObservationAgeMs,
+          ])
             count(n)
-        if (c.recovery) count(c.recovery.unresolvedAttempts)
+        if (c.runner) count(c.runner.unresolvedAttempts)
+        if (c.dispatch) count(c.dispatch.eventAfter)
       }
       for (const c of result.channels) for (const n of Object.values(c.loadedMaterials)) count(n)
       return result

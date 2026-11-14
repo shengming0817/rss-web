@@ -59,13 +59,13 @@ function evidenceFixture(value: unknown) {
           quality: [],
           items: [
             {
-              endpoint: 'pc',
+              endpoint: '54a2df5e-528c-5a64-a3d8-be0e4859f63b',
               source: 'device.software.installations',
               evidence: {
                 scope: { kind: 'device' },
                 source: 'agent.native',
                 dataset: null,
-                deviceId: 'pc',
+                deviceId: '54a2df5e-528c-5a64-a3d8-be0e4859f63b',
                 epoch: task,
                 snapshotId: task,
                 observedAt: 1,
@@ -100,8 +100,14 @@ it('retains both signed i64 extremes and nested integer evidence exactly', async
     },
   }
   expect(
-    (await evidenceFixture(value).evidence(task, task, { kind: 'endpoint', id: 'pc' }, {})).items[0]
-      ?.value,
+    (
+      await evidenceFixture(value).evidence(
+        task,
+        task,
+        { kind: 'endpoint', id: '54a2df5e-528c-5a64-a3d8-be0e4859f63b' },
+        {},
+      )
+    ).items[0]?.value,
   ).toEqual(value)
 })
 it.each([9007199254740992, '01', '-0', '+1', '9223372036854775808', '-9223372036854775809'])(
@@ -111,7 +117,7 @@ it.each([9007199254740992, '01', '-0', '+1', '9223372036854775808', '-9223372036
       evidenceFixture({ kind: 'integer', value }).evidence(
         task,
         task,
-        { kind: 'endpoint', id: 'pc' },
+        { kind: 'endpoint', id: '54a2df5e-528c-5a64-a3d8-be0e4859f63b' },
         {},
       ),
     ).rejects.toThrow()

@@ -6,6 +6,8 @@ import {
   purposes,
   type Purpose,
   type Trust,
+  type Rotation,
+  type RecoveryIdentity,
   type DevicePkiPort,
   type Prepare,
   type Transition,
@@ -140,11 +142,44 @@ export function validateIssuanceRecovery(input: IssuanceRecovery): void {
   validatePublicChain(input.certificateChain)
 }
 
+function rotation(value: Rotation, purpose: Purpose, id?: string): Rotation {
+  if (value.purpose !== purpose || (id !== undefined && value.id !== id))
+    throw new Error('Wrong original rotation')
+  uuid(value.id)
+  positive(value.trustRevision)
+  positive(value.distributionRevision)
+  for (const operation of value.operations) {
+    identifier(operation.actor)
+    identifier(operation.instance)
+    if (operation.receipt.operation !== value.id)
+      throw new Error('Wrong rotation operation receipt')
+    positive(operation.receipt.revision)
+  }
+  return freeze(value)
+}
 /** Every write is explicit. A loaded trust read cannot acknowledge an unknown write. */
 export function createDevicePki(port: DevicePkiPort, tenant: string, service: string) {
   uuid(tenant)
   uuid(service)
   return Object.freeze({
+    async latestRotation(purpose: Purpose, signal?: AbortSignal) {
+      validatePurpose(purpose)
+      const value = await port.latestRotation(purpose, signal)
+      return value === null ? null : rotation(value, purpose)
+    },
+    async rotation(purpose: Purpose, id: string, signal?: AbortSignal) {
+      validatePurpose(purpose)
+      return rotation(await port.rotation(purpose, uuid(id), signal), purpose, id)
+    },
+    rotationBlockers(
+      purpose: Purpose,
+      id: string,
+      cursor: string | null = null,
+      signal?: AbortSignal,
+    ) {
+      validatePurpose(purpose)
+      return port.rotationBlockers(purpose, uuid(id), cursor, signal)
+    },
     async trust(purpose: Purpose) {
       validatePurpose(purpose)
       const value = await port.trust(purpose)
@@ -185,8 +220,12 @@ export function createDevicePki(port: DevicePkiPort, tenant: string, service: st
       return result
     },
     observation: (device: string) => port.observation(identifier(device, 256)),
-    registrationRecovery: (device: string, operation: string) =>
-      port.registrationRecovery(identifier(device, 256), uuid(operation)),
+    registrationRecovery: (device: string, operation: string, identity: RecoveryIdentity) =>
+      port.registrationRecovery(
+        identifier(device, 256),
+        uuid(operation),
+        freeze({ actor: identifier(identity.actor), instance: identifier(identity.instance) }),
+      ),
     async recoverRegistration(input: RegistrationRecovery, secret: string) {
       validateRegistrationRecovery(input, secret)
       const original = freeze({

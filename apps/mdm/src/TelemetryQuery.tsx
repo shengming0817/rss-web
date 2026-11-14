@@ -63,12 +63,12 @@ export function TelemetryQuery({
             setQuery(null)
             setError(null)
             try {
-              let from = 0,
-                until = 0
+              let from = '0',
+                until = '0'
               validateInput(() => {
                 from = parseUtc(start)
                 until = parseUtc(end)
-                if (from >= until) throw new Error('Invalid window')
+                if (BigInt(from) >= BigInt(until)) throw new Error('Invalid window')
               })
               setQuery({
                 device,

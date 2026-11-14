@@ -211,6 +211,7 @@ input:focus-visible {
 }
 .page-heading {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 20px;
@@ -862,7 +863,7 @@ html:has(.mdm-overlay-open) {
 @media (max-width: 760px) {
   .device-metrics,
   .device-detail-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .device-filter-bar {
     align-items: stretch;
@@ -1548,4 +1549,21 @@ html:has(.mdm-overlay-open) {
     width: 100%;
     flex-basis: 100%;
   }
+}
+
+.device-pki .ant-space-item,
+.agent-packages .ant-space-item {
+  min-width: 0;
+  max-width: 100%;
+}
+.device-pki .ant-btn,
+.agent-packages .ant-btn {
+  max-width: 100%;
+  min-height: 32px;
+  height: auto;
+  white-space: normal;
+}
+.device-pki .ant-descriptions-item-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }

@@ -5,7 +5,7 @@ import type { Component } from '@rss/mdm-runtime-diagnostics'
 import { queueText } from '@rss/mdm-runtime-diagnostics'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import { codeOf, Heading, labels, ReadState, usePageRead } from './AdminUi'
+import { Heading, labels, ReadState, usePageRead } from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { DataTable } from './DataTable'
 import { SetupStatus } from './SetupStatus'
@@ -62,36 +62,9 @@ export function Diagnostics({ runtime, locale }: { runtime: Runtime; locale: Loc
           )}
         />
       )}
-      {allowed &&
-        (codeOf(snapshot.error) === 'diagnostics_contract_unavailable' ? (
-          <Alert
-            type="warning"
-            showIcon
-            title={l(
-              '按组件所属模块拆分的诊断尚未就绪',
-              'Diagnostics by component owner are not yet available',
-            )}
-            description={l(
-              '后端仍提供旧聚合，当前无法确认各模块健康。后端缺口 #3140；不会将缺失观察显示为正常。',
-              'The backend still exposes the old aggregate. Individual owner health cannot be confirmed. Tracked in #3140; missing observations are not shown as healthy.',
-            )}
-          />
-        ) : (
-          <ReadState locale={locale} busy={snapshot.busy} error={snapshot.error} />
-        ))}
+      {allowed && <ReadState locale={locale} busy={snapshot.busy} error={snapshot.error} />}
       {current && (
         <>
-          {current.value.source === 'mock' && (
-            <Alert
-              type="warning"
-              showIcon
-              title={l('模拟诊断 · 仅验证界面', 'Mock diagnostics · UI validation only')}
-              description={l(
-                '以下数据来自显式模拟场景，不代表后端、外部服务或设备的实际状态。',
-                'These observations come from an explicit mock scenario and do not represent backend, provider or device health.',
-              )}
-            />
-          )}
           <section className="panel">
             <div className="panel-head">
               <h2>{l('进程与准入', 'Process and readiness')}</h2>
@@ -155,6 +128,34 @@ export function Diagnostics({ runtime, locale }: { runtime: Runtime; locale: Loc
               ]}
             />
           </section>
+          {current.value.firstUse && (
+            <section className="panel">
+              <div className="panel-head">
+                <h2>{l('首次使用意图', 'First-use intent')}</h2>
+              </div>
+              <div className="panel-body">
+                {current.value.firstUse.access === 'available' ? (
+                  <>
+                    <p>
+                      {l('修订', 'Revision')} · {current.value.firstUse.summary.revision} ·{' '}
+                      {l('已完成意图', 'Completion intent')} ·{' '}
+                      {String(current.value.firstUse.summary.complete)} ·{' '}
+                      {l('当前可完成', 'Can complete now')} ·{' '}
+                      {String(current.value.firstUse.summary.canComplete)}
+                    </p>
+                    {current.value.firstUse.summary.steps.map((step) => (
+                      <p key={step.id}>
+                        {setupName(locale, step.id)} ·{' '}
+                        <SetupStatus locale={locale} value={step.status} />
+                      </p>
+                    ))}
+                  </>
+                ) : (
+                  <SetupStatus locale={locale} value={current.value.firstUse.access} />
+                )}
+              </div>
+            </section>
+          )}
           <section className="panel">
             <div className="panel-head">
               <h2>{l('实际组件', 'Actual components')}</h2>
@@ -162,9 +163,9 @@ export function Diagnostics({ runtime, locale }: { runtime: Runtime; locale: Loc
             <DataTable
               locale={locale}
               dataSource={current.value.components}
-              rowKey="owner"
+              rowKey="name"
               columns={[
-                { title: l('所属模块', 'Owner'), render: (_, r) => setupName(locale, r.owner) },
+                { title: l('所属模块', 'Owner'), render: (_, r) => setupName(locale, r.name) },
                 {
                   title: l('就绪', 'Readiness'),
                   render: (_, r) => <SetupStatus locale={locale} value={r.readiness} />,
@@ -189,7 +190,7 @@ export function Diagnostics({ runtime, locale }: { runtime: Runtime; locale: Loc
             />
           )}
           {current.value.components.map((c) => (
-            <ComponentDetail key={c.owner} component={c} locale={locale} />
+            <ComponentDetail key={c.name} component={c} locale={locale} />
           ))}
         </>
       )}
@@ -199,12 +200,32 @@ export function Diagnostics({ runtime, locale }: { runtime: Runtime; locale: Loc
 function ComponentDetail({ component: c, locale }: { component: Component; locale: Locale }) {
   const l = labels(locale)
   return (
-    <section className="panel" data-diagnostic-owner={c.owner}>
+    <section className="panel" data-diagnostic-owner={c.name}>
       <div className="panel-head">
-        <h2>{setupName(locale, c.owner)}</h2>
+        <h2>{setupName(locale, c.name)}</h2>
         <SetupStatus locale={locale} value={c.health} />
       </div>
       <div className="panel-body admin-stack">
+        <p>
+          {l('已挂载', 'Mounted')} · {l(c.mounted ? '是' : '否', c.mounted ? 'Yes' : 'No')}
+        </p>
+        {c.phases.map((phase) => (
+          <p key={phase.name}>
+            {phase.name} · <SetupStatus locale={locale} value={phase.state} /> {phase.reason ?? ''}
+          </p>
+        ))}
+        {c.dispatch && (
+          <p>
+            {l('分发位置 / 窗口开放', 'Dispatch position / window open')} · {c.dispatch.eventAfter}{' '}
+            / {String(c.dispatch.windowOpen)}
+          </p>
+        )}
+        {c.runner?.scan && (
+          <p>
+            {l('最近扫描', 'Latest scan')} · {String(c.runner.scan.successful)} ·{' '}
+            {c.runner.scan.reason ?? '—'} · {c.runner.scan.observedAt ?? '—'}
+          </p>
+        )}
         {c.reasons.length > 0 && (
           <p>
             {l('原因', 'Reasons')}: {c.reasons.join(', ')}
@@ -262,6 +283,14 @@ function ComponentDetail({ component: c, locale }: { component: Component; local
                         : l('否', 'No'),
                 },
                 {
+                  key: 'ages',
+                  label: l(
+                    '调用 / 完成扫描 / 来源观察年龄（毫秒）',
+                    'Invocation / completed pass / source observation age (ms)',
+                  ),
+                  children: `${c.progress.invocationAgeMs ?? '—'} / ${c.progress.completedPassAgeMs ?? '—'} / ${c.progress.sourceObservationAgeMs ?? '—'}`,
+                },
+                {
                   key: 'applied',
                   label: l('本轮应用数量', 'Applied in pass'),
                   children: c.progress.applied ?? '—',
@@ -276,7 +305,7 @@ function ComponentDetail({ component: c, locale }: { component: Component; local
             </p>
           </>
         )}
-        {c.recovery && (
+        {c.runner && (
           <Descriptions
             size="small"
             column={1}
@@ -284,12 +313,14 @@ function ComponentDetail({ component: c, locale }: { component: Component; local
               {
                 key: 'unresolved',
                 label: l('未结算尝试', 'Unresolved attempts'),
-                children: `${c.recovery.truncated ? '≥' : ''}${c.recovery.unresolvedAttempts}`,
+                children: `${c.runner.truncated ? '≥' : ''}${c.runner.unresolvedAttempts}`,
               },
               {
                 key: 'failure',
                 label: l('最近失败', 'Latest failure'),
-                children: c.recovery.lastFailure ?? l('未观察', 'Unobserved'),
+                children: c.runner.latestFailure
+                  ? `${c.runner.latestFailure.stage}: ${c.runner.latestFailure.reason} · ${c.runner.latestFailure.observedAt ?? '—'}`
+                  : l('未观察', 'Unobserved'),
               },
             ]}
           />
@@ -297,7 +328,7 @@ function ComponentDetail({ component: c, locale }: { component: Component; local
         {!c.queues.length &&
           !c.dependencies.length &&
           !c.progress &&
-          !c.recovery &&
+          !c.runner &&
           !c.reasons.length && (
             <p className="subtitle">{l('没有附加观察。', 'No additional observations.')}</p>
           )}

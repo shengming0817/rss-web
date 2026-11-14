@@ -116,3 +116,52 @@ it('never recovers a key secret from a replay with null secret, and rejects unso
     ),
   ).rejects.toThrow('receipt')
 })
+
+it('consumes inventory software write through effective grants, rule CAS and API Key metadata', async () => {
+  const grant = {
+      operation: 'inventory_software_write' as const,
+      scope: { kind: 'tenant' as const },
+    },
+    user = { instanceId: id, tenantId: tenant, principalId: principal },
+    subject = { kind: 'user' as const, user },
+    effective = fixture({
+      ...user,
+      grants: [{ ...grant, subject, ruleId: id, ruleRevision: 1, observation: null }],
+    })
+  expect(
+    (await createAuthorizationAdapter(effective.transport, tenant, 'tenant', principal).effective())
+      .grants[0]?.operation,
+  ).toBe(grant.operation)
+  await expect(
+    createAuthorizationAdapter(effective.transport, tenant, 'management', principal).effective(),
+  ).rejects.toThrow()
+  const rule = { subject, grants: [grant] },
+    detail = fixture({ id, revision: 1, value: rule })
+  expect(
+    (await createAuthorizationAdapter(detail.transport, tenant, 'tenant', principal).rule(id))
+      .value,
+  ).toEqual(rule)
+  const write = fixture({ id, revision: 2, deleted: false })
+  await createAuthorizationAdapter(write.transport, tenant, 'tenant', principal).changeRule(id, {
+    operationId: id,
+    expectedRevision: 1,
+    value: rule,
+  })
+  expect(write.request).toHaveBeenCalledWith(
+    expect.objectContaining({ body: expect.objectContaining({ value: rule }) }),
+  )
+  const metadata = { name: 'Software evidence', enabled: true, expiresAt: null, grants: [grant] },
+    key = fixture({
+      id,
+      revision: 1,
+      authorityRevision: 1,
+      credentialRevision: 1,
+      metadata,
+      createdBy: user,
+      createdAt: 1,
+      revoked: false,
+    })
+  expect(
+    (await createAuthorizationAdapter(key.transport, tenant, 'tenant', principal).key(id)).metadata,
+  ).toEqual(metadata)
+})

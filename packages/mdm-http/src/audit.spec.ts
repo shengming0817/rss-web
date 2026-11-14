@@ -15,7 +15,7 @@ const fact = {
   actor: 'principal',
   action: 'management_read',
   target: { type: 'policy', id },
-  deviceId: 'device',
+  deviceId: '7f408d60-f79e-504d-8fdc-35d425b1946a',
   operationId: id,
   relatedOperationIds: [other],
   requestId: other,
@@ -38,7 +38,7 @@ const activity = {
   recordedAt: 20,
   observedAt: -1,
   origin: 'human',
-  target: { device: 'paired-device' },
+  target: { device: 'a8ce26c9-6276-56a2-a713-a929c101d163' },
   links: {
     policy: null,
     version: null,
@@ -81,10 +81,10 @@ it('uses distinct audit and path-bound timeline window operations with safe fact
     path: '/api/v1/audit-events',
     query,
   })
-  await f.audit.timeline('device', query)
+  await f.audit.timeline('7f408d60-f79e-504d-8fdc-35d425b1946a', query)
   expect(f.request.mock.lastCall![0]).toMatchObject({
     path: '/api/v1/devices/{device}/timeline',
-    pathParams: { device: 'device' },
+    pathParams: { device: '7f408d60-f79e-504d-8fdc-35d425b1946a' },
   })
   await expect(
     fixture({
@@ -103,8 +103,11 @@ it('admits paired activity facts and preserves snapshot coverage without inventi
     retainedFrom: null,
     coverage: [{ source: 'native', complete: false, reasons: ['not_retained'] }],
   })
-  const result = await f.audit.activities('device', { operation: other, related: 'batch:fact' })
-  expect(result.items[0]!.target?.device).toBe('paired-device')
+  const result = await f.audit.activities('7f408d60-f79e-504d-8fdc-35d425b1946a', {
+    operation: other,
+    related: 'batch:fact',
+  })
+  expect(result.items[0]!.target?.device).toBe('a8ce26c9-6276-56a2-a713-a929c101d163')
   expect(result.coverage[0]!.reasons).toEqual(['not_retained'])
   expect(f.request.mock.lastCall![0].query).toMatchObject({
     operation: other,
@@ -118,9 +121,17 @@ it('admits paired activity facts and preserves snapshot coverage without inventi
     missing: ['not_retained'],
     asOf: 30,
   })
-  expect((await detail.audit.activity('device', activity.id)).activity.execution).toBe('received')
-  expect(detail.request.mock.lastCall![0].pathParams).toEqual({ device: 'device', id: activity.id })
-  await expect(detail.audit.activity('device', 'other:fact')).rejects.toBeDefined()
+  expect(
+    (await detail.audit.activity('7f408d60-f79e-504d-8fdc-35d425b1946a', activity.id)).activity
+      .execution,
+  ).toBe('received')
+  expect(detail.request.mock.lastCall![0].pathParams).toEqual({
+    device: '7f408d60-f79e-504d-8fdc-35d425b1946a',
+    id: activity.id,
+  })
+  await expect(
+    detail.audit.activity('7f408d60-f79e-504d-8fdc-35d425b1946a', 'other:fact'),
+  ).rejects.toBeDefined()
   await expect(
     fixture({
       activity: { ...activity, output: 'private' },
@@ -129,7 +140,7 @@ it('admits paired activity facts and preserves snapshot coverage without inventi
       relatedCursor: null,
       missing: [],
       asOf: 30,
-    }).audit.activity('device', activity.id),
+    }).audit.activity('7f408d60-f79e-504d-8fdc-35d425b1946a', activity.id),
   ).rejects.toBeDefined()
 })
 it('projects exact current capability identity without leaking definitions or treating a shared event as an alias', async () => {
@@ -208,7 +219,10 @@ it('requires the current audit fact shape and accepts an explicitly unknown orig
   expect(origin).toBe('request')
   await expect(fixture(page(retiredShape)).audit.search()).rejects.toThrow()
   const current = fixture(page({ ...fact, origin: null }))
-  expect((await current.audit.timeline('device', { requestId: other })).items[0]).toMatchObject({
+  expect(
+    (await current.audit.timeline('7f408d60-f79e-504d-8fdc-35d425b1946a', { requestId: other }))
+      .items[0],
+  ).toMatchObject({
     origin: null,
     requestReplayed: true,
   })

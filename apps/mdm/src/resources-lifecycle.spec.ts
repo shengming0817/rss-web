@@ -581,7 +581,11 @@ it('can discard unwritten local material without locking the selector or sending
       h('button', { disabled: guard.locked }, 'Change resource'),
       h(ContentUpload, {
         content,
-        intent: { id: '11111111-1111-4111-8111-111111111111', target: downloadRequest.target },
+        intent: {
+          purpose: 'resource',
+          id: '11111111-1111-4111-8111-111111111111',
+          target: downloadRequest.target,
+        },
         initialSource: source,
         discarded,
         locale: 'en',
@@ -668,6 +672,7 @@ it('can append a verified software artifact after begin returns the formal bindi
     content = createContent(
       inject<ContentPort>({
         begin: async (value) => ({
+          purpose: 'resource',
           id: value.id,
           target: canonical,
           resourceDigest: Array<number>(32).fill(1),

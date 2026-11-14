@@ -1,3 +1,6 @@
+import { DeviceDeclarations } from './DeviceDeclarations'
+import type { ViewEndpoint } from '@rss/mdm-devices'
+import { OriginalRequests } from './OriginalRequests'
 import { useState } from 'react'
 import { Alert, Button, Checkbox, Descriptions, Space } from 'antd'
 import type { Runtime } from './runtime'
@@ -12,10 +15,12 @@ export function DeviceRegistration({
   runtime,
   locale,
   device,
+  endpoint,
 }: {
   runtime: Runtime
   locale: Locale
   device: string
+  endpoint: ViewEndpoint
 }) {
   const l = labels(locale),
     { enrollment, binding } = useAdministration(runtime),
@@ -86,6 +91,12 @@ export function DeviceRegistration({
             },
           ]}
         />
+      )}
+      {(endpoint.channel === 'agent' || endpoint.source === 'mdm.windows') && (
+        <OriginalRequests runtime={runtime} locale={locale} endpoint={endpoint} />
+      )}
+      {endpoint.source === 'mdm.apple' && (
+        <DeviceDeclarations runtime={runtime} locale={locale} device={device} />
       )}
       <Checkbox
         checked={approved}

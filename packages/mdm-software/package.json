@@ -6,7 +6,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./publications": "./src/publications.ts"
+    "./publications": "./src/publications.ts",
+    "./agent-packages": "./src/agent-packages.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

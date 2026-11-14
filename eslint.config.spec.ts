@@ -224,6 +224,15 @@ it('keeps resource authoring and content transfer in separate pure owners', asyn
       await ruleIds(`export * from '@rss/${name}'`, 'apps/mdm/src/Resources.tsx'),
     ).not.toContain('no-restricted-imports')
   }
+  for (const name of ['mdm-enrollment/requests', 'mdm-software/agent-packages']) {
+    for (const file of [
+      'apps/mdm/src/Enrollment.tsx',
+      'packages/mdm-http/src/enrollment-requests.ts',
+    ])
+      expect(await ruleIds(`export * from '@rss/${name}'`, file)).not.toContain(
+        'no-restricted-imports',
+      )
+  }
   for (const name of ['mdm-inventory', 'mdm-resources', 'mdm-software'])
     expect(
       await ruleIds("export * from '@rss/mdm-content'", `packages/${name}/src/index.ts`),

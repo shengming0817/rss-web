@@ -99,7 +99,7 @@ it('keeps current unknown distinct from historical known values and source regis
       envelope({
         kind: 'detail',
         device: {
-          device: 'endpoint',
+          device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
           collectionScope: { kind: 'device' },
           channels: [],
           fields: {
@@ -115,9 +115,12 @@ it('keeps current unknown distinct from historical known values and source regis
         },
       }),
     )
-  const result = await createInventoryAdapter(f.transport, tenant).inventory('endpoint', {
-    kind: 'device',
-  })
+  const result = await createInventoryAdapter(f.transport, tenant).inventory(
+    '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
+    {
+      kind: 'device',
+    },
+  )
   expect(result.fields['custom.ready']?.state).toEqual(current)
   expect(result.fields['custom.ready']?.sources[0]?.lastKnown).toEqual(previous)
   expect(result.revisions['custom.ready']).toBe(0)
@@ -130,7 +133,7 @@ it('retains concrete namespace in endpoint list requests and does not reinterpre
     f = fixture(
       envelope({
         kind: 'list_items',
-        device: 'endpoint',
+        device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
         field: 'custom.rows',
         assetCut: {
           tenant: '11111111-1111-4111-8111-111111111111',
@@ -146,8 +149,8 @@ it('retains concrete namespace in endpoint list requests and does not reinterpre
   expect(
     (
       await client.list({
-        reference: { kind: 'endpoint', id: 'endpoint' },
-        endpoint: 'endpoint',
+        reference: { kind: 'endpoint', id: '0ecbfa6c-9a99-5881-83ed-2059142c94d9' },
+        endpoint: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
         field: 'custom.rows',
         scope,
         cursor: 'opaque-source/first=',

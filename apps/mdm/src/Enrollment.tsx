@@ -1,3 +1,4 @@
+import { AgentPackages } from './AgentPackages'
 import { Button, Space } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
 import { SecretTabs } from './SecretTabs'
@@ -14,7 +15,7 @@ import { EntraConfiguration } from './EntraConfiguration'
 export function Enrollment({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const [params, setParams] = useSearchParams()
   const requested = params.get('tab')
-  const tabs = ['native', 'configurations', 'admission', 'apple', 'entra']
+  const tabs = ['native', 'packages', 'configurations', 'admission', 'apple', 'entra']
   const l = labels(locale),
     { authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/enrollment-presentation`, authorization.effective),
@@ -54,6 +55,12 @@ export function Enrollment({ runtime, locale }: { runtime: Runtime; locale: Loca
         authorizedKeys={[
           'native',
           ...(agentRead || agentWrite ? ['configurations'] : []),
+          ...(agentRead ||
+          has('release_publish') ||
+          has('software_withdraw') ||
+          (has('software_write') && has('resource_write'))
+            ? ['packages']
+            : []),
           ...(registrationRead || registrationWrite ? ['admission', 'apple', 'entra'] : []),
         ]}
         items={[
@@ -61,6 +68,20 @@ export function Enrollment({ runtime, locale }: { runtime: Runtime; locale: Loca
             key: 'native',
             label: l('注册我的设备', 'Enroll my device'),
             children: <NativeEnrollment runtime={runtime} locale={locale} />,
+          },
+          {
+            key: 'packages',
+            label: l('Agent 安装包管理', 'Agent package management'),
+            children: (
+              <AgentPackages
+                runtime={runtime}
+                locale={locale}
+                canRead={agentRead}
+                canPrepare={has('software_write') && has('resource_write')}
+                canPublish={has('release_publish')}
+                canWithdraw={has('software_withdraw')}
+              />
+            ),
           },
           {
             key: 'configurations',

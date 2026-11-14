@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { Alert, Button, Card, Form, InputNumber, Select, Space, Tag } from 'antd'
 import {
   aggregateSelection,
+  numericText,
+  fractionText,
   seriesKey,
   type AggregateQuery,
   type AggregateValue,
@@ -22,6 +24,7 @@ import {
   queryAggregations,
   seriesLabel,
   utcMicros,
+  secondsMicros,
 } from './telemetry-format'
 import { TelemetryChart } from './TelemetryChart'
 
@@ -94,7 +97,7 @@ function AggregateResults({
         <span>
           {request.coverage.coverage === 'observedOnly'
             ? l('仅统计已观察数据', 'Observed data only')
-            : `${l('有界保持上一状态', 'Bounded hold of the last state')} · ${request.coverage.maxHoldMicros / 1_000_000} ${l('秒', 'seconds')}`}
+            : `${l('有界保持上一状态', 'Bounded hold of the last state')} · ${`${request.coverage.maxHoldMicros} µs / 1000000`} ${l('秒', 'seconds')}`}
         </span>
         <Button onClick={read.reload}>{l('重新读取聚合', 'Read aggregation again')}</Button>
       </Space>
@@ -141,14 +144,15 @@ function AggregateResults({
               { title: l('有效样本', 'Valid samples'), dataIndex: 'validSamples' },
               {
                 title: l('已覆盖 / 桶时长（微秒）', 'Covered / bucket duration (µs)'),
-                render: (_, r) => `${r.coveredMicros} / ${r.window.end - r.window.start}`,
+                render: (_, r) =>
+                  `${r.coveredMicros} / ${BigInt(r.window.end) - BigInt(r.window.start)}`,
               },
               {
                 title: l('完整性', 'Completeness'),
                 render: (_, r) =>
                   r.completeness.length
                     ? r.completeness.map((v) => diagnosticName(v, locale)).join(' · ')
-                    : r.coveredMicros < r.window.end - r.window.start
+                    : BigInt(r.coveredMicros) < BigInt(r.window.end) - BigInt(r.window.start)
                       ? l('覆盖不足', 'Insufficient coverage')
                       : l('已覆盖', 'Covered'),
               },
@@ -198,9 +202,9 @@ export function TelemetryResults({
     ),
     [selection, setSelection] = useState(''),
     [operation, setOperation] = useState<AggregateQuery['operation']>('mean'),
-    [resolution, setResolution] = useState(300),
-    [gap, setGap] = useState<number | null>(300),
-    [hold, setHold] = useState<number | null>(null),
+    [resolution, setResolution] = useState('300'),
+    [gap, setGap] = useState<string | null>('300'),
+    [hold, setHold] = useState<string | null>(null),
     [aggregate, setAggregate] = useState<AggregateQuery | null>(null),
     [error, setError] = useState<unknown>(null),
     rows = read.value?.rows ?? [],
@@ -306,7 +310,7 @@ export function TelemetryResults({
                   title: l('值 / 单位', 'Value / unit'),
                   render: (_, r) =>
                     r.sample.reading.quality === 'valid'
-                      ? `${String(r.sample.reading.value)} ${r.sample.series.definition.unit}`
+                      ? `${typeof r.sample.reading.value === 'object' ? numericText(r.sample.reading.value) : String(r.sample.reading.value)} ${r.sample.series.definition.unit}`
                       : r.sample.reading.quality === 'missing'
                         ? l('缺失', 'Missing')
                         : l('采集失败', 'Collection failed'),
@@ -375,10 +379,10 @@ export function TelemetryResults({
                         query,
                         selected,
                         selectedOperation!,
-                        resolution * 1_000_000,
-                        isCounter && gap !== null ? gap * 1_000_000 : null,
+                        secondsMicros(resolution),
+                        isCounter && gap !== null ? secondsMicros(gap) : null,
                         isState && hold !== null
-                          ? { coverage: 'holdLast', maxHoldMicros: hold * 1_000_000 }
+                          ? { coverage: 'holdLast', maxHoldMicros: secondsMicros(hold) }
                           : { coverage: 'observedOnly' },
                       )
                     })
@@ -390,7 +394,7 @@ export function TelemetryResults({
               >
                 <h3>{l('查询此序列的服务端聚合', 'Query server aggregation for this series')}</h3>
                 {field.value &&
-                  field.value.version !== selected.sample.series.definition.version && (
+                  String(field.value.version) !== selected.sample.series.definition.version && (
                     <p className="subtitle">
                       {l(
                         '当前字段目录已推进；聚合保留此观察的冻结定义，允许的操作由服务端校验。',
@@ -415,10 +419,12 @@ export function TelemetryResults({
                   </Form.Item>
                   <Form.Item label={l('分辨率（秒）', 'Resolution (seconds)')}>
                     <InputNumber
-                      min={1}
+                      stringMode
+                      min="1"
+                      aria-label={l('分辨率（秒）', 'Resolution (seconds)')}
                       value={resolution}
                       onChange={(v) => {
-                        setResolution(v ?? 300)
+                        setResolution(v ?? '300')
                         setAggregate(null)
                       }}
                     />
@@ -431,7 +437,12 @@ export function TelemetryResults({
                       )}
                     >
                       <InputNumber
-                        min={1}
+                        stringMode
+                        min="1"
+                        aria-label={l(
+                          '最大连续间隔（秒，计数器必填）',
+                          'Maximum gap (seconds, required for counters)',
+                        )}
                         value={gap}
                         onChange={(v) => {
                           setGap(v)
@@ -454,7 +465,7 @@ export function TelemetryResults({
                             },
                           ]}
                           onChange={(v) => {
-                            setHold(v === 'hold' ? 300 : null)
+                            setHold(v === 'hold' ? '300' : null)
                             setAggregate(null)
                           }}
                         />
@@ -462,10 +473,12 @@ export function TelemetryResults({
                       {hold !== null && (
                         <Form.Item label={l('最长保持时长（秒）', 'Maximum hold (seconds)')}>
                           <InputNumber
-                            min={1}
+                            stringMode
+                            min="1"
+                            aria-label={l('最长保持时长（秒）', 'Maximum hold (seconds)')}
                             value={hold}
                             onChange={(v) => {
-                              setHold(v ?? 300)
+                              setHold(v ?? '300')
                               setAggregate(null)
                             }}
                           />
@@ -533,7 +546,20 @@ function AggregateReading({
 }) {
   const l = labels(locale)
   if (value.kind === 'missing') return l('无数据', 'No data')
-  if (value.kind === 'number') return `${value.value} ${unit}`
+  if (value.kind === 'count') return <span>{value.value}</span>
+  if (value.kind === 'mean')
+    return (
+      <span>
+        {fractionText(value.sum, value.count)} {unit}
+      </span>
+    )
+  if (value.kind === 'rate')
+    return (
+      <span>
+        {fractionText(value.increase, value.durationMicros, 1000000n)} {unit}
+      </span>
+    )
+  if (value.kind === 'number' || value.kind === 'sum') return `${numericText(value.value)} ${unit}`
   if (value.kind === 'timeline')
     return (
       <ul>

@@ -108,8 +108,8 @@ it('retains association versions and exact source registration generations in hi
           associationVersion: 4,
           verified: false,
           members: [
-            { device: 'endpoint-mdm', channel: 'mdm' },
-            { device: 'endpoint-agent', channel: 'agent' },
+            { device: '2d689b80-028f-5849-8465-d0bc7447b417', channel: 'mdm' },
+            { device: 'f0afed0b-d926-5b92-8fa3-c880655164ba', channel: 'agent' },
           ],
         },
       ],

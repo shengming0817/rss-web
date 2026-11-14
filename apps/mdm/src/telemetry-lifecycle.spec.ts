@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { queryAggregations, utcMicros } from './telemetry-format'
+import { queryAggregations, secondsMicros, utcMicros } from './telemetry-format'
 import { act, createElement as h } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { HistoryPage, HistoryQuery } from '@rss/mdm-telemetry'
 import type { Runtime } from './runtime'
+import { TelemetryChart } from './TelemetryChart'
 import { TelemetryResults } from './TelemetryResults'
 import { TelemetryWorkspace } from './Telemetry'
 let host: HTMLDivElement, root: Root
@@ -43,8 +44,8 @@ const query: HistoryQuery = {
   device: 'device-a',
   field: 'custom.gauge',
   resource: 'device',
-  startMicros: 0,
-  endMicros: 100,
+  startMicros: '0',
+  endMicros: '100',
   maxPoints: 10,
   mode: 'history',
   after: null,
@@ -55,15 +56,15 @@ const page: HistoryPage = {
       device: 'reg',
       source: 'agent.script',
       epoch: 'epoch',
-      receivedAt: 30,
+      receivedAt: '30',
       liveSource: false,
       sourceConflict: false,
       sample: {
         id: 'sample',
-        sequence: 1,
-        observedAt: 20,
+        sequence: '1',
+        observedAt: '20',
         interval: null,
-        reading: { quality: 'valid', value: -12.5 },
+        reading: { quality: 'valid', value: { type: 'f64', value: -12.5 } },
         stream: {
           scope: { tenant: 'tenant', namespace: 'mdm.telemetry' },
           source: 'reg:agent.script',
@@ -73,7 +74,7 @@ const page: HistoryPage = {
           definition: {
             scope: { tenant: 'tenant', namespace: 'mdm.telemetry' },
             key: 'custom.gauge',
-            version: 1,
+            version: '1',
             unit: 'degree',
             metric: { kind: 'gauge', number: 'f64' },
             dimensions: {
@@ -118,7 +119,7 @@ function runtime(
     inventory: {
       fields: async () => ({ items: [], nextCursor: null, dictionary: 'catalog' }),
       field: async () => ({
-        version: 1,
+        version: '1',
         definition: { timeSeries: { aggregations: ['min', 'mean'] } },
       }),
     },
@@ -189,6 +190,17 @@ it('gates device data using exact device grants', async () => {
 it('preserves microsecond observation coordinates in UTC display', () => {
   expect(utcMicros(20)).toBe('1970-01-01T00:00:00.000020Z')
 })
+it.each([
+  ['1.5', '1500000'],
+  ['1.000001', '1000001'],
+  ['9007199254740.993001', '9007199254740993001'],
+])('preserves exact decimal seconds %s as %s microseconds', (seconds, micros) => {
+  expect(secondsMicros(seconds)).toBe(micros)
+})
+it.each(['0', '-1', 'NaN', '1.0000001'])(
+  'rejects a duration without a positive exact microsecond value: %s',
+  (seconds) => expect(() => secondsMicros(seconds)).toThrow('Invalid microsecond duration'),
+)
 
 async function submitQuery() {
   for (const [label, value] of [
@@ -252,7 +264,30 @@ it('removes previously visible observations when the document is hidden', async 
 it('does not use the current field revision to suppress valid frozen historical aggregates', () => {
   const row = page.rows[0]!
   expect(
-    queryAggregations(row, { version: 1, definition: { timeSeries: { aggregations: ['mean'] } } }),
+    queryAggregations(row, {
+      version: 1,
+      definition: { timeSeries: { aggregations: ['mean'] } },
+    }),
   ).toEqual(['mean'])
   expect(queryAggregations(row, { version: 2, definition: null })).toContain('min')
+})
+
+it.each([
+  [0, Number.MIN_VALUE],
+  [-Number.MAX_VALUE, Number.MAX_VALUE],
+])('separates finite f64 chart endpoints %s and %s', async (low, high) => {
+  const rows = [low, high].map((value, i) => ({
+    ...page.rows[0]!,
+    sample: {
+      ...page.rows[0]!.sample,
+      observedAt: String(i),
+      reading: { quality: 'valid' as const, value: { type: 'f64' as const, value } },
+    },
+  }))
+  await act(async () => root.render(h(TelemetryChart, { rows, locale: 'en' })))
+  expect([...host.querySelectorAll('circle')].map((point) => point.getAttribute('cy'))).toEqual([
+    '150',
+    '25',
+  ])
+  expect(host.querySelector('svg')?.textContent).toContain(String(high))
 })

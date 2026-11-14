@@ -1,21 +1,45 @@
-import type { Observation } from '@rss/mdm-telemetry'
+import type { Observation, Numeric } from '@rss/mdm-telemetry'
+import { numericText } from '@rss/mdm-telemetry'
 import type { Locale } from './i18n'
 import { labels } from './AdminUi'
 import { utcMicros } from './telemetry-format'
-/** Observed points only: no zero fill, cross-source join, interpolation or local aggregation. */
+/** Observed points only. Integer differences precede the bounded screen projection. */
 export function TelemetryChart({ rows, locale }: { rows: readonly Observation[]; locale: Locale }) {
   const l = labels(locale),
-    points = rows.flatMap((r) =>
-      r.sample.reading.quality === 'valid' && typeof r.sample.reading.value === 'number'
-        ? [{ at: r.sample.observedAt, value: r.sample.reading.value }]
+    points = rows.flatMap((row) =>
+      row.sample.reading.quality === 'valid' && typeof row.sample.reading.value === 'object'
+        ? [{ at: BigInt(row.sample.observedAt), value: row.sample.reading.value }]
         : [],
     )
   if (!points.length) return null
-  const from = Math.min(...points.map((p) => p.at)),
-    until = Math.max(...points.map((p) => p.at)),
-    low = Math.min(...points.map((p) => p.value)),
-    high = Math.max(...points.map((p) => p.value)),
-    unit = rows[0]?.sample.series.definition.unit ?? ''
+  const float = points[0]!.value.type === 'f64'
+  if (points.some((point) => (point.value.type === 'f64') !== float))
+    throw new Error('Mixed telemetry numeric series')
+  const compare = (a: Numeric, b: Numeric) =>
+    float
+      ? Number(a.value) - Number(b.value)
+      : BigInt(a.value) < BigInt(b.value)
+        ? -1
+        : BigInt(a.value) > BigInt(b.value)
+          ? 1
+          : 0
+  const low = points.reduce((a, b) => (compare(a.value, b.value) < 0 ? a : b)).value,
+    high = points.reduce((a, b) => (compare(a.value, b.value) > 0 ? a : b)).value
+  const from = points.reduce((a, b) => (a < b.at ? a : b.at), points[0]!.at),
+    until = points.reduce((a, b) => (a > b.at ? a : b.at), from)
+  const ratio = (n: bigint, d: bigint) => (d === 0n ? 0 : Number((n * 1000000n) / d) / 1000000)
+  const y = (value: Numeric) => {
+    if (!float)
+      return ratio(BigInt(value.value) - BigInt(low.value), BigInt(high.value) - BigInt(low.value))
+    const span = Number(high.value) - Number(low.value)
+    if (span === 0) return 0
+    return Number.isFinite(span)
+      ? (Number(value.value) - Number(low.value)) / span
+      : (Number(value.value) / 2 - Number(low.value) / 2) /
+          (Number(high.value) / 2 - Number(low.value) / 2)
+  }
+
+  const unit = rows[0]?.sample.series.definition.unit ?? ''
   return (
     <figure className="telemetry-chart">
       <figcaption>
@@ -31,28 +55,28 @@ export function TelemetryChart({ rows, locale }: { rows: readonly Observation[];
       >
         <path d="M50 12V165H700" className="telemetry-axis" />
         <text x="4" y="22">
-          {high.toPrecision(4)}
+          {numericText(high)}
         </text>
         <text x="4" y="160">
-          {low.toPrecision(4)}
+          {numericText(low)}
         </text>
-        {points.map((p, i) => (
+        {points.map((point, i) => (
           <circle
             key={i}
-            cx={50 + ((p.at - from) / Math.max(1, until - from)) * 640}
-            cy={150 - ((p.value - low) / (high - low || 1)) * 125}
+            cx={50 + ratio(point.at - from, until - from) * 640}
+            cy={150 - y(point.value) * 125}
             r="3"
             className="telemetry-point"
           >
             <title>
-              {utcMicros(p.at)} · {String(p.value)} {unit}
+              {utcMicros(String(point.at))} · {numericText(point.value)} {unit}
             </title>
           </circle>
         ))}
       </svg>
       <div className="telemetry-chart-times">
-        <span>{utcMicros(from)}</span>
-        <span>{utcMicros(until)}</span>
+        <span>{utcMicros(String(from))}</span>
+        <span>{utcMicros(String(until))}</span>
       </div>
     </figure>
   )

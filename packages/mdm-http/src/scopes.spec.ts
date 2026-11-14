@@ -32,7 +32,7 @@ it('retains pending unknown exclusion facts and distinguishes absent from empty 
       kind: 'decisions',
       items: [
         {
-          object: { kind: 'endpoint', id: 'endpoint-1' },
+          object: { kind: 'endpoint', id: 'fd753049-737f-5652-b607-203b78eb5309' },
           available: false,
           qualification: { state: 'pending' },
           reasons: ['unknown_exclusion'],
@@ -62,7 +62,7 @@ it('rejects unrepresentable membership entry coordinates', async () => {
       kind: 'decisions',
       items: [
         {
-          object: { kind: 'endpoint', id: 'endpoint-1' },
+          object: { kind: 'endpoint', id: 'fd753049-737f-5652-b607-203b78eb5309' },
           available: false,
           qualification: { state: 'eligible', entry: Number.MAX_SAFE_INTEGER + 1 },
           reasons: [],
@@ -87,7 +87,12 @@ it('preserves unavailable historical members instead of removing them or changin
     channel: 'mdm',
     page: {
       kind: 'members',
-      items: [{ object: { kind: 'endpoint', id: 'endpoint-1' }, available: false }],
+      items: [
+        {
+          object: { kind: 'endpoint', id: 'fd753049-737f-5652-b607-203b78eb5309' },
+          available: false,
+        },
+      ],
     },
     nextCursor: null,
   }

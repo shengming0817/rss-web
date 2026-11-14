@@ -580,6 +580,7 @@ function Detail({
                     label: l('注册', 'Enrollment'),
                     children: (
                       <DeviceRegistration
+                        endpoint={mountedEndpoint}
                         runtime={runtime}
                         locale={locale}
                         device={mountedEndpoint.id}

@@ -35,7 +35,7 @@ def configure(environment, config, private):
 def prepare(operator, facts, environment, private):
     from candidate_fixture import TENANTS
     tenant = TENANTS[0]
-    device = 'fixture-agent'
+    device = 'd452e3d0-e318-53fa-84f0-10447d70893a'
     def quote(value):
         return "'" + str(value).replace("'", "''") + "'"
     compact = lambda value: json.dumps(value, separators=(',', ':'))
@@ -56,4 +56,4 @@ def prepare(operator, facts, environment, private):
             f"UPDATE mdm_recovery.entries SET current_version=1 WHERE tenant_id='{tenant}' AND id='{identity}'"]
     environment.sql('BEGIN;' + ';'.join(statements) + ';COMMIT;', 'mdm_dev')
     facts.pop('keyFile')
-    facts.update(device=device, ordinary=ordinary, mac='fixture-mac')
+    facts.update(device=device, ordinary=ordinary, mac='d8befebe-00eb-524f-a5c4-81613bb0a344')

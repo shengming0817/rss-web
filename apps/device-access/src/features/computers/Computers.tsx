@@ -67,7 +67,11 @@ export function ComputerList() {
       <section className="da-panel">
         <DirectoryControls directory={directory} />
         <ReadState {...directory} />
-        <p>筛选 key、status、assetState、channel、source、platform、search；按 key 排序。</p>
+        <p>
+          筛选
+          reference.kind、reference.id、status、assetState、channel、source、platform、search；按
+          reference.kind 与 reference.id 排序。
+        </p>
         {directory.data && !directory.data.summaries && (
           <QueryRows items={directory.data.items} required={['reference']} onOpen={inspect} />
         )}

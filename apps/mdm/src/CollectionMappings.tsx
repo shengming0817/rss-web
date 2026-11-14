@@ -25,7 +25,7 @@ import {
 } from './AdminUi'
 import { DataTable } from './DataTable'
 import { CollectionMappingEditor } from './CollectionMappingEditor'
-import type { UploadIntent, UploadSession } from '@rss/mdm-content'
+import type { ResourceUploadIntent, ResourceUploadSession } from '@rss/mdm-content'
 import { MappingUpload, type MappingUseCases } from './MappingUpload'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
 import { useProtectedDelivery } from './useProtectedDelivery'
@@ -57,7 +57,7 @@ function MappingVersionEditor({
     [pending, setPending] = useState<PreparedMapping | null>(null),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
     [receipts, setReceipts] = useState<readonly string[]>([]),
-    [intents, setIntents] = useState<readonly UploadIntent[]>([]),
+    [intents, setIntents] = useState<readonly ResourceUploadIntent[]>([]),
     [contentAvailable, setContentAvailable] = useState(false),
     buffers = useRef<PreparedMapping | null>(null),
     delivery = useProtectedDelivery(() => {
@@ -284,8 +284,8 @@ function UploadRecovery({
     [restored, setRestored] = useState<{
       upload: PreparedMaterial
       scriptSource: string
-      session: UploadSession
-      intent: UploadIntent
+      session: ResourceUploadSession
+      intent: ResourceUploadIntent
     } | null>(null),
     material = useRef<PreparedMaterial | null>(null),
     delivery = useProtectedDelivery(() => {
@@ -309,6 +309,7 @@ function UploadRecovery({
             const generation = delivery.capture()
             void action.run(async () => {
               const session = await content.read(resource, id)
+              if (session.purpose !== 'resource') throw new Error('Wrong mapping upload purpose')
               if (!delivery.isCurrent(generation)) return
               const upload = await mappings.restore(
                 session.target,

@@ -66,7 +66,8 @@ try {
     })
   }
   await run.login(p)
-  await run.nav(p, '/certificates', '证书与设备 PKI')
+  await p.goto(origin + '/certificates')
+  await tab('证书档案')
   run.step('archive-initialize-and-unlock')
   const initialVault = await api('GET', '/api/v1/certificate-archive/vault')
   assert.equal(initialVault.initialized, false)
@@ -346,14 +347,14 @@ try {
   assert.equal(prepared.revision, trusted.revision + 1)
   await button('结束本次操作并重新读取').click()
   await label('原轮换 UUID').fill(prepared.operation)
-  await run.response(
-    p,
-    'POST',
-    '/api/v1/pki/agent/rotations',
-    () => button('提交阶段转换').click(),
-    409,
+  await run.response(p, 'GET', `/api/v1/pki/agent/rotations/${prepared.operation}`, () =>
+    button('读取原轮换').click(),
   )
+  await p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).waitFor()
+  assert.equal(await p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).isDisabled(), true)
+  await p.getByRole('cell', { name: 'missing_ack', exact: true }).first().waitFor()
   const ack = await runPkiCollector(process.env.MDM_ENROLLMENT_BROWSER_FIXTURE, {
+    revision: prepared.revision,
     onChild: (_child, terminate) => {
       activeCollector = terminate
       if (interrupted) terminate()
@@ -364,9 +365,16 @@ try {
     interrupted: () => interrupted,
   })
   assert.equal(ack.status, 0)
+  const loaded = await (
+    await run.response(p, 'GET', `/api/v1/pki/agent/rotations/${prepared.operation}`, () =>
+      button('读取原轮换').click(),
+    )
+  ).json()
+  assert.deepEqual(loaded.blockers, [])
+  assert.deepEqual(loaded.preconditions, [])
   const activated = await (
     await run.response(p, 'POST', '/api/v1/pki/agent/rotations', () =>
-      button('显式重提原请求').click(),
+      p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).click(),
     )
   ).json()
   assert.equal(activated.operation, prepared.operation)
@@ -374,6 +382,23 @@ try {
   await button('结束本次操作并重新读取').click()
   await run.response(p, 'POST', '/api/v1/pki/crls', () => button('发布这些撤销列表').click(), 204)
   await button('结束本次操作并重新读取').click()
+  const originalDevice = f.collector.runtime.deviceId
+  await p.goto(origin + `/devices/endpoint/${originalDevice}?tab=registration`)
+  await p.getByRole('button', { name: '读取最新设备事实', exact: true }).waitFor()
+  const originalResponse = await p.request.get(
+    origin + `/api/v1/devices/${originalDevice}/agent-requests`,
+  )
+  assert.equal(originalResponse.status(), 200)
+  const originalRequests = await originalResponse.json()
+  assert.ok(originalRequests.items.length > 0)
+  const originalRequest = originalRequests.items[0]
+  await run.response(p, 'GET', `/api/v1/agent-requests/${originalRequest.id}`, () =>
+    p.getByRole('button', { name: originalRequest.id, exact: true }).click(),
+  )
+  checks.push('real-device-agent-original-request-detail-and-requirements')
+  await p.goto(origin + '/certificates')
+  await tab('设备 PKI')
+  await tab('Agent')
   checks.push('real-ca-preparation-missing-ack-conflict-mtls-ack-activation-and-crl-publication')
 
   run.step('agent-original-issuance-and-registration-recovery')
@@ -411,7 +436,8 @@ try {
   )
 
   run.step('certificate-public-design-screenshots')
-  await run.nav(p, '/certificates', '证书与设备 PKI')
+  await p.goto(origin + '/certificates')
+  await tab('证书档案')
   await button('Edited ' + caName).waitFor()
   await p.waitForFunction(() => !document.querySelector('.ant-spin-spinning'))
   assert.equal(Math.round((await p.locator('aside.sidebar').boundingBox()).width), 218)
@@ -431,6 +457,75 @@ try {
     })
   }
   await p.setViewportSize({ width: 1440, height: 960 })
+  await tab('设备 PKI')
+  await tab('Agent')
+  await button('读取最新轮换').waitFor()
+  await p.setViewportSize({ width: 390, height: 844 })
+  const pkiFits = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
+  if (!pkiFits)
+    console.error(
+      JSON.stringify({
+        phase: 'pki-layout',
+        screenshots,
+        overflow: await p.locator('main *').evaluateAll((nodes) =>
+          nodes
+            .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+            .slice(0, 25)
+            .map((node) => ({
+              tag: node.tagName,
+              class: node.className,
+              width: Math.round(node.getBoundingClientRect().width),
+              right: Math.round(node.getBoundingClientRect().right),
+            })),
+        ),
+      }),
+    )
+  await p.screenshot({
+    path: join(screenshots, 'pki-mobile.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  assert.equal(pkiFits, true)
+  await p.setViewportSize({ width: 1440, height: 960 })
+  await button('English').press('Enter')
+  await run.response(p, 'GET', '/api/v1/pki/agent/rotations/latest', () =>
+    button('Read latest rotation').press('Enter'),
+  )
+  await p.screenshot({
+    path: join(screenshots, 'pki-en-desktop.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  await p.setViewportSize({ width: 390, height: 844 })
+  const englishFits = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
+  if (!englishFits)
+    console.error(
+      JSON.stringify({
+        phase: 'pki-en-layout',
+        screenshots,
+        overflow: await p.locator('main *').evaluateAll((nodes) =>
+          nodes
+            .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+            .slice(0, 25)
+            .map((node) => ({
+              tag: node.tagName,
+              class: node.className,
+              width: Math.round(node.getBoundingClientRect().width),
+              right: Math.round(node.getBoundingClientRect().right),
+            })),
+        ),
+      }),
+    )
+  await p.screenshot({
+    path: join(screenshots, 'pki-en-mobile.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  assert.equal(englishFits, true)
+  await p.setViewportSize({ width: 1440, height: 960 })
+  await button('中文').press('Enter')
+  await tab('证书档案')
+  checks.push('current-pki-mobile-and-english-keyboard-read')
   await button('新建档案材料').click()
   await label('证书名称').waitFor()
   assert.equal(await label('证书名称').inputValue(), '')

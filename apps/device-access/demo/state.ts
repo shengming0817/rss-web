@@ -44,7 +44,7 @@ export function seed() {
   }))
   const now = Math.floor(Date.now() / 1000)
   const computers: Computer[] = names.map((name, i) => ({
-    id: 'computer-' + (i + 1),
+    id: randomUUID(),
     name,
     platform: [0, 3, 4].includes(i) ? 'macos' : 'windows',
     status: i === 2 ? 'revoked' : 'active',

@@ -8,9 +8,9 @@ import {
   uuid,
   positive,
   exactResource,
-  decimal,
+  wireInteger,
   wirePositive,
-  wireCount,
+  wireNumber,
 } from './telemetry-scalars'
 import type { TelemetryPort } from '@rss/mdm-telemetry'
 import { sources as sourceIds } from '@rss/mdm-telemetry'
@@ -73,8 +73,8 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
         {
           body: {
             ...query,
-            startMicros: decimal(query.startMicros),
-            endMicros: decimal(query.endMicros),
+            startMicros: wireInteger(query.startMicros),
+            endMicros: wireInteger(query.endMicros),
           },
         },
         (value) => {
@@ -87,8 +87,8 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
               s.series.subject !== query.device ||
               s.series.resource !== query.resource ||
               s.series.definition.key !== query.field ||
-              s.observedAt < query.startMicros ||
-              s.observedAt >= query.endMicros
+              BigInt(s.observedAt) < BigInt(query.startMicros) ||
+              BigInt(s.observedAt) >= BigInt(query.endMicros)
             )
               throw new Error('Wrong telemetry selection')
           }
@@ -110,15 +110,18 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
             ...request,
             query: {
               ...request.query,
-              startMicros: decimal(request.query.startMicros),
-              endMicros: decimal(request.query.endMicros),
+              startMicros: wireInteger(request.query.startMicros),
+              endMicros: wireInteger(request.query.endMicros),
             },
-            definitionVersion: decimal(request.definitionVersion),
-            resolutionMicros: decimal(request.resolutionMicros),
-            maxGapMicros: request.maxGapMicros === null ? null : decimal(request.maxGapMicros),
+            definitionVersion: wirePositive(request.definitionVersion),
+            resolutionMicros: wirePositive(request.resolutionMicros),
+            maxGapMicros: request.maxGapMicros === null ? null : wirePositive(request.maxGapMicros),
             coverage:
               request.coverage.coverage === 'holdLast'
-                ? { coverage: 'holdLast', maxHoldMicros: decimal(request.coverage.maxHoldMicros) }
+                ? {
+                    coverage: 'holdLast',
+                    maxHoldMicros: wirePositive(request.coverage.maxHoldMicros),
+                  }
                 : request.coverage,
           },
         },
@@ -129,10 +132,10 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
             wirePositive(v['resolutionMicros']) !== request.resolutionMicros ||
             buckets.some(
               (b, i) =>
-                b.window.end <= request.query.startMicros ||
-                b.window.start >= request.query.endMicros ||
-                b.window.end - b.window.start > request.resolutionMicros ||
-                (i > 0 && buckets[i - 1]!.window.end > b.window.start),
+                BigInt(b.window.end) <= BigInt(request.query.startMicros) ||
+                BigInt(b.window.start) >= BigInt(request.query.endMicros) ||
+                BigInt(b.window.end) - BigInt(b.window.start) > BigInt(request.resolutionMicros) ||
+                (i > 0 && BigInt(buckets[i - 1]!.window.end) > BigInt(b.window.start)),
             )
           )
             throw new Error('Wrong aggregate window')
@@ -140,7 +143,7 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
             buckets,
             unavailable: unavailable(v['unavailable'], tenant),
             resolutionMicros: wirePositive(v['resolutionMicros']),
-            refreshedThrough: nullable(v['refreshedThrough'], wireCount),
+            refreshedThrough: nullable(v['refreshedThrough'], wireInteger),
             next: opaque(v['next']),
           }
         },
@@ -148,24 +151,40 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
     health: (
       device: string,
       field: string,
-      receivedFrom: number,
-      receivedUntil: number,
+      receivedFrom: string,
+      receivedUntil: string,
       maxBatches = 64,
     ) =>
       api.postApiV1TelemetryHealth(
         transport,
-        { body: { device, field, receivedFrom, receivedUntil, maxBatches } },
+        {
+          body: {
+            device,
+            field,
+            receivedFrom: wireNumber(receivedFrom),
+            receivedUntil: wireNumber(receivedUntil),
+            maxBatches,
+          },
+        },
         health,
       ),
     gaps: (
       device: string,
-      receivedFrom: number,
-      receivedUntil: number,
+      receivedFrom: string,
+      receivedUntil: string,
       after: ReturnType<typeof gapCursor> = null,
     ) =>
       api.postApiV1TelemetryGapsQuery(
         transport,
-        { body: { device, receivedFrom, receivedUntil, limit: 64, after } },
+        {
+          body: {
+            device,
+            receivedFrom: wireNumber(receivedFrom),
+            receivedUntil: wireNumber(receivedUntil),
+            limit: 64,
+            after,
+          },
+        },
         (value) => gaps(value, device),
       ),
   }

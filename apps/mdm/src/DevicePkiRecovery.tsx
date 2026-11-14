@@ -115,11 +115,13 @@ export function DevicePkiRecovery({
   locale,
   endpoint,
   canRecover,
+  originalIssuance,
 }: {
   runtime: Runtime
   locale: Locale
   endpoint: ViewEndpoint
   canRecover: boolean
+  originalIssuance?: string
 }) {
   const formPrefix = useId()
 
@@ -317,6 +319,10 @@ export function DevicePkiRecovery({
                     const receipt = await devicePki.registrationRecovery(
                       grant.intent.device,
                       grant.intent.operationId,
+                      {
+                        actor: runtime.owner.getSnapshot().identity!.principalId,
+                        instance: runtime.host.serviceId,
+                      },
                     )
                     setGrantReceipt(receipt)
                     if (receipt) setGrantOutcome('confirmed')
@@ -337,6 +343,7 @@ export function DevicePkiRecovery({
         <Card title={l('恢复原签发候选', 'Recover original signing candidate')}>
           <Form
             name={formPrefix + '-1'}
+            initialValues={{ issuance: originalIssuance }}
             form={issuanceForm}
             layout="vertical"
             disabled={!canRecover || action.busy || !!issuance}

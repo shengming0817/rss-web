@@ -2,7 +2,7 @@ import * as api from '@rss/api/mdm-operations'
 import * as schema from '@rss/api/mdm-schemas'
 import { nextCursor, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
-import type { Execution, ExecutionPort, RunDetail, Trust } from '@rss/mdm-execution'
+import type { Execution, ExecutionPort, RunDetail, Trust, DdmItem } from '@rss/mdm-execution'
 import { enumeration, nullable, positive, text, uuid, count, record } from './decode'
 import { integer, requestInput } from './inventory-values'
 const fields = [
@@ -40,6 +40,27 @@ export function createExecutionAdapter(
     }
   }
   return {
+    declarations: (device, cursor, signal) =>
+      api.getApiV1DevicesByDeviceDdm(
+        transport,
+        {
+          pathParams: { device },
+          query: { limit: 50, ...(cursor ? { cursor } : {}) },
+          ...(signal ? { signal } : {}),
+        },
+        (value) => ({
+          ...value,
+          items: value.items.map((item): DdmItem => {
+            if (
+              item.deviceId !== device ||
+              item.observation.protocol !== 'mdm.apple' ||
+              item.observation.observationScope !== 'declarations'
+            )
+              throw new Error('Wrong DDM declaration observation')
+            return { ...item, observation: item.observation }
+          }),
+        }),
+      ),
     statistics: (filter, signal) =>
       api.getApiV1OperationsStatistics(
         transport,

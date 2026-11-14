@@ -106,7 +106,6 @@ function reference(value: unknown) {
   return { kind: choice(v['kind'], ['endpoint', 'association']), id: text(v['id']) }
 }
 export const computerFields = {
-  key: text,
   reference,
   association: optionalRecord,
   endpoints: (v: unknown) =>
@@ -177,7 +176,7 @@ export function computerDirectory(value: unknown, query: DirectoryQuery): Direct
     computerFields,
     query,
     (row) => list(row['endpoints'], nativeComputer),
-    ['key'],
+    ['reference'],
   )
   if (page.summaries)
     page.summaries = [...new Map(page.summaries.map((item) => [item.id, item])).values()]

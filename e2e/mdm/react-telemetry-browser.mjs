@@ -51,6 +51,7 @@ try {
   })
   for (const [name, kind, valueType, unit] of [
     ['gauge', 'gauge', { kind: 'number' }, 'degree'],
+    ['integer', 'gauge', { kind: 'integer' }, 'unit'],
     ['counter', 'cumulative_counter', { kind: 'integer' }, 'byte'],
     ['state', 'state', { kind: 'enum', values: ['running', 'stopped'] }, 'state'],
   ]) {
@@ -74,7 +75,7 @@ try {
         dimensions: {},
         aggregations:
           kind === 'gauge'
-            ? ['min', 'max', 'mean', 'count']
+            ? ['min', 'max', 'sum', 'mean', 'count']
             : kind === 'state'
               ? ['timeline', 'transitions', 'coverage']
               : ['increase', 'rate'],
@@ -136,9 +137,10 @@ try {
       properties: {
         gauge: { type: 'integer' },
         counter: { type: 'integer' },
+        integer: { type: 'integer' },
         state: { type: 'string' },
       },
-      required: ['gauge', 'counter', 'state'],
+      required: ['gauge', 'counter', 'state', 'integer'],
       additionalProperties: false,
     },
     purpose: {
@@ -153,7 +155,7 @@ try {
         capabilities: [],
       },
       mappings: Object.fromEntries(
-        ['gauge', 'counter', 'state'].map((k) => [
+        ['gauge', 'counter', 'state', 'integer'].map((k) => [
           `custom.browser.${k}`,
           { pointer: '/' + k, conversion: { kind: 'identity' }, columns: {} },
         ]),
@@ -207,14 +209,14 @@ try {
         architecture: 'aarch64',
       },
       parameters: {},
-      fields: ['gauge', 'counter', 'state'].map((key) => ({
+      fields: ['gauge', 'counter', 'state', 'integer'].map((key) => ({
         key: 'custom.browser.' + key,
         version: 1,
       })),
       projection: 'both',
       sampleMillis: 5000,
       uploadMillis: 10000,
-      budget: { points: 256, bytes: 65536, resources: 3, executionMillis: 1000, outputBytes: 4096 },
+      budget: { points: 256, bytes: 65536, resources: 4, executionMillis: 1000, outputBytes: 4096 },
       boost: null,
       backfillSeconds: 86400,
     },
@@ -376,9 +378,11 @@ try {
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option').first().click()
   await page.locator('.telemetry-chart svg').waitFor()
   assert.equal(await page.locator('.telemetry-point').count(), 10)
+  await label('分辨率（秒）').fill('300.5')
   const aggregateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
     button('查询聚合').click(),
   )
+  assert.equal(aggregateResponse.request().postDataJSON().resolutionMicros, '300500000')
   const aggregatePage = await aggregateResponse.json(),
     gaugeBucket = aggregatePage.buckets.find(
       (b) => b.value && typeof b.value === 'object' && 'Number' in b.value,
@@ -426,14 +430,16 @@ try {
   async function queryField(field) {
     await label('字段键').fill(field)
     await label('序列资源').fill('device')
-    await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+    const response = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
       button('查询已上报数据').click(),
     )
     await page.locator('.telemetry-results table tbody tr').first().waitFor()
+    return response.json()
   }
   await queryField('custom.browser.counter')
   await selectSeries()
   await run.choose(page, label('聚合含义'), '每秒速率')
+  await label('最大连续间隔（秒，计数器必填）').fill('300.5')
   const rateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
       button('查询聚合').click(),
     ),
@@ -442,16 +448,46 @@ try {
       (b) => b.value && typeof b.value === 'object' && 'Rate' in b.value,
     )
   assert.ok(rateBucket, 'counter rate bucket')
+  assert.equal(rateResponse.request().postDataJSON().maxGapMicros, '300500000')
   const rate = rateBucket.value.Rate,
-    increase = Object.values(rate.increase)[0],
-    expectedRate = increase / (rate.duration_micros / 1_000_000)
+    increase = Object.values(rate.increase)[0]
   await page
     .locator('.telemetry-aggregate')
-    .getByRole('cell', { name: String(expectedRate) + ' byte/s', exact: true })
+    .getByText(new RegExp(`\\(${BigInt(increase) * 1000000n} / ${rate.duration_micros}\\)`))
     .waitFor()
+  const integers = (await queryField('custom.browser.integer')).rows.filter(
+    (row) => row.sample.reading.quality === 'valid',
+  )
+  const exactValues = integers.map((row) => row.sample.reading.value.value.value)
+  assert.ok(exactValues.includes('-9223372036854775808'))
+  assert.ok(exactValues.includes('9223372036854775807'))
+  for (const value of ['9007199254740992', '9007199254740993']) {
+    assert.ok(exactValues.includes(value))
+    await page
+      .getByRole('cell', { name: value + ' unit', exact: true })
+      .first()
+      .waitFor()
+  }
+  await selectSeries()
+  await run.choose(page, label('聚合含义'), '合计')
+  const sumResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
+    button('查询聚合').click(),
+  )
+  const sums = (await sumResponse.json()).buckets.filter(
+    (bucket) => typeof bucket.value === 'object' && bucket.value && 'Sum' in bucket.value,
+  )
+  assert.ok(
+    sums.some(
+      (bucket) =>
+        BigInt(Object.values(bucket.value.Sum)[0]) > 9007199254740991n ||
+        BigInt(Object.values(bucket.value.Sum)[0]) < -9007199254740991n,
+    ),
+  )
+  coverage.push('real-mtls-i64-extremes-adjacent-large-integers-and-i128-aggregate')
   await queryField('custom.browser.state')
   await selectSeries()
   await run.choose(page, label('状态覆盖策略'), '有界保持上一状态')
+  await label('最长保持时长（秒）').fill('300.5')
   assert.equal(
     await page.locator('.telemetry-chart').count(),
     0,
@@ -465,6 +501,7 @@ try {
       (b) => b.value && typeof b.value === 'object' && b.value.StateSegments?.length,
     )
   assert.ok(stateBucket, 'state timeline bucket')
+  assert.equal(stateResponse.request().postDataJSON().coverage.maxHoldMicros, '300500000')
   await page
     .locator('.telemetry-aggregate')
     .getByRole('cell')
@@ -472,7 +509,7 @@ try {
     .first()
     .waitFor()
   coverage.push('counter-rate-from-formal-statistics-and-discrete-state-timeline')
-  run.step('no-data-and-unsafe-integer-fixture')
+  run.step('no-data-and-malformed-integer-rejection')
   await label('字段键').fill(query.field)
   await label('序列资源').fill('device')
   await label('开始时间（UTC）').fill(new Date(Date.now() - 86_400_000).toISOString().slice(0, 16))
@@ -491,7 +528,7 @@ try {
   unsafeRow.sample.series.definition.metric = { kind: 'gauge', number: 'i64' }
   unsafeRow.sample.reading.value = {
     type: 'number',
-    value: { type: 'i64', value: '9007199254740992' },
+    value: { type: 'i64', value: '01' },
   }
   await page.route(
     '**/api/v1/telemetry/history',
@@ -507,7 +544,7 @@ try {
     .getByText('无法读取当前数据，请检查查询或连接后重新读取。', { exact: true })
     .waitFor()
   assert.equal(await page.locator('.telemetry-results table tbody tr').count(), 0)
-  coverage.push('real-empty-query-distinct-from-explicit-unsafe-integer-fixture-failure-gap-3139')
+  coverage.push('real-empty-query-distinct-from-malformed-integer-rejection')
   await run.choose(page, label('查询模式'), '最新有效来源')
   await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
     button('查询已上报数据').click(),
@@ -515,7 +552,28 @@ try {
   assert.equal(await button('下一页观察').count(), 0)
   coverage.push('latest-server-selected-source-without-continuation')
   run.step('configuration-preview-and-links')
+  const configurationPath = `/api/v1/devices/${device}/telemetry-configurations`
+  const configurationResponse = () =>
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        new URL(response.url()).pathname === configurationPath,
+    )
+  let waiting = configurationResponse()
   await page.getByRole('tab', { name: '配置发现与预览', exact: true }).click()
+  let discoveredResponse = await waiting
+  for (let attempt = 0; discoveredResponse.status() === 503 && attempt < 6; attempt++) {
+    await new Promise((done) => setTimeout(done, 500))
+    waiting = configurationResponse()
+    await button('重新读取配置').click()
+    discoveredResponse = await waiting
+  }
+  assert.equal(discoveredResponse.status(), 200, 'real current configuration discovery')
+  const discovered = await discoveredResponse.json()
+  assert.ok(
+    discovered.configurations.some((row) => row.resource.id === profile),
+    'current server-discovered profile',
+  )
   await page
     .getByRole('row')
     .filter({ hasText: profile })

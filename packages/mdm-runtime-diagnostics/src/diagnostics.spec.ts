@@ -3,13 +3,16 @@ import { createRuntimeDiagnostics, queueText } from './index'
 import type { Snapshot } from './model'
 function snapshot(): Snapshot {
   return {
-    source: 'mock',
+    firstUse: null,
     alive: true,
     ready: true,
     channels: [],
     components: [
       {
-        owner: 'policy',
+        name: 'policy',
+        mounted: true,
+        phases: [],
+        dispatch: null,
         health: 'degraded',
         readiness: 'ready',
         task: 'failed',
@@ -17,7 +20,7 @@ function snapshot(): Snapshot {
         dependencies: [],
         queues: [{ name: 'pending', count: null, truncated: null }],
         progress: null,
-        recovery: null,
+        runner: null,
       },
     ],
   }
@@ -31,7 +34,7 @@ it('preserves readiness and degraded/unknown health independently', async () => 
   expect(queueText(result.components[0]!.queues[0]!)).toBe('—')
   expect(queueText({ name: 'pending', count: 3, truncated: true })).toBe('≥3')
 })
-it('rejects duplicate owners, retired aggregates and unsafe observation counters', async () => {
+it('rejects duplicate owners, unknown owners and unsafe observation counters', async () => {
   const value = snapshot()
   await expect(
     createRuntimeDiagnostics({
@@ -42,7 +45,7 @@ it('rejects duplicate owners, retired aggregates and unsafe observation counters
     createRuntimeDiagnostics({
       snapshot: async () => ({
         ...value,
-        components: [{ ...value.components[0]!, owner: 'automation' as never }],
+        components: [{ ...value.components[0]!, name: 'invalid' as never }],
       }),
     }).snapshot(),
   ).rejects.toThrow()

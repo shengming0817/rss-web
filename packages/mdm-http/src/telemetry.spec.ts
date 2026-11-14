@@ -14,7 +14,7 @@ function sample() {
     reading: { quality: 'valid', value: { type: 'number', value: { type: 'f64', value: -12.5 } } },
     stream: {
       scope: { tenant, namespace: 'mdm.telemetry' },
-      source: 'device-a' + ':agent.script',
+      source: '48ade991-ac14-5214-92fe-7084429906bf' + ':agent.script',
       generation: epoch,
     },
     series: {
@@ -32,18 +32,18 @@ function sample() {
           maxTotalBytes: 64,
         },
       },
-      subject: 'device-a',
+      subject: '48ade991-ac14-5214-92fe-7084429906bf',
       resource: 'device',
       dimensions: {},
     },
   }
 }
 const query = {
-  device: 'device-a',
+  device: '48ade991-ac14-5214-92fe-7084429906bf',
   field: 'custom.gauge',
   resource: 'device',
-  startMicros: 0,
-  endMicros: 100,
+  startMicros: '0',
+  endMicros: '100',
   maxPoints: 10,
   mode: 'history' as const,
   after: null,
@@ -66,11 +66,11 @@ it('uses generated operations and admits script observations with all exact coor
     }),
     result = await f.telemetry.history(query)
   expect(result.rows[0]).toMatchObject({
-    device: 'device-a',
+    device: '48ade991-ac14-5214-92fe-7084429906bf',
     source: 'agent.script',
     epoch,
     liveSource: false,
-    sample: { reading: { quality: 'valid', value: -12.5 } },
+    sample: { reading: { quality: 'valid', value: { type: 'f64', value: -12.5 } } },
   })
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -129,7 +129,7 @@ it('reads fixed configuration bindings and registration without substituting act
       architecture: 'aarch64',
     },
     f = fixture({
-      device: 'device-a',
+      device: '48ade991-ac14-5214-92fe-7084429906bf',
       evaluatedAtMicros: 50,
       configurations: [
         {
@@ -146,7 +146,10 @@ it('reads fixed configuration bindings and registration without substituting act
         },
       ],
     })
-  expect((await f.telemetry.configurations('device-a')).configurations[0]?.resource).toEqual({
+  expect(
+    (await f.telemetry.configurations('48ade991-ac14-5214-92fe-7084429906bf')).configurations[0]
+      ?.resource,
+  ).toEqual({
     resource: resource.id,
     version: resource.version,
     variant: resource.variant,
@@ -157,7 +160,44 @@ it('reads fixed configuration bindings and registration without substituting act
     expect.objectContaining({
       method: 'GET',
       path: '/api/v1/devices/{device}/telemetry-configurations',
-      pathParams: { device: 'device-a' },
+      pathParams: { device: '48ade991-ac14-5214-92fe-7084429906bf' },
     }),
   )
+})
+
+it('preserves positive u64 aggregate coordinates and signed timestamp responses', async () => {
+  const u64 = '18446744073709551615',
+    f = fixture({
+      buckets: [
+        {
+          window: { start: '-100', end: '0' },
+          value: { Transitions: [{ at: '-50', from: { Bool: false }, to: { Bool: true } }] },
+          valid_samples: '1',
+          covered_micros: '100',
+          completeness: [],
+        },
+      ],
+      unavailable: [],
+      resolutionMicros: u64,
+      refreshedThrough: '-1',
+      next: null,
+    }),
+    input = {
+      query: { ...query, startMicros: '-100', endMicros: '100' },
+      definitionVersion: u64,
+      resolutionMicros: u64,
+      source: 'agent.script' as const,
+      epoch,
+      dimensions: {},
+      operation: 'transitions' as const,
+      maxGapMicros: u64,
+      coverage: { coverage: 'holdLast' as const, maxHoldMicros: u64 },
+    }
+  const result = await f.telemetry.aggregate(input)
+  expect(result.refreshedThrough).toBe('-1')
+  expect(result.buckets[0]?.value).toEqual({
+    kind: 'transitions',
+    transitions: [{ at: '-50', from: false, to: true }],
+  })
+  expect(f.request).toHaveBeenCalledWith(expect.objectContaining({ body: input }))
 })

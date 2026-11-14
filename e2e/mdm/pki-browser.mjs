@@ -9,11 +9,16 @@ export async function runPkiCollector(fixtureFile, lifecycle = {}) {
   const root = dirname(fileURLToPath(import.meta.url))
   const result = await executeBounded(
     'python3',
-    [join(root, 'device-agent.py'), 'pki-ack', fixtureFile],
+    [
+      join(root, 'device-agent.py'),
+      'pki-ack',
+      fixtureFile,
+      ...(lifecycle.revision ? [String(lifecycle.revision)] : []),
+    ],
     {
       cwd: join(root, '../..'),
       env: process.env,
-      timeoutMs: 30000,
+      timeoutMs: 120000,
       stdio: ['ignore', 'pipe', 'pipe'],
       onChild: lifecycle.onChild,
       onRelease: lifecycle.onRelease,

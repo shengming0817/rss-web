@@ -87,13 +87,19 @@ it('rejects a batch whose returned request belongs to another event identity', a
       executionContext: null,
     },
   }
-  expect(await createPolicyEventsAdapter(fixture(value).transport).batch('endpoint-1', id)).toEqual(
-    { ...value, request: { operationId, event: 'shared.event', source: { kind: 'human' } } },
-  )
+  expect(
+    await createPolicyEventsAdapter(fixture(value).transport).batch(
+      'fd753049-737f-5652-b607-203b78eb5309',
+      id,
+    ),
+  ).toEqual({
+    ...value,
+    request: { operationId, event: 'shared.event', source: { kind: 'human' } },
+  })
   await expect(
     createPolicyEventsAdapter(
       fixture({ ...value, request: { ...value.request, operationId: versionId } }).transport,
-    ).batch('endpoint-1', id),
+    ).batch('fd753049-737f-5652-b607-203b78eb5309', id),
   ).rejects.toThrow('binding')
 })
 it('keeps member acceptance separate from native effect and rejects mismatched owner references', async () => {
@@ -114,7 +120,7 @@ it('keeps member acceptance separate from native effect and rejects mismatched o
       ],
     },
     client = createPolicyEventsAdapter(fixture({ items: [member], nextCursor: null }).transport)
-  const result = await client.members('endpoint-1', id, {})
+  const result = await client.members('fd753049-737f-5652-b607-203b78eb5309', id, {})
   expect(result.items[0]?.state).toBe('accepted')
   expect(result.items[0]?.operations[0]?.state).toBe('queued')
   const wrong = {
@@ -123,7 +129,7 @@ it('keeps member acceptance separate from native effect and rejects mismatched o
   }
   await expect(
     createPolicyEventsAdapter(fixture({ items: [wrong], nextCursor: null }).transport).members(
-      'endpoint-1',
+      'fd753049-737f-5652-b607-203b78eb5309',
       id,
       {},
     ),
@@ -143,7 +149,7 @@ it('preserves native collection delivery and intake without fabricating agent ex
       taskId: operationId,
       policyId: id,
       versionId,
-      device: 'endpoint-1',
+      device: 'fd753049-737f-5652-b607-203b78eb5309',
       occurrence: 'collection:1',
       availableAt: 0,
       deadline: 200,
@@ -174,7 +180,7 @@ it('consumes access run state without inventing a software effect', async () => 
       taskId: operationId,
       policyId: id,
       versionId,
-      device: 'endpoint-1',
+      device: 'fd753049-737f-5652-b607-203b78eb5309',
       occurrence: 'access:1',
       availableAt: 0,
       deadline: 200,
@@ -196,11 +202,11 @@ it('consumes access run state without inventing a software effect', async () => 
 
 it('keeps recurring eligibility, current trigger knowledge and restricted execution facts separate', async () => {
   const base = {
-    object: { kind: 'endpoint', id: 'endpoint-1' },
+    object: { kind: 'endpoint', id: 'fd753049-737f-5652-b607-203b78eb5309' },
     channel: 'agent',
     availability: 'ready',
     reason: null,
-    target: { device: 'endpoint-1', channel: 'agent' },
+    target: { device: 'fd753049-737f-5652-b607-203b78eb5309', channel: 'agent' },
     qualification: { state: 'eligible', entry: 1 },
     sources: [],
     scopeResult: versionId,

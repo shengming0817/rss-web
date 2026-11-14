@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { ConfigProvider, Select, Button, Space } from 'antd'
+import { Alert, ConfigProvider, Select, Button, Space } from 'antd'
 import { StyleProvider } from '@ant-design/cssinjs'
 import { createMdmDemoTransport } from '@rss/api/mdm-demo'
 import { createRuntimeDiagnostics } from '@rss/mdm-runtime-diagnostics'
@@ -25,16 +25,7 @@ function Demo() {
         path: '/api/v1/mdm-candidate/runtime-diagnostics',
         query: { scenario },
         successStatus: 200,
-        decode: (value) => {
-          if (
-            !value ||
-            typeof value !== 'object' ||
-            !('source' in value) ||
-            value.source !== 'mock'
-          )
-            throw new Error('Not a mock snapshot')
-          return value as Snapshot
-        },
+        decode: (value) => value as Snapshot,
       }),
   })
   const runtime = {
@@ -56,6 +47,12 @@ function Demo() {
       <ConfigProvider theme={mdmTheme(dark, true)}>
         <BrowserRouter>
           <main className="main" style={{ maxWidth: 1180, margin: '0 auto', padding: 24 }}>
+            <Alert
+              type="warning"
+              showIcon
+              title="模拟诊断 · 仅验证界面"
+              description="以下数据来自显式模拟场景，不代表后端、外部服务或设备的实际状态。"
+            />
             <Space wrap>
               <strong>RSS MDM · 显式模拟</strong>
               <Select

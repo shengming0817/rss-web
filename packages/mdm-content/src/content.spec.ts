@@ -1,10 +1,11 @@
 import { expect, it, vi } from 'vitest'
 import { chunkBytes, createContent, hashMaterial } from './index'
-import type { ContentPort, UploadIntent, UploadSession } from './model'
+import type { ContentPort, ResourceUploadIntent, ResourceUploadSession } from './model'
 
 const id = '11111111-1111-4111-8111-111111111111'
-function intent(length = 1): UploadIntent {
+function intent(length = 1): ResourceUploadIntent {
   return {
+    purpose: 'resource',
     id,
     target: {
       resource: 'resource',
@@ -16,8 +17,9 @@ function intent(length = 1): UploadIntent {
     },
   }
 }
-function session(original = intent()): UploadSession {
+function session(original = intent()): ResourceUploadSession {
   return {
+    purpose: 'resource',
     id,
     target: original.target,
     actor: 'operator',
@@ -210,7 +212,7 @@ it('holds the original target and observed frontier while an asynchronous source
   Object.assign(observed, { offset: 99 })
   finish(new ArrayBuffer(1))
   await running
-  expect(append.mock.calls[0]?.[0].target.version).toBe('v1')
+  expect((append.mock.calls[0]?.[0] as ResourceUploadIntent).target.version).toBe('v1')
   expect(append.mock.calls[0]?.[1]).toBe(0)
 })
 
@@ -273,4 +275,27 @@ it('binds a software artifact to its content coordinate without retaining source
   expect(selected.target.artifact).not.toHaveProperty('origin')
   expect((await content.begin(selected)).target).toEqual(selected.target)
   expect(artifact.origin).toBe('https://source.example/installer')
+})
+
+it('uses the same observed-frontier transfer for a software preparation and rejects purpose or actor substitution', async () => {
+  const target = {
+    resource: id,
+    filename: 'agent.exe',
+    artifact: { reference: 'installer', length: 1, sha256: Array<number>(32).fill(0) },
+  }
+  const original = { purpose: 'software' as const, id, target },
+    observed = { ...original, actor: 'original', offset: 0, expires: 2000000000, complete: false }
+  const append = vi
+    .fn<ContentPort['append']>()
+    .mockResolvedValueOnce({ ...observed, offset: 1 })
+    .mockResolvedValueOnce({ ...observed, offset: 1, actor: 'other' })
+  const content = createContent(
+    port({ append, read: async () => observed, complete: async () => {} }),
+  )
+  expect(content.prepared(id, target)).toEqual(original)
+  expect((await content.read(id, id)).purpose).toBe('software')
+  const source = { length: 1, read: async () => new ArrayBuffer(1) }
+  const next = await content.append(original, observed, source)
+  await content.complete(original, next)
+  await expect(content.append(original, observed, source)).rejects.toThrow('binding changed')
 })

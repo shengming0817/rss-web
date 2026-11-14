@@ -222,11 +222,20 @@ def script_event(fixture, action, policy):
     return dict(result='passed', task=task['taskId'], attempt=task['attemptId'])
 
 
-def acknowledge_pki(path):
+def acknowledge_pki(path, revision=None):
     file = Path(path)
     check(file.stat().st_mode & 0o077 == 0, 'collector-private-fixture')
     fixture = json.loads(file.read_text())
     agent = fixture['collector']
+    if revision is not None:
+        reload=fixture['pki']['reload']; operation=str(uuid.uuid4())
+        requested=Path(reload['request']); staged=requested.with_suffix('.tmp'); staged.write_text(json.dumps(dict(operation=operation,revision=int(revision)))); staged.chmod(0o600); staged.replace(requested)
+        response=Path(reload['response']); deadline=time.monotonic()+100
+        while True:
+            result=json.loads(response.read_text()) if response.exists() else None
+            if result and result.get('operation') == operation:
+                check(result['revision'] == int(revision),'collector-pki-loaded-revision'); break
+            check(time.monotonic()<deadline,'collector-pki-reload-deadline'); time.sleep(.1)
     trust = call(agent['origin'], agent['ca'], '/api/v1/agent/enroll/trust', cert=agent['cert'], key=agent['key'], method='GET')
     check(trust['tenant'] == fixture['tenant'] and trust['purpose'] == 'agent', 'collector-pki-binding')
     installed = Path(agent['cert']).parent / 'collector-pki-trust.json'
@@ -246,7 +255,7 @@ def acknowledge_pki(path):
 if __name__ == '__main__':
     try:
         if sys.argv[1] == 'pki-ack':
-            print(json.dumps(acknowledge_pki(sys.argv[2])))
+            print(json.dumps(acknowledge_pki(sys.argv[2],sys.argv[3] if len(sys.argv)>3 else None)))
             sys.exit(0)
         path, action, resource, cycle = sys.argv[1:]
         file = Path(path)

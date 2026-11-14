@@ -12,6 +12,8 @@ import {
   type Purpose,
   type RotationReceipt,
   type Trust,
+  type Rotation,
+  type RotationBlocker,
 } from '@rss/mdm-certificates/device-pki'
 import { count, nullable, positive, text, uuid } from './decode'
 import { integer, requestInput } from './inventory-values'
@@ -119,14 +121,51 @@ function observation(value: unknown): Observation | null {
     receivedAt: integer(value.received_at),
   }
 }
+function rotation(value: unknown, purpose: Purpose, id?: string): Rotation {
+  if (
+    !schema.getApiV1PkiByPurposeRotationsByIdResponse.validateRoot(value) ||
+    value.purpose !== purpose ||
+    (id !== undefined && value.id !== id)
+  )
+    throw new Error('Wrong original rotation')
+  return { ...value, purpose }
+}
 /** Management ports only. Device private keys, issuer providers and registration ownership stay out. */
 export function createDevicePkiAdapter(
   transport: HttpTransport,
   tenant: string,
   service: string,
-  actor: string,
 ): DevicePkiPort {
   return {
+    latestRotation: (purpose, signal) =>
+      api.getApiV1PkiByPurposeRotationsLatest(
+        transport,
+        { pathParams: { purpose }, ...(signal ? { signal } : {}) },
+        (value) => (value === null ? null : rotation(value, purpose)),
+      ),
+    rotation: (purpose, id, signal) =>
+      api.getApiV1PkiByPurposeRotationsById(
+        transport,
+        { pathParams: { purpose, id }, ...(signal ? { signal } : {}) },
+        (value) => rotation(value, purpose, id),
+      ),
+    rotationBlockers: (purpose, id, cursor, signal) =>
+      api.getApiV1PkiByPurposeRotationsByIdBlockers(
+        transport,
+        {
+          pathParams: { purpose, id },
+          query: queryParameters({ limit: 50, ...(cursor ? { cursor } : {}) }),
+          ...(signal ? { signal } : {}),
+        },
+        (value) => ({
+          items: value.items.map((row): RotationBlocker => {
+            if (!schema.getApiV1PkiByPurposeRotationsByIdBlockersResponse.validateBlocker(row))
+              throw new Error('Incomplete rotation blocker')
+            return row
+          }),
+          nextCursor: nextCursor(value.nextCursor),
+        }),
+      ),
     trust: (purpose) =>
       api.getApiV1PkiByPurposeTrust(transport, { pathParams: { purpose } }, (value) =>
         trust(value, tenant, service, purpose),
@@ -187,10 +226,13 @@ export function createDevicePkiAdapter(
         { pathParams: { device } },
         observation,
       ),
-    registrationRecovery: (device, operation) =>
+    registrationRecovery: (device, operation, identity) =>
       api.getApiV1DevicesByIdRegistrationRecoveryOperationsByOperation(
         transport,
-        { pathParams: { id: device, operation }, query: { actor, instance: service } },
+        {
+          pathParams: { id: device, operation },
+          query: { actor: identity.actor, instance: identity.instance },
+        },
         (value) => (value === null ? null : grant(value)),
       ),
     recoverRegistration: (input, secret) =>

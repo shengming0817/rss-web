@@ -11,7 +11,7 @@ const settings: Settings = {
   presentation: { name: 'Webhook', vendor: { zero: 0, flag: false } },
   endpoint: 'https://receiver.example/events',
   eventTypes: ['device.registered'],
-  selection: { kind: 'devices', ids: ['device'] },
+  selection: { kind: 'devices', ids: ['7f408d60-f79e-504d-8fdc-35d425b1946a'] },
   keyReference: 'key',
   networkReference: 'network',
 }
@@ -97,10 +97,13 @@ it('uses catalog and test receipt identities independently of delivery state', a
     (await fixture({ version: 1, items: [...eventTypes] }).core.eventTypes()).items,
   ).not.toContain('webhook.test')
   const f = fixture({ id, eventId })
-  expect(await f.core.test(id, operationId, 'device')).toEqual({ id, eventId })
+  expect(await f.core.test(id, operationId, '7f408d60-f79e-504d-8fdc-35d425b1946a')).toEqual({
+    id,
+    eventId,
+  })
   expect(f.request.mock.lastCall![0]).toMatchObject({
     path: '/api/v1/webhooks/subscriptions/{id}/test',
-    body: { operationId, deviceId: 'device' },
+    body: { operationId, deviceId: '7f408d60-f79e-504d-8fdc-35d425b1946a' },
     successStatus: 200,
   })
 })

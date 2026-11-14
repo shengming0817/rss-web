@@ -15,7 +15,7 @@ import type {
   ValueMapping,
 } from '@rss/mdm-resources'
 import type { QueryDefinition } from '@rss/mdm-inventory'
-import type { UploadSession } from '@rss/mdm-content'
+import type { ResourceUploadSession } from '@rss/mdm-content'
 import type { InventoryUseCases } from './FieldEditor'
 import type { GroupsUseCases } from './GroupPicker'
 import type { DevicesUseCases } from './EndpointPicker'
@@ -482,8 +482,9 @@ function preparedUpload(): PreparedMaterial {
     bytes: new Uint8Array([1, 2, 3]).buffer,
   }
 }
-function uploadSession(upload: PreparedMaterial): UploadSession {
+function uploadSession(upload: PreparedMaterial): ResourceUploadSession {
   return {
+    purpose: 'resource',
     id: nested,
     target: upload.target,
     resourceDigest: Array<number>(32).fill(1),
@@ -567,7 +568,7 @@ it('can explicitly begin the original metadata after hiding an unstarted upload 
             children: createElement(MappingUpload, {
               mappings,
               content,
-              intent: { id: nested, target: upload.target },
+              intent: { purpose: 'resource', id: nested, target: upload.target },
               upload,
               locale: 'zh',
               canWrite: true,
@@ -607,7 +608,7 @@ it('erases a restored upload buffer that arrives after its panel unmounts', asyn
         verify: async () => {},
         read: async () => uploadSession(upload),
       }),
-      intent: { id: nested, target: upload.target },
+      intent: { purpose: 'resource', id: nested, target: upload.target },
       upload,
       locale: 'zh',
       canWrite: true,

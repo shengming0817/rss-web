@@ -39,8 +39,14 @@ try {
   const next = p
     .getByRole('tabpanel', { name: '终端目录', exact: true })
     .getByRole('button', { name: '下一页', exact: true })
-  await run.response(p, 'GET', '/api/v1/devices', () => next.click())
-  await p.getByRole('link', { name: f.mdm, exact: true }).waitFor()
+  const following = await (
+    await run.response(p, 'GET', '/api/v1/devices', () => next.click())
+  ).json()
+  assert.ok(following.items.length >= 3)
+  assert.ok(
+    following.items.every((row) => !endpointPage.items.some((previous) => previous.id === row.id)),
+  )
+  await p.getByRole('link', { name: following.items[0].id, exact: true }).waitFor()
   assert.ok((await p.locator('.data-table tbody tr').count()) >= 3)
   checks.push('real-endpoint-directory-retains-distinct-identities')
   run.step('responsive-shell')
@@ -72,9 +78,7 @@ try {
   checks.push('desktop-mobile-drawer-and-dark-design')
   console.log(JSON.stringify({ journey: 'react-devices', screenshots }))
   run.step('association-verification')
-  await openDevice('endpoint', f.mdm, () =>
-    p.getByRole('link', { name: f.mdm, exact: true }).click(),
-  )
+  await openDevice('endpoint', f.mdm, () => p.goto(origin + `/devices/endpoint/${f.mdm}`))
   await p.getByRole('button', { name: '读取最新设备事实', exact: true }).waitFor()
   await p.getByRole('tab', { name: '终端关联', exact: true }).click()
   const candidatesPath = `/api/v1/devices/${f.mdm}/association-candidates`
@@ -230,6 +234,30 @@ try {
   assert.equal(revoked.state, 'revoked')
   assert.equal(revoked.version, 2)
   checks.push('versioned-association-revocation-keeps-endpoints')
+  const windowsRead = p.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === `/api/v1/devices/${f.mdm}/windows-certificate-requests`,
+  )
+  await openDevice('endpoint', f.mdm, () =>
+    p.goto(origin + `/devices/endpoint/${f.mdm}?tab=registration`),
+  )
+  assert.ok(Array.isArray((await (await windowsRead).json()).items))
+  run.checks.push('real-device-context-windows-original-request-directory')
+  const apple = 'd8befebe-00eb-524f-a5c4-81613bb0a344'
+  const ddmRead = p.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === `/api/v1/devices/${apple}/ddm`,
+  )
+  await openDevice('endpoint', apple, () =>
+    p.goto(origin + `/devices/endpoint/${apple}?tab=registration`),
+  )
+  const ddm = await (await ddmRead).json()
+  assert.equal(ddm.effect, 'unverified')
+  assert.equal(ddm.compliance, 'unknown')
+  await p.getByText('发布或同步不证明设备设置生效、合规或已卸载。', { exact: true }).waitFor()
+  run.checks.push('real-current-registration-ddm-window-and-effect-boundary')
 } catch (error) {
   failure = error
   const directory = mkdtempSync(join(tmpdir(), 'rss-react-devices-failure-'))

@@ -20,7 +20,7 @@ const binding = {
     mac: null,
     windows: { kind: 'rss_factor', accounts: ['local'] },
   },
-  device: 'pc',
+  device: '54a2df5e-528c-5a64-a3d8-be0e4859f63b',
   revision: 2,
   principal: id,
   instance: other,
@@ -40,16 +40,18 @@ function fixture(reply: unknown) {
   }
 }
 it('keeps desired, received, applied and missing effect separate in an original receipt', async () => {
-  expect(await fixture(binding).core.operation('pc', id)).toMatchObject({
+  expect(
+    await fixture(binding).core.operation('54a2df5e-528c-5a64-a3d8-be0e4859f63b', id),
+  ).toMatchObject({
     revision: 2,
     receivedRevision: 2,
     appliedRevision: 1,
     effect: null,
   })
-  await expect(fixture(binding).core.operation('pc', other)).rejects.toThrow(
-    'Wrong binding operation',
-  )
-  await expect(fixture(binding).core.binding('other', id)).rejects.toThrow('Wrong device')
+  await expect(
+    fixture(binding).core.operation('54a2df5e-528c-5a64-a3d8-be0e4859f63b', other),
+  ).rejects.toThrow('Wrong binding operation')
+  await expect(fixture(binding).core.binding(other, id)).rejects.toThrow('Wrong device')
 })
 it('validates enterprise composite identity rather than trusting display names or projected omissions', async () => {
   const value = {
@@ -91,7 +93,9 @@ it('sends the exact binding CAS and operation intent while preserving pending ap
         account: { kind: 'create' as const, platform: 'windows' as const, name: 'rss' },
       },
     }
-  expect(await f.core.changeBinding('pc', id, input)).toMatchObject({
+  expect(
+    await f.core.changeBinding('54a2df5e-528c-5a64-a3d8-be0e4859f63b', id, input),
+  ).toMatchObject({
     serverState: 'pending',
     appliedRevision: null,
     effect: null,
@@ -100,7 +104,7 @@ it('sends the exact binding CAS and operation intent while preserving pending ap
   expect(f.request.mock.calls[0]![0]).toMatchObject({
     method: 'PUT',
     path: '/api/v1/devices/{device}/device-access/bindings/{id}',
-    pathParams: { device: 'pc', id },
+    pathParams: { device: '54a2df5e-528c-5a64-a3d8-be0e4859f63b', id },
     body: input,
   })
 })

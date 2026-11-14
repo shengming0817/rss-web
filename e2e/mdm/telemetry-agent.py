@@ -48,6 +48,7 @@ def exercise(path, policy, version):
         values = {}
         for key, value in [('custom.browser.gauge', dict(kind='number', value=-12.5+i*4)),
                            ('custom.browser.counter', dict(kind='integer', value=1000+i*100)),
+                           ('custom.browser.integer', dict(kind='integer', value=[-9223372036854775808,9223372036854775807,9007199254740992,9007199254740993][i%4])),
                            ('custom.browser.state', dict(kind='string', value='running' if i<6 else 'stopped'))]:
             reading = dict(quality='valid', value=value, intervalStart=interval if key.endswith('counter') else None)
             if i in {4, 5}:

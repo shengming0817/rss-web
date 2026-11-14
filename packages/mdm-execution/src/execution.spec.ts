@@ -30,6 +30,13 @@ const detail: CommandDetail = {
 }
 function fixture(rows: readonly Execution[] = [item]) {
   const port: ExecutionPort = {
+    declarations: vi.fn(async () => ({
+      availability: 'current_registration' as const,
+      effect: 'unverified' as const,
+      compliance: 'unknown' as const,
+      items: [],
+      nextCursor: null,
+    })),
     create: vi.fn(async (input) => ({ operationId: input.operationId, revision: 1 })),
     cancel: vi.fn(async (_device, id) => ({ operationId: id, revision: 2 })),
     reauthorize: vi.fn(async (_device, id) => ({ operationId: id, revision: 2 })),

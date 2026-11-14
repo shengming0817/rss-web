@@ -31,25 +31,15 @@ export function nullable<V, T>(value: V, project: (v: Exclude<V, null>) => T): T
   return value === null ? null : project(value as Exclude<V, null>)
 }
 
-/** Current decimal wire only; ordinary f64 fields never pass through this projection. */
-export function wireInteger(value: unknown): number {
-  if (typeof value !== 'string' || !/^(?:0|-?[1-9][0-9]*)$/.test(value))
-    throw new Error('Invalid telemetry decimal')
-  const exact = BigInt(value)
-  if (exact < BigInt(Number.MIN_SAFE_INTEGER) || exact > BigInt(Number.MAX_SAFE_INTEGER))
-    throw new Error('Telemetry integer exceeds exact browser range')
-  return Number(exact)
+export { integerText as wireInteger, positiveText as wirePositive } from '@rss/mdm-telemetry'
+import { integerText } from '@rss/mdm-telemetry'
+export function wireCount(value: unknown): string {
+  return integerText(value, 'u64')
 }
-export function wireCount(value: unknown): number {
-  const n = wireInteger(value)
-  if (n < 0) throw new Error('Invalid telemetry count')
+/** Only endpoints whose formal carrier is a JSON number use this checked conversion. */
+export function wireNumber(value: string): number {
+  const n = Number(integerText(value))
+  if (!Number.isSafeInteger(n) || BigInt(n) !== BigInt(value))
+    throw new Error('Numeric endpoint cannot represent this coordinate')
   return n
-}
-export function wirePositive(value: unknown): number {
-  const n = wireCount(value)
-  if (n < 1) throw new Error('Invalid telemetry positive integer')
-  return n
-}
-export function decimal(value: number): string {
-  return String(integer(value))
 }

@@ -150,7 +150,7 @@ try {
   checks.push('real-cancellation-reuses-original-request-id-and-cas-after-unknown')
 
   run.step('mac-action-capability-before-pin-and-confirmation')
-  await run.nav(p, '/devices/endpoint/fixture-mac', '设备详情')
+  await run.nav(p, '/devices/endpoint/d8befebe-00eb-524f-a5c4-81613bb0a344', '设备详情')
   await run.choose(p, label('设备动作'), '锁定')
   await p.getByText('当前设备证据不足', { exact: false }).last().waitFor()
   assert.equal(await button('核对设备与动作').isDisabled(), true)
@@ -158,7 +158,10 @@ try {
   await run.choose(p, label('设备动作'), '擦除设备')
   assert.equal(await button('核对设备与动作').isDisabled(), true)
   assert.equal(await p.getByRole('dialog', { name: '确认设备动作', exact: true }).count(), 0)
-  assert.equal(run.count(p, 'POST', '/api/v1/devices/fixture-mac/operations'), 0)
+  assert.equal(
+    run.count(p, 'POST', '/api/v1/devices/d8befebe-00eb-524f-a5c4-81613bb0a344/operations'),
+    0,
+  )
   checks.push('real-macos-capability-unknown-blocked-before-pin-confirmation-and-post')
 
   run.step('script-policy-real-agent-lifecycle')

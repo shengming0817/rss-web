@@ -149,7 +149,7 @@ export function ScopeResults({
                               : row[key]
                                   .map(
                                     (item) =>
-                                      `${item.reference.kind}/${item.reference.id} @${item.version}`,
+                                      `${item.reference.kind}/${item.reference.kind === 'direct' ? `${item.reference.object.kind}/${item.reference.object.id}` : item.reference.id} @${item.version}`,
                                   )
                                   .join(' · ') || '—'}
                           </dd>

@@ -3,8 +3,8 @@ import { readListLocation, readSearchLocation, listLocation } from './list-locat
 it('round trips an accepted query and page history through detail navigation', () => {
   const query = {
     filter: "platform=='windows'",
-    sort: ['-key'],
-    fields: ['key', 'reference'],
+    sort: ['-reference.id'],
+    fields: ['reference', 'endpoints'],
     limit: 1,
     cursor: 'YWJj',
   }
