@@ -110,10 +110,8 @@ export function createPublicationsAdapter(transport: HttpTransport): Publication
         (value) => projectedPage(value, targetFields, query.fields, ['id']),
       ),
     list: (query) =>
-      api.getApiV1SoftwarePublications(
-        transport,
-        { query: queryParameters(query) },
-        (value) => projectedPage(value, fields, query.fields, ['id']),
+      api.getApiV1SoftwarePublications(transport, { query: queryParameters(query) }, (value) =>
+        projectedPage(value, fields, query.fields, ['id']),
       ),
     read: (id) =>
       api.getApiV1SoftwarePublicationsById(transport, { pathParams: { id } }, (value) =>

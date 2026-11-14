@@ -99,4 +99,4 @@ rm /tmp/rss-identity-web-dev.yaml
 
 Identity 使用 React + TypeScript + Ant Design。`@rss/core` 提供主题、语言、设计 token 与查询展示；各应用持有自己的展示和会话生命周期。构建提取亮暗两套外部 CSS，运行时使用 zeroRuntime 与独立样式缓存，弹层继承主题和语言；宿主保持 `script-src 'self'; style-src 'self'`。
 
-账户管理与主体选择器共用 Identity accounts 查询入口，支持 filter、sort、fields、limit、cursor（默认 50、最多 100）。账户资料查询显式选择 local 或指定 IdP，读取权限由宿主按列表、详情及被筛选／排序引用的资料字段分别裁定；仅持有列表权限不能推断无权读取的资料。姓名、邮箱使用同一来源的最新接受观察，最新观察失效时不回退旧值。旧 UUID 账户游标不再接受，游标失效需显式重查；会话目录保留自身合同。
+账户管理与主体选择器共用 Identity accounts 查询入口，支持 filter、sort、fields、limit、cursor（前端默认 100、最多 1000；接口上限更小时取其上限）。账户资料查询显式选择 local 或指定 IdP，读取权限由宿主按列表、详情及被筛选／排序引用的资料字段分别裁定；仅持有列表权限不能推断无权读取的资料。姓名、邮箱使用同一来源的最新接受观察，最新观察失效时不回退旧值。旧 UUID 账户游标不再接受，游标失效需显式重查；会话目录保留自身合同。

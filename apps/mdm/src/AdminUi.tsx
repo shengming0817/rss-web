@@ -107,44 +107,51 @@ export function Failure({
     kind === 'read' && readTitle
       ? readTitle
       : code === 'profile_receipt_capacity_reached'
-        ? l('资料操作回执已达部署容量，请联系管理员调整额度。原操作仍可查询。',
-            'Profile operation receipt capacity reached. Contact an administrator to adjust the quota. Existing operations remain queryable.')
-        : code === 'provider_limit_reached'
-          ? l('身份提供方已达部署容量，请联系管理员调整额度。',
-              'Provider capacity reached. Contact an administrator to adjust the quota.')
-      : ['revision_conflict', 'operation_conflict', 'conflict', 'configuration_changed'].includes(
-            code,
-          )
         ? l(
-            '内容已变化，请重新读取详情后编辑。',
-            'Content changed. Read the detail again before editing.',
+            '资料操作回执已达部署容量，请联系管理员调整额度。原操作仍可查询。',
+            'Profile operation receipt capacity reached. Contact an administrator to adjust the quota. Existing operations remain queryable.',
           )
-        : ['forbidden', 'permission_denied', 'insufficient_privilege'].includes(code)
-          ? l('当前账户没有此操作权限。', 'Your account cannot perform this operation.')
-          : ['reauthentication_required', 'interaction_required'].includes(code)
+        : code === 'provider_limit_reached'
+          ? l(
+              '身份提供方已达部署容量，请联系管理员调整额度。',
+              'Provider capacity reached. Contact an administrator to adjust the quota.',
+            )
+          : [
+                'revision_conflict',
+                'operation_conflict',
+                'conflict',
+                'configuration_changed',
+              ].includes(code)
             ? l(
-                '请先到安全设置完成重新认证，再显式提交原操作。',
-                'Reauthenticate in Security, then explicitly submit the original operation.',
+                '内容已变化，请重新读取详情后编辑。',
+                'Content changed. Read the detail again before editing.',
               )
-            : code === 'connection_deployment_unobserved'
-              ? l(
-                  '尚无所需网关部署观察。请核对连接配置中的部署状态后，再显式提交原操作。',
-                  'Required gateway deployment has not been observed. Verify deployment state in Connections, then explicitly submit the original action.',
-                )
-              : kind === 'read'
+            : ['forbidden', 'permission_denied', 'insufficient_privilege'].includes(code)
+              ? l('当前账户没有此操作权限。', 'Your account cannot perform this operation.')
+              : ['reauthentication_required', 'interaction_required'].includes(code)
                 ? l(
-                    '无法读取当前数据，请检查查询或连接后重新读取。',
-                    'Cannot read current data. Check the query or connection and read again.',
+                    '请先到安全设置完成重新认证，再显式提交原操作。',
+                    'Reauthenticate in Security, then explicitly submit the original operation.',
                   )
-                : isUnknown(error)
+                : code === 'connection_deployment_unobserved'
                   ? l(
-                      '结果未确认。请查询原操作；没有查询端点时，仅显式重提原请求。',
-                      'Outcome unconfirmed. Read the original operation, or explicitly resubmit the original request where no query exists.',
+                      '尚无所需网关部署观察。请核对连接配置中的部署状态后，再显式提交原操作。',
+                      'Required gateway deployment has not been observed. Verify deployment state in Connections, then explicitly submit the original action.',
                     )
-                  : l(
-                      '请求未完成，请检查输入、权限或当前状态。',
-                      'Request was not completed. Check the input, permissions or current state.',
-                    )
+                  : kind === 'read'
+                    ? l(
+                        '无法读取当前数据，请检查查询或连接后重新读取。',
+                        'Cannot read current data. Check the query or connection and read again.',
+                      )
+                    : isUnknown(error)
+                      ? l(
+                          '结果未确认。请查询原操作；没有查询端点时，仅显式重提原请求。',
+                          'Outcome unconfirmed. Read the original operation, or explicitly resubmit the original request where no query exists.',
+                        )
+                      : l(
+                          '请求未完成，请检查输入、权限或当前状态。',
+                          'Request was not completed. Check the input, permissions or current state.',
+                        )
   let requestId: string | undefined
   if (
     error instanceof Error &&

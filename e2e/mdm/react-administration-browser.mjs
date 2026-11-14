@@ -184,7 +184,7 @@ try {
     employeeNumber: 'LOCAL-REACT',
     remote: false,
     allocation: 0,
-    vendorFuture: { retained: true },
+    vendorFuture: { retained: true, values: Array.from({ length: 1024 }, (_, i) => i) },
     private_Key: 'ordinary label',
   }
   await admin.getByLabel('完整扩展 JSON', { exact: true }).fill(JSON.stringify(extensions))

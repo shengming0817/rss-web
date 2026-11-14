@@ -35,10 +35,8 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       audit: ready,
     },
     computers: (query, signal) =>
-      api.getApiV1DeviceViews(
-        transport,
-        { query: queryParameters(query), signal },
-        (value) => computerDirectory(value, query),
+      api.getApiV1DeviceViews(transport, { query: queryParameters(query), signal }, (value) =>
+        computerDirectory(value, query),
       ),
     viewComputers: (reference, signal) =>
       api.getApiV1DeviceViewsByKindById(transport, { pathParams: reference, signal }, (value) => {
@@ -232,7 +230,11 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       return device
         ? api.getApiV1DevicesByDeviceTimeline(
             transport,
-            { pathParams: { device }, query: { limit: 100, ...(cursor ? { cursor } : {}) }, signal },
+            {
+              pathParams: { device },
+              query: { limit: 100, ...(cursor ? { cursor } : {}) },
+              signal,
+            },
             project,
           )
         : api.getApiV1AuditEvents(

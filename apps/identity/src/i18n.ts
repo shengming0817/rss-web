@@ -131,7 +131,8 @@ const zh = {
     operation_conflict: '操作 ID 与原始输入不一致，请查询原操作。',
     invalid_request: '资料输入无效，请检查格式和范围。',
     profile_receipt_missing: '尚未找到原操作回执，请稍后再次查询。',
-    profile_receipt_capacity_reached: '资料操作回执已达部署容量，请联系管理员调整额度。原操作仍可查询。',
+    profile_receipt_capacity_reached:
+      '资料操作回执已达部署容量，请联系管理员调整额度。原操作仍可查询。',
     unknown_result: '操作结果尚未确认，请重新读取状态。请勿重复提交写入。',
     malformed_request: '请求无效，请检查输入。',
     invalid_credential: '登录失败或会话已失效。',
@@ -290,7 +291,8 @@ const en = {
       'This operation ID belongs to different input. Look up the original operation.',
     invalid_request: 'Invalid profile input. Check the format and limits.',
     profile_receipt_missing: 'The original receipt is not available yet. Query it again later.',
-    profile_receipt_capacity_reached: 'Profile operation receipt capacity reached. Contact an administrator to adjust the quota. Existing operations remain queryable.',
+    profile_receipt_capacity_reached:
+      'Profile operation receipt capacity reached. Contact an administrator to adjust the quota. Existing operations remain queryable.',
     unknown_result:
       'The outcome is unconfirmed. Read the current state before taking further action; do not repeat the write.',
     malformed_request: 'Invalid request. Check the input.',
@@ -300,7 +302,8 @@ const en = {
     reauthentication_required:
       'Reauthenticate on the sessions page, then submit the operation again.',
     insufficient_privilege: 'You do not have permission to perform this operation.',
-    provider_limit_reached: 'Provider capacity reached. Contact an administrator to adjust the quota.',
+    provider_limit_reached:
+      'Provider capacity reached. Contact an administrator to adjust the quota.',
     account_already_exists: 'This login already exists. Choose another name.',
     configuration_changed: 'The configuration changed. Reload before editing again.',
     identity_link_conflict: 'Identity link conflict. Contact your administrator.',

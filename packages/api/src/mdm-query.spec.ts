@@ -10,10 +10,20 @@ const identifier = (value: unknown) => {
 }
 const nullable = <T>(value: unknown, decode: (value: unknown) => T) =>
   value === null ? null : decode(value)
-import { allOf, comparison, pageCursor, projectedPage, queryParameters } from './mdm-query'
+import {
+  allOf,
+  comparison,
+  windowParameters,
+  pageCursor,
+  projectedPage,
+  queryParameters,
+} from './mdm-query'
 
 describe('current directory protocol', () => {
   it('encodes literal filters and current continuation parameters without losing false or zero', () => {
+    expect(queryParameters()).toEqual({ limit: 100 })
+    expect(queryParameters({ limit: 1000 })).toEqual({ limit: 1000 })
+    expect(windowParameters({}, 64)).toEqual({ limit: 64 })
     expect(comparison('name', '=icontains=', "a';(x)\\")).toBe("name=icontains='a\\';(x)\\\\'")
     expect(
       queryParameters({
@@ -36,6 +46,7 @@ describe('current directory protocol', () => {
       { fields: [] },
       { fields: ['id', 'id'] },
       { limit: 0 },
+      { limit: 1001 },
       { sort: [] },
       { filter: '' },
     ])

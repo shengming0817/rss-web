@@ -213,13 +213,16 @@ export function accounts<F extends keyof AccountRow = keyof Account>(
 ): { items: Pick<AccountRow, F>[]; nextCursor: string | null } {
   const v = object(value, ['accounts', 'nextCursor']),
     projected = selected ?? baseFields
-  const items = list(v['accounts'], (value) => {
-    const row = object(value, projected)
-    return Object.fromEntries(projected.map((field) => [field, fields[field](row[field])])) as Pick<
-      AccountRow,
-      F
-    >
-  }, 1000)
+  const items = list(
+    v['accounts'],
+    (value) => {
+      const row = object(value, projected)
+      return Object.fromEntries(
+        projected.map((field) => [field, fields[field](row[field])]),
+      ) as Pick<AccountRow, F>
+    },
+    1000,
+  )
   if (projected.includes('principalId' as never)) {
     const ids = items.map((item) => Reflect.get(item, 'principalId'))
     if (new Set(ids).size !== ids.length) throw new Error('Duplicate account')

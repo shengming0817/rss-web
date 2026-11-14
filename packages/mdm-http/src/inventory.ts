@@ -134,24 +134,20 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
   return {
     fields: (query = {}) => {
       if (query.fields && !query.fields.includes('key')) throw new Error('Field identity required')
-      return api.getApiV1AssetFields(
-        transport,
-        { query: queryParameters(query) },
-        (value) => {
-          if (value.tenantId !== tenant || value.asset.kind !== 'field_list')
-            throw new Error('Wrong field directory binding')
-          const result = value.asset
-          return {
-            dictionary: result.dictionary,
-            ...projectedPage(
-              { items: result.items, nextCursor: result.nextCursor },
-              fieldFields,
-              query.fields,
-              ['key'],
-            ),
-          }
-        },
-      )
+      return api.getApiV1AssetFields(transport, { query: queryParameters(query) }, (value) => {
+        if (value.tenantId !== tenant || value.asset.kind !== 'field_list')
+          throw new Error('Wrong field directory binding')
+        const result = value.asset
+        return {
+          dictionary: result.dictionary,
+          ...projectedPage(
+            { items: result.items, nextCursor: result.nextCursor },
+            fieldFields,
+            query.fields,
+            ['key'],
+          ),
+        }
+      })
     },
     field: (field) =>
       api.getApiV1AssetFieldsByField(transport, { pathParams: { field } }, (value) => {
@@ -296,21 +292,17 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
     savedQueries: (query = {}) => {
       if (query.fields && !query.fields.includes('id'))
         throw new Error('Saved query identity required')
-      return api.getApiV1SavedQueries(
-        transport,
-        { query: queryParameters(query) },
-        (value) => {
-          if (value.tenantId !== tenant || value.asset.kind !== 'saved_list')
-            throw new Error('Wrong saved query directory binding')
-          const result = value.asset
-          return projectedPage(
-            { items: result.items, nextCursor: result.nextCursor },
-            savedFields,
-            query.fields,
-            ['id'],
-          ) as { items: SavedQueryRow[]; nextCursor: string | null }
-        },
-      )
+      return api.getApiV1SavedQueries(transport, { query: queryParameters(query) }, (value) => {
+        if (value.tenantId !== tenant || value.asset.kind !== 'saved_list')
+          throw new Error('Wrong saved query directory binding')
+        const result = value.asset
+        return projectedPage(
+          { items: result.items, nextCursor: result.nextCursor },
+          savedFields,
+          query.fields,
+          ['id'],
+        ) as { items: SavedQueryRow[]; nextCursor: string | null }
+      })
     },
     savedQuery: (id) =>
       api.getApiV1SavedQueriesById(transport, { pathParams: { id: uuid(id) } }, (value) =>

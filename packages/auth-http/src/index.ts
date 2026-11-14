@@ -103,10 +103,14 @@ export function createAuthPort(transport: HttpTransport): AuthPort {
     security: (tenant) => read(tenant, 'session/security', sessionSecurity),
     providers: (tenant) =>
       read(tenant, 'login-options', (value) =>
-        list(object(value, ['providers'])['providers'], (value) => {
-          const p = object(value, ['providerId', 'label'])
-          return { id: uuid(p['providerId']), label: text(p['label'], 4096) }
-        }, 1024),
+        list(
+          object(value, ['providers'])['providers'],
+          (value) => {
+            const p = object(value, ['providerId', 'label'])
+            return { id: uuid(p['providerId']), label: text(p['label'], 4096) }
+          },
+          1024,
+        ),
       ),
     beginSso: (tenant, provider, csrf) =>
       write(tenant, `oidc/${uuid(provider)}/login`, csrf, { returnTarget: 'resume' }, (value) =>

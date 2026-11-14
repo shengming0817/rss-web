@@ -1,5 +1,7 @@
 # RSS Web
 
+
+Identity、MDM 与 Device Access 的普通分页默认每页 100，前端最多每页 1000；接口上限更小时取其上限。显式选择的合法页大小在翻页时保持，固定数量查询和采样窗口沿用各自语义。
 本仓拥有三个独立应用：React + Ant Design MDM（`apps/mdm`）、React + Ant Design Identity（`apps/identity`）和独立 Device Access（`apps/device-access`）。各应用独立装配会话；`@rss/api` 是唯一 HTTP executor。
 
 MDM 的宿主、部署、回退和验收入口见 [MDM 与 Identity 独立前端](docs/architecture/20260926-2544-mdm-web.md)。Identity 接入见[宿主认证 UI](docs/architecture/20260917-2368-embedded-identity.md)；独立 DA 见 [DA 接入与开发](apps/device-access/README.md)。

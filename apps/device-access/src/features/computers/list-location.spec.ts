@@ -1,6 +1,7 @@
 import { it, expect } from 'vitest'
 import { readListLocation, readSearchLocation, listLocation } from './list-location'
 it('round trips an accepted query and page history through detail navigation', () => {
+  expect(readSearchLocation('').query.limit).toBe(100)
   const query = {
     filter: "platform=='windows'",
     sort: ['-reference.id'],

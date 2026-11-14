@@ -162,10 +162,8 @@ export function createAuthorizationAdapter(
     rules: (query = {}) =>
       (realm === 'management'
         ? api.getApiV1TenantAdministrationAuthorizationRules
-        : api.getApiV1AuthorizationRules)(
-        transport,
-        { query: queryParameters(query) },
-        (v) => projectedPage(v, rules, query.fields, ['id']),
+        : api.getApiV1AuthorizationRules)(transport, { query: queryParameters(query) }, (v) =>
+        projectedPage(v, rules, query.fields, ['id']),
       ),
     rule: (id) =>
       (realm === 'management'
@@ -248,10 +246,8 @@ export function createAuthorizationAdapter(
     },
     keys: (query = {}) => {
       tenantOnly()
-      return api.getApiV1ApiKeys(
-        transport,
-        { query: queryParameters(query) },
-        (v) => projectedPage(v, keys, query.fields, ['id']),
+      return api.getApiV1ApiKeys(transport, { query: queryParameters(query) }, (v) =>
+        projectedPage(v, keys, query.fields, ['id']),
       )
     },
     key: (id) => {

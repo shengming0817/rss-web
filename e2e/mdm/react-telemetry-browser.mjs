@@ -53,7 +53,15 @@ try {
     ['gauge', 'gauge', { kind: 'number' }, 'degree'],
     ['integer', 'gauge', { kind: 'integer' }, 'unit'],
     ['counter', 'cumulative_counter', { kind: 'integer' }, 'byte'],
-    ['state', 'state', { kind: 'enum', values: ['running', 'stopped'] }, 'state'],
+    [
+      'state',
+      'state',
+      {
+        kind: 'enum',
+        values: ['running', 'stopped', ...Array.from({ length: 255 }, (_, i) => `state${i}`)],
+      },
+      'state',
+    ],
   ]) {
     run.step('formal-field-' + name)
     const definition = {

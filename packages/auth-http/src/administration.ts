@@ -121,7 +121,9 @@ export function createIdentityAdministrationAdapter(
       ),
     providers: () => {
       enabled()
-      return call('GET', 'providers', (v) => list(object(v, ['providers'])['providers'], provider, 1024))
+      return call('GET', 'providers', (v) =>
+        list(object(v, ['providers'])['providers'], provider, 1024),
+      )
     },
     createProvider: (settings, clientSecret, caPem) => {
       enabled()

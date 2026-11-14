@@ -114,10 +114,14 @@ export function sessionSecurity(value: unknown): SessionSecurity {
     3,
   )
   if (methods.some((v, i) => i > 0 && methods[i - 1]! >= v)) throw new Error('Invalid methods')
-  const providers = list(v['eligibleStepUpProviders'], (v) => {
-    const p = object(v, ['providerId', 'label'])
-    return { id: uuid(p['providerId']), label: text(p['label'], 4096) }
-  }, 1024)
+  const providers = list(
+    v['eligibleStepUpProviders'],
+    (v) => {
+      const p = object(v, ['providerId', 'label'])
+      return { id: uuid(p['providerId']), label: text(p['label'], 4096) }
+    },
+    1024,
+  )
   if (providers.some((v, i) => i > 0 && providers[i - 1]!.id >= v.id))
     throw new Error('Invalid providers')
   return {

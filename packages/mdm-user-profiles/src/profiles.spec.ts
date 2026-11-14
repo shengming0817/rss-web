@@ -110,6 +110,14 @@ it('accepts RFC6901 root and escapes while rejecting reserved keys, malformed es
     expect(() => validateDefinition({ ...value, pointer })).toThrow()
   expect(() => validateDefinition({ ...value, key: 'sessionId' })).toThrow()
   expect(() => validateDefinition({ ...value, maxItems: 1 })).toThrow()
+  for (const valueType of ['array', 'object'] as const) {
+    expect(() =>
+      validateDefinition({ ...value, valueType, maxLength: null, maxItems: 1024 }),
+    ).not.toThrow()
+    expect(() =>
+      validateDefinition({ ...value, valueType, maxLength: null, maxItems: 1025 }),
+    ).toThrow()
+  }
   expect(() =>
     validateDefinition({ ...value, valueType: 'integer', maxLength: null, minimum: 0.5 }),
   ).not.toThrow()
