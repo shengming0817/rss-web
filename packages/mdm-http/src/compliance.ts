@@ -139,7 +139,7 @@ export function createComplianceAdapter(transport: HttpTransport): CompliancePor
         throw new Error('Directory identity required')
       return api.getApiV1ComplianceRules(
         transport,
-        { query: queryParameters(query) },
+        { query: queryParameters({ ...query, limit: query.limit ?? 50 }) },
         (value) =>
           projectedPage(value, directoryFields, query.fields, ['id']) as {
             items: RuleRow[]

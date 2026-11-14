@@ -31,6 +31,7 @@ import { Devices } from './Devices'
 import { DeviceDetail } from './DeviceDetail'
 import { MappingUpload, type MappingUseCases } from './MappingUpload'
 import { CollectionMappings } from './CollectionMappings'
+import { Compliance } from './Compliance'
 
 const id = '11111111-1111-4111-8111-111111111111',
   nested = '22222222-2222-4222-8222-222222222222'
@@ -69,6 +70,29 @@ function inject<T>(methods: Partial<T>): T {
     },
   }) as T
 }
+it('uses the smaller compliance page default when restoring a filter-only URL', async () => {
+  const list = vi.fn().mockResolvedValue({ items: [], nextCursor: null })
+  const runtime = {
+    administration: () => ({
+      binding: 'tenant/principal/session',
+      compliance: { list },
+      groups: {},
+      authorization: {
+        effective: async () => ({
+          grants: [{ operation: 'compliance_rule_read', scope: { kind: 'tenant' } }],
+        }),
+      },
+    }),
+  } as unknown as Runtime
+  await render(
+    createElement(
+      MemoryRouter,
+      { initialEntries: ['/compliance?compliance.filter=enabled==true'] },
+      createElement(Compliance, { runtime, locale: 'zh' }),
+    ),
+  )
+  expect(list).toHaveBeenCalledWith(expect.objectContaining({ limit: 50, filter: 'enabled==true' }))
+})
 async function render(node: ReactNode) {
   await act(async () => {
     root.render(

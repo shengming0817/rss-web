@@ -307,7 +307,7 @@ function Relationships({ runtime, locale }: { runtime: Runtime; locale: Locale }
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
     [query, setQuery] = useState<Query>({ limit: 100 }),
-    [historyQuery, setHistoryQuery] = useState<Query>({ limit: 100 }),
+    [historyQuery, setHistoryQuery] = useState<Query>({}),
     [selected, setSelected] = useState<string>(),
     read = useRead(
       `${binding}/associations/${JSON.stringify(query)}`,

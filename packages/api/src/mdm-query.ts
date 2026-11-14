@@ -150,7 +150,7 @@ export type WindowQuery = Pick<DirectoryQuery, 'limit' | 'cursor'>
 export function windowParameters(query: WindowQuery = {}, maximum = 200) {
   closed(query, [], ['limit', 'cursor'])
   if (query.limit !== undefined && query.limit > maximum) throw new Error('Invalid page size')
-  return queryParameters({ limit: Math.min(100, maximum), ...query })
+  return queryParameters({ ...query, limit: query.limit ?? Math.min(100, maximum) })
 }
 export function windowPage<V, T>(
   value: { items: readonly V[]; nextCursor: string | null },

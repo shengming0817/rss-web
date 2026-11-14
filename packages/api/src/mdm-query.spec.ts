@@ -24,6 +24,7 @@ describe('current directory protocol', () => {
     expect(queryParameters()).toEqual({ limit: 100 })
     expect(queryParameters({ limit: 1000 })).toEqual({ limit: 1000 })
     expect(windowParameters({}, 64)).toEqual({ limit: 64 })
+    expect(windowParameters({ limit: undefined }, 64)).toEqual({ limit: 64 })
     expect(comparison('name', '=icontains=', "a';(x)\\")).toBe("name=icontains='a\\';(x)\\\\'")
     expect(
       queryParameters({
