@@ -1,5 +1,10 @@
 import { expect, it } from 'vitest'
-import { profileExtensions, validateLocalProfile, validateNewPassword } from './administration'
+import {
+  profileExtensions,
+  validateLocalProfile,
+  validateNewPassword,
+  validateLogin,
+} from './administration'
 it('preserves unknown extension keys, including prototype-like names, without prototype mutation', () => {
   const input = JSON.parse(
     '{"__proto__":{"futureKey":0},"vendor":{"enabled":false,"empty":"","optional":null},"constructor":"business"}',
@@ -12,11 +17,13 @@ it('counts root object as depth one and enforces aggregate members, arrays and U
   const nested = (depth: number): unknown => (depth === 1 ? {} : { child: nested(depth - 1) })
   expect(() => profileExtensions(nested(8))).not.toThrow()
   expect(() => profileExtensions(nested(9))).toThrow()
-  expect(() => profileExtensions({ array: Array(128).fill(false) })).not.toThrow()
-  expect(() => profileExtensions({ array: Array(129).fill(false) })).toThrow()
+  expect(() => profileExtensions({ array: Array(1024).fill(false) })).not.toThrow()
+  expect(() => profileExtensions({ array: Array(1025).fill(false) })).toThrow()
   expect(() =>
-    profileExtensions(Object.fromEntries(Array.from({ length: 257 }, (_, i) => [`k${i}`, 0]))),
+    profileExtensions(Object.fromEntries(Array.from({ length: 1025 }, (_, i) => [`k${i}`, 0]))),
   ).toThrow()
+  const members = Object.fromEntries(Array.from({ length: 1024 }, (_, i) => [`k${i}`, false]))
+  expect(profileExtensions(members)).toEqual(members)
   expect(() => profileExtensions({ value: '字'.repeat(22000) })).toThrow()
 })
 it('rejects nested normalized secret keys, control keys, nonfinite/unsafe values and NUL strings', () => {
@@ -49,5 +56,8 @@ it('validates local profile source budgets and password character/byte limits', 
   expect(() => validateLocalProfile({ ...value, displayName: '字'.repeat(171) })).toThrow()
   expect(() => validateNewPassword('字'.repeat(15))).not.toThrow()
   expect(() => validateNewPassword('short')).toThrow()
+  expect(() => validateLogin('a'.repeat(255))).not.toThrow()
+  for (const login of ['a'.repeat(256), ' admin', 'admin ', '用户'])
+    expect(() => validateLogin(login)).toThrow()
   expect(() => validateNewPassword('字'.repeat(342))).toThrow()
 })

@@ -101,22 +101,15 @@ function policyRun(item: api.getApiV1PoliciesByIdRunsContract.Output['items'][nu
 export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
   return {
     list: (query = {}, signal) =>
-      api.getApiV1Policies(
-        transport,
-        { signal, query: queryParameters({ limit: 20, ...query }) },
-        (value) => {
-          if (query.fields && !query.fields.includes('id'))
-            throw new Error('Policy identity required')
-          const page = projectedPage(value, fields, query.fields, ['id'])
-          for (const row of page.items)
-            if (
-              row.toolName !== undefined &&
-              row.toolName !== `policy_${row.id.replaceAll('-', '')}`
-            )
-              throw new Error('Wrong policy tool identity')
-          return page
-        },
-      ),
+      api.getApiV1Policies(transport, { signal, query: queryParameters(query) }, (value) => {
+        if (query.fields && !query.fields.includes('id'))
+          throw new Error('Policy identity required')
+        const page = projectedPage(value, fields, query.fields, ['id'])
+        for (const row of page.items)
+          if (row.toolName !== undefined && row.toolName !== `policy_${row.id.replaceAll('-', '')}`)
+            throw new Error('Wrong policy tool identity')
+        return page
+      }),
     read: (id, signal) =>
       api.getApiV1PoliciesByPolicy(
         transport,

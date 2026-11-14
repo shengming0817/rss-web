@@ -54,7 +54,7 @@ function query(value: Query, identity: string, maximum = 1000) {
     (value.limit !== undefined && value.limit > maximum)
   )
     throw new Error('Invalid Apple directory query')
-  return queryParameters({ limit: 20, ...value })
+  return queryParameters(value)
 }
 /** Apple organization control plane; protocol callback and external qualification stay with their owners. */
 export function createAppleEnrollmentAdapter(transport: HttpTransport): AppleEnrollmentPort {

@@ -107,7 +107,7 @@ function RuleDirectory({
   const l = labels(locale),
     action = useAction(),
     guard = useSelectionGuard(),
-    [query, setQuery] = useDirectoryQuery('compliance.'),
+    [query, setQuery] = useDirectoryQuery('compliance.', { limit: 50 }),
     read = useRead(`compliance-rule-directory/${JSON.stringify(query)}`, () =>
       compliance.list(directoryQuery(query, fields)),
     ),

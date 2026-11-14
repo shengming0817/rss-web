@@ -258,6 +258,9 @@ it('round trips query state while preserving other directory and selection coord
     }
   const next = writeCatalogQuery(params, query, 'groups.')
   expect(catalogQuery(next, 'groups.')).toEqual(query)
+  expect(
+    catalogQuery(new URLSearchParams('compliance.filter=enabled==true'), 'compliance.', 50),
+  ).toEqual({ filter: 'enabled==true', limit: 50 })
   expect(next.get('groups.cursor')).toBeNull()
   expect(next.get('devices.cursor')).toBe('kept')
   expect(next.get('policy')).toBe('one')

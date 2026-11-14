@@ -23,7 +23,7 @@ export function useDirectory<T>(
     filter: initial?.query.filter ?? '',
     sort: initial?.query.sort?.join(',') ?? '',
     fields: [...(initial?.query.fields ?? columns)],
-    limit: initial?.query.limit ?? 50,
+    limit: initial?.query.limit ?? Math.min(100, maximum),
   })
   const [accepted, setAccepted] = useState<DirectoryLocation | undefined>()
   const attempt = useRef<DirectoryLocation | undefined>(initial),
@@ -122,7 +122,7 @@ export function useDirectory<T>(
         filter: location.query.filter ?? '',
         sort: location.query.sort?.join(',') ?? '',
         fields: [...(location.query.fields ?? columns)],
-        limit: location.query.limit ?? 50,
+        limit: location.query.limit ?? Math.min(100, maximum),
       })
       return reader.reload()
     },

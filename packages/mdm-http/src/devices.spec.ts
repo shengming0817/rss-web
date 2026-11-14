@@ -43,7 +43,7 @@ it('uses the relationship directory and keeps empty candidate windows continuabl
   expect(f.request).toHaveBeenLastCalledWith(
     expect.objectContaining({
       path: '/api/v1/device-associations',
-      query: { fields: 'id,version', limit: 20 },
+      query: { fields: 'id,version', limit: 100 },
     }),
   )
   expect(

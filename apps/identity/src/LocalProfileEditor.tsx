@@ -109,7 +109,12 @@ export function LocalProfileEditor({ principal }: { principal: string }) {
           setRevision(null)
           clearDraft()
         }
-        if (isRssApiError(failure) && failure.cause === 'wire' && failure.status === 409)
+        if (
+          isRssApiError(failure) &&
+          failure.cause === 'wire' &&
+          failure.status === 409 &&
+          failure.code !== 'profile_receipt_capacity_reached'
+        )
           setPending({ id: change.operationId, state: 'conflict' })
         else if (
           isRssApiError(failure) &&

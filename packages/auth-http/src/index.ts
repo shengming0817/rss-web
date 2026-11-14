@@ -103,10 +103,14 @@ export function createAuthPort(transport: HttpTransport): AuthPort {
     security: (tenant) => read(tenant, 'session/security', sessionSecurity),
     providers: (tenant) =>
       read(tenant, 'login-options', (value) =>
-        list(object(value, ['providers'])['providers'], (value) => {
-          const p = object(value, ['providerId', 'label'])
-          return { id: uuid(p['providerId']), label: text(p['label'], 4096) }
-        }),
+        list(
+          object(value, ['providers'])['providers'],
+          (value) => {
+            const p = object(value, ['providerId', 'label'])
+            return { id: uuid(p['providerId']), label: text(p['label'], 4096) }
+          },
+          1024,
+        ),
       ),
     beginSso: (tenant, provider, csrf) =>
       write(tenant, `oidc/${uuid(provider)}/login`, csrf, { returnTarget: 'resume' }, (value) =>
@@ -128,8 +132,8 @@ export function createAuthPort(transport: HttpTransport): AuthPort {
         { returnTarget: 'resume', password },
         (value) => redirect(value, 'authorizationUrl'),
       ),
-    sessions: (tenant, cursor, limit = 50) => {
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    sessions: (tenant, cursor, limit = 100) => {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
         throw new Error('Invalid session page size')
       return transport.request({
         method: 'GET',
@@ -140,7 +144,7 @@ export function createAuthPort(transport: HttpTransport): AuthPort {
         decode(value) {
           const v = object(value, ['sessions', 'nextCursor'])
           return {
-            sessions: list(v['sessions'], session),
+            sessions: list(v['sessions'], session, 1000),
             next: v['nextCursor'] === null ? null : uuid(v['nextCursor']),
           }
         },

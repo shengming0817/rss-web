@@ -18,7 +18,7 @@ function GroupImpacts({
   id: string
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<ImpactQuery>({ limit: 20 }),
+    [query, setQuery] = useState<ImpactQuery>({ limit: 100 }),
     read = useRead(`group-references/${id}/${JSON.stringify(query)}`, () =>
       groups.impacts(id, query),
     )
@@ -124,7 +124,7 @@ export function GroupReferences({
   onDeletionChange: (blocked: boolean | null) => void
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = useRead(`group-blockers/${id}/${JSON.stringify(query)}`, () =>
       groups.references(id, query),
     )

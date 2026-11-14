@@ -366,7 +366,7 @@ function RuleEditor({
 function Rules({ runtime, locale, instance }: Props & { instance: string }) {
   const l = labels(locale),
     { authorization, binding } = useAdministration(runtime)
-  const [query, setQuery] = useState<Query>({ limit: 20 }),
+  const [query, setQuery] = useState<Query>({ limit: 100 }),
     [selected, setSelected] = useState<string | null>(null)
   const [create, setCreate] = useState<Revision<Rule> | null>(null),
     [deleting, setDeleting] = useState<Revision<Rule> | null>(null)
@@ -549,7 +549,7 @@ function GroupEditor({
     action = useAction()
   const [pending, setPending] = useState<Change<UserGroup> | null>(null),
     [invalid, setInvalid] = useState(false)
-  const [memberQuery, setMemberQuery] = useState<Query>({ limit: 20 })
+  const [memberQuery, setMemberQuery] = useState<Query>({ limit: 100 })
   const memberFields = ['principalId', 'instanceId', 'tenantId'] as const
   const members = useRead(
     `${detail.id}/${detail.revision}/members/${JSON.stringify(memberQuery)}`,

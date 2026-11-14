@@ -182,7 +182,7 @@ function ListContents({
   refresh: () => void
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 50 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = useRead(
       `inventory-list/${JSON.stringify(initial)}/${JSON.stringify(query)}`,
       (signal) =>
@@ -190,7 +190,7 @@ function ListContents({
           {
             ...initial,
             cursor: query.cursor ?? initial.cursor,
-            limit: query.limit ?? 50,
+            limit: query.limit ?? 100,
           },
           signal,
         ),
@@ -204,7 +204,7 @@ function ListContents({
       <Form.Item label={l('集合每页条目', 'Collection page size')}>
         <InputNumber
           aria-label={l('集合每页条目', 'Collection page size')}
-          value={query.limit ?? 50}
+          value={query.limit ?? 100}
           min={1}
           max={1000}
           precision={0}
@@ -440,7 +440,7 @@ export function AssetFacts({
       { retryReadConflict: true },
     ),
     [namespace, setNamespace] = useState<CollectionScope>({ kind: 'device' }),
-    [scopeQuery, setScopeQuery] = useState<Query>({ limit: 20 }),
+    [scopeQuery, setScopeQuery] = useState<Query>({ limit: 100 }),
     scopes = useRead(`asset-scopes/${endpoint}/${JSON.stringify(scopeQuery)}`, () =>
       inventory.scopes(endpoint, scopeQuery),
     ),

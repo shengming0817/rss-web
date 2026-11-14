@@ -46,7 +46,7 @@ export function FieldReferences({
   locale: Locale
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = useRead(`field-references/${field}/${JSON.stringify(query)}`, () =>
       inventory.references(field, query),
     )
@@ -119,7 +119,7 @@ export function FieldCatalog({
   const l = labels(locale),
     action = useAction(),
     guard = useSelectionGuard(),
-    [query, setQuery] = useState<Query>({ fields: defaultColumns, limit: 20 }),
+    [query, setQuery] = useState<Query>({ fields: defaultColumns, limit: 100 }),
     [key, setKey] = useState('custom.'),
     [detail, setDetail] = useState<FieldDetail | null>(null),
     [editor, setEditor] = useState(0),

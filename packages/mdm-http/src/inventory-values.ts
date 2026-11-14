@@ -248,7 +248,7 @@ export function summary(value: unknown) {
 }
 export function windowQuery(
   query: { readonly cursor?: string | undefined; readonly limit?: number | undefined } = {},
-  limit = 50,
+  limit = 100,
 ) {
   return {
     ...(query.cursor === undefined ? {} : { cursor: text(query.cursor) }),

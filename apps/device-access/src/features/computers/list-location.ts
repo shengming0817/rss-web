@@ -18,7 +18,7 @@ export function readListLocation(values: Record<string, unknown>): DirectoryLoca
       filter: text('filter'),
       sort: text('sort')?.split(','),
       fields: text('fields')?.split(','),
-      limit: text('limit') === undefined ? 50 : Number(text('limit')),
+      limit: text('limit') === undefined ? 100 : Number(text('limit')),
       cursor: text('cursor'),
     }
     queryParameters(query)

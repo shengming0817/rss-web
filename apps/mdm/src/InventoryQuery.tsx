@@ -131,7 +131,7 @@ function FixedFacets({
 }) {
   const l = labels(locale),
     [facet, setFacet] = useState<'os_versions' | 'channels' | 'asset_states'>('os_versions'),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = useRead(
       `${task}/facets/${facet}/${JSON.stringify(query)}`,
       (signal) => inventory.facets(task, facet, query, signal),
@@ -199,7 +199,7 @@ export function FixedQueryResult({
   onRerun?: (() => void) | undefined
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [columns, setColumns] = useState<readonly string[]>([]),
     status = useRead(`query-status/${task}`, (signal) => inventory.queryStatus(task, signal), {
       retryReadConflict: false,
@@ -292,7 +292,7 @@ export function FixedQueryResult({
           <Form.Item label={l('固定结果每页条目', 'Fixed result page size')}>
             <InputNumber
               aria-label={l('固定结果每页条目', 'Fixed result page size')}
-              value={query.limit ?? 20}
+              value={query.limit ?? 100}
               min={1}
               max={1000}
               precision={0}

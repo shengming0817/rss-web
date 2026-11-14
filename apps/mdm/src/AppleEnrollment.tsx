@@ -29,7 +29,7 @@ export function AppleEnrollment({
   const guard = useSelectionGuard()
   const l = labels(locale),
     { appleEnrollment: apple, binding } = useAdministration(runtime),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [selected, setSelected] = useState<string>(),
     [creating, setCreating] = useState(false),
     read = useRead(`${binding}/apple-organizations/${JSON.stringify(query)}`, () =>

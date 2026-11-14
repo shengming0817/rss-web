@@ -61,7 +61,7 @@ export function CertificateArchive({
     [newId, setNewId] = useState(() => crypto.randomUUID()),
     [mounted, setMounted] = useState<Entry | null>(null),
     [target, setTarget] = useState<Reference | null>(null),
-    [historyQuery, setHistoryQuery] = useState<WindowQuery>({ limit: 10 }),
+    [historyQuery, setHistoryQuery] = useState<WindowQuery>({ limit: 100 }),
     [vault, setVault] = useState<Vault | null>(null),
     list = useRead(`${binding}/certificate-archive/${canRead}/${JSON.stringify(query)}`, () =>
       canRead
@@ -141,7 +141,7 @@ export function CertificateArchive({
     setSelected(id)
     setMounted(null)
     setTarget(null)
-    setHistoryQuery({ limit: 10 })
+    setHistoryQuery({ limit: 100 })
     if (id === null) setNewId(crypto.randomUUID())
   }
   return (
@@ -494,7 +494,7 @@ export function CertificateArchive({
                         </Button>
                       )}
                       {historyQuery.cursor && (
-                        <Button onClick={() => setHistoryQuery({ limit: 10 })}>
+                        <Button onClick={() => setHistoryQuery({ limit: 100 })}>
                           {l('最新版本页', 'Newest version page')}
                         </Button>
                       )}

@@ -130,10 +130,8 @@ function original(value: unknown, id: string): MaterialOperation {
 export function createWebhooksAdapter(transport: HttpTransport): WebhooksPort {
   return {
     subscriptions: (query) =>
-      api.getApiV1WebhooksSubscriptions(
-        transport,
-        { query: queryParameters({ limit: 32, ...query }) },
-        (value) => projectedPage(value, subscriptionFields, query.fields, ['id']),
+      api.getApiV1WebhooksSubscriptions(transport, { query: queryParameters(query) }, (value) =>
+        projectedPage(value, subscriptionFields, query.fields, ['id']),
       ),
     subscription: (id) =>
       api.getApiV1WebhooksSubscriptionsById(transport, { pathParams: { id } }, (value) =>
@@ -180,10 +178,8 @@ export function createWebhooksAdapter(transport: HttpTransport): WebhooksPort {
         },
       ),
     deliveries: (query) =>
-      api.getApiV1WebhooksDeliveries(
-        transport,
-        { query: queryParameters({ limit: 32, ...query }) },
-        (value) => projectedPage(value, deliveryFields, query.fields, ['id']),
+      api.getApiV1WebhooksDeliveries(transport, { query: queryParameters(query) }, (value) =>
+        projectedPage(value, deliveryFields, query.fields, ['id']),
       ),
     delivery: (id) =>
       api.getApiV1WebhooksDeliveriesById(transport, { pathParams: { id } }, (value) =>

@@ -167,7 +167,7 @@ export function createDeviceAccessAdapter(transport: HttpTransport): DeviceAcces
     bindings: (device, query, signal) =>
       api.getApiV1DevicesByDeviceDeviceAccess(
         transport,
-        { signal, pathParams: { device }, query: queryParameters({ limit: 20, ...query }) },
+        { signal, pathParams: { device }, query: queryParameters(query) },
         (value) => ({
           items: value.items.map((item) => binding(item, device)),
           nextCursor: nextCursor(value.nextCursor),
@@ -190,7 +190,7 @@ export function createDeviceAccessAdapter(transport: HttpTransport): DeviceAcces
         transport,
         {
           signal,
-          query: queryParameters({ limit: 20, ...query, fields: ['id', 'kind', 'value'] }),
+          query: queryParameters({ limit: 100, ...query, fields: ['id', 'kind', 'value'] }),
         },
         (value) => ({
           items: value.items.map((item): EnterpriseRecord => {

@@ -213,7 +213,7 @@ function DefinitionEditor({
             )}
             {(valueType === 'array' || valueType === 'object') && (
               <Form.Item name="maxItems" label={l('最大项数', 'Maximum items')}>
-                <InputNumber min={1} max={valueType === 'array' ? 128 : 256} />
+                <InputNumber min={1} max={1024} />
               </Form.Item>
             )}
             {(valueType === 'number' || valueType === 'integer') && (
@@ -321,7 +321,7 @@ function Definitions(props: Props) {
     l = labels(locale),
     { profiles, binding } = useAdministration(runtime),
     action = useAction()
-  const [query, setQuery] = useState<Query>({ limit: 20 }),
+  const [query, setQuery] = useState<Query>({ limit: 100 }),
     [id, setId] = useState<string | null>(null),
     [fresh, setFresh] = useState<Definition | null>(null)
   const [deleting, setDeleting] = useState<Definition | null>(null),

@@ -403,7 +403,7 @@ export function CollectionMappings({
   const l = labels(locale),
     action = useAction(),
     guard = useSelectionGuard(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = useRead(`mapping-resources/${JSON.stringify(query)}`, () =>
       mappings.resources(directoryQuery(query, resourceColumns)),
     ),

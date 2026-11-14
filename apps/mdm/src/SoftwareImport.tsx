@@ -88,7 +88,7 @@ export function SoftwareImport({
   const l = labels(locale),
     guard = useSelectionGuard(),
     action = useAction(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [sourceKey, setSourceKey] = useState(''),
     [source, setSource] = useState<SourceView | null>(null),
     sourceDirectory = useRead(`import-sources/${JSON.stringify(query)}`, () =>

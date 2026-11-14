@@ -40,7 +40,7 @@ const sourceFields = [
   'extraction',
 ] as const
 const entryFields = ['entryId', 'source', 'revision', 'packageId', 'name', 'version'] as const
-const first = { limit: 20 }
+const first = { limit: 100 }
 const digest = (bytes: readonly number[]) =>
   bytes.map((b) => b.toString(16).padStart(2, '0')).join('')
 

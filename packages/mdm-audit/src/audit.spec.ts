@@ -42,7 +42,9 @@ it('keeps recorded-time and opaque snapshot context without mixing path and quer
   expect(() =>
     validateAuditQuery({ ...query, operationId: '00000000-0000-0000-0000-000000000000' }),
   ).toThrow()
-  expect(() => validateAuditQuery({ ...query, limit: 201 })).toThrow()
+  expect(() => validateAuditQuery({ ...query, limit: 1000 })).not.toThrow()
+  expect(() => validateAuditQuery({ ...query, limit: 1001 })).toThrow()
+  expect(() => validateActivityQuery({ limit: 201 })).toThrow()
   expect(() =>
     validateActivityQuery({
       operation: id,

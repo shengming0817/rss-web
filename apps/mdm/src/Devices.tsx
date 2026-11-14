@@ -40,7 +40,7 @@ export function devicePath(kind: 'endpoint' | 'association', id: string): string
 function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
-    [query, setQuery] = useDirectoryQuery('devices.', { limit: 20 })
+    [query, setQuery] = useDirectoryQuery('devices.', { limit: 100 })
   const read = useRead(
       `${binding}/views/${JSON.stringify(query)}`,
       (signal) =>
@@ -306,8 +306,8 @@ function EndpointDirectory({ runtime, locale }: { runtime: Runtime; locale: Loca
 function Relationships({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     { devices, binding } = useAdministration(runtime),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
-    [historyQuery, setHistoryQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
+    [historyQuery, setHistoryQuery] = useState<Query>({}),
     [selected, setSelected] = useState<string>(),
     read = useRead(
       `${binding}/associations/${JSON.stringify(query)}`,

@@ -41,7 +41,7 @@ export function AppleAccounts({
     { appleEnrollment: apple, binding } = useAdministration(runtime),
     action = useAction(),
     [localCreating, setLocalCreating] = useState(false),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [accountName, setAccountName] = useState<string>(),
     [newAccount, setNewAccount] = useState(false),
     [target, setTarget] = useState<User | null | undefined>(),

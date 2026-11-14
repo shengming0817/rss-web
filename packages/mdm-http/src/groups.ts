@@ -192,7 +192,7 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
         {
           signal,
           query: {
-            ...queryParameters({ limit: 20, ...directory, fields: projection }),
+            ...queryParameters({ limit: 100, ...directory, fields: projection }),
             ...(referenceableFor === undefined ? {} : { referenceableFor: uuid(referenceableFor) }),
           },
         },

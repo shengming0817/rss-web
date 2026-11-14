@@ -269,7 +269,7 @@ it('opens device activity without InventoryRead and uses the detail related-quer
   await click('下一页关联事实')
   expect(list.mock.lastCall).toEqual([
     'device',
-    { related: 'native:fact', limit: 50, cursor: 'YWJj' },
+    { related: 'native:fact', limit: 100, cursor: 'YWJj' },
   ])
   expect(host.textContent).not.toContain('paired-device')
   expect(host.textContent).toContain('当前所选事实的读取权限尚未确认')

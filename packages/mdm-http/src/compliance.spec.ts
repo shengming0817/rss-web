@@ -41,6 +41,11 @@ it('admits projected rule rows without requiring a full definition or flattening
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({ query: { fields: 'id,name,enabled,revision', limit: 1 } }),
   )
+  await client.list({ fields: ['id', 'name', 'enabled', 'revision'] })
+  expect(f.request).toHaveBeenLastCalledWith(
+    expect.objectContaining({ query: { fields: 'id,name,enabled,revision', limit: 50 } }),
+  )
+  await expect(client.list({ limit: 51 })).rejects.toMatchObject({ cause: 'client' })
 })
 it('decodes flattened history entries while validating strict assessment facts separately', async () => {
   const value = { ...assessment(), task, disposition: 'superseded' },

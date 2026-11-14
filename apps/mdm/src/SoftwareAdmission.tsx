@@ -141,7 +141,7 @@ function ResourceVersions({
   const l = labels(locale),
     guard = useSelectionGuard(),
     action = useAction(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [selected, setSelected] = useState<VersionDetail | null>(null),
     [version, setVersion] = useState(''),
     read = useRead(`software-versions/${resource}/${JSON.stringify(query)}`, () =>

@@ -56,7 +56,10 @@ it('reads bounded session pages and links an identity with the current CSRF', as
   )
   const port = createAuthPort({ request } as unknown as HttpTransport)
   expect(await port.sessions(tenant)).toMatchObject({ next: null, sessions: [{ id: provider }] })
-  expect(() => port.sessions(tenant, undefined, 101)).toThrow()
+  expect(request).toHaveBeenLastCalledWith(expect.objectContaining({ query: { limit: '100' } }))
+  await port.sessions(tenant, undefined, 1000)
+  expect(request).toHaveBeenLastCalledWith(expect.objectContaining({ query: { limit: '1000' } }))
+  expect(() => port.sessions(tenant, undefined, 1001)).toThrow()
   expect(await port.link(tenant, 'current-csrf', provider, null)).toBe(
     'https://idp.example/authorize',
   )

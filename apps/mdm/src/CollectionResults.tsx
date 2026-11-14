@@ -122,7 +122,7 @@ function CollectionFieldItems({
   scope: CollectionScope
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = useRead(
       `collection-items/${device}/${run}/${field}/${JSON.stringify(scope)}/${JSON.stringify(query)}`,
       () => inventory.collectionItems(device, run, field, scope, query),

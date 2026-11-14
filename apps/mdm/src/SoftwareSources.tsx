@@ -298,7 +298,7 @@ function SourceDirectory({
   const l = labels(locale),
     guard = useSelectionGuard(),
     action = useAction(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [selected, setSelected] = useState<SourceView | null>(null),
     [id, setId] = useState(''),
     [revision, setRevision] = useState(''),

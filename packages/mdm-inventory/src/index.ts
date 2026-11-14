@@ -136,7 +136,7 @@ export function createInventory(port: InventoryPort) {
       identifier(query.endpoint)
       fieldKey(query.field)
       identifier(query.cursor, 16384)
-      const limit = query.limit ?? 50
+      const limit = query.limit ?? 100
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
         throw new Error('Invalid page size')
       if (query.reference.kind === 'endpoint' && query.reference.id !== query.endpoint)

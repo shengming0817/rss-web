@@ -201,7 +201,7 @@ export function createConnectionsAdapters(
       history: (query) =>
         api.getApiV1StorageConnectionsVersions(
           transport,
-          { query: windowParameters({ limit: 20, ...query }) },
+          { query: windowParameters(query) },
           (value) => windowPage(value, storageReceipt),
         ),
       operation: (id) =>
@@ -262,10 +262,8 @@ export function createConnectionsAdapters(
           return value
         }),
       history: (query) =>
-        api.getApiV1SmtpVersions(
-          transport,
-          { query: windowParameters({ limit: 20, ...query }) },
-          (value) => windowPage(value, mailReceipt),
+        api.getApiV1SmtpVersions(transport, { query: windowParameters(query) }, (value) =>
+          windowPage(value, mailReceipt),
         ),
       operation: (id) =>
         api.getApiV1SmtpOperationsById(transport, { pathParams: { id: uuid(id) } }, (value) => {
@@ -298,10 +296,8 @@ export function createConnectionsAdapters(
           return value
         }),
       history: (query) =>
-        api.getApiV1WindowsWnsVersions(
-          transport,
-          { query: windowParameters({ limit: 20, ...query }) },
-          (value) => windowPage(value, wnsReceipt),
+        api.getApiV1WindowsWnsVersions(transport, { query: windowParameters(query) }, (value) =>
+          windowPage(value, wnsReceipt),
         ),
       operation: (id) =>
         api.getApiV1WindowsWnsOperationsById(transport, { pathParams: { id: uuid(id) } }, (value) =>
@@ -337,7 +333,7 @@ export function createConnectionsAdapters(
       history: (purpose, query) =>
         api.getApiV1AppleMaterialsByPurposeVersions(
           transport,
-          { pathParams: { purpose }, query: windowParameters({ limit: 20, ...query }) },
+          { pathParams: { purpose }, query: windowParameters(query) },
           (value) => windowPage(value, appleMaterial),
         ),
       operation: (id) =>

@@ -15,8 +15,8 @@ export function SessionsPage() {
   const [next, setNext] = useState<string | null>(null)
   const [trail, setTrail] = useState<(string | undefined)[]>([])
   const acceptedCursor = useRef<string | undefined>(undefined)
-  const appliedLimit = useRef(50)
-  const [limit, setLimit] = useState(50)
+  const appliedLimit = useRef(100)
+  const [limit, setLimit] = useState(100)
   const [tab, setTab] = useState('sessions')
   const [confirmAll, setConfirmAll] = useState(false)
   const [current, setCurrent] = useState('')
@@ -180,13 +180,13 @@ export function SessionsPage() {
         <InputNumber
           id="session-limit"
           min={1}
-          max={100}
+          max={1000}
           value={limit}
           disabled={op.busy || !scope}
           onChange={(value) => setLimit(value ?? 0)}
         />
         <Button
-          disabled={op.busy || !scope || !Number.isInteger(limit) || limit < 1 || limit > 100}
+          disabled={op.busy || !scope || !Number.isInteger(limit) || limit < 1 || limit > 1000}
           onClick={() => {
             void op.run((checkpoint) => load(undefined, false, checkpoint))
           }}

@@ -54,10 +54,10 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
       ) ?? false,
     [params, setParams] = useSearchParams(),
     navigate = useNavigate(),
-    pageLimit = Number(params.get('limit') ?? 20),
+    pageLimit = Number(params.get('limit') ?? 100),
     query: Query = {
       limit:
-        Number.isSafeInteger(pageLimit) && pageLimit >= 1 && pageLimit <= 1000 ? pageLimit : 20,
+        Number.isSafeInteger(pageLimit) && pageLimit >= 1 && pageLimit <= 1000 ? pageLimit : 100,
       ...(params.get('filter') ? { filter: params.get('filter')! } : {}),
       ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
       ...(params.has('sort') ? { sort: params.getAll('sort') } : {}),

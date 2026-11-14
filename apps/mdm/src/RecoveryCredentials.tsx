@@ -49,7 +49,7 @@ export function RecoveryCredentials({
     { recoveryCredentials: credentials, binding } = useAdministration(runtime),
     guard = useSelectionGuard(),
     [query, setQuery] = useState<Omit<Query, 'fields'> & { fields?: readonly (keyof Material)[] }>({
-      limit: 20,
+      limit: 100,
     }),
     [selected, setSelected] = useState<MaterialRef | null>(null),
     [held, setHeld] = useState<Material | null>(null),

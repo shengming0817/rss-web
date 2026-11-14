@@ -85,7 +85,6 @@ export function createSoftwareAdapter(transport: HttpTransport): SoftwarePort {
         transport,
         {
           query: queryParameters({
-            limit: 20,
             ...query,
             ...(selected ? { fields: selected } : {}),
           }),
@@ -125,7 +124,7 @@ export function createSoftwareAdapter(transport: HttpTransport): SoftwarePort {
     versions: (id, query) =>
       api.getApiV1SoftwareResourcesByIdVersions(
         transport,
-        { pathParams: { id }, query: queryParameters({ limit: 20, ...query }) },
+        { pathParams: { id }, query: queryParameters(query) },
         (value) => {
           const page = projectedPage(value, versionFields, query.fields, ['version'])
           if (page.items.some((item) => item.resource !== undefined && item.resource !== id))

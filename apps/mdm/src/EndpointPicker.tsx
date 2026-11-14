@@ -34,7 +34,7 @@ export function EndpointPicker({
 }) {
   const l = labels(locale),
     action = useAction(),
-    [query, setQuery] = useDirectoryQuery(queryPrefix, { limit: 10 }),
+    [query, setQuery] = useDirectoryQuery(queryPrefix, { limit: 100 }),
     read = useRead(
       `endpoint-picker/${JSON.stringify(query)}`,
       (signal) =>

@@ -147,7 +147,7 @@ export function createPolicyEventsAdapter(transport: HttpTransport): PolicyEvent
         {
           signal,
           pathParams: { device: text(device) },
-          query: queryParameters({ limit: 20, ...query }),
+          query: queryParameters(query),
         },
         (value) => ({ items: value.items.map(batch), nextCursor: nextCursor(value.nextCursor) }),
       ),
@@ -167,7 +167,7 @@ export function createPolicyEventsAdapter(transport: HttpTransport): PolicyEvent
         {
           signal,
           pathParams: { device: text(device), batch: uuid(id) },
-          query: queryParameters({ limit: 20, ...query }),
+          query: queryParameters(query),
         },
         (value) => ({ items: value.items.map(member), nextCursor: nextCursor(value.nextCursor) }),
       ),

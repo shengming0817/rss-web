@@ -91,27 +91,23 @@ const definitionFields = {
 export function createProfilesAdapter(transport: HttpTransport): ProfilesPort {
   return {
     definitions: (query = {}) =>
-      api.getApiV1UserAttributeDefinitions(
-        transport,
-        { query: queryParameters({ limit: 20, ...query }) },
-        (v) => {
-          const items = v.items.map((item) => projectedRow(item, definitionFields, query.fields))
-          if (!query.fields || query.fields.includes('fieldId' as never)) {
-            const ids = items.map((item) => Reflect.get(item, 'fieldId'))
-            if (new Set(ids).size !== ids.length) throw new Error('Duplicate field definition')
-          }
-          return {
-            items,
-            nextCursor: nextCursor(v.nextCursor),
-            sources: v.sources.map((s) => ({
-              source: source(s.source),
-              providerConfigVersion: nullable(s.providerConfigVersion, positive),
-              extensionsRoot: nullable(s.extensionsRoot, text),
-              maxAgeSeconds: positive(s.maxAgeSeconds),
-            })),
-          }
-        },
-      ),
+      api.getApiV1UserAttributeDefinitions(transport, { query: queryParameters(query) }, (v) => {
+        const items = v.items.map((item) => projectedRow(item, definitionFields, query.fields))
+        if (!query.fields || query.fields.includes('fieldId' as never)) {
+          const ids = items.map((item) => Reflect.get(item, 'fieldId'))
+          if (new Set(ids).size !== ids.length) throw new Error('Duplicate field definition')
+        }
+        return {
+          items,
+          nextCursor: nextCursor(v.nextCursor),
+          sources: v.sources.map((s) => ({
+            source: source(s.source),
+            providerConfigVersion: nullable(s.providerConfigVersion, positive),
+            extensionsRoot: nullable(s.extensionsRoot, text),
+            maxAgeSeconds: positive(s.maxAgeSeconds),
+          })),
+        }
+      }),
     definition: (id) =>
       api.getApiV1UserAttributeDefinitionsById(transport, { pathParams: { id: uuid(id) } }, (v) => {
         const result = definition(v)

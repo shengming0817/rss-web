@@ -54,7 +54,7 @@ export function AgentConfigurations({
   const l = labels(locale),
     { enrollment, binding } = useAdministration(runtime),
     action = useAction(),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     [selected, setSelected] = useState<string>(),
     [open, setOpen] = useState(false),
     [quantity, setQuantity] = useState<'finite' | 'unlimited'>('finite'),

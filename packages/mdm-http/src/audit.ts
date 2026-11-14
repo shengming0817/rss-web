@@ -53,7 +53,7 @@ export function auditFact(value: unknown): AuditFact {
 function auditPage(value: unknown): AuditPage {
   if (!schema.getApiV1AuditEventsResponse.validateRoot(value)) throw new Error('Invalid audit page')
   return {
-    items: list(value.items, auditFact, 200),
+    items: value.items.map(auditFact),
     nextCursor: nextCursor(value.nextCursor),
     coverage: { complete: boolean(value.coverage.complete) },
   }
@@ -104,7 +104,7 @@ function activities(value: unknown): ActivityPage {
   if (!schema.getApiV1DevicesByDeviceManagementActivitiesResponse.validateRoot(value))
     throw new Error('Invalid management activity page')
   return {
-    items: distinct(list(value.items, activity, 200), (item) => item.id),
+    items: distinct(value.items.map(activity), (item) => item.id),
     nextCursor: nextCursor(value.nextCursor),
     syncCursor: pageCursor(value.syncCursor),
     asOf: integer(value.asOf),
@@ -139,7 +139,7 @@ export function createAuditAdapter(transport: HttpTransport): AuditPort {
         transport,
         {
           query: requestInput(
-            { limit: 50, ...query },
+            { limit: 100, ...query },
             schema.getApiV1AuditEventsQuery.validateRoot,
           ),
         },
@@ -151,7 +151,7 @@ export function createAuditAdapter(transport: HttpTransport): AuditPort {
         {
           pathParams: { device },
           query: requestInput(
-            { limit: 50, ...query },
+            { limit: 100, ...query },
             schema.getApiV1DevicesByDeviceTimelineQuery.validateRoot,
           ),
         },
@@ -163,7 +163,7 @@ export function createAuditAdapter(transport: HttpTransport): AuditPort {
         {
           pathParams: { device },
           query: requestInput(
-            { limit: 50, ...query },
+            { limit: 100, ...query },
             schema.getApiV1DevicesByDeviceManagementActivitiesQuery.validateRoot,
           ),
         },
@@ -229,7 +229,7 @@ export function createAuditPolicyLookupAdapter(
         {
           query: queryParameters({
             ...query,
-            limit: query.limit ?? 20,
+            limit: query.limit ?? 100,
             filter: comparison('customEvent', '==', event),
             fields: Object.keys(policyFields),
             sort: ['id'],

@@ -67,7 +67,7 @@ export function AuditPolicyLocator({
     setPage(null)
     setEvent(name)
     const result = await action.run(() =>
-      lookup.byEvent(name, { limit: 20, ...(cursor ? { cursor } : {}) }),
+      lookup.byEvent(name, { limit: 100, ...(cursor ? { cursor } : {}) }),
     )
     if (result.ok && generation === epoch.current && permitted) setPage(result.value)
     else if (!result.ok && generation === epoch.current) {

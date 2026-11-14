@@ -154,7 +154,7 @@ export function createDevicePkiAdapter(
         transport,
         {
           pathParams: { purpose, id },
-          query: queryParameters({ limit: 50, ...(cursor ? { cursor } : {}) }),
+          query: queryParameters({ limit: 100, ...(cursor ? { cursor } : {}) }),
           ...(signal ? { signal } : {}),
         },
         (value) => ({

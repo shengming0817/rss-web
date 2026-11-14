@@ -22,7 +22,7 @@ export function createRequestHistoryAdapter(transport: HttpTransport): RequestHi
         transport,
         {
           pathParams: { device },
-          query: queryParameters({ limit: 50, ...(cursor ? { cursor } : {}) }),
+          query: queryParameters({ limit: 100, ...(cursor ? { cursor } : {}) }),
           ...(signal ? { signal } : {}),
         },
         (value) => ({ items: value.items.map(agent), nextCursor: nextCursor(value.nextCursor) }),
@@ -38,7 +38,7 @@ export function createRequestHistoryAdapter(transport: HttpTransport): RequestHi
         transport,
         {
           pathParams: { device },
-          query: queryParameters({ limit: 50, ...(cursor ? { cursor } : {}) }),
+          query: queryParameters({ limit: 100, ...(cursor ? { cursor } : {}) }),
           ...(signal ? { signal } : {}),
         },
         (value) => ({ items: value.items.map(windows), nextCursor: nextCursor(value.nextCursor) }),
@@ -54,7 +54,7 @@ export function createRequestHistoryAdapter(transport: HttpTransport): RequestHi
         transport,
         {
           pathParams: { device, attempt },
-          query: queryParameters({ limit: 50, ...(cursor ? { cursor } : {}) }),
+          query: queryParameters({ limit: 100, ...(cursor ? { cursor } : {}) }),
           ...(signal ? { signal } : {}),
         },
         (value) => ({

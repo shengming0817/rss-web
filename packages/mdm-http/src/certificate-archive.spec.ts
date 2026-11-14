@@ -75,7 +75,7 @@ it('uses independent detail and exact version history without equating revision 
   const f = fixture({ items: [version()], nextCursor: null })
   expect((await f.core.history(entryId)).items[0]!.version).toBe(3)
   expect(f.request).toHaveBeenCalledWith(
-    expect.objectContaining({ pathParams: { entry: entryId }, query: { limit: 50 } }),
+    expect.objectContaining({ pathParams: { entry: entryId }, query: { limit: 100 } }),
   )
   await expect(fixture({ ...entry(), id: tenant }).core.entry(entryId)).rejects.toBeDefined()
 })

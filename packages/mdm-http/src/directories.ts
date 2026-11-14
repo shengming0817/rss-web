@@ -25,7 +25,10 @@ export const directoryCapabilities = Object.freeze(
         throw new Error(`Missing formal directory capabilities: ${name}`)
       return [
         name,
-        Object.freeze({ fields: owner.schema.fields, maximum: owner.schema['max_limit'] }),
+        Object.freeze({
+          fields: owner.schema.fields,
+          maximum: Math.min(1000, owner.schema['max_limit']),
+        }),
       ]
     }),
   ) as Readonly<Record<DirectoryName, DirectoryCapabilities>>,

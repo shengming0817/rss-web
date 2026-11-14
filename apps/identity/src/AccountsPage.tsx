@@ -50,7 +50,7 @@ export function AccountsPage({ manualLoad = false }: { manualLoad?: boolean }) {
   const [sort, setSort] = useState('')
   const [fields, setFields] = useState<(keyof AccountRow)[]>(initialFields)
   const [source, setSource] = useState('local')
-  const [limit, setLimit] = useState(50)
+  const [limit, setLimit] = useState(100)
   const applied = useRef<AccountQuery | null>(null)
   const acceptedCursor = useRef<string | undefined>(undefined)
   const [trail, setTrail] = useState<(string | undefined)[]>([])
@@ -214,7 +214,7 @@ export function AccountsPage({ manualLoad = false }: { manualLoad?: boolean }) {
         fields={fields}
         columns={columns}
         limit={limit}
-        maximum={100}
+        maximum={1000}
         previous={trail.length > 0}
         next={!!next}
         disabled={op.busy}
@@ -303,7 +303,7 @@ export function AccountsPage({ manualLoad = false }: { manualLoad?: boolean }) {
             value={login}
             onChange={(event) => setLogin(event.target.value)}
             autoComplete="off"
-            maxLength={128}
+            maxLength={255}
             required
             disabled={op.busy || blocked}
           />

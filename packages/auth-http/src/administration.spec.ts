@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import type { SessionOwner } from '@rss/auth-core'
 import { decodeIdentityError, type HttpTransport, type RequestOptions } from '@rss/api/identity'
 import { createIdentityAdministrationAdapter } from './administration'
-import { providerTest, accounts } from './administration-decode'
+import { providerTest, accounts, account as decodeAccount } from './administration-decode'
 const tenant = '11111111-1111-4111-8111-111111111111',
   principal = '22222222-2222-4222-8222-222222222222',
   session = '33333333-3333-4333-8333-333333333333'
@@ -67,6 +67,13 @@ it('keeps a known forbidden self change separate from session expiry, preserving
     status: 403,
   })
   expect(f.owner.invalidate).not.toHaveBeenCalled()
+  f.request.mockRejectedValue(
+    decodeIdentityError(409, { code: 'profile_receipt_capacity_reached' }),
+  )
+  await expect(
+    f.client.saveLocalProfile(principal, { operationId: tenant, expectedRevision: 1, value: null }),
+  ).rejects.toMatchObject({ status: 409, code: 'profile_receipt_capacity_reached', cause: 'wire' })
+  expect(f.owner.invalidate).not.toHaveBeenCalled()
   f.request.mockRejectedValue(decodeIdentityError(429, { code: 'rate_limited' }, '31'))
   await expect(f.client.account(principal)).rejects.toMatchObject({ retryAfterSeconds: 31 })
 })
@@ -86,6 +93,8 @@ it('distinguishes absent projections, malformed full account responses and curso
     accounts({ accounts: [{ ...account, administrator: true }], nextCursor: null }),
   ).toThrow()
   expect(() => accounts({ accounts: [account], nextCursor: principal })).toThrow()
+  expect(decodeAccount({ ...account, login: 'a'.repeat(255) }).login).toHaveLength(255)
+  expect(() => decodeAccount({ ...account, login: 'a'.repeat(256) })).toThrow()
 })
 it('shows the actual provider connection checks without inventing code exchange or full login qualification', () => {
   expect(

@@ -133,7 +133,7 @@ function ActivityDetail({
     read = useRead(`${binding}/activity-detail/${device}/${id}`, () => audit.activity(device, id)),
     [cursor, setCursor] = useState<string>(),
     related = useRead(`${binding}/activity-related/${device}/${id}/${cursor ?? ''}`, async () =>
-      cursor ? audit.activities(device, { related: id, limit: 50, cursor }) : null,
+      cursor ? audit.activities(device, { related: id, limit: 100, cursor }) : null,
     )
   useEffect(() => {
     title.current?.focus()
@@ -342,11 +342,11 @@ export function AuditWorkspace({
             kind: 'activities',
             page: await audit.activities(
               context.device,
-              activityQuery({ ...context, limit: context.limit ?? 20 }),
+              activityQuery({ ...context, limit: context.limit ?? 100 }),
             ),
           }
         }
-        const query = factQuery({ ...context, limit: context.limit ?? 20 })
+        const query = factQuery({ ...context, limit: context.limit ?? 100 })
         if (context.view === 'timeline') {
           if (!context.device) throw { cause: 'client', code: 'invalid_input' }
           const { device, ...window } = query
@@ -366,7 +366,7 @@ export function AuditWorkspace({
         ...context,
         from: localDate(context.from),
         until: localDate(context.until),
-        limit: context.limit ?? 20,
+        limit: context.limit ?? 100,
       })
     setInputError(null)
   }, [key, visible, authority, form])
@@ -526,7 +526,7 @@ export function AuditWorkspace({
                 </Form.Item>
               )}
               <Form.Item name="limit" label={l('每页', 'Page size')}>
-                <InputNumber min={1} max={200} precision={0} />
+                <InputNumber min={1} max={draftView === 'activities' ? 200 : 1000} precision={0} />
               </Form.Item>
             </div>
           </details>

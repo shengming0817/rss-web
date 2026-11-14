@@ -27,7 +27,7 @@ export function PolicyAssignments({
     location = useLocation(),
     [params, setParams] = useSearchParams(),
     query: Query = {
-      limit: 20,
+      limit: 100,
       ...(params.get('assignmentCursor') ? { cursor: params.get('assignmentCursor')! } : {}),
     },
     read = usePageRead(
@@ -263,7 +263,7 @@ export function PolicyRuns({
     location = useLocation(),
     [params, setParams] = useSearchParams(),
     query: Query = {
-      limit: 20,
+      limit: 100,
       ...(params.get('runCursor') ? { cursor: params.get('runCursor')! } : {}),
     },
     read = usePageRead(

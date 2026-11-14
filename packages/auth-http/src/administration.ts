@@ -101,7 +101,7 @@ export function createIdentityAdministrationAdapter(
         (v) => accounts(v, query.fields),
         undefined,
         200,
-        accountQuery({ limit: 20, ...query }),
+        accountQuery({ limit: 100, ...query }),
       ),
     account: (id) => call('GET', `accounts/${uuid(id)}`, boundAccount(id)),
     createAccount: (login, password) => call('POST', 'accounts', account, { login, password }, 201),
@@ -121,7 +121,9 @@ export function createIdentityAdministrationAdapter(
       ),
     providers: () => {
       enabled()
-      return call('GET', 'providers', (v) => list(object(v, ['providers'])['providers'], provider))
+      return call('GET', 'providers', (v) =>
+        list(object(v, ['providers'])['providers'], provider, 1024),
+      )
     },
     createProvider: (settings, clientSecret, caPem) => {
       enabled()

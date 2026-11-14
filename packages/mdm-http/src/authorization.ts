@@ -162,10 +162,8 @@ export function createAuthorizationAdapter(
     rules: (query = {}) =>
       (realm === 'management'
         ? api.getApiV1TenantAdministrationAuthorizationRules
-        : api.getApiV1AuthorizationRules)(
-        transport,
-        { query: queryParameters({ limit: 50, ...query }) },
-        (v) => projectedPage(v, rules, query.fields, ['id']),
+        : api.getApiV1AuthorizationRules)(transport, { query: queryParameters(query) }, (v) =>
+        projectedPage(v, rules, query.fields, ['id']),
       ),
     rule: (id) =>
       (realm === 'management'
@@ -197,7 +195,7 @@ export function createAuthorizationAdapter(
       tenantOnly()
       return api.getApiV1AuthorizationUserGroups(
         transport,
-        { query: queryParameters({ limit: 50, ...query }) },
+        { query: queryParameters(query) },
         (v) => projectedPage(v, groups, query.fields, ['id']),
       )
     },
@@ -230,7 +228,7 @@ export function createAuthorizationAdapter(
       tenantOnly()
       return api.getApiV1AuthorizationUserGroupsByIdMembers(
         transport,
-        { pathParams: { id: uuid(id) }, query: queryParameters({ limit: 100, ...query }) },
+        { pathParams: { id: uuid(id) }, query: queryParameters(query) },
         (value) => {
           if (value.id !== id || !value.revision) throw new Error('Wrong group member page')
           const items = value.items.map((v) => projectedRow(v, members, query.fields))
@@ -248,10 +246,8 @@ export function createAuthorizationAdapter(
     },
     keys: (query = {}) => {
       tenantOnly()
-      return api.getApiV1ApiKeys(
-        transport,
-        { query: queryParameters({ limit: 50, ...query }) },
-        (v) => projectedPage(v, keys, query.fields, ['id']),
+      return api.getApiV1ApiKeys(transport, { query: queryParameters(query) }, (v) =>
+        projectedPage(v, keys, query.fields, ['id']),
       )
     },
     key: (id) => {

@@ -35,10 +35,8 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       audit: ready,
     },
     computers: (query, signal) =>
-      api.getApiV1DeviceViews(
-        transport,
-        { query: queryParameters({ limit: 50, ...query }), signal },
-        (value) => computerDirectory(value, query),
+      api.getApiV1DeviceViews(transport, { query: queryParameters(query), signal }, (value) =>
+        computerDirectory(value, query),
       ),
     viewComputers: (reference, signal) =>
       api.getApiV1DeviceViewsByKindById(transport, { pathParams: reference, signal }, (value) => {
@@ -65,7 +63,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
     bindings: (device, query, signal) =>
       api.getApiV1DevicesByDeviceDeviceAccess(
         transport,
-        { pathParams: { device }, query: queryParameters({ limit: 50, ...query }), signal },
+        { pathParams: { device }, query: queryParameters(query), signal },
         (value) => bindingDirectory(value, device, query),
       ),
     binding: (device, id, signal) =>
@@ -106,7 +104,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
     materials: (device, query, signal) =>
       api.getApiV1DevicesByDeviceRecoveryCredentials(
         transport,
-        { pathParams: { device }, query: queryParameters({ limit: 50, ...query }), signal },
+        { pathParams: { device }, query: queryParameters(query), signal },
         (value) => materialDirectory(value, device, query),
       ),
     material: (device, id, version, signal) =>
@@ -188,7 +186,7 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
     },
     applications: (query, signal) => {
       const selection = {
-        limit: 50,
+        limit: 100,
         ...query,
         filter: allOf("kind=='relying_party'", query.filter),
       }
@@ -232,12 +230,16 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       return device
         ? api.getApiV1DevicesByDeviceTimeline(
             transport,
-            { pathParams: { device }, query: { limit: 50, ...(cursor ? { cursor } : {}) }, signal },
+            {
+              pathParams: { device },
+              query: { limit: 100, ...(cursor ? { cursor } : {}) },
+              signal,
+            },
             project,
           )
         : api.getApiV1AuditEvents(
             transport,
-            { query: { limit: 50, ...(cursor ? { cursor } : {}) }, signal },
+            { query: { limit: 100, ...(cursor ? { cursor } : {}) }, signal },
             project,
           )
     },

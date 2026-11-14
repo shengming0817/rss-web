@@ -413,12 +413,12 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
     await mount(f.runtime, `/tenants/${tenant}/sessions`)
     await click('下一页')
     expect(requests(f.calls, '/sessions').at(-1)?.query).toEqual({
-      limit: '50',
+      limit: '100',
       cursor: nextSession,
     })
     expect(container.textContent).toContain(nextSession)
     await click('上一页')
-    expect(requests(f.calls, '/sessions').at(-1)?.query).toEqual({ limit: '50' })
+    expect(requests(f.calls, '/sessions').at(-1)?.query).toEqual({ limit: '100' })
   })
   it('reads authentication facts and submits reauthentication without retaining the password', async () => {
     const f = fixture()
@@ -454,11 +454,11 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
     const f = fixture({ oidc: false })
     await mount(f.runtime, `/tenants/${tenant}/accounts`)
     await click('创建本地账户')
-    await input('account-login', 'new-account')
+    await input('account-login', 'new-account'.padEnd(255, 'a'))
     await input('account-password', 'new account password')
     await submit('account-password')
     expect(requests(f.calls, '/accounts', 'POST')[0]?.body).toEqual({
-      login: 'new-account',
+      login: 'new-account'.padEnd(255, 'a'),
       password: 'new account password',
     })
     expect(field('account-password')?.value ?? '').toBe('')
@@ -475,7 +475,7 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
     })
     await mount(f.runtime, `/tenants/${tenant}/accounts`)
     await click('创建本地账户')
-    await input('account-login', 'new-account')
+    await input('account-login', 'new-account'.padEnd(255, 'a'))
     await input('account-password', 'new account password')
     await submit('account-password')
     expect(field('account-password')?.value).toBe('')
@@ -661,7 +661,7 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
       await flush()
     })
     expect(requests(f.calls, '/sessions')).toHaveLength(reads + 1)
-    expect(requests(f.calls, '/sessions').at(-1)?.query).toEqual({ limit: '50' })
+    expect(requests(f.calls, '/sessions').at(-1)?.query).toEqual({ limit: '100' })
   })
   it('discards a late directory response after leaving the account page', async () => {
     const f = fixture({ oidc: false })
@@ -782,6 +782,22 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
       expectedRevision: 4,
       value: null,
     })
+  })
+  it('shows receipt quota rejection without losing the session or replaying the write', async () => {
+    const f = fixture({ oidc: false })
+    f.override((request) => {
+      if (request.path.endsWith('/profile') && request.method === 'PUT')
+        throw decodeIdentityError(409, { code: 'profile_receipt_capacity_reached' })
+      return undefined
+    })
+    await mount(f.runtime, `/tenants/${tenant}/accounts`)
+    await click('读取详情')
+    await click('本地资料')
+    await submit('local-display')
+    expect(document.body.textContent).toContain('资料操作回执已达部署容量')
+    expect(requests(f.calls, '/profile', 'PUT')).toHaveLength(1)
+    expect(f.runtime.owner.getSnapshot().status).toBe('authenticated')
+    expect(document.body.textContent).not.toContain('已比较，重新编辑')
   })
   it('creates provider settings, clears cancelled drafts and confirms disabling a provider', async () => {
     const f = fixture()

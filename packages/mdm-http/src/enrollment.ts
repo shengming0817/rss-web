@@ -481,7 +481,7 @@ export function createEnrollmentAdapter(
         throw new Error('Configuration identity required')
       return api.getApiV1AgentConfigurations(
         transport,
-        { query: queryParameters({ limit: 20, ...query }) },
+        { query: queryParameters(query) },
         (value) =>
           projectedPage(value, configurationFields, query.fields, [
             'configurationId',

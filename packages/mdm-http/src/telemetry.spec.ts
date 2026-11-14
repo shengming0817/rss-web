@@ -93,6 +93,39 @@ it('uses the server latest effective source and conflict facts', async () => {
     sourceConflict: true,
   })
 })
+it('preserves expanded State definitions and exact dimension coordinates', async () => {
+  const original = sample(),
+    keys = Array.from({ length: 1024 }, (_, i) => `d${i}`),
+    members = Array.from({ length: 1024 }, (_, i) => `state${i}`),
+    value = {
+      ...original,
+      reading: { quality: 'valid', value: { type: 'state', value: members[1023] } },
+      series: {
+        ...original.series,
+        definition: {
+          ...original.series.definition,
+          metric: { kind: 'state', members },
+          dimensions: {
+            allowed: keys,
+            required: keys,
+            maxCount: 1024,
+            maxValueBytes: 256,
+            maxTotalBytes: 32768,
+          },
+        },
+        dimensions: Object.fromEntries(keys.map((key) => [key, 'v'])),
+      },
+    },
+    result = await fixture({
+      mode: 'history',
+      rows: [{ sample: value, receivedAt: '25', liveSource: true }],
+      unavailable: [],
+      next: null,
+      retired: false,
+    }).telemetry.history(query)
+  expect(result.rows[0]?.sample.series).toEqual(value.series)
+  expect(result.rows[0]?.sample.reading).toEqual({ quality: 'valid', value: members[1023] })
+})
 it('rejects unsafe integer telemetry rather than rendering a rounded value', async () => {
   const value = sample()
   value.series.definition.metric = { kind: 'gauge', number: 'i64' }

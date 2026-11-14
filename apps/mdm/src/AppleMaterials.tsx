@@ -49,7 +49,7 @@ export function AppleMaterials({
     [recovery] = Form.useForm<{ material: string }>(),
     kind = Form.useWatch('kind', form) ?? 'key',
     sourceKind = Form.useWatch('sourceKind', form) ?? 'generate',
-    [historyQuery, setHistoryQuery] = useState<Query>({ limit: 20 }),
+    [historyQuery, setHistoryQuery] = useState<Query>({ limit: 100 }),
     [pending, setPending] = useState<Pending | null>(null),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
     [operationId, setOperationId] = useState(''),

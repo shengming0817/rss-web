@@ -49,7 +49,7 @@ export function validateDefinition(value: DefinitionValue): void {
   )
     throw new Error('Invalid JSON pointer')
   integer(value.maxLength, 65536)
-  integer(value.maxItems, value.valueType === 'array' ? 128 : 256)
+  integer(value.maxItems, 1024)
   if (value.maxLength !== null && value.valueType !== 'string')
     throw new Error('Length only applies to strings')
   if (value.maxItems !== null && !['array', 'object'].includes(value.valueType))

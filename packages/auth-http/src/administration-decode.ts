@@ -18,7 +18,7 @@ export function account(value: unknown): Account {
   const v = object(value, ['principalId', 'login', 'enabled', 'memberActive', 'hasLocalPassword'])
   return {
     principalId: uuid(v['principalId']),
-    login: nullable(v['login'], (v) => text(v, 128)),
+    login: nullable(v['login'], (v) => text(v, 255)),
     enabled: bool(v['enabled']),
     memberActive: bool(v['memberActive']),
     hasLocalPassword: bool(v['hasLocalPassword']),
@@ -200,7 +200,7 @@ export function accountQuery(query: AccountQuery): Record<string, string> {
     }
   }
   if (query.limit !== undefined) {
-    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 100)
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 1000)
       throw new Error('Invalid account page size')
     result['limit'] = String(query.limit)
   }
@@ -213,13 +213,16 @@ export function accounts<F extends keyof AccountRow = keyof Account>(
 ): { items: Pick<AccountRow, F>[]; nextCursor: string | null } {
   const v = object(value, ['accounts', 'nextCursor']),
     projected = selected ?? baseFields
-  const items = list(v['accounts'], (value) => {
-    const row = object(value, projected)
-    return Object.fromEntries(projected.map((field) => [field, fields[field](row[field])])) as Pick<
-      AccountRow,
-      F
-    >
-  })
+  const items = list(
+    v['accounts'],
+    (value) => {
+      const row = object(value, projected)
+      return Object.fromEntries(
+        projected.map((field) => [field, fields[field](row[field])]),
+      ) as Pick<AccountRow, F>
+    },
+    1000,
+  )
   if (projected.includes('principalId' as never)) {
     const ids = items.map((item) => Reflect.get(item, 'principalId'))
     if (new Set(ids).size !== ids.length) throw new Error('Duplicate account')

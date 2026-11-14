@@ -295,7 +295,7 @@ function ResourceBlockers({
   historySource?: string | undefined
 }) {
   const l = labels(locale),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = usePageRead(`resource-references/${id}/${version}/${JSON.stringify(query)}`, () =>
       resources.references(id, version, query),
     )

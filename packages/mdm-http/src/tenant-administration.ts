@@ -100,10 +100,8 @@ export function createTenantAdministrationAdapter(
 ): TenantAdministrationPort {
   return {
     tenants: (query = {}) =>
-      api.getApiV1TenantAdministrationTenants(
-        transport,
-        { query: queryParameters({ limit: 50, ...query }) },
-        (v) => projectedPage(v, tenantFields, query.fields, ['tenantId']),
+      api.getApiV1TenantAdministrationTenants(transport, { query: queryParameters(query) }, (v) =>
+        projectedPage(v, tenantFields, query.fields, ['tenantId']),
       ),
     tenant: (id) =>
       api.getApiV1TenantAdministrationTenantsByTenant(
@@ -118,7 +116,7 @@ export function createTenantAdministrationAdapter(
     provisionings: (query = {}) =>
       api.getApiV1TenantAdministrationProvisionings(
         transport,
-        { query: queryParameters({ limit: 50, ...query }) },
+        { query: queryParameters(query) },
         (v) => projectedPage(v, provisioningFields, query.fields, ['operationId']),
       ),
     provisioning: (id) =>

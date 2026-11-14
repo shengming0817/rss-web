@@ -8,6 +8,14 @@ describe('Identity errors never fall back to the RSS bearer wire', () => {
       'insufficient_privilege',
     )
     expect(decodeIdentityError(401, { code: 'invalid_credential' }).status).toBe(401)
+    expect(decodeIdentityError(409, { code: 'profile_receipt_capacity_reached' })).toMatchObject({
+      cause: 'wire',
+      status: 409,
+      code: 'profile_receipt_capacity_reached',
+    })
+    expect(decodeIdentityError(401, { code: 'profile_receipt_capacity_reached' }).cause).toBe(
+      'protocol',
+    )
   })
   it('recognizes only the exact own-password rejection coordinate', () => {
     expect(decodeIdentityError(403, { code: 'reauthentication_failed' })).toMatchObject({

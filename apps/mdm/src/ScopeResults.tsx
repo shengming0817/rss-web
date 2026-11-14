@@ -25,7 +25,7 @@ export function ScopeResults({
   const l = labels(locale),
     [channel, setChannel] = useState<Channel>('agent'),
     [kind, setKind] = useState<ScopeResultKind>('members'),
-    [query, setQuery] = useState<Query>({ limit: 20 }),
+    [query, setQuery] = useState<Query>({ limit: 100 }),
     read = usePageRead(
       `scope-result/${JSON.stringify(owner)}/${id}/${result}/${channel}/${kind}/${JSON.stringify(query)}`,
       (signal) => scopes.result(owner, id, result, kind, channel, query, signal),
