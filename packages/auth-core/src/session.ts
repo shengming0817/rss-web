@@ -346,7 +346,7 @@ export function createSession(
         return value
       })
     },
-    sessions(cursor?: string, limit = 50) {
+    sessions(cursor?: string, limit = 100) {
       return business(({ tenant }) => port.sessions(tenant, cursor, limit))
     },
     link(provider: string, password: string | null) {

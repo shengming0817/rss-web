@@ -491,13 +491,13 @@ it.each(['runs', 'assignments'])(
     if (tab === 'runs')
       expect(runs.mock.lastCall).toEqual([
         policy,
-        { limit: 20, cursor: 'run-page-2' },
+        { limit: 100, cursor: 'run-page-2' },
         expect.any(AbortSignal),
       ])
     else
       expect(assignments.mock.lastCall).toEqual([
         policy,
-        { limit: 20, cursor: 'assignment-page-2' },
+        { limit: 100, cursor: 'assignment-page-2' },
         expect.any(AbortSignal),
       ])
     expect(
@@ -719,7 +719,7 @@ it('shows historical success beside an absent current run and performs one bound
     { fields: ['key', 'reference', 'endpoints'], limit: 1, filter: "key=='endpoint:device-a'" },
     expect.any(AbortSignal),
   ])
-  expect(assignments.mock.calls[0]).toEqual([id, { limit: 20 }, expect.any(AbortSignal)])
+  expect(assignments.mock.calls[0]).toEqual([id, { limit: 100 }, expect.any(AbortSignal)])
   await act(async () => button('读取分配').click())
   expect(assignments).toHaveBeenCalledTimes(2)
 })

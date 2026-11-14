@@ -171,7 +171,7 @@ it('retains concrete namespaces and opaque cursors without evaluating a list loc
       scope,
       cursor,
       field: 'custom.rows',
-      limit: 50,
+      limit: 100,
     },
     signal,
   )

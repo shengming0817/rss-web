@@ -198,7 +198,7 @@ describe('fixed producer HTTP operations', () => {
   it('rejects out of budget requests before invoking transport', async () => {
     const request = vi.fn()
     const transport = { request } as HttpTransport
-    await expect(getApiV1AssetFields(transport, { query: { limit: 1001 } })).rejects.toMatchObject({
+    await expect(getApiV1AssetFields(transport, { query: { limit: 1025 } })).rejects.toMatchObject({
       cause: 'client',
     })
     await expect(

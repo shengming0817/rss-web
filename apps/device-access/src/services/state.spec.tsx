@@ -247,7 +247,7 @@ it('keeps accepted cursor coordinates separate from edited query drafts and fail
   await act(async () => {
     await h.output.following()
   })
-  expect(load.mock.calls[1]?.[0]).toMatchObject({ cursor: 'YQ', limit: 50 })
+  expect(load.mock.calls[1]?.[0]).toMatchObject({ cursor: 'YQ', limit: 100 })
   expect(load.mock.calls[1]?.[0].filter).toBeUndefined()
   load.mockRejectedValueOnce(new Error('offline'))
   await act(async () => {

@@ -241,6 +241,6 @@ it('reads complete direct blockers independently of the filtered recursive impac
     f = fixture(value)
   expect(await createGroupsAdapter(f.transport).references(id, {})).toEqual(value)
   expect(f.request).toHaveBeenCalledWith(
-    expect.objectContaining({ path: '/api/v1/groups/{id}/references', query: { limit: 50 } }),
+    expect.objectContaining({ path: '/api/v1/groups/{id}/references', query: { limit: 100 } }),
   )
 })
