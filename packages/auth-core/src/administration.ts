@@ -150,7 +150,7 @@ export function profileExtensions(value: unknown): { readonly [key: string]: Pro
       throw new Error('Invalid profile object')
     const entries = Object.entries(input)
     members += entries.length
-    if (members > 256) throw new Error('Profile member budget exceeded')
+    if (members > 1024) throw new Error('Profile member budget exceeded')
     return Object.fromEntries(
       entries.map(([key, item]) => {
         const normalized = key
@@ -172,7 +172,7 @@ export function profileExtensions(value: unknown): { readonly [key: string]: Pro
       return input
     if (typeof input === 'string' && !input.includes('\u0000')) return input
     if (Array.isArray(input)) {
-      if (depth >= 8 || input.length > 128) throw new Error('Profile array budget exceeded')
+      if (depth >= 8 || input.length > 1024) throw new Error('Profile array budget exceeded')
       return input.map((v) => check(v, depth + 1))
     }
     if (input && typeof input === 'object') return object(input, depth + 1)
@@ -204,7 +204,7 @@ export function validateNewPassword(password: string): void {
     throw new Error('Invalid password length')
 }
 export function validateLogin(login: string): void {
-  if (!login || login.length > 128 || login.trim() !== login || /[^\x20-\x7e]/.test(login))
+  if (!login || login.length > 255 || login.trim() !== login || /[^\x20-\x7e]/.test(login))
     throw new Error('Invalid login')
 }
 export function createIdentityAdministration(port: IdentityAdministrationPort) {

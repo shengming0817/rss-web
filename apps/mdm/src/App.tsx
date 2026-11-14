@@ -152,7 +152,7 @@ function Login({ runtime, locale }: Ui) {
             label={t.account}
             rules={[{ required: true, message: t.account }]}
           >
-            <Input autoComplete="username" autoFocus maxLength={128} />
+            <Input autoComplete="username" autoFocus maxLength={255} />
           </Form.Item>
           <Form.Item
             name="password"

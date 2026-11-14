@@ -46,8 +46,8 @@ export function LocalProfile({
         <Alert
           type="error"
           title={l(
-            '请检查资料文本和 JSON 预算：64 KiB、总对象成员256、深度8、每个数组128项；秘密键不可保存。',
-            'Check profile text and JSON budgets: 64 KiB, 256 total object members, depth 8, 128 items per array. Secret keys cannot be saved.',
+            '请检查资料文本和 JSON 预算：64 KiB、总对象成员1024、深度8、每个数组1024项；秘密键不可保存。',
+            'Check profile text and JSON budgets: 64 KiB, 1024 total object members, depth 8, 1024 items per array. Secret keys cannot be saved.',
           )}
           role="alert"
         />

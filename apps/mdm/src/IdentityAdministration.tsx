@@ -83,8 +83,8 @@ function AccountCreate({ runtime, locale, done }: Props & { done: () => void }) 
         <Alert
           type="error"
           title={l(
-            '登录名限128个ASCII字符，密码至少15字符且不超过1024字节。',
-            'Login: up to 128 ASCII characters. Password: at least 15 characters and up to 1024 bytes.',
+            '登录名限255个ASCII字符，密码至少15字符且不超过1024字节。',
+            'Login: up to 255 ASCII characters. Password: at least 15 characters and up to 1024 bytes.',
           )}
           role="alert"
         />
@@ -114,7 +114,7 @@ function AccountCreate({ runtime, locale, done }: Props & { done: () => void }) 
         }}
       >
         <Form.Item name="login" label={l('本地登录名', 'Local login')} rules={[{ required: true }]}>
-          <Input maxLength={128} autoComplete="off" />
+          <Input maxLength={255} autoComplete="off" />
         </Form.Item>
         <Form.Item name="password" label={l('密码', 'Password')} rules={[{ required: true }]}>
           <Secret form={form} field="password" />

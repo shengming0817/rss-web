@@ -213,7 +213,7 @@ function DefinitionEditor({
             )}
             {(valueType === 'array' || valueType === 'object') && (
               <Form.Item name="maxItems" label={l('最大项数', 'Maximum items')}>
-                <InputNumber min={1} max={valueType === 'array' ? 128 : 256} />
+                <InputNumber min={1} max={1024} />
               </Form.Item>
             )}
             {(valueType === 'number' || valueType === 'integer') && (

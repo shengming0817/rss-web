@@ -171,11 +171,11 @@ export function createOperationDiagnosticsAdapter(
   const lookup = schema.getApiV1OperationDiagnosticsOperationsByOwnerByOperationIdQuery.validateRoot
   return {
     search: (query, signal) =>
-      operations.search(transport, { query: requestInput(query, discovery), signal }, page),
+      operations.search(transport, { query: requestInput({ limit: 100, ...query }, discovery), signal }, page),
     request: (requestId, query, signal) =>
       operations.request(
         transport,
-        { pathParams: { requestId }, query: requestInput(query, discovery), signal },
+        { pathParams: { requestId }, query: requestInput({ limit: 100, ...query }, discovery), signal },
         page,
       ),
     operation: ({ owner, operationId, actor, instance, device, target }, options, signal) =>

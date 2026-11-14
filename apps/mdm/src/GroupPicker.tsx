@@ -42,7 +42,7 @@ export function GroupPicker({
 }) {
   const l = labels(locale),
     action = useAction(),
-    [query, setQuery] = useDirectoryQuery(queryPrefix, { limit: 10 }),
+    [query, setQuery] = useDirectoryQuery(queryPrefix, { limit: 100 }),
     fixed = formatFilter({
       kind: 'and',
       children: [

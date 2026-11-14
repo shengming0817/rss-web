@@ -18,7 +18,7 @@ export function account(value: unknown): Account {
   const v = object(value, ['principalId', 'login', 'enabled', 'memberActive', 'hasLocalPassword'])
   return {
     principalId: uuid(v['principalId']),
-    login: nullable(v['login'], (v) => text(v, 128)),
+    login: nullable(v['login'], (v) => text(v, 255)),
     enabled: bool(v['enabled']),
     memberActive: bool(v['memberActive']),
     hasLocalPassword: bool(v['hasLocalPassword']),

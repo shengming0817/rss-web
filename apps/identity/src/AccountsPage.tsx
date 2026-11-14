@@ -303,7 +303,7 @@ export function AccountsPage({ manualLoad = false }: { manualLoad?: boolean }) {
             value={login}
             onChange={(event) => setLogin(event.target.value)}
             autoComplete="off"
-            maxLength={128}
+            maxLength={255}
             required
             disabled={op.busy || blocked}
           />

@@ -30,7 +30,7 @@ export function PolicyResourcePicker({
 }) {
   const l = labels(locale),
     action = useAction(),
-    [query, setQuery] = useDirectoryQuery(`resourcePicker.${kind}.`, { limit: 10 }),
+    [query, setQuery] = useDirectoryQuery(`resourcePicker.${kind}.`, { limit: 100 }),
     [selected, setSelected] = useState<Resource | null>(null),
     [version, setVersion] = useState<string | null>(null),
     read = useRead(`policy-resource/${kind}/${JSON.stringify(query)}`, (signal) =>

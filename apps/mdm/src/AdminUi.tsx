@@ -106,6 +106,12 @@ export function Failure({
   const title =
     kind === 'read' && readTitle
       ? readTitle
+      : code === 'profile_receipt_capacity_reached'
+        ? l('资料操作回执已达部署容量，请联系管理员调整额度。原操作仍可查询。',
+            'Profile operation receipt capacity reached. Contact an administrator to adjust the quota. Existing operations remain queryable.')
+        : code === 'provider_limit_reached'
+          ? l('身份提供方已达部署容量，请联系管理员调整额度。',
+              'Provider capacity reached. Contact an administrator to adjust the quota.')
       : ['revision_conflict', 'operation_conflict', 'conflict', 'configuration_changed'].includes(
             code,
           )
