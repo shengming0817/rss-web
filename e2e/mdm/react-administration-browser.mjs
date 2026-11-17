@@ -105,7 +105,11 @@ try {
       .waitFor()
     assert.equal(
       new URL(p.url()).pathname,
-      initialSetup ? '/setup' : management ? '/platform' : '/',
+      initialSetup
+        ? `/tenants/${f.tenant}/setup`
+        : management
+          ? '/platform'
+          : `/tenants/${f.tenant}`,
     )
   }
   const dialog = (p, name) => p.getByRole('dialog', { name, exact: true })
@@ -682,9 +686,18 @@ try {
   await d.getByRole('button', { name: '创建并供应租户', exact: true }).click()
   await d.getByRole('button', { name: '查询原供应操作', exact: true }).waitFor()
   const provisionReads = requestCount(manager, 'GET', `${provisionPath}/${provisionOperation}`)
-  await d.getByRole('button', { name: '查询原供应操作', exact: true }).click()
-  await d.getByText('供应尚未完成，不能进入业务租户', { exact: true }).waitFor()
-  assert.equal(await d.getByRole('link', { name: '进入业务租户', exact: false }).count(), 0)
+  const originalProvision = await result(
+    manager,
+    'GET',
+    provisionPath + '/' + provisionOperation,
+    () => d.getByRole('button', { name: '查询原供应操作', exact: true }).click(),
+  )
+  if (originalProvision.result.phase === 'configured')
+    assert.equal(
+      await d.getByRole('link', { name: '进入业务租户', exact: false }).getAttribute('href'),
+      originalProvision.result.entryPath,
+    )
+  else await d.getByText('供应尚未完成，不能进入业务租户', { exact: true }).waitFor()
   await manager.unroute('**/tenant-administration/provisionings', loseProvision)
   assert.equal(requestCount(manager, 'POST', provisionPath), 1)
   assert.equal(

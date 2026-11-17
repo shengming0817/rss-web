@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card } from 'antd'
-import type { PublicEnrollmentPort } from '@rss/mdm-enrollment'
+import type { AgentPackageDownloadPort, EntraTermsPort } from '@rss/mdm-enrollment'
 import type { Locale } from './i18n'
 import { Heading, labels, ReadState, useRead } from './AdminUi'
 import { DataTable } from './DataTable'
@@ -8,7 +8,7 @@ export function PublicDownloads({
   downloads,
   locale,
 }: {
-  downloads: Pick<PublicEnrollmentPort, 'packages' | 'packageUrl'>
+  downloads: AgentPackageDownloadPort
   locale: Locale
 }) {
   const l = labels(locale),
@@ -58,13 +58,7 @@ export function PublicDownloads({
     </section>
   )
 }
-export function EntraTerms({
-  terms,
-  locale,
-}: {
-  terms: Pick<PublicEnrollmentPort, 'terms' | 'termsFinishUrl'>
-  locale: Locale
-}) {
+export function EntraTerms({ terms, locale }: { terms: EntraTermsPort; locale: Locale }) {
   const l = labels(locale),
     read = useRead('public-entra-terms', terms.terms),
     [now, setNow] = useState(() => Date.now())

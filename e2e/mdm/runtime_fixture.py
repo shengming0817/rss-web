@@ -70,7 +70,7 @@ def storage(environment, binary, config, tenant):
 def signer(environment, origin, tenant, login, password):
     operator = Browser(origin, environment.root/'ca.crt', urlsplit(origin).port)
     operator.login(tenant, login, password)
-    status, trust = operator.call('POST', '/api/v1/task-signing/trust',
+    status, trust = operator.call('POST', operator.business_path('/task-signing/trust'),
         dict(action='prepare', expectedRevision=0), str(uuid.uuid4()))
     if status != 200 or trust['revision'] != 1:
         raise RuntimeError('baseline-task-signing')

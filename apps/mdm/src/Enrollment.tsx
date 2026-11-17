@@ -36,7 +36,7 @@ export function Enrollment({ runtime, locale }: { runtime: Runtime; locale: Loca
           'Native enrollment, public installers and administrator enrollment files have separate flows.',
         )}
         actions={
-          <Link className="button-link" to="/downloads/agent">
+          <Link className="button-link" to="/downloads/agent" reloadDocument>
             {l('公开 Agent 安装包', 'Public Agent installers')}
           </Link>
         }

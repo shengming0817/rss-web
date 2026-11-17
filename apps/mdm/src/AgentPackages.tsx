@@ -218,7 +218,9 @@ export function AgentPackages({
           >
             {l('明确撤回此发布', 'Explicitly withdraw this release')}
           </Button>
-          <Link to="/downloads/agent">{l('公开安装包入口', 'Public installer entry')}</Link>
+          <Link to="/downloads/agent" reloadDocument>
+            {l('公开安装包入口', 'Public installer entry')}
+          </Link>
         </Card>
       )}
       {canPrepare && (

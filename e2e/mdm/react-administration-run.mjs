@@ -15,7 +15,8 @@ assert.ok(
 )
 const installation = resolve(root, 'e2e/mdm/shared-tenant-installation.py')
 const env = { ...process.env }
-let active,
+let tag,
+  active,
   interrupted = false,
   started = false,
   phase = 'build'
@@ -44,7 +45,7 @@ async function run(command, args, cwd, timeoutMs) {
 }
 try {
   if (shared) {
-    const tag = 'rss-mdm-web:shared-' + randomUUID()
+    tag = 'rss-mdm-web:shared-' + randomUUID()
     await run('pnpm', ['image:mdm', '--tag', tag], root, 1200000)
     env.MDM_REACT_ADMIN_WEB_IMAGE = execFileSync(
       'docker',
@@ -105,6 +106,19 @@ try {
           ),
         }),
       )
+      process.exitCode = 1
+    }
+  }
+  if (tag) {
+    phase = 'cleanup'
+    try {
+      const present = execFileSync('docker', ['image', 'ls', '--quiet', tag], {
+        encoding: 'utf8',
+        timeout: 30000,
+      }).trim()
+      if (present) await run('docker', ['image', 'rm', tag], root, 60000)
+    } catch {
+      console.error(JSON.stringify({ phase, result: 'failed', recoveryImage: tag }))
       process.exitCode = 1
     }
   }

@@ -15,7 +15,8 @@ import {
   type Installer,
   type NativeInstructions,
   type Page,
-  type PublicEnrollmentPort,
+  type AgentPackageDownloadPort,
+  type EntraTermsPort,
   type Quantity,
   type Target,
   type Terms,
@@ -296,10 +297,10 @@ function installer(value: unknown, tenant: string): Installer {
   uuid(value.releaseId)
   return value
 }
-export function createPublicEnrollmentAdapter(
+export function createAgentPackageDownloadAdapter(
   transport: HttpTransport,
   tenant: string,
-): Pick<PublicEnrollmentPort, 'packages' | 'package' | 'packageUrl'> {
+): AgentPackageDownloadPort {
   uuid(tenant)
   return {
     packages: () =>
@@ -309,25 +310,13 @@ export function createPublicEnrollmentAdapter(
           throw new Error('Duplicate installer')
         return items
       }),
-    package: (id) =>
-      api.getApiV1AgentEnrollPackagesById(
-        transport,
-        { pathParams: { id: uuid(id) }, query: { tenantId: tenant } },
-        (value) => {
-          const item = installer(value, tenant)
-          if (item.releaseId !== id) throw new Error('Wrong installer')
-          return item
-        },
-      ),
     packageUrl: (id) =>
       api.getApiV1AgentEnrollPackagesByIdContent.url({ id: uuid(id) }) +
       '?' +
       new URLSearchParams({ tenantId: tenant }),
   }
 }
-export function createEntraTermsAdapter(
-  transport: HttpTransport,
-): Pick<PublicEnrollmentPort, 'terms' | 'termsFinishUrl'> {
+export function createEntraTermsAdapter(transport: HttpTransport): EntraTermsPort {
   return {
     terms: () =>
       api.getApiV1WindowsEntraTermsContext(transport, {}, (value) => {

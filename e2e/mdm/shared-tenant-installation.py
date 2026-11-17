@@ -45,9 +45,8 @@ def cleanup():
             owner.ports_file = ports
         owner.cleanup()
     network = Ingress(root, project, project)
-    if network.record.exists():
-        network.release()
-    for command in (['ps', '-aq'], ['volume', 'ls', '-q']):
+    network.release()
+    for command in (['ps', '-aq'], ['volume', 'ls', '-q'], ['network', 'ls', '-q']):
         result = subprocess.check_output(
             ['docker', *command, '--filter', 'label=com.docker.compose.project=' + project],
             text=True, timeout=30,

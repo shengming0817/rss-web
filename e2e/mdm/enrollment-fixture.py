@@ -120,7 +120,7 @@ def prepare_signer(origin, reader_password):
     login = post(f'/api/v1/identity/tenants/{TENANTS[0]}/login',
                  dict(login='admin',password=(environment.root/'account-password').read_text()))
     post(f'/api/v1/identity/tenants/{TENANTS[0]}/accounts', dict(login='reader', password=reader_password.read_text()), login['csrfToken'], expected=201)
-    return post('/api/v1/task-signing/trust', dict(action='prepare',expectedRevision=0),
+    return post(f'/api/v1/tenants/{TENANTS[0]}/task-signing/trust', dict(action='prepare',expectedRevision=0),
                 login['csrfToken'], str(uuid.uuid4()))['revision']
 
 try:
@@ -160,10 +160,9 @@ try:
     log_path = private(environment.root/'product.log', '')
     with log_path.open('w') as log:
         phase = 'signer'
-        initial = start(binary, initialized, log, expected=503)
-        revision = prepare_signer(initialized['origin'], reader_password)
+        initial = start(binary, initialized, log, expected=None)
+        prepare_signer(initialized['origin'], reader_password)
         shutdown(initial)
-        config['task_signing'] = dict(revision=revision)
         phase = 'native-inputs'
         native_ports = Environment(BACKEND, group='enrollment-native').host_ports()
         root = environment.root/'native'
@@ -193,7 +192,7 @@ try:
         operator = Browser(initialized['origin'],environment.root/'ca.crt',urlsplit(initialized['origin']).port)
         operator.login(TENANTS[0],'admin',(environment.root/'account-password').read_text())
         if browser_module == 'react-certificates-browser.mjs':
-            status, rules = operator.call('GET', '/api/v1/authorization/rules')
+            status, rules = operator.call('GET', operator.business_path('/authorization/rules'))
             if status != 200: raise RuntimeError('certificate-authority-read')
             archive_permissions = {'certificate_archive_read','certificate_archive_write','certificate_archive_unlock','certificate_archive_export'}
             for existing in rules['items']:
@@ -201,7 +200,7 @@ try:
                     continue
                 value = dict(existing['value'])
                 value['grants'] = [grant for grant in value['grants'] if grant['operation'] not in archive_permissions]
-                status, _ = operator.call('PUT', '/api/v1/authorization/rules/'+existing['id'], dict(operationId=str(uuid.uuid4()),expectedRevision=existing['revision'],value=value))
+                status, _ = operator.call('PUT', operator.business_path('/authorization/rules/'+existing['id']), dict(operationId=str(uuid.uuid4()),expectedRevision=existing['revision'],value=value))
                 if status != 200: raise RuntimeError('certificate-authority-scope')
         installer_release = None
         installer_file = None

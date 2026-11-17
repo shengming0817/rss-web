@@ -469,7 +469,7 @@ try {
       await p.getByRole('link', { name: '查看此执行的管理活动', exact: true }).click()
       await p.waitForURL(
         (url) =>
-          url.pathname === '/audit' &&
+          url.pathname === `/tenants/${f.tenant}/audit` &&
           url.searchParams.get('task') === task.task &&
           url.searchParams.get('attempt') === final.attemptId,
       )
@@ -734,13 +734,13 @@ try {
 
   run.step('device-access-authority-boundary')
   const enterpriseRead = await p.request.get(
-    `${origin}/api/v1/device-access/enterprise/configuration?limit=1`,
+    `${origin}/api/v1/tenants/${f.tenant}/device-access/enterprise/configuration?limit=1`,
   )
   if (enterpriseRead.status() === 403) {
     assert.equal((await enterpriseRead.json()).code, 'permission_denied')
     for (const path of [
       `/api/v1/tenants/${run.fixture.tenant}/devices/${f.executionAccess.device}/device-access?limit=1`,
-      `/api/v1/apple/platform-sso/configuration?deviceId=${f.executionAccess.device}`,
+      `/api/v1/tenants/${f.tenant}/apple/platform-sso/configuration?deviceId=${f.executionAccess.device}`,
     ])
       assert.equal((await api('GET', path, undefined, 403)).code, 'permission_denied')
     await run.nav(
@@ -853,7 +853,7 @@ try {
     )
     const psso = await api(
       'GET',
-      `/api/v1/apple/platform-sso/configuration?deviceId=${encodeURIComponent(f.executionAccess.device)}`,
+      `/api/v1/tenants/${f.tenant}/apple/platform-sso/configuration?deviceId=${encodeURIComponent(f.executionAccess.device)}`,
     )
     assert.equal(psso.configuration.teamId, 'ABCDEFGHIJ')
     await p.getByText('Platform SSO 管理配置', { exact: true }).waitFor()

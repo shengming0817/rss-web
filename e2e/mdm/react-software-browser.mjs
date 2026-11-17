@@ -740,7 +740,7 @@ try {
     .waitFor()
   const draftReturn = draftPage.getByRole('button', { name: '返回来源', exact: true })
   const sourceUrl = new URL(new URL(p.url()).searchParams.get('returnTo'), origin)
-  assert.equal(sourceUrl.pathname, '/software')
+  assert.equal(sourceUrl.pathname, `/tenants/${f.tenant}/software`)
   assert.equal(sourceUrl.searchParams.get('resource'), resource)
   assert.equal(sourceUrl.searchParams.get('version'), 'resource-v1')
   assert.equal(sourceUrl.searchParams.get('variant'), JSON.stringify(['windows', 'x86_64', 'main']))

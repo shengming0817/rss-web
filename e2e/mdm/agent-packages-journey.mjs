@@ -6,10 +6,12 @@ import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 export async function agentPackagesJourney(run, page, anonymous) {
   const { origin, fixture } = run
+  const packages = `/api/v1/tenants/${fixture.tenant}/agent-packages`
+  const publicCatalog = origin + `/api/v1/agent/enroll/packages?tenantId=${fixture.tenant}`
   await run.nav(page, '/enroll?tab=packages', '设备注册')
   await page.getByLabel('选择 Agent 安装包', { exact: true }).setInputFiles(fixture.installerFile)
   const preparation = await (
-    await run.response(page, 'POST', '/api/v1/agent-packages/uploads', () =>
+    await run.response(page, 'POST', packages + '/uploads', () =>
       page.getByRole('button', { name: '明确准备此上传', exact: true }).click(),
     )
   ).json()
@@ -24,10 +26,10 @@ export async function agentPackagesJourney(run, page, anonymous) {
     () => page.getByRole('button', { name: '完成原上传', exact: true }).click(),
     201,
   )
-  await run.response(page, 'GET', '/api/v1/agent-packages/uploads/' + preparation.packageId, () =>
+  await run.response(page, 'GET', packages + '/uploads/' + preparation.packageId, () =>
     page.getByRole('button', { name: '读取持久解析', exact: true }).click(),
   )
-  await run.response(page, 'POST', '/api/v1/agent-packages/uploads/' + preparation.packageId, () =>
+  await run.response(page, 'POST', packages + '/uploads/' + preparation.packageId, () =>
     page.getByRole('button', { name: '明确解析原上传', exact: true }).click(),
   )
   await page
@@ -98,8 +100,8 @@ export async function agentPackagesJourney(run, page, anonymous) {
   run.checks.push('agent-package-mobile-and-english-keyboard-authoring:' + screenshots)
   let original,
     savedWrites = 0
-  const beforeSave = run.count(page, 'POST', '/api/v1/agent-packages/save')
-  await page.route('**/api/v1/agent-packages/save', async (route) => {
+  const beforeSave = run.count(page, 'POST', packages + '/save')
+  await page.route('**' + packages + '/save', async (route) => {
     savedWrites++
     original = route.request().postDataJSON().operationId
     const actual = await route.fetch()
@@ -110,8 +112,7 @@ export async function agentPackagesJourney(run, page, anonymous) {
   await Promise.all([
     page.waitForEvent(
       'requestfailed',
-      (request) =>
-        request.method() === 'POST' && request.url().endsWith('/api/v1/agent-packages/save'),
+      (request) => request.method() === 'POST' && request.url().endsWith(packages + '/save'),
     ),
     page.getByRole('button', { name: '明确保存软件定义', exact: true }).click(),
   ])
@@ -123,22 +124,20 @@ export async function agentPackagesJourney(run, page, anonymous) {
     await page.getByRole('button', { name: '明确发布已保存软件', exact: true }).isDisabled(),
     true,
   )
-  await page.unroute('**/api/v1/agent-packages/save')
-  await run.response(page, 'GET', '/api/v1/agent-packages/operations/' + original, () =>
+  await page.unroute('**' + packages + '/save')
+  await run.response(page, 'GET', packages + '/operations/' + original, () =>
     page.getByRole('button', { name: '读取原包操作', exact: true }).click(),
   )
   await page.getByRole('button', { name: '结束此操作', exact: true }).click()
   assert.equal(savedWrites, 1)
-  assert.equal(run.count(page, 'POST', '/api/v1/agent-packages/save'), beforeSave + 1)
+  assert.equal(run.count(page, 'POST', packages + '/save'), beforeSave + 1)
   const release = await (
-    await run.response(page, 'POST', '/api/v1/agent-packages', () =>
+    await run.response(page, 'POST', packages, () =>
       page.getByRole('button', { name: '明确发布已保存软件', exact: true }).click(),
     )
   ).json()
   assert.equal(release.version, '3148-browser')
-  const catalog = await (
-    await anonymous.request.get(origin + '/api/v1/agent/enroll/packages')
-  ).json()
+  const catalog = await (await anonymous.request.get(publicCatalog)).json()
   const presented = catalog.find((row) => row.releaseId === release.releaseId)
   assert.ok(presented)
   await anonymous.reload()
@@ -163,12 +162,12 @@ export async function agentPackagesJourney(run, page, anonymous) {
   await run.response(
     page,
     'POST',
-    '/api/v1/agent-packages/' + release.releaseId + '/withdraw',
+    packages + '/' + release.releaseId + '/withdraw',
     () => page.getByRole('button', { name: '明确撤回此发布', exact: true }).click(),
     204,
   )
   assert.ok(
-    !(await (await anonymous.request.get(origin + '/api/v1/agent/enroll/packages')).json()).some(
+    !(await (await anonymous.request.get(publicCatalog)).json()).some(
       (row) => row.releaseId === release.releaseId,
     ),
   )

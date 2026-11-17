@@ -42,7 +42,7 @@ def register(origin, ca, native, operator, private, tenant, capabilities=None, a
     csr = base64.b64encode((native/'agent.der').read_bytes()).decode()
     secret = secrets.token_urlsafe(32)
     request = call(origin, ca, '/api/v1/agent/enroll/requests', dict(wireVersion=1, operationId=str(uuid.uuid4()), secret=secret, platform='macos', csr=csr))
-    status, grant = operator.call('POST', '/api/v1/agent-requests/'+request['grantId']+'/authorize', dict(operationId=str(uuid.uuid4())))
+    status, grant = operator.call('POST', operator.business_path('/agent-requests/'+request['grantId']+'/authorize'), dict(operationId=str(uuid.uuid4())))
     check(status == 200, 'collector-authorization')
     context = dict(revision=1, osVersion=[14,0,0,0], userHelper=True, systemBroker=True,
                    interactiveUser=dict(windowsAuthority=None, generatedUid='00000000-0000-0000-0000-000000000501', identity='501', sessionId=str(uuid.uuid4()), administrator=False),

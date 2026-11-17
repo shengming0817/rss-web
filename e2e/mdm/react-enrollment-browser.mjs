@@ -12,10 +12,10 @@ try {
   const { origin, fixture: f, checks } = run,
     anonymous = await run.page()
   await run.nav(anonymous, '/downloads/agent', 'Agent 安装包')
-  assert.equal(new URL(anonymous.url()).pathname, '/downloads/agent')
+  assert.equal(new URL(anonymous.url()).pathname, `/tenants/${f.tenant}/downloads/agent`)
   const catalogResponse = await anonymous
     .context()
-    .request.get(origin + '/api/v1/agent/enroll/packages')
+    .request.get(origin + `/api/v1/agent/enroll/packages?tenantId=${f.tenant}`)
   assert.equal(catalogResponse.status(), 200)
   const packages = await catalogResponse.json()
   assert.ok(packages.length > 0)
@@ -150,7 +150,7 @@ try {
   assert.equal(established.status, 'active')
   await anonymous.reload()
   await anonymous.getByRole('heading', { name: 'Agent 安装包', exact: true }).waitFor()
-  assert.equal(new URL(anonymous.url()).pathname, '/downloads/agent')
+  assert.equal(new URL(anonymous.url()).pathname, `/tenants/${f.tenant}/downloads/agent`)
   checks.push('real-stale-admission-rejected-maintenance-and-public-downloads-continue')
   await api('PUT', admissionPath, {
     operationId: randomUUID(),

@@ -358,10 +358,11 @@ export interface AdeOperation {
   readonly state: 'pending' | 'running' | 'succeeded' | 'failed' | 'unknown' | 'superseded'
   readonly result: Readonly<Record<string, unknown>> | null
 }
-export interface PublicEnrollmentPort {
+export interface AgentPackageDownloadPort {
   packages(): Promise<readonly Installer[]>
-  package(id: string): Promise<Installer>
   packageUrl(id: string): string
+}
+export interface EntraTermsPort {
   terms(): Promise<Terms>
   termsFinishUrl(): string
 }

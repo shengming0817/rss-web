@@ -59,7 +59,7 @@ import {
   appleBridgeUrl,
   createEntraTermsAdapter,
   createEnrollmentAdapter,
-  createPublicEnrollmentAdapter,
+  createAgentPackageDownloadAdapter,
 } from '@rss/mdm-http/enrollment'
 import { createAppleEnrollmentAdapter } from '@rss/mdm-http/apple-enrollment'
 import { createConnectionsAdapters } from '@rss/mdm-http/connections'
@@ -135,7 +135,7 @@ export async function startRuntime(
   }
   const base = management ? '' : `/tenants/${tenant}`
   if (!management && pathname === base + '/downloads/agent')
-    return { kind: 'downloads', downloads: createPublicEnrollmentAdapter(mdm, tenant) } as const
+    return { kind: 'downloads', downloads: createAgentPackageDownloadAdapter(mdm, tenant) } as const
   const runtime = createRuntime(
     identity,
     mdm,

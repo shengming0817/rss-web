@@ -707,7 +707,7 @@ try {
       .getByRole('alert')
       .filter({ hasText: '重新认证已完成，请显式读取或重提原操作' })
       .waitFor()
-    assert.equal(new URL(p.url()).pathname, '/webhooks')
+    assert.equal(new URL(p.url()).pathname, `/tenants/${f.tenant}/webhooks`)
     assert.equal(await label('材料操作重新认证密码').inputValue(), '')
     assert.equal(run.count(p, 'POST', base + '/materials'), 1)
     await run.response(p, 'GET', `${base}/materials/operations/${materialId}`, () =>
@@ -921,7 +921,11 @@ try {
   )
 } catch (error) {
   failure = error
-  if (diagnosticPage && (publicLayout || new URL(diagnosticPage.url()).pathname === '/audit')) {
+  if (
+    diagnosticPage &&
+    (publicLayout ||
+      new URL(diagnosticPage.url()).pathname === `/tenants/${run.fixture.tenant}/audit`)
+  ) {
     const directory = mkdtempSync(join(tmpdir(), 'rss-react-audit-failure-'))
     await diagnosticPage
       .screenshot({

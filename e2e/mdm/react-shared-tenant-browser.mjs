@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { realBrowser } from './react-mdm-browser.mjs'
 
-const run = await realBrowser('MDM_SHARED_BROWSER_FIXTURE', 'react-shared-tenant')
+const run = await realBrowser('MDM_SHARED_BROWSER_FIXTURE', 'react-shared-tenant', {
+  ignoreDefaultArgs: ['--disable-back-forward-cache'],
+})
 let failure
 try {
   const { fixture, origin, checks } = run
@@ -29,6 +31,9 @@ try {
   assert.ok(before)
   await a.goto(origin + path(fixture.tenant) + '/setup')
   await a.getByRole('button', { name: '保存意图', exact: true }).waitFor()
+  const retainedA = await run.page(a.context())
+  await retainedA.goto(origin + path(fixture.tenant) + '/setup')
+  await retainedA.getByRole('button', { name: '保存意图', exact: true }).waitFor()
 
   await run.choose(a, a.getByRole('combobox', { name: '邮件', exact: true }), '显式跳过')
   await a.getByRole('textbox', { name: '邮件 跳过原因', exact: true }).fill('A-only unsaved draft')
@@ -45,18 +50,33 @@ try {
   await dialog.getByLabel('初始管理员密码', { exact: true }).fill(password)
   const provisioning = '/api/v1/tenant-administration/provisionings'
   let operation,
-    writes = 0
+    writes = 0,
+    intercepted
+  const submission = new Promise((resolve) => {
+    intercepted = resolve
+  })
   const lose = async (route) => {
-    if (route.request().method() !== 'POST') return route.fallback()
+    if (route.request().method() !== 'POST') return route.fallback().catch(() => undefined)
     operation = route.request().headers()['idempotency-key']
     writes++
-    const response = await route.fetch({ maxRetries: 0 })
-    assert.ok([200, 202].includes(response.status()))
-    await route.abort('failed')
+    let status
+    try {
+      const response = await route.fetch({ maxRetries: 0 })
+      status = response.status()
+      await response.dispose()
+      await route.abort('failed')
+    } catch {
+      status = undefined
+      await route.abort('failed').catch(() => undefined)
+    } finally {
+      intercepted(status)
+    }
   }
   await manager.route('**' + provisioning, lose)
   await dialog.getByRole('button', { name: '创建并供应租户', exact: true }).click()
   await dialog.getByRole('button', { name: '查询原供应操作', exact: true }).waitFor()
+  assert.ok([200, 202].includes(await submission), 'provisioning interception failed')
+  await manager.unroute('**' + provisioning, lose)
   const entry = dialog.getByRole('link', { name: '进入业务租户', exact: false })
   for (let i = 0; i < 12 && !(await entry.count()); i++) {
     const response = manager.waitForResponse(
@@ -100,6 +120,11 @@ try {
   assert.equal((await a.request.get(api(tenantB, '/resources'))).status(), 200)
   assert.ok([401, 403].includes((await a.request.get(api(fixture.tenant, '/resources'))).status()))
   assert.equal(await ready(a), before)
+  await retainedA.bringToFront()
+  // Headless Chromium can keep both tabs visible. Exercise the same visibility handler.
+  await retainedA.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await retainedA.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
+  await a.bringToFront()
   await a.goto(origin + path(fixture.tenant) + '/setup')
   await a.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
   await a.goBack()

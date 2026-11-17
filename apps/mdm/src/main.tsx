@@ -19,8 +19,16 @@ try {
       if (event.persisted) runtime.owner.suspend()
       else runtime.owner.dispose()
     })
+    const recheck = () => void runtime.owner.check(runtime.tenant).catch(() => undefined)
     window.addEventListener('pageshow', (event) => {
-      if (event.persisted) void runtime.owner.check(runtime.tenant).catch(() => undefined)
+      if (event.persisted) recheck()
+    })
+    document.addEventListener('visibilitychange', () => {
+      if (
+        document.visibilityState === 'visible' &&
+        runtime.owner.getSnapshot().status === 'authenticated'
+      )
+        recheck()
     })
   }
   root.render(<App startup={startup} />)

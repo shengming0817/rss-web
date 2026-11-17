@@ -248,7 +248,12 @@ const featureRoutes: readonly FeatureRoute[] = [
     render: (ui) => <TenantSetup {...ui} />,
   },
   { path: '/settings', label: 'settings', render: (ui) => <Settings {...ui} /> },
-  { path: '/diagnostics', label: 'diagnostics', render: (ui) => <Diagnostics {...ui} /> },
+  {
+    path: '/diagnostics',
+    label: 'diagnostics',
+    realm: 'tenant',
+    render: (ui) => <Diagnostics {...ui} />,
+  },
   {
     path: '/operation-diagnostics',
     label: 'operationDiagnostics',
