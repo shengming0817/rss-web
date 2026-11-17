@@ -7,8 +7,8 @@ const id = '11111111-1111-4111-8111-111111111111'
 const empty = { items: [], nextCursor: null, coverage: { complete: false } }
 
 it.each([
-  ['mdm', '/api/v1'],
-  ['da', '/api/v1/device-access'],
+  ['mdm', '/api/v1/tenants/{tenant}'],
+  ['da', '/api/v1/tenants/{tenant}/device-access'],
   ['management', '/api/v1/tenant-administration'],
 ] as const)('binds the %s reads to its generated operations', async (context, prefix) => {
   const owner = context === 'management' ? 'tenant_administration' : 'webhook'
@@ -36,7 +36,7 @@ it.each([
     ),
   )
   const client = createOperationDiagnostics(
-    createOperationDiagnosticsAdapter({ request } as unknown as HttpTransport, context),
+    createOperationDiagnosticsAdapter({ request } as unknown as HttpTransport, context, id),
   )
   const base = prefix + '/operation-diagnostics'
   const signal = new AbortController().signal
@@ -103,7 +103,7 @@ it('retains delivery, asynchronous progress and effect from the generated RunSta
     }),
   )
   const client = createOperationDiagnostics(
-    createOperationDiagnosticsAdapter({ request } as unknown as HttpTransport, 'mdm'),
+    createOperationDiagnosticsAdapter({ request } as unknown as HttpTransport, 'mdm', id),
   )
   expect(
     (
@@ -167,7 +167,7 @@ it('preserves a sealed partial native collection report separately from delivery
     }),
   )
   const client = createOperationDiagnostics(
-    createOperationDiagnosticsAdapter({ request } as unknown as HttpTransport, 'mdm'),
+    createOperationDiagnosticsAdapter({ request } as unknown as HttpTransport, 'mdm', id),
   )
   await expect(
     client.operation({ owner: 'collection_execution', operationId: id }),

@@ -15,9 +15,9 @@ it('requires the formal exact upload href before handing coordinates to Content'
   const transport = {
     request: async (input: RequestOptions<unknown>) => input.decode(value),
   } as unknown as HttpTransport
-  const adapter = createAgentPackagesAdapter(transport),
+  const adapter = createAgentPackagesAdapter(transport, '11111111-1111-4111-8111-111111111111'),
     input = { operationId: id, filename: 'agent.exe', length: 4, sha256: Array<number>(32).fill(0) }
   await expect(adapter.prepare(input)).rejects.toThrow('href')
-  value.href = `/api/v1/resources/${id}/uploads/${id}`
+  value.href = `/api/v1/tenants/11111111-1111-4111-8111-111111111111/resources/${id}/uploads/${id}`
   expect((await adapter.prepare(input)).upload).toBe(id)
 })

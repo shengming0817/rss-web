@@ -24,7 +24,7 @@ import {
 } from './inventory-values'
 
 function definition(value: unknown): Definition {
-  if (!schema.getApiV1ComplianceRulesByIdResponse.validateDefinition(value))
+  if (!schema.getApiV1TenantsByTenantComplianceRulesByIdResponse.validateDefinition(value))
     throw new Error('Invalid compliance definition')
   return {
     ...value,
@@ -34,14 +34,14 @@ function definition(value: unknown): Definition {
   }
 }
 function rule(value: unknown, id: string, revision?: number): Rule {
-  if (!schema.getApiV1ComplianceRulesByIdResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantComplianceRulesByIdResponse.validateRoot(value))
     throw new Error('Invalid compliance rule')
   if (uuid(value.id) !== id || (revision !== undefined && value.revision !== revision))
     throw new Error('Wrong compliance rule binding')
   return { id, revision: positive(value.revision), definition: definition(value.definition) }
 }
 function assessment(value: unknown): Assessment {
-  if (!schema.getApiV1DevicesByIdComplianceResponse.validateAssessment(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdComplianceResponse.validateAssessment(value))
     throw new Error('Invalid compliance assessment')
   const evidence = value.evidence.map((field) => {
     if (field.sources.length > 2) throw new Error('Invalid field evidence budget')
@@ -87,7 +87,10 @@ function assessment(value: unknown): Assessment {
   }
 }
 function current(value: unknown, device: string): Current {
-  if (!schema.getApiV1DevicesByIdComplianceResponse.validateRoot(value) || value.device !== device)
+  if (
+    !schema.getApiV1TenantsByTenantDevicesByIdComplianceResponse.validateRoot(value) ||
+    value.device !== device
+  )
     throw new Error('Wrong compliance device')
   const rules = distinct(
     value.rules.map((row): CurrentRule => {
@@ -132,14 +135,14 @@ const directoryFields = {
   definition: (value: unknown) => nullable(value, definition),
 }
 /** The sole bound transport performs authentication/CSRF; this module owns compliance wire binding. */
-export function createComplianceAdapter(transport: HttpTransport): CompliancePort {
+export function createComplianceAdapter(transport: HttpTransport, tenant: string): CompliancePort {
   return {
     list: (query = {}) => {
       if (query.fields && !query.fields.includes('id'))
         throw new Error('Directory identity required')
-      return api.getApiV1ComplianceRules(
+      return api.getApiV1TenantsByTenantComplianceRules(
         transport,
-        { query: queryParameters({ ...query, limit: query.limit ?? 50 }) },
+        { pathParams: { tenant }, query: queryParameters({ ...query, limit: query.limit ?? 50 }) },
         (value) =>
           projectedPage(value, directoryFields, query.fields, ['id']) as {
             items: RuleRow[]
@@ -148,21 +151,26 @@ export function createComplianceAdapter(transport: HttpTransport): CompliancePor
       )
     },
     read: (id) =>
-      api.getApiV1ComplianceRulesById(transport, { pathParams: { id: uuid(id) } }, (value) =>
-        rule(value, id),
+      api.getApiV1TenantsByTenantComplianceRulesById(
+        transport,
+        { pathParams: { tenant, id: uuid(id) } },
+        (value) => rule(value, id),
       ),
     version: (id, revision) =>
-      api.getApiV1ComplianceRulesByIdVersionsByRevision(
+      api.getApiV1TenantsByTenantComplianceRulesByIdVersionsByRevision(
         transport,
-        { pathParams: { id: uuid(id), revision: positive(revision) } },
+        { pathParams: { tenant, id: uuid(id), revision: positive(revision) } },
         (value) => rule(value, id, revision),
       ),
     put: (id, change) =>
-      api.putApiV1ComplianceRulesById(
+      api.putApiV1TenantsByTenantComplianceRulesById(
         transport,
         {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.putApiV1ComplianceRulesByIdBody.validateRoot),
+          pathParams: { tenant, id: uuid(id) },
+          body: requestInput(
+            change,
+            schema.putApiV1TenantsByTenantComplianceRulesByIdBody.validateRoot,
+          ),
         },
         (value) => {
           if (
@@ -175,11 +183,14 @@ export function createComplianceAdapter(transport: HttpTransport): CompliancePor
         },
       ),
     remove: (id, change) =>
-      api.deleteApiV1ComplianceRulesById(
+      api.deleteApiV1TenantsByTenantComplianceRulesById(
         transport,
         {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.deleteApiV1ComplianceRulesByIdBody.validateRoot),
+          pathParams: { tenant, id: uuid(id) },
+          body: requestInput(
+            change,
+            schema.deleteApiV1TenantsByTenantComplianceRulesByIdBody.validateRoot,
+          ),
         },
         (value) => {
           if (value.id !== id || value.revision !== change.expectedRevision + 1 || !value.deleted)
@@ -188,18 +199,21 @@ export function createComplianceAdapter(transport: HttpTransport): CompliancePor
         },
       ),
     recompute: (id, change) =>
-      api.postApiV1ComplianceRulesByIdRecompute(
+      api.postApiV1TenantsByTenantComplianceRulesByIdRecompute(
         transport,
         {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.postApiV1ComplianceRulesByIdRecomputeBody.validateRoot),
+          pathParams: { tenant, id: uuid(id) },
+          body: requestInput(
+            change,
+            schema.postApiV1TenantsByTenantComplianceRulesByIdRecomputeBody.validateRoot,
+          ),
         },
         (value) => ({ task: uuid(value.task) }),
       ),
     task: (id, task) =>
-      api.getApiV1ComplianceRulesByIdTasksByTask(
+      api.getApiV1TenantsByTenantComplianceRulesByIdTasksByTask(
         transport,
-        { pathParams: { id: uuid(id), task: uuid(task) } },
+        { pathParams: { tenant, id: uuid(id), task: uuid(task) } },
         (value) => {
           if (value.ruleId !== id || value.task !== task)
             throw new Error('Wrong compliance task coordinates')
@@ -212,14 +226,16 @@ export function createComplianceAdapter(transport: HttpTransport): CompliancePor
         },
       ),
     current: (device) =>
-      api.getApiV1DevicesByIdCompliance(transport, { pathParams: { id: device } }, (value) =>
-        current(value, device),
+      api.getApiV1TenantsByTenantDevicesByIdCompliance(
+        transport,
+        { pathParams: { tenant, id: device } },
+        (value) => current(value, device),
       ),
     history: (device, query = {}) =>
-      api.getApiV1DevicesByIdComplianceHistory(
+      api.getApiV1TenantsByTenantDevicesByIdComplianceHistory(
         transport,
         {
-          pathParams: { id: device },
+          pathParams: { tenant, id: device },
           query: {
             ...windowQuery(query),
             ...(query.from === undefined ? {} : { from: integer(query.from) }),

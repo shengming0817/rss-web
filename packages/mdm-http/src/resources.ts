@@ -28,12 +28,12 @@ const fields = {
     return resourcePresentation(value as Readonly<Record<string, unknown>>)
   },
 }
-export function createResourcesAdapter(transport: HttpTransport): ResourcesPort {
+export function createResourcesAdapter(transport: HttpTransport, tenant: string): ResourcesPort {
   return {
     references: (id, version, query = {}) =>
-      api.getApiV1ResourcesByIdVersionsByVersionReferences(
+      api.getApiV1TenantsByTenantResourcesByIdVersionsByVersionReferences(
         transport,
-        { pathParams: { id, version }, query: windowQuery(query) },
+        { pathParams: { tenant, id, version }, query: windowQuery(query) },
         (value) => ({
           items: value.items.map((item) => ({
             ...item,
@@ -44,18 +44,18 @@ export function createResourcesAdapter(transport: HttpTransport): ResourcesPort 
         }),
       ),
     reconstruct: async (target) => {
-      const source = await api.getApiV1ResourcesById(
+      const source = await api.getApiV1TenantsByTenantResourcesById(
         transport,
-        { pathParams: { id: target.resource } },
+        { pathParams: { tenant, id: target.resource } },
         (value) => resourceRead(value, target.resource),
       )
       return reconstructResourceMaterial(source, target)
     },
     prepareVersion: async (draft) => {
       validateVersionDraft(draft)
-      const source = await api.getApiV1ResourcesById(
+      const source = await api.getApiV1TenantsByTenantResourcesById(
         transport,
-        { pathParams: { id: draft.resource } },
+        { pathParams: { tenant, id: draft.resource } },
         (value) => resourceRead(value, draft.resource),
       )
       if (source.revision !== draft.expectedRevision)
@@ -93,9 +93,10 @@ export function createResourcesAdapter(transport: HttpTransport): ResourcesPort 
     },
     list: (query, kind, signal) => {
       const projection = query.fields ?? (Object.keys(fields) as (keyof typeof fields)[])
-      return api.getApiV1Resources(
+      return api.getApiV1TenantsByTenantResources(
         transport,
         {
+          pathParams: { tenant },
           signal,
           query: queryParameters({
             ...query,
@@ -107,34 +108,40 @@ export function createResourcesAdapter(transport: HttpTransport): ResourcesPort 
       )
     },
     read: (id, signal) =>
-      api.getApiV1ResourcesById(transport, { pathParams: { id }, signal }, (value) =>
-        resourceRead(value, id),
+      api.getApiV1TenantsByTenantResourcesById(
+        transport,
+        { pathParams: { tenant, id }, signal },
+        (value) => resourceRead(value, id),
       ),
     blueprints: () =>
-      api.getApiV1CollectionBlueprints(transport, {}, (value) => ({
-        categories: [...value.categories],
-        items: value.items.map((blueprint) => ({
-          id: blueprint.id,
-          version: blueprint.version,
-          presentation: resourcePresentation(blueprint.presentation),
-          platform: blueprint.platform,
-          definition:
-            blueprint.definition.kind === 'agent_collection'
-              ? {
-                  kind: blueprint.definition.kind,
-                  template: agentDefinition(blueprint.definition.template),
-                }
-              : blueprint.definition.kind === 'native_collection'
+      api.getApiV1TenantsByTenantCollectionBlueprints(
+        transport,
+        { pathParams: { tenant } },
+        (value) => ({
+          categories: [...value.categories],
+          items: value.items.map((blueprint) => ({
+            id: blueprint.id,
+            version: blueprint.version,
+            presentation: resourcePresentation(blueprint.presentation),
+            platform: blueprint.platform,
+            definition:
+              blueprint.definition.kind === 'agent_collection'
                 ? {
                     kind: blueprint.definition.kind,
-                    template: nativeDefinition(blueprint.definition.template),
+                    template: agentDefinition(blueprint.definition.template),
                   }
-                : {
-                    kind: blueprint.definition.kind,
-                    content: structuredClone(blueprint.definition.content),
-                  },
-        })),
-      })),
+                : blueprint.definition.kind === 'native_collection'
+                  ? {
+                      kind: blueprint.definition.kind,
+                      template: nativeDefinition(blueprint.definition.template),
+                    }
+                  : {
+                      kind: blueprint.definition.kind,
+                      content: structuredClone(blueprint.definition.content),
+                    },
+          })),
+        }),
+      ),
     change: (id, change) => {
       const input =
         change.input.action === 'version'
@@ -146,9 +153,12 @@ export function createResourcesAdapter(transport: HttpTransport): ResourcesPort 
               })),
             }
           : change.input
-      return api.postApiV1ResourcesById(
+      return api.postApiV1TenantsByTenantResourcesById(
         transport,
-        { pathParams: { id }, body: requestInput({ ...change, input }, validateResourceWrite) },
+        {
+          pathParams: { tenant, id },
+          body: requestInput({ ...change, input }, validateResourceWrite),
+        },
         (value) => {
           if (change.input.action === 'instantiate') return resourceRead(value, id)
           if (

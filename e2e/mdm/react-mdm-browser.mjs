@@ -90,7 +90,7 @@ export async function realBrowser(fixtureVariable, journey) {
   async function login(p, account = fixture.admin ?? { login: fixture.login, passwordFile }) {
     assert.equal(statSync(account.passwordFile).mode & 0o077, 0)
     phase = 'login-form'
-    await p.goto(origin + '/login')
+    await p.goto(origin + `/tenants/${fixture.tenant}/login`)
     await p.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
     await p.getByLabel('账户', { exact: true }).fill(account.login)
     await p
@@ -102,7 +102,7 @@ export async function realBrowser(fixtureVariable, journey) {
   }
   async function nav(p, path, title) {
     phase = 'navigate:' + path
-    await p.goto(origin + path)
+    await p.goto(origin + `/tenants/${fixture.tenant}` + path)
     await p.getByRole('heading', { name: title, exact: true }).waitFor()
   }
   async function choose(p, control, label) {

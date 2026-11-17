@@ -2,14 +2,16 @@
 import { bindSession } from '@rss/auth-http'
 import { createIdentityTransport } from '@rss/api/identity'
 import { createDeviceAccessDemoTransport } from '@rss/api/device-access-demo'
+import { createFlows } from '@rss/auth-core'
 import { createDeviceAccess } from '../src/bootstrap'
 import { createDemoClients } from './client'
 import DemoControls from './DemoControls'
-import { TENANT, INSTANCE } from './constants'
+import { TENANT } from './constants'
 createDeviceAccess(
   createIdentityTransport(),
   { canonicalOrigin: window.location.origin, oidcEnabled: false },
-  { canonicalOrigin: window.location.origin, tenant: TENANT, serviceId: INSTANCE },
+  TENANT,
+  createFlows(window.sessionStorage),
   {
     source: 'demo',
     controls: DemoControls,

@@ -17,7 +17,7 @@ import { requestInput } from './inventory-values'
 import { resourceDigest, resourcePresentation } from './resource-values'
 
 export function softwareSource(value: unknown): SoftwareSource {
-  if (!schema.postApiV1ResourcesByIdBody.validateSoftwareSource(value))
+  if (!schema.postApiV1TenantsByTenantResourcesByIdBody.validateSoftwareSource(value))
     throw new Error('Invalid software source snapshot')
   return {
     id: resourceId(value.id),
@@ -26,14 +26,14 @@ export function softwareSource(value: unknown): SoftwareSource {
   }
 }
 function sourceDefinition(value: unknown): SourceDefinition {
-  if (!schema.getApiV1SoftwareSourcesResponse.validateSourceDefinition(value))
+  if (!schema.getApiV1TenantsByTenantSoftwareSourcesResponse.validateSourceDefinition(value))
     throw new Error('Invalid software source definition')
   const result = structuredClone(value)
   validateSource(result)
   return result
 }
 function lifecycle(value: unknown): Lifecycle {
-  if (!schema.getApiV1SoftwareSourcesResponse.validateLifecycle(value))
+  if (!schema.getApiV1TenantsByTenantSoftwareSourcesResponse.validateLifecycle(value))
     throw new Error('Invalid software lifecycle')
   return {
     revision: count(value.revision),
@@ -45,7 +45,11 @@ function lifecycle(value: unknown): Lifecycle {
   }
 }
 function sourceView(value: unknown, id: string, revision: string): SourceView {
-  if (!schema.getApiV1SoftwareSourcesByIdRevisionsByRevisionResponse.validateRoot(value))
+  if (
+    !schema.getApiV1TenantsByTenantSoftwareSourcesByIdRevisionsByRevisionResponse.validateRoot(
+      value,
+    )
+  )
     throw new Error('Invalid source view')
   const source = sourceDefinition(value.source),
     snapshot = softwareSource(value.snapshot)
@@ -75,15 +79,16 @@ const versionFields = {
     enumeration(value, ['frozen', 'active', 'deprecated', 'archived'] as const),
 }
 /** Sources, exact import and software admission never create a second Resource catalog. */
-export function createSoftwareAdapter(transport: HttpTransport): SoftwarePort {
+export function createSoftwareAdapter(transport: HttpTransport, tenant: string): SoftwarePort {
   return {
     sources: (query) => {
       const selected = query.fields
         ? [...new Set<keyof SourceRow>(['id', 'revision', ...query.fields])]
         : undefined
-      return api.getApiV1SoftwareSources(
+      return api.getApiV1TenantsByTenantSoftwareSources(
         transport,
         {
+          pathParams: { tenant },
           query: queryParameters({
             ...query,
             ...(selected ? { fields: selected } : {}),
@@ -93,27 +98,33 @@ export function createSoftwareAdapter(transport: HttpTransport): SoftwarePort {
       )
     },
     source: (id, revision) =>
-      api.getApiV1SoftwareSourcesByIdRevisionsByRevision(
+      api.getApiV1TenantsByTenantSoftwareSourcesByIdRevisionsByRevision(
         transport,
-        { pathParams: { id, revision } },
+        { pathParams: { tenant, id, revision } },
         (value) => sourceView(value, id, revision),
       ),
     changeSource: (id, revision, change) =>
-      api.postApiV1SoftwareSourcesByIdRevisionsByRevision(
+      api.postApiV1TenantsByTenantSoftwareSourcesByIdRevisionsByRevision(
         transport,
         {
-          pathParams: { id, revision },
+          pathParams: { tenant, id, revision },
           body: requestInput(
             change,
-            schema.postApiV1SoftwareSourcesByIdRevisionsByRevisionBody.validateRoot,
+            schema.postApiV1TenantsByTenantSoftwareSourcesByIdRevisionsByRevisionBody.validateRoot,
           ),
         },
         (value) => sourceView(value, id, revision),
       ),
     import: (change) =>
-      api.postApiV1SoftwareImports(
+      api.postApiV1TenantsByTenantSoftwareImports(
         transport,
-        { body: requestInput(change, schema.postApiV1SoftwareImportsBody.validateRoot) },
+        {
+          pathParams: { tenant },
+          body: requestInput(
+            change,
+            schema.postApiV1TenantsByTenantSoftwareImportsBody.validateRoot,
+          ),
+        },
         (value) => ({
           resource: resourceId(value.resource),
           version: resourceId(value.version),
@@ -122,9 +133,9 @@ export function createSoftwareAdapter(transport: HttpTransport): SoftwarePort {
         }),
       ),
     versions: (id, query) =>
-      api.getApiV1SoftwareResourcesByIdVersions(
+      api.getApiV1TenantsByTenantSoftwareResourcesByIdVersions(
         transport,
-        { pathParams: { id }, query: queryParameters(query) },
+        { pathParams: { tenant, id }, query: queryParameters(query) },
         (value) => {
           const page = projectedPage(value, versionFields, query.fields, ['version'])
           if (page.items.some((item) => item.resource !== undefined && item.resource !== id))
@@ -133,9 +144,9 @@ export function createSoftwareAdapter(transport: HttpTransport): SoftwarePort {
         },
       ),
     version: (id, version) =>
-      api.getApiV1SoftwareResourcesByIdVersionsByVersion(
+      api.getApiV1TenantsByTenantSoftwareResourcesByIdVersionsByVersion(
         transport,
-        { pathParams: { id, version } },
+        { pathParams: { tenant, id, version } },
         (value) => {
           if (value.resource !== id || value.version !== version)
             throw new Error('Wrong software admission detail')
@@ -150,13 +161,13 @@ export function createSoftwareAdapter(transport: HttpTransport): SoftwarePort {
         },
       ),
     changeVersion: (id, version, change) =>
-      api.postApiV1SoftwareResourcesByIdVersionsByVersion(
+      api.postApiV1TenantsByTenantSoftwareResourcesByIdVersionsByVersion(
         transport,
         {
-          pathParams: { id, version },
+          pathParams: { tenant, id, version },
           body: requestInput(
             change,
-            schema.postApiV1SoftwareResourcesByIdVersionsByVersionBody.validateRoot,
+            schema.postApiV1TenantsByTenantSoftwareResourcesByIdVersionsByVersionBody.validateRoot,
           ),
         },
         (value) => {

@@ -9,7 +9,10 @@ function fixture(read: (options: RequestOptions<unknown>) => unknown | Promise<u
   const request = vi.fn(async (options: RequestOptions<unknown>) =>
       options.decode(await read(options)),
     ),
-    adapter = createSoftwareAdapter({ request } as unknown as HttpTransport)
+    adapter = createSoftwareAdapter(
+      { request } as unknown as HttpTransport,
+      '11111111-1111-4111-8111-111111111111',
+    )
   return { request, adapter, software: createSoftware(adapter) }
 }
 function source() {
@@ -47,7 +50,7 @@ it('keeps both Source identity coordinates in a projected directory without fetc
   expect(f.request).toHaveBeenCalledTimes(1)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/software/sources',
+    path: '/api/v1/tenants/{tenant}/software/sources',
     query: { fields: 'id,revision,protocol', limit: 1 },
   })
 })
@@ -62,8 +65,12 @@ it('registers a pinned Brew source through the generated body and binds its exac
   expect(await f.software.changeSource('company/tap', '1', change)).toEqual(value)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/software/sources/{id}/revisions/{revision}',
-    pathParams: { id: 'company/tap', revision: '1' },
+    path: '/api/v1/tenants/{tenant}/software/sources/{id}/revisions/{revision}',
+    pathParams: {
+      tenant: '11111111-1111-4111-8111-111111111111',
+      id: 'company/tap',
+      revision: '1',
+    },
     body: change,
   })
   const wrong = fixture(() => ({ ...value, snapshot: { ...value.snapshot, revision: '2' } }))
@@ -77,7 +84,10 @@ it('reads Resource version states without confusing them with admission or requi
   expect(
     (await f.software.versions('company/app', { fields: ['version', 'state'] })).items,
   ).toEqual([{ version: 'resource-v2', state: 'active' }])
-  expect(f.request.mock.calls[0]?.[0].pathParams).toEqual({ id: 'company/app' })
+  expect(f.request.mock.calls[0]?.[0].pathParams).toEqual({
+    tenant: '11111111-1111-4111-8111-111111111111',
+    id: 'company/app',
+  })
   const wrong = fixture(() => ({
     items: [{ version: 'resource-v2', resource: 'another', state: 'active' }],
     nextCursor: null,
@@ -122,8 +132,12 @@ it('withdraws by the admission lifecycle revision and preserves a definitive CAS
   await f.software.changeVersion('company/app', 'resource-v2', change)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/software/resources/{id}/versions/{version}',
-    pathParams: { id: 'company/app', version: 'resource-v2' },
+    path: '/api/v1/tenants/{tenant}/software/resources/{id}/versions/{version}',
+    pathParams: {
+      tenant: '11111111-1111-4111-8111-111111111111',
+      id: 'company/app',
+      version: 'resource-v2',
+    },
     body: change,
   })
   const conflict = fixture(() => {
@@ -191,7 +205,7 @@ it('sends a complete pinned Brew import with ordered invocation arguments and Di
   await f.software.import(change)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/software/imports',
+    path: '/api/v1/tenants/{tenant}/software/imports',
     successStatus: 200,
     body: change,
   })

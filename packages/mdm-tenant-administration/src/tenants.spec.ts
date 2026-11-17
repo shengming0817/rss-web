@@ -3,7 +3,6 @@ import {
   createTenantAdministration,
   prepareUpdate,
   provisioningEntry,
-  provisioningState,
   type TenantAdministrationPort,
   type Tenant,
   type Provisioning,
@@ -15,35 +14,25 @@ const tenant: Tenant = {
   name: 'Business',
   notes: null,
   management: false,
-  initialEpoch: 1,
-  currentEpoch: 1,
   revision: 4,
   deletable: true,
 }
 const progress: Provisioning = {
-  operationId,
   tenantId,
   administratorId: null,
-  hostId: tenantId,
-  revision: 1,
-  phase: 'reserved',
+  phase: 'pending',
   blocked: null,
-  origin: null,
-  application: null,
+  entryPath: `/tenants/${tenantId}`,
 }
-it('does not turn a registered operation, administrator or pending host into an enabled tenant entry', () => {
-  expect(provisioningState(progress)).toBe('needs_credentials')
+it('opens precisely the same-origin configured tenant after its administrator exists', () => {
   expect(provisioningEntry(progress)).toBeNull()
-  const waiting = {
-    ...progress,
-    administratorId: operationId,
-    phase: 'host_pending' as const,
-    origin: 'https://tenant.example',
-  }
-  expect(provisioningState(waiting)).toBe('waiting_for_host')
+  const waiting = { ...progress, administratorId: operationId }
   expect(provisioningEntry(waiting)).toBeNull()
-  expect(provisioningEntry({ ...waiting, phase: 'enabled' })).toBe('https://tenant.example')
-  expect(provisioningEntry({ ...waiting, phase: 'enabled', blocked: 'outcome_unknown' })).toBeNull()
+  const complete = { ...waiting, phase: 'configured' as const }
+  expect(provisioningEntry(complete)).toBe(progress.entryPath)
+  expect(provisioningEntry({ ...complete, blocked: 'outcome_unknown' })).toBeNull()
+  expect(() => provisioningEntry({ ...complete, entryPath: `/tenants/${operationId}` })).toThrow()
+  expect(() => provisioningEntry({ ...complete, entryPath: 'https://elsewhere.test' })).toThrow()
 })
 it('uses full tenant detail revision, forbids management edits and deletion of used tenants', async () => {
   expect(() => prepareUpdate(operationId, { ...tenant, management: true }, 'New', null)).toThrow()

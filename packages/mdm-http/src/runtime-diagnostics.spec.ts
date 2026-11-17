@@ -18,7 +18,10 @@ it('reads current owner observations through the injected executor and preserves
     firstUse: { access: 'forbidden' },
   }
   const request = vi.fn(async (input: RequestOptions<unknown>) => input.decode(value)),
-    adapter = createRuntimeDiagnosticsAdapter({ request } as unknown as HttpTransport)
+    adapter = createRuntimeDiagnosticsAdapter(
+      { request } as unknown as HttpTransport,
+      '11111111-1111-4111-8111-111111111111',
+    )
   const controller = new AbortController(),
     snapshot = await adapter.snapshot(controller.signal)
   expect(snapshot.components[0]).toMatchObject({
@@ -30,6 +33,9 @@ it('reads current owner observations through the injected executor and preserves
   })
   expect(snapshot.firstUse).toEqual({ access: 'forbidden' })
   expect(request).toHaveBeenCalledWith(
-    expect.objectContaining({ path: '/api/v1/runtime/diagnostics', signal: controller.signal }),
+    expect.objectContaining({
+      path: '/api/v1/tenants/{tenant}/runtime/diagnostics',
+      signal: controller.signal,
+    }),
   )
 })

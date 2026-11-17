@@ -19,7 +19,10 @@ import { count, nullable, positive, text, uuid } from './decode'
 import { integer, requestInput } from './inventory-values'
 
 function trust(value: unknown, tenant: string, service: string, purpose: Purpose): Trust {
-  if (!schema.getApiV1PkiByPurposeTrustResponse.validateRoot(value) || value.version !== 1)
+  if (
+    !schema.getApiV1TenantsByTenantPkiByPurposeTrustResponse.validateRoot(value) ||
+    value.version !== 1
+  )
     throw new Error('Invalid device public trust')
   const result: Trust = {
     tenant: uuid(value.tenant),
@@ -63,7 +66,10 @@ function trustInput(value: Trust) {
   }
 }
 function receipt(value: unknown, operation: string): RotationReceipt {
-  if (!schema.postApiV1PkiRotationsResponse.validateRoot(value) || value.operation !== operation)
+  if (
+    !schema.postApiV1TenantsByTenantPkiRotationsResponse.validateRoot(value) ||
+    value.operation !== operation
+  )
     throw new Error('Wrong PKI operation receipt')
   return {
     operation: uuid(value.operation),
@@ -73,7 +79,7 @@ function receipt(value: unknown, operation: string): RotationReceipt {
 }
 function candidate(value: unknown, issuance: string): IssuanceCandidate {
   if (
-    !schema.postApiV1AgentIssuancesByIdRecoverResponse.validateRoot(value) ||
+    !schema.postApiV1TenantsByTenantAgentIssuancesByIdRecoverResponse.validateRoot(value) ||
     value.wireVersion !== 1 ||
     value.issuanceId !== issuance
   )
@@ -88,7 +94,7 @@ function candidate(value: unknown, issuance: string): IssuanceCandidate {
 }
 function grant(value: unknown): GrantReceipt {
   if (
-    !schema.postApiV1DevicesByIdRegistrationRecoveryResponse.validateRoot(value) ||
+    !schema.postApiV1TenantsByTenantDevicesByIdRegistrationRecoveryResponse.validateRoot(value) ||
     value.wireVersion !== 1
   )
     throw new Error('Invalid registration recovery grant')
@@ -100,7 +106,11 @@ function grant(value: unknown): GrantReceipt {
   }
 }
 function observation(value: unknown): Observation | null {
-  if (!schema.getApiV1PkiAgentTrustDevicesByDeviceObservationResponse.validateRoot(value))
+  if (
+    !schema.getApiV1TenantsByTenantPkiAgentTrustDevicesByDeviceObservationResponse.validateRoot(
+      value,
+    )
+  )
     throw new Error('Invalid Agent installation observation')
   if (value === null) return null
   const item = value.observation
@@ -123,7 +133,7 @@ function observation(value: unknown): Observation | null {
 }
 function rotation(value: unknown, purpose: Purpose, id?: string): Rotation {
   if (
-    !schema.getApiV1PkiByPurposeRotationsByIdResponse.validateRoot(value) ||
+    !schema.getApiV1TenantsByTenantPkiByPurposeRotationsByIdResponse.validateRoot(value) ||
     value.purpose !== purpose ||
     (id !== undefined && value.id !== id)
   )
@@ -138,28 +148,32 @@ export function createDevicePkiAdapter(
 ): DevicePkiPort {
   return {
     latestRotation: (purpose, signal) =>
-      api.getApiV1PkiByPurposeRotationsLatest(
+      api.getApiV1TenantsByTenantPkiByPurposeRotationsLatest(
         transport,
-        { pathParams: { purpose }, ...(signal ? { signal } : {}) },
+        { pathParams: { tenant, purpose }, ...(signal ? { signal } : {}) },
         (value) => (value === null ? null : rotation(value, purpose)),
       ),
     rotation: (purpose, id, signal) =>
-      api.getApiV1PkiByPurposeRotationsById(
+      api.getApiV1TenantsByTenantPkiByPurposeRotationsById(
         transport,
-        { pathParams: { purpose, id }, ...(signal ? { signal } : {}) },
+        { pathParams: { tenant, purpose, id }, ...(signal ? { signal } : {}) },
         (value) => rotation(value, purpose, id),
       ),
     rotationBlockers: (purpose, id, cursor, signal) =>
-      api.getApiV1PkiByPurposeRotationsByIdBlockers(
+      api.getApiV1TenantsByTenantPkiByPurposeRotationsByIdBlockers(
         transport,
         {
-          pathParams: { purpose, id },
+          pathParams: { tenant, purpose, id },
           query: queryParameters({ limit: 100, ...(cursor ? { cursor } : {}) }),
           ...(signal ? { signal } : {}),
         },
         (value) => ({
           items: value.items.map((row): RotationBlocker => {
-            if (!schema.getApiV1PkiByPurposeRotationsByIdBlockersResponse.validateBlocker(row))
+            if (
+              !schema.getApiV1TenantsByTenantPkiByPurposeRotationsByIdBlockersResponse.validateBlocker(
+                row,
+              )
+            )
               throw new Error('Incomplete rotation blocker')
             return row
           }),
@@ -167,13 +181,16 @@ export function createDevicePkiAdapter(
         }),
       ),
     trust: (purpose) =>
-      api.getApiV1PkiByPurposeTrust(transport, { pathParams: { purpose } }, (value) =>
-        trust(value, tenant, service, purpose),
+      api.getApiV1TenantsByTenantPkiByPurposeTrust(
+        transport,
+        { pathParams: { tenant, purpose } },
+        (value) => trust(value, tenant, service, purpose),
       ),
     prepare: (input) =>
-      api.postApiV1PkiRotations(
+      api.postApiV1TenantsByTenantPkiRotations(
         transport,
         {
+          pathParams: { tenant },
           body: requestInput(
             {
               id: input.id,
@@ -181,22 +198,23 @@ export function createDevicePkiAdapter(
               expected_revision: input.expectedRevision,
               candidate: trustInput(input.candidate),
             },
-            schema.postApiV1PkiRotationsBody.validateRoot,
+            schema.postApiV1TenantsByTenantPkiRotationsBody.validateRoot,
           ),
         },
         (value) => receipt(value, input.id),
       ),
     transition: (input) =>
-      api.postApiV1PkiByPurposeRotations(
+      api.postApiV1TenantsByTenantPkiByPurposeRotations(
         transport,
         {
-          pathParams: { purpose: input.purpose },
+          pathParams: { tenant, purpose: input.purpose },
           body: { id: input.id, expected_revision: input.expectedRevision, action: input.action },
         },
         (value) => receipt(value, input.id),
       ),
     publish: (input) =>
-      api.postApiV1PkiCrls(transport, {
+      api.postApiV1TenantsByTenantPkiCrls(transport, {
+        pathParams: { tenant },
         body: {
           operation: input.operation,
           purpose: input.purpose,
@@ -208,12 +226,15 @@ export function createDevicePkiAdapter(
         },
       }),
     recoverSigning: (input) =>
-      api.postApiV1PkiSigningRecover(
+      api.postApiV1TenantsByTenantPkiSigningRecover(
         transport,
-        { body: { operation: input.operation, attempt: input.attempt, chain: [...input.chain] } },
+        {
+          pathParams: { tenant },
+          body: { operation: input.operation, attempt: input.attempt, chain: [...input.chain] },
+        },
         (value) => {
           if (
-            !schema.postApiV1PkiSigningRecoverResponse.validateRoot(value) ||
+            !schema.postApiV1TenantsByTenantPkiSigningRecoverResponse.validateRoot(value) ||
             value.attempt !== input.attempt
           )
             throw new Error('Wrong original signing attempt')
@@ -221,27 +242,28 @@ export function createDevicePkiAdapter(
         },
       ),
     observation: (device) =>
-      api.getApiV1PkiAgentTrustDevicesByDeviceObservation(
+      api.getApiV1TenantsByTenantPkiAgentTrustDevicesByDeviceObservation(
         transport,
-        { pathParams: { device } },
+        { pathParams: { tenant, device } },
         observation,
       ),
     registrationRecovery: (device, operation, identity) =>
-      api.getApiV1DevicesByIdRegistrationRecoveryOperationsByOperation(
+      api.getApiV1TenantsByTenantDevicesByIdRegistrationRecoveryOperationsByOperation(
         transport,
         {
-          pathParams: { id: device, operation },
+          pathParams: { tenant, id: device, operation },
           query: { actor: identity.actor, instance: identity.instance },
         },
         (value) => (value === null ? null : grant(value)),
       ),
     recoverRegistration: (input, secret) =>
-      api.postApiV1DevicesByIdRegistrationRecovery(
+      api.postApiV1TenantsByTenantDevicesByIdRegistrationRecovery(
         transport,
         {
-          pathParams: { id: input.device },
+          pathParams: { tenant, id: input.device },
           body: {
             wireVersion: 1,
+            tenantId: tenant,
             operationId: input.operationId,
             secret,
             platform: input.platform,
@@ -251,10 +273,10 @@ export function createDevicePkiAdapter(
         grant,
       ),
     recoverIssuance: (input) =>
-      api.postApiV1AgentIssuancesByIdRecover(
+      api.postApiV1TenantsByTenantAgentIssuancesByIdRecover(
         transport,
         {
-          pathParams: { id: input.issuance },
+          pathParams: { tenant, id: input.issuance },
           body: {
             wireVersion: 1,
             operationId: input.operationId,
@@ -264,10 +286,10 @@ export function createDevicePkiAdapter(
         (value) => candidate(value, input.issuance),
       ),
     issuanceRecovery: async (issuance, operation) => {
-      const page = await api.getApiV1AgentIssuancesByIdRecoveryOperations(
+      const page = await api.getApiV1TenantsByTenantAgentIssuancesByIdRecoveryOperations(
         transport,
         {
-          pathParams: { id: uuid(issuance) },
+          pathParams: { tenant, id: uuid(issuance) },
           query: queryParameters({
             filter: comparison('operationId', '==', uuid(operation)),
             fields: ['actor', 'instance', 'operationId'],
@@ -286,9 +308,9 @@ export function createDevicePkiAdapter(
       if (!page.items.length && !page.nextCursor) return null
       if (page.items.length !== 1 || page.nextCursor)
         throw new Error('Ambiguous original recovery identity')
-      return api.getApiV1AgentIssuancesByIdRecoveryOperationsByOperation(
+      return api.getApiV1TenantsByTenantAgentIssuancesByIdRecoveryOperationsByOperation(
         transport,
-        { pathParams: { id: issuance, operation }, query: page.items[0]! },
+        { pathParams: { tenant, id: issuance, operation }, query: page.items[0]! },
         (value) => nullable(value, (value) => candidate(value, issuance)),
       )
     },

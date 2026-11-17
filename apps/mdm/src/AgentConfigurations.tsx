@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Select } from 'antd'
 import {
@@ -401,12 +402,12 @@ export function AgentConfigurations({
         maskClosable={!locked && !action.busy}
       >
         <EnrollmentFailure error={action.error} locale={locale} />
-        <a href="/security" target="_blank" rel="noopener noreferrer">
+        <Link to="/security" target="_blank" rel="noopener noreferrer">
           {l(
             '在新窗口完成重认证；返回后显式查询原操作',
             'Reauthenticate in a new window, then explicitly query the original operation',
           )}
-        </a>
+        </Link>
         {revoke && (
           <div className="admin-recovery">
             <code>{revoke.operationId}</code>

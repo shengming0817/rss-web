@@ -3,7 +3,6 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-r
 import { Alert, Button, Card, Form, Input, Layout, Menu, Select, Space, Switch } from 'antd'
 import { usePresentation } from '@rss/core'
 import type { AuthenticationFlows, Provider, SessionOwner } from '@rss/auth-core'
-import type { DaHost } from './config'
 import { errorMessage } from './services/status'
 import { ComputerList, ComputerDetail } from './features/computers/Computers'
 import { Applications } from './features/applications/Applications'
@@ -12,12 +11,12 @@ import { AccountSecurity } from './features/account-security/AccountSecurity'
 import { Audit } from './features/audit/Audit'
 function Login({
   session,
-  host,
+  tenant,
   oidc,
   flows,
 }: {
   session: SessionOwner
-  host: DaHost
+  tenant: string
   oidc: boolean
   flows: AuthenticationFlows
 }) {
@@ -50,7 +49,7 @@ function Login({
   useEffect(() => {
     let active = true
     void session
-      .providers(host.tenant)
+      .providers(tenant)
       .then((value) => {
         if (active) setProviders(value)
       })
@@ -61,7 +60,7 @@ function Login({
       active = false
       setPassword('')
     }
-  }, [host.tenant, session])
+  }, [tenant, session])
   async function submit() {
     if (busy || document.hidden || !live.current) return
     const secret = password,
@@ -73,7 +72,7 @@ function Login({
     setBusy(true)
     setError('')
     try {
-      await session.login(host.tenant, login, secret)
+      await session.login(tenant, login, secret)
       if (valid()) navigate('/', { replace: true })
     } catch (e) {
       if (valid()) setError(errorMessage(e))
@@ -90,9 +89,9 @@ function Login({
     setPassword('')
     setBusy(true)
     try {
-      const target = await session.beginSso(host.tenant, provider)
+      const target = await session.beginSso(tenant, provider)
       if (!valid()) return
-      flows.save('sso', host.tenant)
+      flows.save('sso', tenant)
       window.location.assign(target)
     } catch (e) {
       if (valid()) {
@@ -136,48 +135,6 @@ function Login({
     </Card>
   )
 }
-function Resume({
-  session,
-  host,
-  flows,
-}: {
-  session: SessionOwner
-  host: DaHost
-  flows: AuthenticationFlows
-}) {
-  const [error, setError] = useState('')
-  const navigate = useNavigate()
-  useEffect(() => {
-    let active = true
-    const flow = flows.take()
-    if (!flow || flow.tenant !== host.tenant) {
-      setError('认证流程已过期，请重新开始。')
-      return
-    }
-    void session
-      .check(host.tenant)
-      .then(() => {
-        if (!active) return
-        if (session.getSnapshot().status !== 'authenticated') {
-          setError('未确认登录会话。')
-          return
-        }
-        navigate(flow.kind === 'sso' ? '/' : '/security', { replace: true })
-      })
-      .catch((e) => {
-        if (active) setError(errorMessage(e))
-      })
-    return () => {
-      active = false
-    }
-  }, [session, host.tenant, navigate])
-  return (
-    <Card title="恢复认证会话">
-      {error || '正在确认同源会话…'}
-      <Link to="/login">返回登录</Link>
-    </Card>
-  )
-}
 function Overview() {
   return (
     <>
@@ -198,14 +155,14 @@ function Overview() {
 }
 export function App({
   session,
-  host,
+  tenant,
   oidc,
   controls: Controls,
   flows,
   status,
 }: {
   session: SessionOwner
-  host: DaHost
+  tenant: string
   oidc: boolean
   controls: ComponentType | null
   flows: AuthenticationFlows
@@ -222,11 +179,11 @@ export function App({
     }
     const visibility = () => {
       if (document.hidden) session.leavePage()
-      else void session.check(host.tenant).catch(() => undefined)
+      else void session.check(tenant).catch(() => undefined)
     }
     const depart = () => session.suspend()
     const restore = (event: PageTransitionEvent) => {
-      if (event.persisted) void session.check(host.tenant).catch(() => undefined)
+      if (event.persisted) void session.check(tenant).catch(() => undefined)
     }
     window.addEventListener('pointerdown', activity, true)
     window.addEventListener('keydown', activity, true)
@@ -240,21 +197,11 @@ export function App({
       window.removeEventListener('pagehide', depart)
       window.removeEventListener('pageshow', restore)
     }
-  }, [session, host.tenant])
+  }, [session, tenant])
   useEffect(() => {
-    if (location.pathname === '/auth/error') flows.clear()
     return () => session.leavePage()
   }, [session, location.pathname])
-  const authenticated = state.status === 'authenticated' && !status
-  if (location.pathname === '/auth/resume')
-    return <Resume flows={flows} session={session} host={host} />
-  if (location.pathname === '/auth/error')
-    return (
-      <Card title="认证未完成">
-        <p>认证已取消、失败或过期，请明确重新发起。</p>
-        <Link to="/login">返回登录</Link>
-      </Card>
-    )
+  const authenticated = state.status === 'authenticated' && state.tenant === tenant && !status
   if (!authenticated)
     return (
       <main className="da-surface">
@@ -269,13 +216,13 @@ export function App({
               type="error"
               title="会话服务暂不可用"
               action={
-                <Button onClick={() => void session.check(host.tenant).catch(() => undefined)}>
+                <Button onClick={() => void session.check(tenant).catch(() => undefined)}>
                   重新检查
                 </Button>
               }
             />
           )}
-          <Login flows={flows} session={session} host={host} oidc={oidc} />
+          <Login flows={flows} session={session} tenant={tenant} oidc={oidc} />
         </>
       </main>
     )
@@ -324,7 +271,7 @@ export function App({
         }))}
       />
       <Layout.Content>
-        <p className="da-tenant">租户 {host.tenant}</p>
+        <p className="da-tenant">租户 {tenant}</p>
         {error && <Alert type="error" title={error} />}
         <Routes>
           <Route path="/" element={<Overview />} />

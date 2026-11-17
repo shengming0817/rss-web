@@ -33,3 +33,5 @@ export function decodeMdmError(status: number, value: unknown): RssApiError {
 export function createMdmTransport(): HttpTransport {
   return createMdmHttpTransport(decodeMdmError)
 }
+
+export { loadMdmHostConfig, mdmTenantFromPath, type MdmHostConfig } from './mdm-host'

@@ -172,7 +172,10 @@ function fixture(read: (options: RequestOptions<unknown>) => unknown | Promise<u
   const request = vi.fn(async (options: RequestOptions<unknown>) =>
       options.decode(await read(options)),
     ),
-    adapter = createResourcesAdapter({ request } as unknown as HttpTransport)
+    adapter = createResourcesAdapter(
+      { request } as unknown as HttpTransport,
+      '11111111-1111-4111-8111-111111111111',
+    )
   return { request, adapter, resources: createResources(adapter) }
 }
 it('reads every Resource family with exact definitions, immutable coordinates and unknown metadata intact', async () => {
@@ -192,8 +195,8 @@ it('reads every Resource family with exact definitions, immutable coordinates an
     expect(f.request).toHaveBeenCalledTimes(1)
     expect(f.request.mock.calls[0]?.[0]).toMatchObject({
       method: 'GET',
-      path: '/api/v1/resources/{id}',
-      pathParams: { id: value.id },
+      path: '/api/v1/tenants/{tenant}/resources/{id}',
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id: value.id },
     })
     expect(result.versions[0]?.state).toBe('active')
   }
@@ -222,7 +225,7 @@ it('keeps a single projected software catalog and combines its fixed kind with t
   expect(result.items).toHaveLength(1)
   expect(f.request).toHaveBeenCalledTimes(1)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
-    path: '/api/v1/resources',
+    path: '/api/v1/tenants/{tenant}/resources',
     query: {
       filter: "(kind==software);(id=='company/resource')",
       fields: 'id,kind,revision,activeVersion,presentation',
@@ -413,7 +416,11 @@ it('reads exact resource version blockers with retention and opaque cursor ident
   ).toEqual({ items: [item], nextCursor: 'bmV4dA' })
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      pathParams: { id: 'company/script', version: 'fixed-v1' },
+      pathParams: {
+        tenant: '11111111-1111-4111-8111-111111111111',
+        id: 'company/script',
+        version: 'fixed-v1',
+      },
       query: { cursor: 'cHJldg', limit: 1 },
     }),
   )

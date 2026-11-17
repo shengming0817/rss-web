@@ -29,7 +29,6 @@ import type {
   EntraPolicy,
   Limits,
   NativeIntent,
-  PublicEnrollmentPort,
   QuotaConfiguration,
   User,
 } from './model'
@@ -46,9 +45,6 @@ import {
   validateUser,
 } from './authoring'
 
-export function createPublicEnrollment(port: PublicEnrollmentPort) {
-  return Object.freeze({ ...port })
-}
 /** Secret-free intents and explicit submissions. Usage never becomes a browser admission decision. */
 export function createEnrollment(port: EnrollmentPort, tenant: string, principal: string) {
   uuid(tenant)

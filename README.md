@@ -8,13 +8,13 @@ MDM 的宿主、部署、回退和验收入口见 [MDM 与 Identity 独立前端
 
 生产 MDM 使用 React + Ant Design，位于 `apps/mdm`，使用 `pnpm dev:mdm` 和 `pnpm build:mdm`，独立依赖 `@rss/auth-core`、`@rss/auth-http`、`@rss/mdm-http`。认证与业务使用同一会话 owner 和既有 `@rss/api` HTTP executor。新入口须挂载到提供正式 Identity/MDM host 配置的同源 HTTPS 宿主；Vite loopback 开发入口本身不提供后端。镜像使用 `pnpm image:mdm --tag rss-mdm-web:my-version`。新认证和响应式界面的真实 HTTPS Chromium 验证使用 `MDM_REACT_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-auth-browser`，复用后端隔离环境与构建租约，退出确认清理；该验证不证明设备实际效果。
 
-新 React 管理入口包括 `/authorization`（规则、授权用户组及 API Key）、`/user-profiles`（字段映射及资料投影）、`/identity`（受控账户与 Provider）。管理租户使用 `/platform/authorization`、`/platform/tenants`、`/platform/identity`。编辑单独读取详情版本；提交未知时显式查询原操作或重提同一请求，Provider/普通账户写入没有幂等回执，须显式读取比较。Key 秘密只在正式初次响应中展示，关闭、隐藏或离开会清除。
+业务功能路径以 `/tenants/{tenant}` 为前缀。新 React 管理入口包括 `/authorization`（规则、授权用户组及 API Key）、`/user-profiles`（字段映射及资料投影）、`/identity`（受控账户与 Provider）。管理租户使用 `/platform/authorization`、`/platform/tenants`、`/platform/identity`。编辑单独读取详情版本；提交未知时显式查询原操作或重提同一请求，Provider/普通账户写入没有幂等回执，须显式读取比较。Key 秘密只在正式初次响应中展示，关闭、隐藏或离开会清除。
 
-新 React 授权、租户和资料的真实 HTTPS Chromium 验证：`MDM_REACT_ADMIN_BACKEND=/absolute/rss-mdm IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:mdm:react-administration-browser`。复用现有资料 fixture 的隔离 PG、Keycloak、MDM 宿主、构建租约与清理，以新应用运行代表旅程；不代替业务租户宿主完整启用或设备实际效果验收。
+新 React 授权、租户和资料的真实 HTTPS Chromium 验证：`MDM_REACT_ADMIN_BACKEND=/absolute/rss-mdm IDENTITY_BACKEND_FIXTURE=/absolute/rss-identity pnpm test:mdm:react-administration-browser`。复用现有资料 fixture 的隔离 PG、Keycloak、MDM 宿主、构建租约与清理，以新应用运行代表旅程；共享租户端到端开通通过管理浏览器的固定候选场景验证。
 
 设备注册详情可读取 Agent 原申请与 Windows 证书申请及恢复历史；Apple 设备显示 DDM 声明与原生观察，发布与设备效果分别确认。`/enroll` 的 Agent 包管理复用 Content 上传、软件定义与原操作查询，提供解析、保存、发布和撤回。保存时明确填写平台、架构和完整安装定义；文件存储完成、软件保存、发布与可下载分别确认。
 
-新 React 的 `/devices` 保留终端与关联身份，`/devices/:kind/:id` 提供人员、注册、关系和退管事实；`/enroll` 管理原生注册、通道准入、配额、Apple 组织、Entra 和管理员 Agent 安装配置；`/connections` 分别管理存储、邮件、WNS、Apple 材料与 Agent 连接。匿名固定安装包入口为 `/downloads/agent`，Windows 系统条款入口为 `/enrollment/windows/entra/terms`，均不要求控制台登录。
+新 React 的 `/devices` 保留终端与关联身份，`/devices/:kind/:id` 提供人员、注册、关系和退管事实；`/enroll` 管理原生注册、通道准入、配额、Apple 组织、Entra 和管理员 Agent 安装配置；`/connections` 分别管理存储、邮件、WNS、Apple 材料与 Agent 连接。匿名固定安装包入口为 `/tenants/{tenant}/downloads/agent`，Windows 系统条款入口为 `/enrollment/windows/entra/terms`，均不要求控制台登录。
 
 管理员安装配置只交付一份 `rss-agent-enrollment.json`；隐藏、关闭或离开页面会清除秘密下载。签发结果未知时查询原操作元数据，不能恢复秘密文件；确认撤销后才能显式开始新的签发。刷新和重认证不会自动重放写入。配额和通道读取仅供展示，新注册是否准入由服务端决定；暂停不停止已有设备维护或公开下载。
 

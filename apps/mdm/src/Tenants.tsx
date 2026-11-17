@@ -9,7 +9,6 @@ import type { FormInstance } from 'antd'
 import {
   prepareUpdate,
   provisioningEntry,
-  provisioningState,
   type Tenant,
   type ProvisionIntent,
   type Provisioning,
@@ -35,27 +34,21 @@ import {
   type Query,
 } from './AdminUi'
 type Props = { runtime: Runtime; locale: Locale }
-function Progress({ progress, locale }: { progress: Provisioning; locale: Locale }) {
+function Progress({
+  progress,
+  operationId,
+  locale,
+}: {
+  progress: Provisioning
+  operationId: string
+  locale: Locale
+}) {
   const l = labels(locale),
     entry = provisioningEntry(progress)
   const phases = {
-    reserved: l('已登记', 'Reserved'),
-    database_ready: l('数据库就绪', 'Database ready'),
-    accounts_ready: l('账户就绪', 'Accounts ready'),
-    host_pending: l('等待宿主', 'Waiting for host'),
-    enabled: l('已启用', 'Enabled'),
-  }
-  const blocked = {
-    capacity: l('容量不足', 'Capacity'),
-    database: l('数据库不可用', 'Database unavailable'),
-    authentication: l('身份服务不可用', 'Authentication unavailable'),
-    authorization: l('授权服务不可用', 'Authorization unavailable'),
-    host_unavailable: l('宿主不可用', 'Host unavailable'),
-    material_missing: l('接入材料缺失', 'Material missing'),
-    material_expired: l('接入材料已过期', 'Material expired'),
-    material_revoked: l('接入材料已撤销', 'Material revoked'),
-    external_authorization: l('外部授权未满足', 'External authorization'),
-    outcome_unknown: l('结果未确认', 'Outcome unconfirmed'),
+    pending: l('等待初始化', 'Pending initialization'),
+    blocked: l('初始化受阻', 'Initialization blocked'),
+    configured: l('初始化完成', 'Configured'),
   }
   return (
     <div className="admin-progress">
@@ -77,47 +70,23 @@ function Progress({ progress, locale }: { progress: Provisioning; locale: Locale
           {
             key: 'op',
             label: l('供应操作', 'Provisioning operation'),
-            children: progress.operationId,
+            children: operationId,
           },
           { key: 'tenant', label: l('业务租户', 'Business tenant'), children: progress.tenantId },
           {
             key: 'phase',
-            label: l('阶段', 'Phase'),
+            label: l('业务初始化', 'Business initialization'),
             children: <Tag>{phases[progress.phase]}</Tag>,
           },
           {
             key: 'blocked',
             label: l('阻断原因', 'Blocked reason'),
-            children: progress.blocked ? blocked[progress.blocked] : '—',
+            children: progress.blocked ?? '—',
           },
           {
             key: 'admin',
             label: l('管理员主体', 'Administrator principal'),
             children: progress.administratorId ?? l('尚未确认', 'Not confirmed'),
-          },
-          { key: 'revision', label: l('版本', 'Revision'), children: progress.revision },
-          { key: 'host', label: l('宿主', 'Host'), children: progress.hostId },
-          {
-            key: 'requested',
-            label: l('请求应用版本', 'Requested host revision'),
-            children: progress.application?.requestedRevision ?? '—',
-          },
-          {
-            key: 'applied',
-            label: l('观察到的应用版本', 'Observed host revision'),
-            children: progress.application?.observation?.appliedRevision ?? '—',
-          },
-          {
-            key: 'observed',
-            label: l('宿主观察时间', 'Host observed at'),
-            children: progress.application?.observation
-              ? new Date(progress.application.observation.observedAt * 1000).toLocaleString()
-              : '—',
-          },
-          {
-            key: 'failure',
-            label: l('宿主失败原因', 'Host failure'),
-            children: progress.application?.observation?.failure ?? '—',
           },
         ]}
       />
@@ -126,7 +95,7 @@ function Progress({ progress, locale }: { progress: Provisioning; locale: Locale
           {l('进入业务租户', 'Open business tenant')} →
         </a>
       )}
-      {provisioningState(progress) === 'needs_credentials' && (
+      {progress.administratorId === null && (
         <p className="subtitle">
           {l(
             '查询只读取已登记的操作；继续创建管理员需显式重输原请求的凭据。',
@@ -209,7 +178,7 @@ function Provision({
       )}
       {id && <ReadState busy={read.busy} error={read.error} locale={locale} />}
       <Failure error={action.error} locale={locale} />
-      {current && <Progress progress={current} locale={locale} />}
+      {current && id && <Progress progress={current} operationId={id} locale={locale} />}
       {canContinue && (
         <Form
           form={form}
@@ -282,7 +251,8 @@ function Provision({
 }
 function ReceiptView({ receipt, locale }: { receipt: Receipt; locale: Locale }) {
   const l = labels(locale)
-  if (receipt.action === 'provision') return <Progress progress={receipt.result} locale={locale} />
+  if (receipt.action === 'provision')
+    return <Progress progress={receipt.result} operationId={receipt.operationId} locale={locale} />
   const r = receipt.result
   return (
     <>
@@ -447,11 +417,6 @@ function TenantEditor({
         items={[
           { key: 'id', label: l('租户标识', 'Tenant ID'), children: detail.tenantId },
           { key: 'rev', label: l('版本', 'Revision'), children: detail.revision },
-          {
-            key: 'epoch',
-            label: l('初始 / 当前 Epoch', 'Initial / current epoch'),
-            children: `${detail.initialEpoch} / ${detail.currentEpoch}`,
-          },
           {
             key: 'realm',
             label: l('类型', 'Realm'),
@@ -656,8 +621,6 @@ function Registry(props: Props) {
     'name',
     'notes',
     'management',
-    'initialEpoch',
-    'currentEpoch',
     'revision',
     'deletable',
   ]
@@ -681,7 +644,7 @@ function Registry(props: Props) {
         onChange={setQuery}
         fields={fields}
         required="tenantId"
-        sort={['tenantId', 'name', 'management', 'revision', 'deletable', 'initialEpoch', 'notes']}
+        sort={['tenantId', 'name', 'management', 'revision', 'deletable', 'notes']}
       />
       <ReadState busy={page.busy} error={page.error} locale={locale} />
       {page.value && (

@@ -34,16 +34,16 @@ import {
 } from './inventory-values'
 
 type Asset =
-  | schema.getApiV1DevicesByIdInventoryResponse200.Root['asset']
-  | schema.getApiV1DevicesByIdInventoryResponse202.Root['asset']
+  | schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.Root['asset']
+  | schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse202.Root['asset']
 function asset<K extends Asset['kind']>(
   value: unknown,
   tenant: string,
   kind: K,
 ): Extract<Asset, { kind: K }> {
   if (
-    !schema.getApiV1DevicesByIdInventoryResponse200.validateRoot(value) &&
-    !schema.getApiV1DevicesByIdInventoryResponse202.validateRoot(value)
+    !schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateRoot(value) &&
+    !schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse202.validateRoot(value)
   )
     throw new Error('Invalid inventory envelope')
   if (value.tenantId !== tenant || value.asset.kind !== kind)
@@ -58,7 +58,7 @@ function cursor(value: unknown): string | null {
   return token
 }
 function definition(value: unknown): QueryDefinition {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateQueryInput(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateQueryInput(value))
     throw new Error('Invalid saved asset definition')
   return {
     filter: value.filter,
@@ -68,7 +68,7 @@ function definition(value: unknown): QueryDefinition {
   }
 }
 function savedDefinition(value: unknown): NonNullable<SavedQuery['definition']> {
-  if (!schema.getApiV1SavedQueriesByIdResponse200.validateSavedDefinition(value))
+  if (!schema.getApiV1TenantsByTenantSavedQueriesByIdResponse200.validateSavedDefinition(value))
     throw new Error('Invalid saved query definition')
   return { name: value.name, query: definition(value.query) }
 }
@@ -87,7 +87,7 @@ const fieldFields = {
   searchable: boolean,
   sensitivity: (value: unknown) => enumeration(value, ['standard', 'sensitive', 'secret'] as const),
   valueType: (value: unknown): FieldDescriptor['valueType'] => {
-    if (!schema.getApiV1AssetFieldsResponse.validateValueType(value))
+    if (!schema.getApiV1TenantsByTenantAssetFieldsResponse.validateValueType(value))
       throw new Error('Invalid field type')
     return value
   },
@@ -104,7 +104,7 @@ const fieldFields = {
   itemKey: (value: unknown) => nullable(value, text),
   timeSeries: (value: unknown): FieldDescriptor['timeSeries'] => {
     if (value === null) return null
-    if (!schema.getApiV1AssetFieldsResponse.validateTimeSeriesBinding(value))
+    if (!schema.getApiV1TenantsByTenantAssetFieldsResponse.validateTimeSeriesBinding(value))
       throw new Error('Invalid time series field binding')
     return value
   },
@@ -117,7 +117,8 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
       const result = asset(value, tenant, 'accepted')
       if (
         result.task !== operationId ||
-        result.statusUrl !== api.getApiV1DeviceQueriesById.url({ id: operationId })
+        result.statusUrl !==
+          api.getApiV1TenantsByTenantDeviceQueriesById.url({ tenant, id: operationId })
       )
         throw new Error('Wrong query operation receipt')
       return { task: uuid(result.task), statusUrl: result.statusUrl }
@@ -134,38 +135,48 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
   return {
     fields: (query = {}) => {
       if (query.fields && !query.fields.includes('key')) throw new Error('Field identity required')
-      return api.getApiV1AssetFields(transport, { query: queryParameters(query) }, (value) => {
-        if (value.tenantId !== tenant || value.asset.kind !== 'field_list')
-          throw new Error('Wrong field directory binding')
-        const result = value.asset
-        return {
-          dictionary: result.dictionary,
-          ...projectedPage(
-            { items: result.items, nextCursor: result.nextCursor },
-            fieldFields,
-            query.fields,
-            ['key'],
-          ),
-        }
-      })
+      return api.getApiV1TenantsByTenantAssetFields(
+        transport,
+        { pathParams: { tenant }, query: queryParameters(query) },
+        (value) => {
+          if (value.tenantId !== tenant || value.asset.kind !== 'field_list')
+            throw new Error('Wrong field directory binding')
+          const result = value.asset
+          return {
+            dictionary: result.dictionary,
+            ...projectedPage(
+              { items: result.items, nextCursor: result.nextCursor },
+              fieldFields,
+              query.fields,
+              ['key'],
+            ),
+          }
+        },
+      )
     },
     field: (field) =>
-      api.getApiV1AssetFieldsByField(transport, { pathParams: { field } }, (value) => {
-        const result = asset(value, tenant, 'field_descriptor')
-        const descriptor = fieldDescriptor(result.field)
-        if (descriptor.key !== field) throw new Error('Wrong field detail')
-        return {
-          field,
-          version: descriptor.version,
-          definition: fieldDefinition(
-            Object.fromEntries(Object.entries(descriptor).filter(([key]) => key !== 'operations')),
-          ),
-        }
-      }),
-    references: (field, query = {}) =>
-      api.getApiV1AssetFieldsByFieldReferences(
+      api.getApiV1TenantsByTenantAssetFieldsByField(
         transport,
-        { pathParams: { field }, query: windowQuery(query) },
+        { pathParams: { tenant, field } },
+        (value) => {
+          const result = asset(value, tenant, 'field_descriptor')
+          const descriptor = fieldDescriptor(result.field)
+          if (descriptor.key !== field) throw new Error('Wrong field detail')
+          return {
+            field,
+            version: descriptor.version,
+            definition: fieldDefinition(
+              Object.fromEntries(
+                Object.entries(descriptor).filter(([key]) => key !== 'operations'),
+              ),
+            ),
+          }
+        },
+      ),
+    references: (field, query = {}) =>
+      api.getApiV1TenantsByTenantAssetFieldsByFieldReferences(
+        transport,
+        { pathParams: { tenant, field }, query: windowQuery(query) },
         (value) => {
           return {
             items: value.items.map((item) => ({
@@ -187,11 +198,14 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     putField: (field, change) =>
-      api.putApiV1AssetFieldsByField(
+      api.putApiV1TenantsByTenantAssetFieldsByField(
         transport,
         {
-          pathParams: { field },
-          body: requestInput(change, schema.putApiV1AssetFieldsByFieldBody.validateRoot),
+          pathParams: { tenant, field },
+          body: requestInput(
+            change,
+            schema.putApiV1TenantsByTenantAssetFieldsByFieldBody.validateRoot,
+          ),
         },
         (value) => {
           const result = asset(value, tenant, 'field')
@@ -205,45 +219,57 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     layout: () =>
-      api.getApiV1AssetFieldLayout(transport, {}, (value) => {
-        const result = asset(value, tenant, 'field_layout')
-        return {
-          revision: count(result.revision),
-          editable: result.editable,
-          groups: result.groups.map((group) => ({
-            ...group,
-            id: uuid(group.id),
-            fields: [...group.fields],
-          })),
-        }
-      }),
-    putLayout: (change) =>
-      api.putApiV1AssetFieldLayout(
+      api.getApiV1TenantsByTenantAssetFieldLayout(
         transport,
-        { body: requestInput(change, schema.putApiV1AssetFieldLayoutBody.validateRoot) },
+        { pathParams: { tenant } },
+        (value) => {
+          const result = asset(value, tenant, 'field_layout')
+          return {
+            revision: count(result.revision),
+            editable: result.editable,
+            groups: result.groups.map((group) => ({
+              ...group,
+              id: uuid(group.id),
+              fields: [...group.fields],
+            })),
+          }
+        },
+      ),
+    putLayout: (change) =>
+      api.putApiV1TenantsByTenantAssetFieldLayout(
+        transport,
+        {
+          pathParams: { tenant },
+          body: requestInput(
+            change,
+            schema.putApiV1TenantsByTenantAssetFieldLayoutBody.validateRoot,
+          ),
+        },
         (value) => ({ revision: count(asset(value, tenant, 'field_layout_written').revision) }),
       ),
     query: (operationId, input) =>
-      api.postApiV1DeviceQueries(
+      api.postApiV1TenantsByTenantDeviceQueries(
         transport,
         {
+          pathParams: { tenant },
           body: requestInput(
             { operationId, expectedRevision: 0, input },
-            schema.postApiV1DeviceQueriesBody.validateRoot,
+            schema.postApiV1TenantsByTenantDeviceQueriesBody.validateRoot,
           ),
         },
         (value) => accepted(value, operationId),
       ),
     queryStatus: (id, signal) =>
-      api.getApiV1DeviceQueriesById(
+      api.getApiV1TenantsByTenantDeviceQueriesById(
         transport,
-        { signal, pathParams: { id: uuid(id) } },
+        { signal, pathParams: { tenant, id: uuid(id) } },
         (value) => {
           const result = asset(value, tenant, 'query_status')
           if (
             result.task !== id ||
             (result.resultUrl !== null &&
-              result.resultUrl !== api.getApiV1DeviceQueriesByIdItems.url({ id }))
+              result.resultUrl !==
+                api.getApiV1TenantsByTenantDeviceQueriesByIdItems.url({ tenant, id }))
           )
             throw new Error('Wrong fixed query coordinates')
           return {
@@ -259,9 +285,9 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     queryItems: (id, query = {}, signal) =>
-      api.getApiV1DeviceQueriesByIdItems(
+      api.getApiV1TenantsByTenantDeviceQueriesByIdItems(
         transport,
-        { signal, pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        { signal, pathParams: { tenant, id: uuid(id) }, query: windowQuery(query) },
         (value) => {
           const result = asset(value, tenant, 'page')
           if (result.snapshot !== id) throw new Error('Wrong fixed query snapshot')
@@ -276,9 +302,9 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     facets: (id, facet, query = {}, signal) =>
-      api.getApiV1DeviceQueriesByIdFacetsByFacet(
+      api.getApiV1TenantsByTenantDeviceQueriesByIdFacetsByFacet(
         transport,
-        { signal, pathParams: { id: uuid(id), facet }, query: windowQuery(query) },
+        { signal, pathParams: { tenant, id: uuid(id), facet }, query: windowQuery(query) },
         (value) => {
           const result = asset(value, tenant, 'facets')
           if (result.task !== id || result.facet !== facet)
@@ -292,44 +318,56 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
     savedQueries: (query = {}) => {
       if (query.fields && !query.fields.includes('id'))
         throw new Error('Saved query identity required')
-      return api.getApiV1SavedQueries(transport, { query: queryParameters(query) }, (value) => {
-        if (value.tenantId !== tenant || value.asset.kind !== 'saved_list')
-          throw new Error('Wrong saved query directory binding')
-        const result = value.asset
-        return projectedPage(
-          { items: result.items, nextCursor: result.nextCursor },
-          savedFields,
-          query.fields,
-          ['id'],
-        ) as { items: SavedQueryRow[]; nextCursor: string | null }
-      })
+      return api.getApiV1TenantsByTenantSavedQueries(
+        transport,
+        { pathParams: { tenant }, query: queryParameters(query) },
+        (value) => {
+          if (value.tenantId !== tenant || value.asset.kind !== 'saved_list')
+            throw new Error('Wrong saved query directory binding')
+          const result = value.asset
+          return projectedPage(
+            { items: result.items, nextCursor: result.nextCursor },
+            savedFields,
+            query.fields,
+            ['id'],
+          ) as { items: SavedQueryRow[]; nextCursor: string | null }
+        },
+      )
     },
     savedQuery: (id) =>
-      api.getApiV1SavedQueriesById(transport, { pathParams: { id: uuid(id) } }, (value) =>
-        saved(value, id),
+      api.getApiV1TenantsByTenantSavedQueriesById(
+        transport,
+        { pathParams: { tenant, id: uuid(id) } },
+        (value) => saved(value, id),
       ),
     putSavedQuery: (id, change) =>
-      api.putApiV1SavedQueriesById(
+      api.putApiV1TenantsByTenantSavedQueriesById(
         transport,
         {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.putApiV1SavedQueriesByIdBody.validateRoot),
+          pathParams: { tenant, id: uuid(id) },
+          body: requestInput(
+            change,
+            schema.putApiV1TenantsByTenantSavedQueriesByIdBody.validateRoot,
+          ),
         },
         (value) => saved(value, id),
       ),
     executeSavedQuery: (id, change) =>
-      api.postApiV1SavedQueriesByIdExecute(
+      api.postApiV1TenantsByTenantSavedQueriesByIdExecute(
         transport,
         {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.postApiV1SavedQueriesByIdExecuteBody.validateRoot),
+          pathParams: { tenant, id: uuid(id) },
+          body: requestInput(
+            change,
+            schema.postApiV1TenantsByTenantSavedQueriesByIdExecuteBody.validateRoot,
+          ),
         },
         (value) => accepted(value, change.operationId),
       ),
     inventory: (id, namespace) =>
-      api.getApiV1DevicesByIdInventory(
+      api.getApiV1TenantsByTenantDevicesByIdInventory(
         transport,
-        { pathParams: { id }, query: { scope: JSON.stringify(scope(namespace)) } },
+        { pathParams: { tenant, id }, query: { scope: JSON.stringify(scope(namespace)) } },
         (value) => {
           const result = inventoryView(asset(value, tenant, 'detail').device)
           if (
@@ -341,9 +379,9 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     scopes: (id, query = {}) =>
-      api.postApiV1DevicesByIdInventoryScopes(
+      api.postApiV1TenantsByTenantDevicesByIdInventoryScopes(
         transport,
-        { pathParams: { id }, body: { limit: query.limit ?? 100, cursor: query.cursor } },
+        { pathParams: { tenant, id }, body: { limit: query.limit ?? 100, cursor: query.cursor } },
         (value) => {
           const result = asset(value, tenant, 'inventory_scopes')
           if (result.device !== id) throw new Error('Wrong namespace directory')
@@ -359,9 +397,9 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     view: (reference, signal) =>
-      api.getApiV1DeviceViewsByKindById(
+      api.getApiV1TenantsByTenantDeviceViewsByKindById(
         transport,
-        { signal, pathParams: { ...reference } },
+        { signal, pathParams: { tenant, ...reference } },
         (value) => {
           const identity = viewSummary(value, tenant)
           if (referenceKey(identity.reference) !== referenceKey(reference))
@@ -423,11 +461,11 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
       ),
     list: (query, signal) =>
       query.reference.kind === 'association'
-        ? api.getApiV1DeviceViewsByKindByIdInventoryListsByField(
+        ? api.getApiV1TenantsByTenantDeviceViewsByKindByIdInventoryListsByField(
             transport,
             {
               signal,
-              pathParams: { ...query.reference, field: query.field },
+              pathParams: { tenant, ...query.reference, field: query.field },
               query: { cursor: query.cursor, limit: query.limit ?? 100 },
             },
             (value) => {
@@ -450,15 +488,16 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
               }
             },
           )
-        : api.postApiV1DevicesByIdInventoryListsByField(
+        : api.postApiV1TenantsByTenantDevicesByIdInventoryListsByField(
             transport,
             {
               signal,
-              pathParams: { id: query.endpoint, field: query.field },
+              pathParams: { tenant, id: query.endpoint, field: query.field },
               body: {
                 scope: requestInput(
                   scope(query.scope),
-                  schema.postApiV1DevicesByIdInventoryListsByFieldBody.validateCollectionScope,
+                  schema.postApiV1TenantsByTenantDevicesByIdInventoryListsByFieldBody
+                    .validateCollectionScope,
                 ),
                 cursor: query.cursor,
                 limit: query.limit ?? 100,
@@ -481,9 +520,9 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
             },
           ),
     collection: (id, run, namespace) =>
-      api.getApiV1DevicesByIdCollectionsByRun(
+      api.getApiV1TenantsByTenantDevicesByIdCollectionsByRun(
         transport,
-        { pathParams: { id, run }, query: { scope: JSON.stringify(scope(namespace)) } },
+        { pathParams: { tenant, id, run }, query: { scope: JSON.stringify(scope(namespace)) } },
         (value) => {
           const result = asset(value, tenant, 'collection_run').run
           if (result.id !== run) throw new Error('Wrong collection run')
@@ -504,10 +543,10 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     collectionItems: (id, run, field, namespace, query = {}) =>
-      api.getApiV1DevicesByIdCollectionsByRunFieldsByFieldItems(
+      api.getApiV1TenantsByTenantDevicesByIdCollectionsByRunFieldsByFieldItems(
         transport,
         {
-          pathParams: { id, run, field },
+          pathParams: { tenant, id, run, field },
           query: { ...windowQuery(query), scope: JSON.stringify(scope(namespace)) },
         },
         (value) => {
@@ -527,13 +566,13 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     assign: (id, field, change) =>
-      api.putApiV1DevicesByIdManualFieldsByField(
+      api.putApiV1TenantsByTenantDevicesByIdManualFieldsByField(
         transport,
         {
-          pathParams: { id, field },
+          pathParams: { tenant, id, field },
           body: requestInput(
             change,
-            schema.putApiV1DevicesByIdManualFieldsByFieldBody.validateRoot,
+            schema.putApiV1TenantsByTenantDevicesByIdManualFieldsByFieldBody.validateRoot,
           ),
         },
         (value) => {

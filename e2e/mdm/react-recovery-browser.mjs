@@ -13,7 +13,7 @@ try {
     label = (name) => p.getByLabel(name, { exact: true }).filter({ visible: true }),
     button = (name) => p.getByRole('button', { name, exact: true }).filter({ visible: true }),
     tab = (name) => p.getByRole('tab', { name, exact: true }).filter({ visible: true }).click(),
-    base = `/api/v1/devices/${f.recovery.device}`,
+    base = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.recovery.device}`,
     ordinaryPath = `${base}/recovery-credentials/${f.recovery.ordinary}/versions/1`
   let nextApi = 0
   async function api(method, path, data, expected = 200) {
@@ -54,7 +54,7 @@ try {
     return expected === 204 ? undefined : result.json()
   }
   async function open(device) {
-    await p.goto(origin + `/devices/endpoint/${device}`)
+    await p.goto(origin + `/tenants/${run.fixture.tenant}` + `/devices/endpoint/${device}`)
     await button('读取最新设备事实').waitFor()
     await tab('设备安全')
     await tab('恢复凭据')
@@ -74,7 +74,7 @@ try {
       .waitFor({ state: yes ? 'visible' : 'hidden' })
   }
   async function changeAuthority(grants) {
-    const path = `/api/v1/authorization/rules/${f.ruleId}`,
+    const path = `/api/v1/tenants/${run.fixture.tenant}/authorization/rules/${f.ruleId}`,
       current = await api('GET', path)
     await api('PUT', path, {
       operationId: randomUUID(),
@@ -113,7 +113,7 @@ try {
 
   run.step('filevault-configuration-and-native-original-request')
   await open(f.recovery.mac)
-  const configPath = `/api/v1/devices/${f.recovery.mac}/recovery-credentials/filevault/configuration`
+  const configPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.recovery.mac}/recovery-credentials/filevault/configuration`
   await label('已配置的接收证书标识').fill(f.recovery.recipient)
   await label('允许收集 FileVault 恢复密钥').click()
   const configured = await (
@@ -136,7 +136,7 @@ try {
     409,
   )
   const collector = f.collector.runtime
-  await api('POST', '/api/v1/device-associations', {
+  await api('POST', `/api/v1/tenants/${run.fixture.tenant}/device-associations`, {
     operationId: randomUUID(),
     associationId: null,
     expectedVersion: 0,
@@ -157,7 +157,10 @@ try {
     const deadline = Date.now() + 90000
     let state
     do {
-      state = await api('GET', `/api/v1/groups/${groupId}/tasks/${task}`)
+      state = await api(
+        'GET',
+        `/api/v1/tenants/${run.fixture.tenant}/groups/${groupId}/tasks/${task}`,
+      )
       if (state.status === 'completed' || state.status === 'failed') break
       await new Promise((done) => setTimeout(done, 350))
     } while (Date.now() < deadline)
@@ -165,7 +168,7 @@ try {
   }
   const definition = await api(
     'POST',
-    `/api/v1/groups/${groupId}`,
+    `/api/v1/tenants/${run.fixture.tenant}/groups/${groupId}`,
     {
       operationId: randomUUID(),
       expectedRevision: 0,
@@ -185,7 +188,7 @@ try {
   await settlePlanningTask(definition.task)
   const recompute = await api(
     'POST',
-    `/api/v1/groups/${groupId}`,
+    `/api/v1/tenants/${run.fixture.tenant}/groups/${groupId}`,
     {
       operationId: randomUUID(),
       expectedRevision: 1,
@@ -195,7 +198,7 @@ try {
   )
   await settlePlanningTask(recompute.task)
   await label('正式关联的另一端点 ID').fill(collector.deviceId)
-  const linkPath = `/api/v1/devices/${f.recovery.mac}/recovery-credentials/filevault/link`
+  const linkPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.recovery.mac}/recovery-credentials/filevault/link`
   async function linkResponse(trigger) {
     const waiting = p.waitForResponse(
       (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === linkPath,
@@ -223,7 +226,7 @@ try {
   await p
     .getByRole('checkbox', { name: '已核对无现有材料，以 absence revision 0 新建', exact: true })
     .check()
-  const operationsPath = `/api/v1/devices/${f.recovery.mac}/recovery-credentials/operations`
+  const operationsPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.recovery.mac}/recovery-credentials/operations`
   const accepted = await (
     await run.response(p, 'POST', operationsPath, () => button('提交原生凭据操作').click(), 202)
   ).json()
@@ -231,7 +234,7 @@ try {
   const original = await run.response(
     p,
     'GET',
-    `/api/v1/devices/${f.recovery.mac}/operations/${accepted.operationId}`,
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.recovery.mac}/operations/${accepted.operationId}`,
     () => button('读取原凭据操作事实').click(),
   )
   const facts = await original.json()
@@ -243,7 +246,9 @@ try {
   )
 
   run.step('safe-responsive-directory-design')
-  await run.response(p, 'GET', '/api/v1/device-views', () => run.nav(p, '/devices', '设备'))
+  await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/device-views`, () =>
+    run.nav(p, '/devices', '设备'),
+  )
   await p.waitForFunction(() => !document.querySelector('.ant-spin-spinning'))
   const screenshots = mkdtempSync(join(tmpdir(), 'rss-react-recovery-design-'))
   for (const [name, width] of [

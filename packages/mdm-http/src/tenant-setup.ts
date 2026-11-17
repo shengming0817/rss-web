@@ -59,6 +59,7 @@ function unique<T extends { readonly id: string }>(values: T[]): T[] {
 export function createCatalogAdapter(
   transport: HttpTransport,
   management: boolean,
+  tenant: string,
 ): () => Promise<Catalog> {
   const decode = (value: unknown): Catalog => {
     const v = record(value)
@@ -75,36 +76,41 @@ export function createCatalogAdapter(
   return () =>
     management
       ? api.getApiV1TenantAdministrationSettingsCatalog(transport, {}, decode)
-      : api.getApiV1SettingsCatalog(transport, {}, decode)
+      : api.getApiV1TenantsByTenantSettingsCatalog(transport, { pathParams: { tenant } }, decode)
 }
 export function createTenantSetupAdapter(transport: HttpTransport, tenant: string): SetupPort {
   return {
-    catalog: createCatalogAdapter(transport, false),
+    catalog: createCatalogAdapter(transport, false, tenant),
     read: () =>
-      api.getApiV1SettingsFirstUse(transport, {}, (value) => {
-        if (value['tenantId'] !== tenant) throw new Error('Wrong setup tenant')
-        return {
-          tenantId: uuid(value['tenantId']),
-          saved: saved(value['saved']),
-          steps: unique(
-            list(value['steps'], (raw) => {
-              const s = record(raw)
-              return {
-                id: enumeration(s['id'], stepIds),
-                status: enumeration(s['status'], stepStatuses),
-                reason: nullable(s['reason'], text),
-                evidence: unique(list(s['evidence'], entry)),
-              }
-            }),
-          ),
-          canComplete: boolean(value['canComplete']),
-          complete: boolean(value['complete']),
-        }
-      }),
+      api.getApiV1TenantsByTenantSettingsFirstUse(
+        transport,
+        { pathParams: { tenant } },
+        (value) => {
+          if (value['tenantId'] !== tenant) throw new Error('Wrong setup tenant')
+          return {
+            tenantId: uuid(value['tenantId']),
+            saved: saved(value['saved']),
+            steps: unique(
+              list(value['steps'], (raw) => {
+                const s = record(raw)
+                return {
+                  id: enumeration(s['id'], stepIds),
+                  status: enumeration(s['status'], stepStatuses),
+                  reason: nullable(s['reason'], text),
+                  evidence: unique(list(s['evidence'], entry)),
+                }
+              }),
+            ),
+            canComplete: boolean(value['canComplete']),
+            complete: boolean(value['complete']),
+          }
+        },
+      ),
     update: (command) =>
-      api.putApiV1SettingsFirstUse(
+      api.putApiV1TenantsByTenantSettingsFirstUse(
         transport,
         {
+          pathParams: { tenant },
           headers: { 'Idempotency-Key': command.operationId },
           body: {
             expectedRevision: command.expectedRevision,
@@ -114,6 +120,10 @@ export function createTenantSetupAdapter(transport: HttpTransport, tenant: strin
         receipt,
       ),
     operation: (id) =>
-      api.getApiV1SettingsFirstUseOperationsById(transport, { pathParams: { id } }, receipt),
+      api.getApiV1TenantsByTenantSettingsFirstUseOperationsById(
+        transport,
+        { pathParams: { tenant, id } },
+        receipt,
+      ),
   }
 }

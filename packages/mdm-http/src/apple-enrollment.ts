@@ -19,7 +19,11 @@ import {
 import { boolean, count, enumeration, text, uuid } from './decode'
 import { attachment } from './download'
 function accountEnrollment(value: unknown): AccountEnrollment | null {
-  if (!schema.getApiV1AppleOrganizationsByIdAccountEnrollmentResponse.validateRoot(value))
+  if (
+    !schema.getApiV1TenantsByTenantAppleOrganizationsByIdAccountEnrollmentResponse.validateRoot(
+      value,
+    )
+  )
     throw new Error('Invalid account enrollment contract')
   if (value === null) return null
   if (value.externalOrganizationVerification !== 'not_observed')
@@ -29,7 +33,7 @@ function accountEnrollment(value: unknown): AccountEnrollment | null {
   return value
 }
 function ade(value: unknown, id?: string): AdeStatus {
-  if (!schema.getApiV1AppleOrganizationsResponse.validateAde(value))
+  if (!schema.getApiV1TenantsByTenantAppleOrganizationsResponse.validateAde(value))
     throw new Error('Invalid ADE contract')
   if (
     (id !== undefined && value.organizationId !== id) ||
@@ -42,7 +46,7 @@ function ade(value: unknown, id?: string): AdeStatus {
   return value
 }
 function setup(value: unknown): AdeSetup {
-  if (!schema.getApiV1AppleOrganizationsByIdAdeProfilesResponse.validateSetup(value))
+  if (!schema.getApiV1TenantsByTenantAppleOrganizationsByIdAdeProfilesResponse.validateSetup(value))
     throw new Error('Invalid setup contract')
   const result = { ...value, skip: value.skip.map((pane) => enumeration(pane, setupPanes)) }
   validateSetup(result)
@@ -57,7 +61,10 @@ function query(value: Query, identity: string, maximum = 1000) {
   return queryParameters(value)
 }
 /** Apple organization control plane; protocol callback and external qualification stay with their owners. */
-export function createAppleEnrollmentAdapter(transport: HttpTransport): AppleEnrollmentPort {
+export function createAppleEnrollmentAdapter(
+  transport: HttpTransport,
+  tenant: string,
+): AppleEnrollmentPort {
   const accountFields = {
       account: text,
       principalId: uuid,
@@ -83,9 +90,9 @@ export function createAppleEnrollmentAdapter(transport: HttpTransport): AppleEnr
     }
   return {
     organizations: (input) =>
-      api.getApiV1AppleOrganizations(
+      api.getApiV1TenantsByTenantAppleOrganizations(
         transport,
-        { query: query(input, 'id') },
+        { pathParams: { tenant }, query: query(input, 'id') },
         (value) =>
           projectedPage(
             value,
@@ -95,30 +102,34 @@ export function createAppleEnrollmentAdapter(transport: HttpTransport): AppleEnr
           ) as Page<OrganizationRow>,
       ),
     accountOrganization: (id) =>
-      api.getApiV1AppleOrganizationsByIdAccountEnrollment(
+      api.getApiV1TenantsByTenantAppleOrganizationsByIdAccountEnrollment(
         transport,
-        { pathParams: { id: uuid(id) } },
+        { pathParams: { tenant, id: uuid(id) } },
         accountEnrollment,
       ),
     saveAccountOrganization: (id, operationId, body) =>
-      api.putApiV1AppleOrganizationsByIdAccountEnrollment(
+      api.putApiV1TenantsByTenantAppleOrganizationsByIdAccountEnrollment(
         transport,
-        { pathParams: { id: uuid(id) }, headers: { 'Idempotency-Key': uuid(operationId) }, body },
+        {
+          pathParams: { tenant, id: uuid(id) },
+          headers: { 'Idempotency-Key': uuid(operationId) },
+          body,
+        },
         (value) => count(value.revision),
       ),
     accounts: (id, input) =>
-      api.getApiV1AppleOrganizationsByIdAccountEnrollmentAccounts(
+      api.getApiV1TenantsByTenantAppleOrganizationsByIdAccountEnrollmentAccounts(
         transport,
-        { pathParams: { id: uuid(id) }, query: query(input, 'account') },
+        { pathParams: { tenant, id: uuid(id) }, query: query(input, 'account') },
         (value) =>
           projectedPage(value, accountFields, input.fields, ['account']) as Page<
             Partial<AccountMapping> & { readonly account: string }
           >,
       ),
     account: (id, name) =>
-      api.getApiV1AppleOrganizationsByIdAccountEnrollmentAccountsByAccount(
+      api.getApiV1TenantsByTenantAppleOrganizationsByIdAccountEnrollmentAccountsByAccount(
         transport,
-        { pathParams: { id: uuid(id), account: name } },
+        { pathParams: { tenant, id: uuid(id), account: name } },
         (value) => {
           if (value.account !== name) throw new Error('Wrong managed account')
           uuid(value.principalId)
@@ -128,23 +139,29 @@ export function createAppleEnrollmentAdapter(transport: HttpTransport): AppleEnr
         },
       ),
     saveAccount: (id, name, operationId, body) =>
-      api.putApiV1AppleOrganizationsByIdAccountEnrollmentAccountsByAccount(
+      api.putApiV1TenantsByTenantAppleOrganizationsByIdAccountEnrollmentAccountsByAccount(
         transport,
         {
-          pathParams: { id: uuid(id), account: name },
+          pathParams: { tenant, id: uuid(id), account: name },
           headers: { 'Idempotency-Key': uuid(operationId) },
           body,
         },
         (value) => count(value.revision),
       ),
     ade: (id) =>
-      api.getApiV1AppleOrganizationsByIdAde(transport, { pathParams: { id: uuid(id) } }, (value) =>
-        ade(value, id),
+      api.getApiV1TenantsByTenantAppleOrganizationsByIdAde(
+        transport,
+        { pathParams: { tenant, id: uuid(id) } },
+        (value) => ade(value, id),
       ),
     configureAde: (id, operationId, body) =>
-      api.putApiV1AppleOrganizationsByIdAdeConfiguration(
+      api.putApiV1TenantsByTenantAppleOrganizationsByIdAdeConfiguration(
         transport,
-        { pathParams: { id: uuid(id) }, headers: { 'Idempotency-Key': uuid(operationId) }, body },
+        {
+          pathParams: { tenant, id: uuid(id) },
+          headers: { 'Idempotency-Key': uuid(operationId) },
+          body,
+        },
         (value) => {
           if (
             value.operationId !== operationId ||
@@ -156,21 +173,21 @@ export function createAppleEnrollmentAdapter(transport: HttpTransport): AppleEnr
         },
       ),
     adePublicKey: (id) =>
-      api.getApiV1AppleOrganizationsByIdAdePublicKey(
+      api.getApiV1TenantsByTenantAppleOrganizationsByIdAdePublicKey(
         transport,
-        { pathParams: { id: uuid(id) } },
+        { pathParams: { tenant, id: uuid(id) } },
         (value) => attachment(value, 'application/x-pem-file', 'RSS-ADE-public.pem', 65536),
       ),
     adeProfiles: (id, input) =>
-      api.getApiV1AppleOrganizationsByIdAdeProfiles(
+      api.getApiV1TenantsByTenantAppleOrganizationsByIdAdeProfiles(
         transport,
-        { pathParams: { id: uuid(id) }, query: query(input, 'id') },
+        { pathParams: { tenant, id: uuid(id) }, query: query(input, 'id') },
         (value) => projectedPage(value, profileFields, input.fields, ['id']) as Page<AdeProfile>,
       ),
     adeDevices: (id, input) =>
-      api.getApiV1AppleOrganizationsByIdAdeDevices(
+      api.getApiV1TenantsByTenantAppleOrganizationsByIdAdeDevices(
         transport,
-        { pathParams: { id: uuid(id) }, query: query(input, 'serial') },
+        { pathParams: { tenant, id: uuid(id) }, query: query(input, 'serial') },
         (value) => projectedPage(value, deviceFields, input.fields, ['serial']) as Page<AdeDevice>,
       ),
     adeCommand: (id, operationId, command) => {
@@ -183,9 +200,13 @@ export function createAppleEnrollmentAdapter(transport: HttpTransport): AppleEnr
           : command.kind === 'assign' || command.kind === 'clear'
             ? { ...command, devices: [...command.devices] }
             : command
-      return api.postApiV1AppleOrganizationsByIdAdeOperations(
+      return api.postApiV1TenantsByTenantAppleOrganizationsByIdAdeOperations(
         transport,
-        { pathParams: { id: uuid(id) }, headers: { 'Idempotency-Key': uuid(operationId) }, body },
+        {
+          pathParams: { tenant, id: uuid(id) },
+          headers: { 'Idempotency-Key': uuid(operationId) },
+          body,
+        },
         (value) => {
           if (
             value.operationId !== operationId ||
@@ -197,9 +218,9 @@ export function createAppleEnrollmentAdapter(transport: HttpTransport): AppleEnr
       )
     },
     adeOperation: (id, operationId) =>
-      api.getApiV1AppleOrganizationsByIdAdeOperationsByOperation(
+      api.getApiV1TenantsByTenantAppleOrganizationsByIdAdeOperationsByOperation(
         transport,
-        { pathParams: { id: uuid(id), operation: uuid(operationId) } },
+        { pathParams: { tenant, id: uuid(id), operation: uuid(operationId) } },
         (value) => {
           if (value.operationId !== operationId) throw new Error('Wrong ADE operation')
           return { ...value, result: value.result === null ? null : { ...value.result } }

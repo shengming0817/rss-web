@@ -364,7 +364,6 @@ export interface PublicEnrollmentPort {
   packageUrl(id: string): string
   terms(): Promise<Terms>
   termsFinishUrl(): string
-  appleBridgeUrl(): string
 }
 export interface EnrollmentPort {
   channels(): Promise<Channels>

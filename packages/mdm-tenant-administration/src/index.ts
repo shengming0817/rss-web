@@ -1,47 +1,17 @@
 export interface Tenant {
   readonly tenantId: string
   readonly management: boolean
-  readonly initialEpoch: number
-  readonly currentEpoch: number
   readonly name: string | null
   readonly notes: string | null
   readonly revision: number
   readonly deletable: boolean
 }
-export type Phase = 'reserved' | 'database_ready' | 'accounts_ready' | 'host_pending' | 'enabled'
-export type BlockedReason =
-  | 'capacity'
-  | 'database'
-  | 'authentication'
-  | 'authorization'
-  | 'host_unavailable'
-  | 'material_missing'
-  | 'material_expired'
-  | 'material_revoked'
-  | 'external_authorization'
-  | 'outcome_unknown'
 export interface Provisioning {
-  readonly operationId: string
   readonly tenantId: string
   readonly administratorId: string | null
-  readonly hostId: string
-  readonly revision: number
-  readonly phase: Phase
-  readonly blocked: BlockedReason | null
-  readonly origin: string | null
-  readonly application: {
-    readonly requestedRevision: number
-    readonly materialDigest: string
-    readonly operationId: string
-    readonly observation: {
-      readonly hostId: string
-      readonly processGeneration: string
-      readonly appliedRevision: number
-      readonly materialDigest: string
-      readonly observedAt: number
-      readonly failure: string | null
-    } | null
-  } | null
+  readonly phase: 'pending' | 'blocked' | 'configured'
+  readonly blocked: string | null
+  readonly entryPath: string
 }
 export interface Administrator {
   readonly tenantId: string
@@ -145,27 +115,12 @@ export function prepareUpdate(
   if (notes !== null) text(notes, 2048, true)
   return { operationId, tenantId: detail.tenantId, expectedRevision: detail.revision, name, notes }
 }
-/** An existing operation or an allocated administrator does not prove host activation. */
-export function provisioningState(
-  p: Provisioning,
-): 'needs_credentials' | 'waiting_for_host' | 'blocked' | 'enabled' {
-  if (
-    p.phase === 'enabled' &&
-    p.administratorId !== null &&
-    p.origin !== null &&
-    p.blocked === null
-  )
-    return 'enabled'
-  if (p.blocked !== null) return 'blocked'
-  if (p.administratorId === null) return 'needs_credentials'
-  return 'waiting_for_host'
-}
 export function provisioningEntry(p: Provisioning): string | null {
-  if (provisioningState(p) !== 'enabled' || p.origin === null) return null
-  const url = new URL(p.origin)
-  if (url.protocol !== 'https:' || url.origin !== p.origin || url.username || url.password)
-    throw new Error('Invalid tenant origin')
-  return p.origin
+  uuid(p.tenantId)
+  if (p.entryPath !== `/tenants/${p.tenantId}`) throw new Error('Invalid tenant entry')
+  return p.phase === 'configured' && p.administratorId !== null && p.blocked === null
+    ? p.entryPath
+    : null
 }
 export function confirmOperation(
   receipt: Receipt,
@@ -179,8 +134,6 @@ export function confirmOperation(
     (tenantId !== undefined && receipt.result.tenantId !== tenantId)
   )
     throw new Error('Wrong tenant operation receipt')
-  if (receipt.action === 'provision' && receipt.result.operationId !== operationId)
-    throw new Error('Wrong provisioning operation')
   return receipt
 }
 /** Explicit use cases; re-entering credentials and resubmitting is always a caller action. */

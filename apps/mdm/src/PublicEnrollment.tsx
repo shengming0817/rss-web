@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card } from 'antd'
-import type { Runtime } from './runtime'
+import type { PublicEnrollmentPort } from '@rss/mdm-enrollment'
 import type { Locale } from './i18n'
 import { Heading, labels, ReadState, useRead } from './AdminUi'
 import { DataTable } from './DataTable'
-export function PublicDownloads({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
+export function PublicDownloads({
+  downloads,
+  locale,
+}: {
+  downloads: Pick<PublicEnrollmentPort, 'packages' | 'packageUrl'>
+  locale: Locale
+}) {
   const l = labels(locale),
-    read = useRead(`public-packages/${runtime.host.tenant}`, runtime.onboarding.packages)
+    read = useRead('public-packages', downloads.packages)
   return (
     <section className="public-enrollment">
       <Heading
@@ -41,7 +47,7 @@ export function PublicDownloads({ runtime, locale }: { runtime: Runtime; locale:
             {
               title: l('下载', 'Download'),
               render: (_, row) => (
-                <a href={runtime.onboarding.packageUrl(row.releaseId)} download={row.filename}>
+                <a href={downloads.packageUrl(row.releaseId)} download={row.filename}>
                   {l('下载安装包', 'Download installer')}
                 </a>
               ),
@@ -52,9 +58,15 @@ export function PublicDownloads({ runtime, locale }: { runtime: Runtime; locale:
     </section>
   )
 }
-export function EntraTerms({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
+export function EntraTerms({
+  terms,
+  locale,
+}: {
+  terms: Pick<PublicEnrollmentPort, 'terms' | 'termsFinishUrl'>
+  locale: Locale
+}) {
   const l = labels(locale),
-    read = useRead('public-entra-terms', runtime.onboarding.terms),
+    read = useRead('public-entra-terms', terms.terms),
     [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
@@ -78,7 +90,7 @@ export function EntraTerms({ runtime, locale }: { runtime: Runtime; locale: Loca
               )}
             />
           )}
-          <form action={runtime.onboarding.termsFinishUrl()} method="post">
+          <form action={terms.termsFinishUrl()} method="post">
             <input type="hidden" name="csrfToken" value={read.value.csrfToken} />
             <Button
               htmlType="submit"

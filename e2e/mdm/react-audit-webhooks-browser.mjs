@@ -26,7 +26,7 @@ try {
     },
     tab = (name) => p.getByRole('tab', { name, exact: true }).filter({ visible: true }).click(),
     summary = (name) => p.locator('summary').getByText(name, { exact: true }).click(),
-    base = '/api/v1/webhooks',
+    base = `/api/v1/tenants/${run.fixture.tenant}/webhooks`,
     designOnly = process.env.MDM_REACT_AUDIT_WEBHOOKS_MODE === 'design',
     importSecret = 'whsec_' + Buffer.alloc(32, 9).toString('base64')
   diagnosticPage = p
@@ -79,7 +79,7 @@ try {
     assert.fail('bounded fact readiness')
   }
   async function changeAuthority(grants) {
-    const path = `/api/v1/authorization/rules/${f.ruleId}`,
+    const path = `/api/v1/tenants/${run.fixture.tenant}/authorization/rules/${f.ruleId}`,
       current = await api('GET', path)
     await api('PUT', path, {
       operationId: randomUUID(),
@@ -103,7 +103,7 @@ try {
     run.step('real-native-facts-and-independent-activity-read')
     const operations = []
     const deadline = Math.floor(Date.now() / 1000) + 3600
-    const controlPath = `/api/v1/devices/${f.mdm}/operations`
+    const controlPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations`
     const restart = (operationId) => ({ operationId, action: { kind: 'restart' }, deadline })
     for (let i = 0; i < 3; i++) {
       const operationId = randomUUID()
@@ -112,13 +112,20 @@ try {
       operations.push(operationId)
     }
     const operationId = operations[0],
-      current = await api('GET', `/api/v1/devices/${f.mdm}/operations/${operationId}`),
+      current = await api(
+        'GET',
+        `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations/${operationId}`,
+      ),
       cancelId = randomUUID()
-    await api('POST', `/api/v1/devices/${f.mdm}/operations/${operationId}/cancel`, {
-      requestId: cancelId,
-      expectedRevision: current.revision,
-    })
-    const activityPath = `/api/v1/devices/${f.mdm}/management-activities`,
+    await api(
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations/${operationId}/cancel`,
+      {
+        requestId: cancelId,
+        expectedRevision: current.revision,
+      },
+    )
+    const activityPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/management-activities`,
       activities = await until(
         () => api('GET', activityPath + '?operation=' + operationId),
         (value) => value.items.some((item) => item.links.operation === operationId),
@@ -129,7 +136,7 @@ try {
     await changeAuthority(
       f.rule.grants.filter((grant) => !['audit_read', 'inventory_read'].includes(grant.operation)),
     )
-    await api('GET', '/api/v1/audit-events', undefined, 403)
+    await api('GET', `/api/v1/tenants/${run.fixture.tenant}/audit-events`, undefined, 403)
     await run.nav(
       p,
       `/audit?view=activities&device=${f.mdm}&operation=${operationId}`,
@@ -150,7 +157,7 @@ try {
     )
 
     run.step('audit-window-pagination-cursor-binding-and-owner-navigation')
-    const auditQuery = `/api/v1/audit-events?device=${f.mdm}&operationId=${operationId}&action=command_cancel`,
+    const auditQuery = `/api/v1/tenants/${run.fixture.tenant}/audit-events?device=${f.mdm}&operationId=${operationId}&action=command_cancel`,
       audit = await until(
         () => api('GET', auditQuery),
         (value) => value.items.some((fact) => fact.operationId === cancelId),
@@ -178,7 +185,10 @@ try {
     await settled()
     await run.nav(p, `/audit?device=${f.mdm}&limit=1`, '审计与管理活动')
     await button('下一页').waitFor({ state: 'visible' })
-    const firstPage = await api('GET', `/api/v1/audit-events?device=${f.mdm}&limit=1`)
+    const firstPage = await api(
+      'GET',
+      `/api/v1/tenants/${run.fixture.tenant}/audit-events?device=${f.mdm}&limit=1`,
+    )
     assert.ok(firstPage.nextCursor)
     await button('下一页').click()
     await p.waitForURL((url) => url.searchParams.has('cursor'))
@@ -191,13 +201,13 @@ try {
     )
     await api(
       'GET',
-      `/api/v1/devices/${f.mdm}/timeline?limit=1&cursor=${encodeURIComponent(firstPage.nextCursor)}`,
+      `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/timeline?limit=1&cursor=${encodeURIComponent(firstPage.nextCursor)}`,
       undefined,
       409,
     )
     await api(
       'GET',
-      `/api/v1/audit-events?limit=1&action=command_cancel&cursor=${encodeURIComponent(firstPage.nextCursor)}`,
+      `/api/v1/tenants/${run.fixture.tenant}/audit-events?limit=1&action=command_cancel&cursor=${encodeURIComponent(firstPage.nextCursor)}`,
       undefined,
       409,
     )
@@ -216,7 +226,7 @@ try {
     const policyIds = [randomUUID(), randomUUID()],
       event = 'react.audit.shared'
     for (const [index, id] of policyIds.entries()) {
-      await api('POST', '/api/v1/policies/' + id, {
+      await api('POST', `/api/v1/tenants/${run.fixture.tenant}/policies/` + id, {
         operationId: randomUUID(),
         expectedRevision: 0,
         input: {
@@ -242,7 +252,7 @@ try {
         },
       })
     }
-    const resolved = await api('POST', '/api/v1/policies/resolve', {
+    const resolved = await api('POST', `/api/v1/tenants/${run.fixture.tenant}/policies/resolve`, {
       kind: 'alias',
       alias: 'react.audit.0',
     })
@@ -255,7 +265,7 @@ try {
     ]) {
       await run.choose(p, label('地址类型'), kind)
       await label('精确地址').fill(value)
-      await run.response(p, 'POST', '/api/v1/policies/resolve', () =>
+      await run.response(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/policies/resolve`, () =>
         button('读取当前身份').click(),
       )
       await p.getByText('当前配置身份（本次读取）', { exact: true }).waitFor()
@@ -273,7 +283,7 @@ try {
     )
 
     run.step('policy-entry-availability-and-authorized-alias-withdrawal')
-    const policyPath = '/api/v1/policies/' + policyIds[0]
+    const policyPath = `/api/v1/tenants/${run.fixture.tenant}/policies/` + policyIds[0]
     await run.nav(
       p,
       `/policies?${new URLSearchParams({ policy: policyIds[0], tab: 'configuration' })}`,
@@ -292,7 +302,7 @@ try {
     const heldPolicy = new Promise((done) => {
         releasePolicy = done
       }),
-      otherPolicyPath = '/api/v1/policies/' + policyIds[1]
+      otherPolicyPath = `/api/v1/tenants/${run.fixture.tenant}/policies/` + policyIds[1]
     await p.route('**' + otherPolicyPath, async (route) => {
       if (route.request().method() === 'GET') await heldPolicy
       await route.continue()
@@ -325,7 +335,7 @@ try {
     assert.equal(copiedEvent.pathname, `/v1/event/${event}`)
     assert.equal(copiedEvent.searchParams.get('device'), f.agent)
     assert.equal(copiedEvent.searchParams.get('tenant'), f.tenant)
-    const registered = await api('GET', `/api/v1/devices/${f.agent}`)
+    const registered = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.agent}`)
     assert.ok(registered)
     assert.equal(copiedEvent.searchParams.get('instance'), f.instance)
 
@@ -344,8 +354,13 @@ try {
     await label('共享事件名').fill('')
     await label('确认范围、资源、调度与潜在影响').check()
     await run.response(p, 'POST', policyPath, () => button('保存策略定义').click())
-    await api('POST', '/api/v1/policies/resolve', { kind: 'alias', alias: 'react.audit.0' }, 404)
-    const renamed = await api('POST', '/api/v1/policies/resolve', {
+    await api(
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/policies/resolve`,
+      { kind: 'alias', alias: 'react.audit.0' },
+      404,
+    )
+    const renamed = await api('POST', `/api/v1/tenants/${run.fixture.tenant}/policies/resolve`, {
       kind: 'alias',
       alias: 'react.audit.renamed',
     })
@@ -365,7 +380,7 @@ try {
     assert.equal(withdrawn.definition.customEvent, null)
     await api(
       'POST',
-      '/api/v1/policies/resolve',
+      `/api/v1/tenants/${run.fixture.tenant}/policies/resolve`,
       { kind: 'alias', alias: 'react.audit.renamed' },
       404,
     )
@@ -492,7 +507,7 @@ try {
     })
     assert.equal(edit.status(), 200)
     assert.equal((await api('GET', path)).enabled, false)
-    const diagnosticBase = '/api/v1/operation-diagnostics'
+    const diagnosticBase = `/api/v1/tenants/${run.fixture.tenant}/operation-diagnostics`
     const diagnosticPath = `${diagnosticBase}/operations/webhook/${original.operationId}`
     const operationQuery = new URLSearchParams({
       mode: 'operation',
@@ -509,14 +524,17 @@ try {
     const attempt = discovery.items.find(
       ({ fact }) => fact.origin === 'request' && fact.requestId,
     ).fact
-    const auditByRequest = await api('GET', '/api/v1/audit-events?requestId=' + attempt.requestId)
+    const auditByRequest = await api(
+      'GET',
+      `/api/v1/tenants/${run.fixture.tenant}/audit-events?requestId=` + attempt.requestId,
+    )
     const indexedAttempt = auditByRequest.items.find((fact) => fact.eventId === attempt.eventId)
     assert.equal(indexedAttempt?.origin, 'request')
     assert.equal(typeof indexedAttempt?.requestReplayed, 'boolean')
     assert.equal(indexedAttempt.requestReplayed, attempt.requestReplayed)
     const timeline = await api(
       'GET',
-      `/api/v1/devices/${f.mdm}/timeline?operationId=${operationId}`,
+      `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/timeline?operationId=${operationId}`,
     )
     assert.ok(
       timeline.items.length &&

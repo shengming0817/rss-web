@@ -22,7 +22,7 @@ export function createExecutionAdapter(
 ): ExecutionPort {
   function trust(value: unknown): Trust {
     if (
-      !schema.getApiV1TaskSigningTrustResponse.validateRoot(value) ||
+      !schema.getApiV1TenantsByTenantTaskSigningTrustResponse.validateRoot(value) ||
       value.version !== 1 ||
       value.tenant !== tenant ||
       value.service_id !== serviceId
@@ -41,10 +41,10 @@ export function createExecutionAdapter(
   }
   return {
     declarations: (device, cursor, signal) =>
-      api.getApiV1DevicesByDeviceDdm(
+      api.getApiV1TenantsByTenantDevicesByDeviceDdm(
         transport,
         {
-          pathParams: { device },
+          pathParams: { tenant, device },
           query: { limit: 100, ...(cursor ? { cursor } : {}) },
           ...(signal ? { signal } : {}),
         },
@@ -62,9 +62,9 @@ export function createExecutionAdapter(
         }),
       ),
     statistics: (filter, signal) =>
-      api.getApiV1OperationsStatistics(
+      api.getApiV1TenantsByTenantOperationsStatistics(
         transport,
-        { signal, query: queryParameters(filter ? { filter } : {}) },
+        { pathParams: { tenant }, signal, query: queryParameters(filter ? { filter } : {}) },
         (value) => ({
           total: count(value.statistics.total),
           commands: count(value.statistics.commands),
@@ -74,17 +74,17 @@ export function createExecutionAdapter(
         }),
       ),
     create: (input, pin) =>
-      api.postApiV1DevicesByDeviceOperations(
+      api.postApiV1TenantsByTenantDevicesByDeviceOperations(
         transport,
         {
-          pathParams: { device: input.device },
+          pathParams: { tenant, device: input.device },
           body: requestInput(
             {
               operationId: input.operationId,
               deadline: input.deadline,
               action: input.action.kind === 'lock' ? { ...input.action, pin } : input.action,
             },
-            schema.postApiV1DevicesByDeviceOperationsBody.validateRoot,
+            schema.postApiV1TenantsByTenantDevicesByDeviceOperationsBody.validateRoot,
           ),
         },
         (value) => {
@@ -94,45 +94,55 @@ export function createExecutionAdapter(
         },
       ),
     cancel: (device, id, input) =>
-      api.postApiV1DevicesByDeviceOperationsByIdCancel(
+      api.postApiV1TenantsByTenantDevicesByDeviceOperationsByIdCancel(
         transport,
         {
-          pathParams: { device, id },
+          pathParams: { tenant, device, id },
           body: requestInput(
             { requestId: input.requestId, expectedRevision: input.expectedRevision },
-            schema.postApiV1DevicesByDeviceOperationsByIdCancelBody.validateRoot,
+            schema.postApiV1TenantsByTenantDevicesByDeviceOperationsByIdCancelBody.validateRoot,
           ),
         },
         (value) => ({ operationId: uuid(value.operationId), revision: positive(value.revision) }),
       ),
     reauthorize: (device, id, input) =>
-      api.postApiV1DevicesByDeviceOperationsByIdReauthorize(
+      api.postApiV1TenantsByTenantDevicesByDeviceOperationsByIdReauthorize(
         transport,
         {
-          pathParams: { device, id },
+          pathParams: { tenant, device, id },
           body: requestInput(
             input,
-            schema.postApiV1DevicesByDeviceOperationsByIdReauthorizeBody.validateRoot,
+            schema.postApiV1TenantsByTenantDevicesByDeviceOperationsByIdReauthorizeBody
+              .validateRoot,
           ),
         },
         (value) => ({ operationId: uuid(value.operationId), revision: positive(value.revision) }),
       ),
-    trust: () => api.getApiV1TaskSigningTrust(transport, {}, trust),
+    trust: () =>
+      api.getApiV1TenantsByTenantTaskSigningTrust(transport, { pathParams: { tenant } }, trust),
     changeTrust: (operationId, input) =>
-      api.postApiV1TaskSigningTrust(
+      api.postApiV1TenantsByTenantTaskSigningTrust(
         transport,
         {
-          body: requestInput(input, schema.postApiV1TaskSigningTrustBody.validateRoot),
+          pathParams: { tenant },
+          body: requestInput(
+            input,
+            schema.postApiV1TenantsByTenantTaskSigningTrustBody.validateRoot,
+          ),
           headers: { 'Idempotency-Key': operationId },
         },
         trust,
       ),
     trustOperation: (id) =>
-      api.getApiV1TaskSigningOperationsById(transport, { pathParams: { id } }, trust),
-    trustObservation: (device) =>
-      api.getApiV1TaskSigningTrustDevicesByDeviceObservation(
+      api.getApiV1TenantsByTenantTaskSigningOperationsById(
         transport,
-        { pathParams: { device } },
+        { pathParams: { tenant, id } },
+        trust,
+      ),
+    trustObservation: (device) =>
+      api.getApiV1TenantsByTenantTaskSigningTrustDevicesByDeviceObservation(
+        transport,
+        { pathParams: { tenant, device } },
         (value) =>
           value === null
             ? null
@@ -146,9 +156,13 @@ export function createExecutionAdapter(
               },
       ),
     list: (query, signal) =>
-      api.getApiV1Operations(
+      api.getApiV1TenantsByTenantOperations(
         transport,
-        { signal, query: queryParameters({ limit: 100, ...query, fields }) },
+        {
+          pathParams: { tenant },
+          signal,
+          query: queryParameters({ limit: 100, ...query, fields }),
+        },
         (value) => {
           const items: Execution[] = value.items.map((item) => ({
             id: uuid(item.id),
@@ -166,12 +180,14 @@ export function createExecutionAdapter(
         },
       ),
     command: (device, id, signal) =>
-      api.getApiV1DevicesByDeviceOperationsById(
+      api.getApiV1TenantsByTenantDevicesByDeviceOperationsById(
         transport,
-        { signal, pathParams: { device, id: uuid(id) } },
+        { signal, pathParams: { tenant, device, id: uuid(id) } },
         (value) => {
           if (
-            !schema.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(value) ||
+            !schema.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse.validateRoot(
+              value,
+            ) ||
             value.operationId !== id ||
             value.commandId !== id
           )
@@ -180,7 +196,8 @@ export function createExecutionAdapter(
             value.owner === 'device'
               ? requestInput(
                   value.reauthorization,
-                  schema.getApiV1DevicesByDeviceOperationsByIdResponse.validateReauthorization,
+                  schema.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse
+                    .validateReauthorization,
                 )
               : null
           return {
@@ -209,12 +226,12 @@ export function createExecutionAdapter(
         },
       ),
     run: (policy, id, signal) =>
-      api.getApiV1PoliciesByIdRunsByTask(
+      api.getApiV1TenantsByTenantPoliciesByIdRunsByTask(
         transport,
-        { signal, pathParams: { id: uuid(policy), task: uuid(id) } },
+        { signal, pathParams: { tenant, id: uuid(policy), task: uuid(id) } },
         (value) => {
           if (
-            !schema.getApiV1PoliciesByIdRunsByTaskResponse.validateRoot(value) ||
+            !schema.getApiV1TenantsByTenantPoliciesByIdRunsByTaskResponse.validateRoot(value) ||
             value.taskId !== id ||
             value.policyId !== policy
           )
@@ -224,13 +241,14 @@ export function createExecutionAdapter(
             ? null
             : requestInput(
                 value.state,
-                schema.getApiV1PoliciesByIdRunsByTaskResponse.validateRunState,
+                schema.getApiV1TenantsByTenantPoliciesByIdRunsByTaskResponse.validateRunState,
               )
           const authorization =
             'authorization' in value && value.authorization
               ? requestInput(
                   value.authorization,
-                  schema.getApiV1PoliciesByIdRunsByTaskResponse.validateTaskAuthorization,
+                  schema.getApiV1TenantsByTenantPoliciesByIdRunsByTaskResponse
+                    .validateTaskAuthorization,
                 )
               : null
           const common = {

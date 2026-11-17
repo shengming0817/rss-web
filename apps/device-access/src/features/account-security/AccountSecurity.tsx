@@ -118,7 +118,7 @@ export function AccountSecurity({ oidc }: { oidc: boolean }) {
         selected ? { kind: 'remove', credential: selected.id } : { kind: 'register' },
       )
       if (!valid()) return
-      r.flows.save('step-up', r.host.tenant)
+      r.flows.save('step-up', r.tenant)
       cancel()
       window.location.assign(target)
     } catch (e) {

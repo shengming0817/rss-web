@@ -27,9 +27,9 @@ import {
 export function createTelemetryAdapter(transport: HttpTransport, tenant: string): TelemetryPort {
   return {
     configurations: (device: string) =>
-      api.getApiV1DevicesByDeviceTelemetryConfigurations(
+      api.getApiV1TenantsByTenantDevicesByDeviceTelemetryConfigurations(
         transport,
-        { pathParams: { device } },
+        { pathParams: { tenant, device } },
         (value) => {
           const v = value
           if (v['device'] !== device) throw new Error('Wrong configuration device')
@@ -55,9 +55,9 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     resources: (device: string, field: string, after: string | null = null) =>
-      api.postApiV1TelemetryResources(
+      api.postApiV1TenantsByTenantTelemetryResources(
         transport,
-        { body: { device, field, after, limit: 64 } },
+        { pathParams: { tenant }, body: { device, field, after, limit: 64 } },
         (value) => {
           const v = value
           return {
@@ -68,9 +68,10 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     history: (query: Parameters<TelemetryPort['history']>[0]) =>
-      api.postApiV1TelemetryHistory(
+      api.postApiV1TenantsByTenantTelemetryHistory(
         transport,
         {
+          pathParams: { tenant },
           body: {
             ...query,
             startMicros: wireInteger(query.startMicros),
@@ -103,9 +104,10 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
         },
       ),
     aggregate: (request: Parameters<TelemetryPort['aggregate']>[0]) =>
-      api.postApiV1TelemetryAggregate(
+      api.postApiV1TenantsByTenantTelemetryAggregate(
         transport,
         {
+          pathParams: { tenant },
           body: {
             ...request,
             query: {
@@ -155,9 +157,10 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
       receivedUntil: string,
       maxBatches = 64,
     ) =>
-      api.postApiV1TelemetryHealth(
+      api.postApiV1TenantsByTenantTelemetryHealth(
         transport,
         {
+          pathParams: { tenant },
           body: {
             device,
             field,
@@ -174,9 +177,10 @@ export function createTelemetryAdapter(transport: HttpTransport, tenant: string)
       receivedUntil: string,
       after: ReturnType<typeof gapCursor> = null,
     ) =>
-      api.postApiV1TelemetryGapsQuery(
+      api.postApiV1TenantsByTenantTelemetryGapsQuery(
         transport,
         {
+          pathParams: { tenant },
           body: {
             device,
             receivedFrom: wireNumber(receivedFrom),

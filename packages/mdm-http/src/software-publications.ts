@@ -9,7 +9,7 @@ import { requestInput } from './inventory-values'
 import { resourceDigest } from './resource-values'
 
 function exportDocument(value: unknown): ExportDocument {
-  if (!schema.postApiV1SoftwarePublicationsResponse.validateExportDocument(value))
+  if (!schema.postApiV1TenantsByTenantSoftwarePublicationsResponse.validateExportDocument(value))
     throw new Error('Invalid native publication document')
   boundedDocument(value, 8 * 1024 * 1024)
   return value.kind === 'Winget'
@@ -30,7 +30,7 @@ const outcome = (value: unknown) =>
   enumeration(value, ['pending', 'unknown', 'not_applied', 'published'] as const)
 function publication(value: unknown, id?: string): Publication {
   if (
-    !schema.postApiV1SoftwarePublicationsResponse.validateRoot(value) ||
+    !schema.postApiV1TenantsByTenantSoftwarePublicationsResponse.validateRoot(value) ||
     (id !== undefined && value.id !== id)
   )
     throw new Error('Wrong publication detail')
@@ -71,12 +71,16 @@ const targetFields = {
   digest: resourceDigest,
   protocol: (value: unknown) => enumeration(value, ['winget', 'brew'] as const),
 }
-export function createPublicationsAdapter(transport: HttpTransport): PublicationsPort {
+export function createPublicationsAdapter(
+  transport: HttpTransport,
+  tenant: string,
+): PublicationsPort {
   return {
     target: (id) =>
-      api.getApiV1SoftwarePublicationTargets(
+      api.getApiV1TenantsByTenantSoftwarePublicationTargets(
         transport,
         {
+          pathParams: { tenant },
           query: queryParameters({
             filter: comparison('id', '==', id),
             fields: ['id', 'digest', 'protocol'],
@@ -92,9 +96,10 @@ export function createPublicationsAdapter(transport: HttpTransport): Publication
         },
       ),
     original: (operation, query) =>
-      api.getApiV1SoftwarePublications(
+      api.getApiV1TenantsByTenantSoftwarePublications(
         transport,
         {
+          pathParams: { tenant },
           query: queryParameters({
             ...query,
             filter: comparison('operationId', '==', operation),
@@ -104,31 +109,44 @@ export function createPublicationsAdapter(transport: HttpTransport): Publication
         (value) => projectedPage(value, fields, undefined, ['id']),
       ),
     targets: (query) =>
-      api.getApiV1SoftwarePublicationTargets(
+      api.getApiV1TenantsByTenantSoftwarePublicationTargets(
         transport,
-        { query: queryParameters(query) },
+        { pathParams: { tenant }, query: queryParameters(query) },
         (value) => projectedPage(value, targetFields, query.fields, ['id']),
       ),
     list: (query) =>
-      api.getApiV1SoftwarePublications(transport, { query: queryParameters(query) }, (value) =>
-        projectedPage(value, fields, query.fields, ['id']),
+      api.getApiV1TenantsByTenantSoftwarePublications(
+        transport,
+        { pathParams: { tenant }, query: queryParameters(query) },
+        (value) => projectedPage(value, fields, query.fields, ['id']),
       ),
     read: (id) =>
-      api.getApiV1SoftwarePublicationsById(transport, { pathParams: { id } }, (value) =>
-        publication(value, id),
+      api.getApiV1TenantsByTenantSoftwarePublicationsById(
+        transport,
+        { pathParams: { tenant, id } },
+        (value) => publication(value, id),
       ),
     publish: (change) =>
-      api.postApiV1SoftwarePublications(
+      api.postApiV1TenantsByTenantSoftwarePublications(
         transport,
-        { body: requestInput(change, schema.postApiV1SoftwarePublicationsBody.validateRoot) },
+        {
+          pathParams: { tenant },
+          body: requestInput(
+            change,
+            schema.postApiV1TenantsByTenantSoftwarePublicationsBody.validateRoot,
+          ),
+        },
         (value) => publication(value, change.operationId),
       ),
     change: (id, change) =>
-      api.postApiV1SoftwarePublicationsById(
+      api.postApiV1TenantsByTenantSoftwarePublicationsById(
         transport,
         {
-          pathParams: { id },
-          body: requestInput(change, schema.postApiV1SoftwarePublicationsByIdBody.validateRoot),
+          pathParams: { tenant, id },
+          body: requestInput(
+            change,
+            schema.postApiV1TenantsByTenantSoftwarePublicationsByIdBody.validateRoot,
+          ),
         },
         (value) => publication(value, id),
       ),

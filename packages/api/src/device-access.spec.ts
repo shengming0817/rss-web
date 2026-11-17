@@ -1,4 +1,4 @@
-import { getApiV1DevicesByDeviceDeviceAccess } from './generated/mdm'
+import { getApiV1TenantsByTenantDevicesByDeviceDeviceAccess } from './generated/mdm'
 import { it, expect, vi } from 'vitest'
 import axios from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
@@ -11,14 +11,19 @@ it('separates public DA routes from explicit demo and credential transports', as
     transport = createDeviceAccessTransport()
   spy.mockRestore()
   mock.onAny().reply(200, { items: [], nextCursor: null }, { 'Content-Type': 'application/json' })
-  await getApiV1DevicesByDeviceDeviceAccess(transport, {
-    pathParams: { device: '33333333-3333-4333-8333-333333333333' },
+  await getApiV1TenantsByTenantDevicesByDeviceDeviceAccess(transport, {
+    pathParams: {
+      tenant: '11111111-1111-4111-8111-111111111111',
+      device: '33333333-3333-4333-8333-333333333333',
+    },
   })
   expect(mock.history.get[0]?.url).toBe(
-    '/api/v1/devices/33333333-3333-4333-8333-333333333333/device-access',
+    '/api/v1/tenants/11111111-1111-4111-8111-111111111111/devices/33333333-3333-4333-8333-333333333333/device-access',
   )
   await expect(
-    getApiV1DevicesByDeviceDeviceAccess(transport, { pathParams: { device: 'space device' } }),
+    getApiV1TenantsByTenantDevicesByDeviceDeviceAccess(transport, {
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111', device: 'space device' },
+    }),
   ).rejects.toMatchObject({ cause: 'client' })
   for (const path of [
     '/api/da-demo/computers',
@@ -32,7 +37,7 @@ it('separates public DA routes from explicit demo and credential transports', as
   await expect(
     transport.request({
       method: 'GET',
-      path: '/api/v1/devices',
+      path: '/api/v1/tenants/{tenant}/devices',
       headers: { Authorization: 'not permitted' },
       successStatus: 200,
       decode: (v) => v,
@@ -60,7 +65,7 @@ it('allows candidate endpoints only through a loopback-only explicit demo factor
   await expect(
     transport.request({
       method: 'GET',
-      path: '/api/v1/devices',
+      path: '/api/v1/tenants/{tenant}/devices',
       successStatus: 200,
       decode: (v) => v,
     }),

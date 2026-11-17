@@ -26,7 +26,7 @@ function group() {
 }
 it('keeps projected zero counts and exact referenceable context with server cursor paging', async () => {
   const f = fixture({ items: [{ id, memberCount: 0 }], nextCursor: 'b3BhcXVl' }),
-    client = createGroupsAdapter(f.transport)
+    client = createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111')
   expect(
     (
       await client.list({
@@ -55,17 +55,21 @@ it('keeps projected zero counts and exact referenceable context with server curs
 it('reads an empty initial static group without manufacturing a result UUID', async () => {
   const value = { group: group(), criteria: null, memberSet: null, freshness: 'current' },
     f = fixture(value)
-  expect(await createGroupsAdapter(f.transport).read(id)).toEqual(value)
-  await expect(createGroupsAdapter(f.transport).read(nested)).rejects.toThrow()
+  expect(
+    await createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111').read(id),
+  ).toEqual(value)
+  await expect(
+    createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111').read(nested),
+  ).rejects.toThrow()
 })
 it('distinguishes asynchronous definition acceptance from a completed membership change', async () => {
   const f = fixture({
       task,
       kind: 'group_definition',
       target: id,
-      statusUrl: `/api/v1/groups/${id}/tasks/${task}`,
+      statusUrl: `/api/v1/tenants/11111111-1111-4111-8111-111111111111/groups/${id}/tasks/${task}`,
     }),
-    client = createGroupsAdapter(f.transport)
+    client = createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111')
   const change = {
     operationId: task,
     expectedRevision: 2,
@@ -82,7 +86,7 @@ it('distinguishes asynchronous definition acceptance from a completed membership
     task,
     kind: 'group_definition',
     target: id,
-    statusUrl: `/api/v1/groups/${id}/tasks/${task}`,
+    statusUrl: `/api/v1/tenants/11111111-1111-4111-8111-111111111111/groups/${id}/tasks/${task}`,
   })
   expect(f.request).toHaveBeenCalledWith(expect.objectContaining({ body: change }))
   await expect(client.change(nested, change)).rejects.toThrow()
@@ -136,13 +140,20 @@ it('retains association versions and exact source registration generations in hi
       nextCursor: null,
     },
     f = fixture(value)
-  expect(await createGroupsAdapter(f.transport).result(id, task, 'decisions', {})).toEqual(value)
+  expect(
+    await createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111').result(
+      id,
+      task,
+      'decisions',
+      {},
+    ),
+  ).toEqual(value)
 })
 it('preserves deletion protection on an empty permission-filtered reference page', async () => {
   const value = { items: [], nextCursor: 'b3BhcXVl' },
     f = fixture(value)
   expect(
-    await createGroupsAdapter(f.transport).impacts(id, {
+    await createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111').impacts(id, {
       relation: 'indirect',
       kind: 'compliance_rule',
       cursor: 'cHJldmlvdXM',
@@ -167,9 +178,9 @@ it('rejects a task for another group', async () => {
     failureDetail: null,
     replacementTask: null,
   })
-  await expect(createGroupsAdapter(wrong.transport).task(id, task)).rejects.toThrow(
-    'Wrong group task',
-  )
+  await expect(
+    createGroupsAdapter(wrong.transport, '11111111-1111-4111-8111-111111111111').task(id, task),
+  ).rejects.toThrow('Wrong group task')
 })
 
 it('binds a reused calculation task to its returned identity and canonical status URL', async () => {
@@ -177,10 +188,10 @@ it('binds a reused calculation task to its returned identity and canonical statu
       task: nested,
       target: id,
       kind: 'group',
-      statusUrl: `/api/v1/groups/${id}/tasks/${nested}`,
+      statusUrl: `/api/v1/tenants/11111111-1111-4111-8111-111111111111/groups/${id}/tasks/${nested}`,
     },
     f = fixture(receipt),
-    client = createGroupsAdapter(f.transport)
+    client = createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111')
   expect(
     await client.change(id, {
       operationId: task,
@@ -189,7 +200,10 @@ it('binds a reused calculation task to its returned identity and canonical statu
     }),
   ).toEqual(receipt)
   f.request.mockImplementation(async (options: RequestOptions<unknown>) =>
-    options.decode({ ...receipt, statusUrl: `/api/v1/groups/${id}/tasks/${task}` }),
+    options.decode({
+      ...receipt,
+      statusUrl: `/api/v1/tenants/11111111-1111-4111-8111-111111111111/groups/${id}/tasks/${task}`,
+    }),
   )
   await expect(
     client.change(id, { operationId: task, expectedRevision: 2, input: { action: 'recompute' } }),
@@ -215,12 +229,21 @@ it('previews unsaved criteria with bounded sample facts and no task identity', a
       asOf: 0,
     },
     f = fixture(value)
-  expect(await createGroupsAdapter(f.transport).preview(input)).toEqual(value)
+  expect(
+    await createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111').preview(input),
+  ).toEqual(value)
   expect(f.request).toHaveBeenCalledWith(
-    expect.objectContaining({ method: 'POST', path: '/api/v1/groups/previews', body: input }),
+    expect.objectContaining({
+      method: 'POST',
+      path: '/api/v1/tenants/{tenant}/groups/previews',
+      body: input,
+    }),
   )
   await expect(
-    createGroupsAdapter(fixture({ ...value, scanComplete: 'false' }).transport).preview(input),
+    createGroupsAdapter(
+      fixture({ ...value, scanComplete: 'false' }).transport,
+      '11111111-1111-4111-8111-111111111111',
+    ).preview(input),
   ).rejects.toThrow()
 })
 it('reads complete direct blockers independently of the filtered recursive impacts', async () => {
@@ -239,8 +262,16 @@ it('reads complete direct blockers independently of the filtered recursive impac
       nextCursor: null,
     },
     f = fixture(value)
-  expect(await createGroupsAdapter(f.transport).references(id, {})).toEqual(value)
+  expect(
+    await createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111').references(
+      id,
+      {},
+    ),
+  ).toEqual(value)
   expect(f.request).toHaveBeenCalledWith(
-    expect.objectContaining({ path: '/api/v1/groups/{id}/references', query: { limit: 100 } }),
+    expect.objectContaining({
+      path: '/api/v1/tenants/{tenant}/groups/{id}/references',
+      query: { limit: 100 },
+    }),
   )
 })

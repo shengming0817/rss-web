@@ -1,6 +1,11 @@
 import { expect, it, vi } from 'vitest'
 import type { HttpTransport, RequestOptions } from '@rss/api/mdm'
-import { createEnrollmentAdapter, createPublicEnrollmentAdapter } from './enrollment'
+import {
+  appleBridgeUrl,
+  createEntraTermsAdapter,
+  createEnrollmentAdapter,
+  createPublicEnrollmentAdapter,
+} from './enrollment'
 const tenant = '11111111-1111-4111-8111-111111111111',
   service = '22222222-2222-4222-8222-222222222222',
   operation = '33333333-3333-4333-8333-333333333333',
@@ -93,8 +98,8 @@ it('queries the original issuance operation without resubmitting or disclosing a
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       method: 'GET',
-      path: '/api/v1/agent-configuration-operations/{id}',
-      pathParams: { id: operation },
+      path: '/api/v1/tenants/{tenant}/agent-configuration-operations/{id}',
+      pathParams: { tenant, id: operation },
     }),
   )
 })
@@ -120,10 +125,12 @@ it('exposes public package content and callback routes without an agent web enro
     client = createPublicEnrollmentAdapter(f.transport, tenant)
   expect(await client.packages()).toEqual([])
   expect(client.packageUrl(configurationId)).toBe(
-    `/api/v1/agent/enroll/packages/${configurationId}/content`,
+    `/api/v1/agent/enroll/packages/${configurationId}/content?tenantId=${tenant}`,
   )
-  expect(client.termsFinishUrl()).toBe('/api/v1/windows/entra/terms/finish')
-  expect(client.appleBridgeUrl()).toBe('/api/v1/apple/account-enrollment/authenticate')
+  expect(createEntraTermsAdapter(f.transport).termsFinishUrl()).toBe(
+    '/api/v1/windows/entra/terms/finish',
+  )
+  expect(appleBridgeUrl()).toBe('/api/v1/apple/account-enrollment/authenticate')
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({ method: 'GET', path: '/api/v1/agent/enroll/packages' }),
   )

@@ -22,7 +22,7 @@ pnpm dev:device-access:demo
 pnpm build:device-access
 ```
 
-产物为 `apps/device-access/dist`。静态文件与 `/api/v1/identity`、`/api/v1/identity-host`、MDM 当前公开管理 HTTP V1 位于同一个 HTTPS origin。复用已有 `/api/v1/identity-host/config.json` 和 `/api/v1/mdm-host/config.json`，严格核对 canonicalOrigin、tenant 和 serviceId；网关需将 `/computers/...` 等前端路径回落到 index.html。配置失败不启动模拟会话或切到 mock。浅深主题保持 DA 配色，通过构建期外部 CSS 提供；弹层附着于 DA 应用容器。
+产物为 `apps/device-access/dist`。静态文件与 `/api/v1/identity`、`/api/v1/identity-host`、MDM 当前公开管理 HTTP V1 位于同一个 HTTPS origin。复用已有 `/api/v1/identity-host/config.json` 和 `/api/v1/mdm-host/config.json`，严格核对 canonicalOrigin、managementTenant 和 serviceId。业务租户从 `/tenants/{tenant}` 定位；网关将 `/tenants/{tenant}/computers/...` 等前端路径回落到 index.html。配置失败不启动模拟会话或切到 mock。浅深主题保持 DA 配色，通过构建期外部 CSS 提供；弹层附着于 DA 应用容器。
 
 独立 DA 使用一个 `@rss/auth-core` session owner 和 `@rss/auth-http` adapter；MDM 是另一个独立应用实例，继续持有自己的唯一 owner。共享 `bindSession` 只将业务请求交给既有 owner，不复制 Cookie/CSRF，不另造刷新或重试控制器。三个应用独立部署，不共享浏览器端 session owner。
 

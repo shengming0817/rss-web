@@ -2,7 +2,10 @@ import { expect, it, vi } from 'vitest'
 import axios from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
 import { createMdmTransport, decodeMdmError } from './mdm'
-import { postApiV1GroupsById, getApiV1PoliciesByPolicyAssignments } from './generated/mdm'
+import {
+  postApiV1TenantsByTenantGroupsById,
+  getApiV1TenantsByTenantPoliciesByPolicyAssignments,
+} from './generated/mdm'
 
 it('accepts product and embedded authentication errors without exposing server detail', () => {
   expect(decodeMdmError(403, { code: 'csrf_rejected' })).toMatchObject({
@@ -58,7 +61,7 @@ it('rejects raw domain requests instead of accepting a parallel handwritten cont
   await expect(
     transport.request({
       method: 'GET',
-      path: '/api/v1/policies',
+      path: '/api/v1/tenants/{tenant}/policies',
       successStatus: 200,
       decode: (v) => v,
     }),
@@ -67,7 +70,7 @@ it('rejects raw domain requests instead of accepting a parallel handwritten cont
 it('keeps caller credentials and tenant authority out of generated requests', async () => {
   for (const header of ['Authorization', 'X-Tenant-ID', 'X-CSRF-Token'])
     await expect(
-      getApiV1PoliciesByPolicyAssignments(createMdmTransport(), {
+      getApiV1TenantsByTenantPoliciesByPolicyAssignments(createMdmTransport(), {
         pathParams: { id: '11111111-1111-4111-8111-111111111111' },
         headers: { [header]: 'secret' },
       } as never),
@@ -86,7 +89,7 @@ it('enforces the complete UTF-8 JSON ingress budget on generated operations', as
     input: { action: 'edit' as const, presentation: { extension: '' } },
   }
   const base = new TextEncoder().encode(JSON.stringify(body)).byteLength
-  mock.onPost(`/api/v1/groups/${id}`).reply(
+  mock.onPost(`/api/v1/tenants/11111111-1111-4111-8111-111111111111/groups/${id}`).reply(
     200,
     {
       operation: id,
@@ -110,9 +113,17 @@ it('enforces the complete UTF-8 JSON ingress budget on generated operations', as
     { 'Content-Type': 'application/json' },
   )
   body.input.presentation.extension = 'a'.repeat(16384 - base)
-  await postApiV1GroupsById(transport, { pathParams: { id }, body })
+  await postApiV1TenantsByTenantGroupsById(transport, {
+    pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id },
+    body,
+  })
   body.input.presentation.extension += '界'
-  await expect(postApiV1GroupsById(transport, { pathParams: { id }, body })).rejects.toMatchObject({
+  await expect(
+    postApiV1TenantsByTenantGroupsById(transport, {
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id },
+      body,
+    }),
+  ).rejects.toMatchObject({
     status: 413,
     cause: 'wire',
     code: 'request_too_large',
@@ -129,8 +140,11 @@ it('preserves only a public HTTP response request UUID and leaves response loss 
   const transport = createMdmTransport()
   spy.mockRestore()
   const id = '11111111-1111-4111-8111-111111111111'
-  const url = `/api/v1/policies/${id}/assignments`
-  const read = () => getApiV1PoliciesByPolicyAssignments(transport, { pathParams: { policy: id } })
+  const url = `/api/v1/tenants/11111111-1111-4111-8111-111111111111/policies/${id}/assignments`
+  const read = () =>
+    getApiV1TenantsByTenantPoliciesByPolicyAssignments(transport, {
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111', policy: id },
+    })
   mock
     .onGet(url)
     .replyOnce(

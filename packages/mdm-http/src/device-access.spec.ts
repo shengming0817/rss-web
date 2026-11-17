@@ -36,7 +36,12 @@ function fixture(reply: unknown) {
   const request = vi.fn(async (o: RequestOptions<unknown>) => o.decode(reply))
   return {
     request,
-    core: createDeviceAccess(createDeviceAccessAdapter({ request } as unknown as HttpTransport)),
+    core: createDeviceAccess(
+      createDeviceAccessAdapter(
+        { request } as unknown as HttpTransport,
+        '11111111-1111-4111-8111-111111111111',
+      ),
+    ),
   }
 }
 it('keeps desired, received, applied and missing effect separate in an original receipt', async () => {
@@ -103,8 +108,12 @@ it('sends the exact binding CAS and operation intent while preserving pending ap
   expect(f.request).toHaveBeenCalledTimes(1)
   expect(f.request.mock.calls[0]![0]).toMatchObject({
     method: 'PUT',
-    path: '/api/v1/devices/{device}/device-access/bindings/{id}',
-    pathParams: { device: '54a2df5e-528c-5a64-a3d8-be0e4859f63b', id },
+    path: '/api/v1/tenants/{tenant}/devices/{device}/device-access/bindings/{id}',
+    pathParams: {
+      tenant: '11111111-1111-4111-8111-111111111111',
+      device: '54a2df5e-528c-5a64-a3d8-be0e4859f63b',
+      id,
+    },
     body: input,
   })
 })

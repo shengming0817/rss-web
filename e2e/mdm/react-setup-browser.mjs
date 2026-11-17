@@ -13,9 +13,10 @@ let failure
 try {
   const page = await run.page(),
     { origin, fixture, checks } = run
+  const base = `/tenants/${fixture.tenant}`
   publicPage = page
   await run.login(page)
-  await page.waitForURL((url) => url.pathname === '/setup')
+  await page.waitForURL((url) => url.pathname === base + '/setup')
   await page.getByRole('button', { name: '保存意图', exact: true }).waitFor({ state: 'visible' })
   await page.getByRole('checkbox', { name: 'Agent 通道', exact: true }).check()
   await page.getByRole('checkbox', { name: 'Windows MDM', exact: true }).uncheck()
@@ -50,13 +51,13 @@ try {
       finishInterception()
     }
   }
-  await page.route('**/api/v1/settings/first-use', lose)
+  await page.route(`**/api/v1${base}/settings/first-use`, lose)
   await page.getByRole('button', { name: '保存意图', exact: true }).click()
   await page.getByRole('button', { name: '查询原操作', exact: true }).waitFor()
   await interception
   assert.ok(!interceptionFailed && discarded && operation)
   assert.equal(writes, 1)
-  await page.unroute('**/api/v1/settings/first-use', lose)
+  await page.unroute(`**/api/v1${base}/settings/first-use`, lose)
   await page.getByRole('button', { name: '查询原操作', exact: true }).click()
   await page
     .getByText('原请求回执已核对；完成与健康以重新读取的进度为准。', { exact: true })
@@ -88,7 +89,7 @@ try {
     'X-CSRF-Token': session.csrfToken,
   }
   const progress = async () => {
-    const r = await page.request.get(origin + '/api/v1/settings/first-use')
+    const r = await page.request.get(origin + '/api/v1' + base + '/settings/first-use')
     assert.equal(r.status(), 200)
     return r.json()
   }
@@ -170,9 +171,9 @@ try {
     () => page.getByRole('button', { name: '退出登录', exact: true }).click(),
     204,
   )
-  await page.waitForURL((url) => url.pathname === '/login')
+  await page.waitForURL((url) => url.pathname === base + '/login')
   await run.login(page)
-  await page.waitForURL((url) => url.pathname === '/')
+  await page.waitForURL((url) => url.pathname === base || url.pathname === base + '/')
   checks.push('relogin-does-not-force-setup-after-confirmation')
   await run.nav(page, '/settings', '设置')
   await page.locator('.settings-page .group-grid .panel').first().waitFor()
@@ -223,8 +224,11 @@ try {
     animations: 'disabled',
   })
   await page.setViewportSize({ width: 1440, height: 960 })
-  const diagnosticResponse = run.response(page, 'GET', '/api/v1/runtime/diagnostics', () =>
-    run.nav(page, '/diagnostics', '运行诊断'),
+  const diagnosticResponse = run.response(
+    page,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/runtime/diagnostics`,
+    () => run.nav(page, '/diagnostics', '运行诊断'),
   )
   const diagnostic = await (await diagnosticResponse).json()
   assert.ok(diagnostic.components.length >= 21)
@@ -249,7 +253,7 @@ try {
   ).json()
   writeHeaders['X-CSRF-Token'] = renewedSession.csrfToken
   const response = await page.request.put(
-    origin + `/api/v1/authorization/rules/${fixture.ruleId}`,
+    origin + `/api/v1/tenants/${run.fixture.tenant}/authorization/rules/${fixture.ruleId}`,
     {
       headers: writeHeaders,
       data: { operationId: randomUUID(), expectedRevision: 1, value: rule },
@@ -264,7 +268,9 @@ try {
 } catch (error) {
   if (
     publicPage &&
-    ['/setup', '/connections', '/settings', '/enroll'].includes(new URL(publicPage.url()).pathname)
+    ['/setup', '/connections', '/settings', '/enroll'].includes(
+      new URL(publicPage.url()).pathname.slice(`/tenants/${run.fixture.tenant}`.length),
+    )
   ) {
     await publicPage
       .screenshot({ path: join(shots, 'public-failure.png'), fullPage: true })

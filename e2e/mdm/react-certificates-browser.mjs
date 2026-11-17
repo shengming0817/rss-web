@@ -57,7 +57,7 @@ try {
     await button('结束本次操作并读取当前状态').click()
   }
   async function changeAuthority(grants) {
-    const path = `/api/v1/authorization/rules/${f.ruleId}`,
+    const path = `/api/v1/tenants/${run.fixture.tenant}/authorization/rules/${f.ruleId}`,
       current = await api('GET', path)
     await api('PUT', path, {
       operationId: randomUUID(),
@@ -66,22 +66,31 @@ try {
     })
   }
   await run.login(p)
-  await p.goto(origin + '/certificates')
+  await p.goto(origin + `/tenants/${run.fixture.tenant}` + '/certificates')
   await tab('证书档案')
   run.step('archive-initialize-and-unlock')
-  const initialVault = await api('GET', '/api/v1/certificate-archive/vault')
+  const initialVault = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/vault`,
+  )
   assert.equal(initialVault.initialized, false)
   await p.getByText('主密码管理', { exact: true }).click()
   await label('设置主密码（至少 12 字符）').fill(master)
-  await run.response(p, 'POST', '/api/v1/certificate-archive/vault/initialize', () =>
-    button('初始化档案').click(),
+  await run.response(
+    p,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/vault/initialize`,
+    () => button('初始化档案').click(),
   )
   assert.equal(await label('设置主密码（至少 12 字符）').inputValue(), '')
   await finishCommand()
   await p.getByText('解锁与锁定档案', { exact: true }).click()
   await label('档案主密码').fill(master)
-  await run.response(p, 'POST', '/api/v1/certificate-archive/vault/unlock', () =>
-    button('解锁档案').click(),
+  await run.response(
+    p,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/vault/unlock`,
+    () => button('解锁档案').click(),
   )
   assert.equal(await label('档案主密码').inputValue(), '')
   checks.push('real-archive-master-initialize-unlock-and-immediate-password-clear')
@@ -92,21 +101,30 @@ try {
   await label('证书名称').fill(caName)
   await label('通用名称 CN').fill('Disposable tenant CA')
   const generated = await (
-      await run.response(p, 'POST', '/api/v1/certificate-archive/generate', () =>
-        button('提交生成材料').click(),
+      await run.response(
+        p,
+        'POST',
+        `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/generate`,
+        () => button('提交生成材料').click(),
       )
     ).json(),
     ca = generated.entryId
   assert.equal(generated.action, 'certificate_archive_generate')
   assert.equal(generated.version, 1)
   await finishCommand()
-  await run.response(p, 'GET', `/api/v1/certificate-archive/entries/${ca}`, () =>
-    button(caName).click(),
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}`,
+    () => button(caName).click(),
   )
-  const original = await api('GET', `/api/v1/certificate-archive/entries/${ca}`)
+  const original = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}`,
+  )
   await api(
     'PUT',
-    `/api/v1/certificate-archive/entries/${ca}/metadata`,
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}/metadata`,
     {
       expectedRevision: original.revision,
       metadata: { ...original.latest.metadata, vendor: { nested: { retained: false, count: 0 } } },
@@ -114,8 +132,11 @@ try {
     200,
     randomUUID(),
   )
-  await run.response(p, 'GET', `/api/v1/certificate-archive/entries/${ca}`, () =>
-    button('重新读取详情版本').click(),
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}`,
+    () => button('重新读取详情版本').click(),
   )
   await button('编辑档案信息').click()
   const metadataForm = p
@@ -123,12 +144,18 @@ try {
     .filter({ has: p.getByRole('button', { name: '保存为新材料版本', exact: true }) })
   await metadataForm.getByLabel('证书名称', { exact: true }).fill('Edited ' + caName)
   const metadata = await (
-    await run.response(p, 'PUT', `/api/v1/certificate-archive/entries/${ca}/metadata`, () =>
-      button('保存为新材料版本').click(),
+    await run.response(
+      p,
+      'PUT',
+      `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}/metadata`,
+      () => button('保存为新材料版本').click(),
     )
   ).json()
   assert.equal(metadata.version, 3)
-  const edited = await api('GET', `/api/v1/certificate-archive/entries/${ca}`)
+  const edited = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}`,
+  )
   assert.deepEqual(edited.latest.metadata.vendor, { nested: { retained: false, count: 0 } })
   await finishCommand()
   checks.push('real-ca-private-key-generation-independent-detail-cas-and-nested-metadata-retention')
@@ -141,31 +168,40 @@ try {
   await exportForm.getByLabel('精确材料版本', { exact: true }).fill('1')
   let lostExport = false,
     exportOperation
-  await p.route('**/api/v1/certificate-archive/export', async (route) => {
-    try {
-      if (!lostExport) {
-        lostExport = true
-        exportOperation = route.request().headers()['idempotency-key']
-        const actual = await route.fetch()
-        assert.equal(actual.status(), 200)
-        await route.abort('failed')
-      } else await route.continue()
-    } catch {
-      interceptionFailure = true
-      await route.abort('failed').catch(() => {})
-    }
-  })
+  await p.route(
+    `**/api/v1/tenants/${run.fixture.tenant}/certificate-archive/export`,
+    async (route) => {
+      try {
+        if (!lostExport) {
+          lostExport = true
+          exportOperation = route.request().headers()['idempotency-key']
+          const actual = await route.fetch()
+          assert.equal(actual.status(), 200)
+          await route.abort('failed')
+        } else await route.continue()
+      } catch {
+        interceptionFailure = true
+        await route.abort('failed').catch(() => {})
+      }
+    },
+  )
   await button('请求导出此版本').click()
   await p
     .getByText('结果未确认。请查询原操作；没有查询端点时，仅显式重提原请求。', { exact: true })
     .waitFor()
   assert.equal(await p.locator('a[download]').count(), 0)
-  await run.response(p, 'GET', `/api/v1/certificate-archive/operations/${exportOperation}`, () =>
-    button('读取原导出回执').click(),
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/operations/${exportOperation}`,
+    () => button('读取原导出回执').click(),
   )
   assert.equal(await p.locator('a[download]').count(), 0)
-  const exportedResponse = await run.response(p, 'POST', '/api/v1/certificate-archive/export', () =>
-    button('使用原操作显式重新导出').click(),
+  const exportedResponse = await run.response(
+    p,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/export`,
+    () => button('使用原操作显式重新导出').click(),
   )
   assert.equal(exportedResponse.request().headers()['idempotency-key'], exportOperation)
   const exported = await exportedResponse.json()
@@ -173,7 +209,10 @@ try {
   assert.equal(exported.version, 1)
   await p.locator('a[download]').first().waitFor()
   const caVersion = (
-      await api('GET', `/api/v1/certificate-archive/entries/${ca}/versions`)
+      await api(
+        'GET',
+        `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}/versions`,
+      )
     ).items.find((value) => value.version === 1),
     materials = []
   for (const file of exported.files) {
@@ -189,7 +228,7 @@ try {
   await button('关闭并清除导出内容').click()
   assert.equal(await p.locator('a[download]').count(), 0)
   await button('结束本次导出').click()
-  await p.unroute('**/api/v1/certificate-archive/export')
+  await p.unroute(`**/api/v1/tenants/${run.fixture.tenant}/certificate-archive/export`)
   checks.push(
     'exact-private-export-response-loss-original-receipt-not-delivery-and-same-id-reexport',
   )
@@ -212,39 +251,51 @@ try {
   let importOperation,
     lostImport = false,
     importedId
-  await p.route('**/api/v1/certificate-archive/import', async (route) => {
-    try {
-      if (!lostImport) {
-        lostImport = true
-        importOperation = route.request().headers()['idempotency-key']
-        const actual = await route.fetch()
-        assert.equal(actual.status(), 200)
-        importedId = (await actual.json()).entryId
-        await route.abort('failed')
-      } else await route.continue()
-    } catch {
-      interceptionFailure = true
-      await route.abort('failed').catch(() => {})
-    }
-  })
+  await p.route(
+    `**/api/v1/tenants/${run.fixture.tenant}/certificate-archive/import`,
+    async (route) => {
+      try {
+        if (!lostImport) {
+          lostImport = true
+          importOperation = route.request().headers()['idempotency-key']
+          const actual = await route.fetch()
+          assert.equal(actual.status(), 200)
+          importedId = (await actual.json()).entryId
+          await route.abort('failed')
+        } else await route.continue()
+      } catch {
+        interceptionFailure = true
+        await route.abort('failed').catch(() => {})
+      }
+    },
+  )
   await button('提交导入材料').click()
   await p
     .getByText('结果未确认。请查询原操作；没有查询端点时，仅显式重提原请求。', { exact: true })
     .waitFor()
   assert.equal(await label('选择原始文件 1').inputValue(), '')
-  await run.response(p, 'GET', `/api/v1/certificate-archive/operations/${importOperation}`, () =>
-    button('读取原操作回执').click(),
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/operations/${importOperation}`,
+    () => button('读取原操作回执').click(),
   )
   for (let index = 0; index < materials.length; index++)
     await label(`选择原始文件 ${index + 1}`).setInputFiles(materials[index].path)
-  const replay = await run.response(p, 'POST', '/api/v1/certificate-archive/import', () =>
-    button('重新选择原文件并显式重提').click(),
+  const replay = await run.response(
+    p,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/import`,
+    () => button('重新选择原文件并显式重提').click(),
   )
   assert.equal(replay.request().headers()['idempotency-key'], importOperation)
   assert.equal((await replay.json()).version, 1)
-  await p.unroute('**/api/v1/certificate-archive/import')
+  await p.unroute(`**/api/v1/tenants/${run.fixture.tenant}/certificate-archive/import`)
   await finishCommand()
-  const imported = await api('GET', `/api/v1/certificate-archive/entries/${importedId}`)
+  const imported = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${importedId}`,
+  )
   assert.equal(imported.revision, 1)
   assert.ok(imported.latest.facts.some((fact) => fact.containsPrivateKey))
   checks.push(
@@ -260,7 +311,7 @@ try {
   assert.equal(await button('请求导出此版本').count(), 0)
   await api(
     'POST',
-    '/api/v1/certificate-archive/export',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/export`,
     { entryId: ca, version: 1 },
     403,
     randomUUID(),
@@ -271,37 +322,58 @@ try {
 
   run.step('archive-settings-lifecycle-cas-and-lock')
   await button('档案设置').click()
-  const settingsBefore = await api('GET', '/api/v1/certificate-archive/settings')
+  const settingsBefore = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/settings`,
+  )
   await label('到期提醒天数').fill('45')
-  await run.response(p, 'PUT', '/api/v1/certificate-archive/settings', () =>
-    button('保存档案设置').click(),
+  await run.response(
+    p,
+    'PUT',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/settings`,
+    () => button('保存档案设置').click(),
   )
   await finishCommand()
-  const settingsAfter = await api('GET', '/api/v1/certificate-archive/settings')
+  const settingsAfter = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/settings`,
+  )
   assert.equal(settingsAfter.value.reminderDays, 45)
   await api(
     'PUT',
-    '/api/v1/certificate-archive/settings',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/settings`,
     { expectedRevision: settingsBefore.revision, value: settingsBefore.value },
     409,
     randomUUID(),
   )
-  await run.response(p, 'GET', `/api/v1/certificate-archive/entries/${ca}`, () =>
-    button('Edited ' + caName).click(),
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}`,
+    () => button('Edited ' + caName).click(),
   )
   await button('编辑档案信息').click()
-  const managedBefore = await api('GET', `/api/v1/certificate-archive/entries/${ca}`)
+  const managedBefore = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}`,
+  )
   await label('推荐的精确材料版本（可清空）').fill('1')
-  await run.response(p, 'PUT', `/api/v1/certificate-archive/entries/${ca}`, () =>
-    button('保存生命周期与推荐版本').click(),
+  await run.response(
+    p,
+    'PUT',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}`,
+    () => button('保存生命周期与推荐版本').click(),
   )
   await finishCommand()
-  const managedAfter = await api('GET', `/api/v1/certificate-archive/entries/${ca}`)
+  const managedAfter = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}`,
+  )
   assert.equal(managedAfter.recommendedVersion, 1)
   assert.equal(managedAfter.latest.version, managedBefore.latest.version)
   await api(
     'PUT',
-    `/api/v1/certificate-archive/entries/${ca}`,
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/entries/${ca}`,
     { expectedRevision: managedBefore.revision, retired: true, recommendedVersion: null },
     409,
     randomUUID(),
@@ -309,13 +381,13 @@ try {
   await run.response(
     p,
     'POST',
-    '/api/v1/certificate-archive/vault/lock',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/vault/lock`,
     () => button('清除本地秘密并锁定档案').click(),
     200,
   )
   await api(
     'POST',
-    '/api/v1/certificate-archive/export',
+    `/api/v1/tenants/${run.fixture.tenant}/certificate-archive/export`,
     { entryId: ca, version: 1 },
     423,
     randomUUID(),
@@ -328,7 +400,7 @@ try {
   run.step('pki-prepare-ack-and-separate-loading')
   await tab('设备 PKI')
   await tab('Agent')
-  const trusted = await api('GET', '/api/v1/pki/agent/trust'),
+  const trusted = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/pki/agent/trust`),
     next = f.pki.candidateTrust.issuers[0],
     preparation = p.locator('form').filter({ has: button('提交准备材料') })
   for (const [name, value] of [
@@ -341,14 +413,19 @@ try {
   ])
     await preparation.getByLabel(name, { exact: true }).fill(value)
   const prepared = await (
-    await run.response(p, 'POST', '/api/v1/pki/rotations', () => button('提交准备材料').click())
+    await run.response(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/pki/rotations`, () =>
+      button('提交准备材料').click(),
+    )
   ).json()
   assert.equal(prepared.state, 'distributing')
   assert.equal(prepared.revision, trusted.revision + 1)
   await button('结束本次操作并重新读取').click()
   await label('原轮换 UUID').fill(prepared.operation)
-  await run.response(p, 'GET', `/api/v1/pki/agent/rotations/${prepared.operation}`, () =>
-    button('读取原轮换').click(),
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/pki/agent/rotations/${prepared.operation}`,
+    () => button('读取原轮换').click(),
   )
   await p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).waitFor()
   assert.equal(await p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).isDisabled(), true)
@@ -366,44 +443,62 @@ try {
   })
   assert.equal(ack.status, 0)
   const loaded = await (
-    await run.response(p, 'GET', `/api/v1/pki/agent/rotations/${prepared.operation}`, () =>
-      button('读取原轮换').click(),
+    await run.response(
+      p,
+      'GET',
+      `/api/v1/tenants/${run.fixture.tenant}/pki/agent/rotations/${prepared.operation}`,
+      () => button('读取原轮换').click(),
     )
   ).json()
   assert.deepEqual(loaded.blockers, [])
   assert.deepEqual(loaded.preconditions, [])
   const activated = await (
-    await run.response(p, 'POST', '/api/v1/pki/agent/rotations', () =>
+    await run.response(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/pki/agent/rotations`, () =>
       p.getByRole('button', { name: /^按后端当前阶段显式继续/ }).click(),
     )
   ).json()
   assert.equal(activated.operation, prepared.operation)
   assert.equal(activated.state, 'activated')
   await button('结束本次操作并重新读取').click()
-  await run.response(p, 'POST', '/api/v1/pki/crls', () => button('发布这些撤销列表').click(), 204)
+  await run.response(
+    p,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/pki/crls`,
+    () => button('发布这些撤销列表').click(),
+    204,
+  )
   await button('结束本次操作并重新读取').click()
   const originalDevice = f.collector.runtime.deviceId
-  await p.goto(origin + `/devices/endpoint/${originalDevice}?tab=registration`)
+  await p.goto(
+    origin +
+      `/tenants/${run.fixture.tenant}` +
+      `/devices/endpoint/${originalDevice}?tab=registration`,
+  )
   await p.getByRole('button', { name: '读取最新设备事实', exact: true }).waitFor()
   const originalResponse = await p.request.get(
-    origin + `/api/v1/devices/${originalDevice}/agent-requests`,
+    origin + `/api/v1/tenants/${run.fixture.tenant}/devices/${originalDevice}/agent-requests`,
   )
   assert.equal(originalResponse.status(), 200)
   const originalRequests = await originalResponse.json()
   assert.ok(originalRequests.items.length > 0)
   const originalRequest = originalRequests.items[0]
-  await run.response(p, 'GET', `/api/v1/agent-requests/${originalRequest.id}`, () =>
-    p.getByRole('button', { name: originalRequest.id, exact: true }).click(),
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/agent-requests/${originalRequest.id}`,
+    () => p.getByRole('button', { name: originalRequest.id, exact: true }).click(),
   )
   checks.push('real-device-agent-original-request-detail-and-requirements')
-  await p.goto(origin + '/certificates')
+  await p.goto(origin + `/tenants/${run.fixture.tenant}` + '/certificates')
   await tab('设备 PKI')
   await tab('Agent')
   checks.push('real-ca-preparation-missing-ack-conflict-mtls-ack-activation-and-crl-publication')
 
   run.step('agent-original-issuance-and-registration-recovery')
   const device = f.collector.runtime.deviceId
-  await p.goto(origin + `/devices/endpoint/${encodeURIComponent(device)}`)
+  await p.goto(
+    origin + `/tenants/${run.fixture.tenant}` + `/devices/endpoint/${encodeURIComponent(device)}`,
+  )
   await tab('设备安全')
   await tab('设备 PKI 恢复与观察')
   await button('重新读取材料观察').click()
@@ -411,8 +506,11 @@ try {
   await label('原签发 UUID').fill(candidate.issuanceId)
   await label('原 CA 已签证书链').fill(candidate.certificateChain.join('\n'))
   const recovered = await (
-    await run.response(p, 'POST', `/api/v1/agent-issuances/${candidate.issuanceId}/recover`, () =>
-      button('关联原签发结果').click(),
+    await run.response(
+      p,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/agent-issuances/${candidate.issuanceId}/recover`,
+      () => button('关联原签发结果').click(),
     )
   ).json()
   assert.equal(recovered.issuanceId, candidate.issuanceId)
@@ -426,7 +524,7 @@ try {
   await run.response(
     p,
     'POST',
-    `/api/v1/devices/${f.collector.runtime.deviceId}/registration/recovery`,
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.collector.runtime.deviceId}/registration/recovery`,
     () => button('提交注册恢复').click(),
   )
   assert.equal(await label('重新输入同一恢复秘密').inputValue(), '')
@@ -436,7 +534,7 @@ try {
   )
 
   run.step('certificate-public-design-screenshots')
-  await p.goto(origin + '/certificates')
+  await p.goto(origin + `/tenants/${run.fixture.tenant}` + '/certificates')
   await tab('证书档案')
   await button('Edited ' + caName).waitFor()
   await p.waitForFunction(() => !document.querySelector('.ant-spin-spinning'))
@@ -488,8 +586,11 @@ try {
   assert.equal(pkiFits, true)
   await p.setViewportSize({ width: 1440, height: 960 })
   await button('English').press('Enter')
-  await run.response(p, 'GET', '/api/v1/pki/agent/rotations/latest', () =>
-    button('Read latest rotation').press('Enter'),
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/pki/agent/rotations/latest`,
+    () => button('Read latest rotation').press('Enter'),
   )
   await p.screenshot({
     path: join(screenshots, 'pki-en-desktop.png'),

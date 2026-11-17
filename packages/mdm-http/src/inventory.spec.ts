@@ -30,7 +30,7 @@ it('admits sparse field rows and preserves false while leaving complete editing 
   })
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      path: '/api/v1/asset-fields',
+      path: '/api/v1/tenants/{tenant}/asset-fields',
       query: { fields: 'key,manual', limit: 1 },
     }),
   )
@@ -46,7 +46,10 @@ it('rejects cross-tenant envelopes and a query status URL outside the formal ope
     badUrl = fixture(envelope({ kind: 'accepted', task, statusUrl: 'https://other.example/task' }))
   await expect(createInventoryAdapter(badUrl.transport, tenant).query(task, body)).rejects.toThrow()
   const foreign = fixture(
-    envelope({ kind: 'accepted', task, statusUrl: `/api/v1/device-queries/${task}` }, other),
+    envelope(
+      { kind: 'accepted', task, statusUrl: `/api/v1/tenants/${tenant}/device-queries/${task}` },
+      other,
+    ),
   )
   await expect(createInventoryAdapter(foreign.transport, tenant).query(task, body)).rejects.toThrow(
     'Wrong inventory binding',
@@ -71,7 +74,7 @@ it('keeps full server summaries and opaque continuation on an empty fixed-result
   })
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      pathParams: { id: task },
+      pathParams: { tenant, id: task },
       query: { cursor: 'cHJldmlvdXM', limit: 1 },
     }),
   )
@@ -181,7 +184,11 @@ it('uses opaque Resource references in field impact pages rather than requiring 
 })
 it('sends the observed saved revision unchanged and preserves sparse saved directory rows', async () => {
   const f = fixture(
-      envelope({ kind: 'accepted', task, statusUrl: `/api/v1/device-queries/${task}` }),
+      envelope({
+        kind: 'accepted',
+        task,
+        statusUrl: `/api/v1/tenants/${tenant}/device-queries/${task}`,
+      }),
     ),
     client = createInventoryAdapter(f.transport, tenant)
   await client.executeSavedQuery(other, { operationId: task, expectedRevision: 7, input: {} })

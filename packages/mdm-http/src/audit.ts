@@ -22,7 +22,7 @@ import { boolean, count, enumeration, list, nullable, text, uuid } from './decod
 import { distinct, integer, requestInput } from './inventory-values'
 
 export function auditFact(value: unknown): AuditFact {
-  if (!schema.getApiV1AuditEventsResponse.validateFactView(value))
+  if (!schema.getApiV1TenantsByTenantAuditEventsResponse.validateFactView(value))
     throw new Error('Invalid safe audit fact')
   return {
     origin: value.origin,
@@ -51,7 +51,8 @@ export function auditFact(value: unknown): AuditFact {
   }
 }
 function auditPage(value: unknown): AuditPage {
-  if (!schema.getApiV1AuditEventsResponse.validateRoot(value)) throw new Error('Invalid audit page')
+  if (!schema.getApiV1TenantsByTenantAuditEventsResponse.validateRoot(value))
+    throw new Error('Invalid audit page')
   return {
     items: value.items.map(auditFact),
     nextCursor: nextCursor(value.nextCursor),
@@ -59,7 +60,11 @@ function auditPage(value: unknown): AuditPage {
   }
 }
 function activity(value: unknown): ManagementActivity {
-  if (!schema.getApiV1DevicesByDeviceManagementActivitiesResponse.validateManagementActivity(value))
+  if (
+    !schema.getApiV1TenantsByTenantDevicesByDeviceManagementActivitiesResponse.validateManagementActivity(
+      value,
+    )
+  )
     throw new Error('Invalid safe management activity')
   const links = value.links
   return {
@@ -101,7 +106,9 @@ function activity(value: unknown): ManagementActivity {
   }
 }
 function activities(value: unknown): ActivityPage {
-  if (!schema.getApiV1DevicesByDeviceManagementActivitiesResponse.validateRoot(value))
+  if (
+    !schema.getApiV1TenantsByTenantDevicesByDeviceManagementActivitiesResponse.validateRoot(value)
+  )
     throw new Error('Invalid management activity page')
   return {
     items: distinct(value.items.map(activity), (item) => item.id),
@@ -118,7 +125,9 @@ function activities(value: unknown): ActivityPage {
 }
 function detail(value: unknown, id: string): ActivityDetail {
   if (
-    !schema.getApiV1DevicesByDeviceManagementActivitiesByIdResponse.validateRoot(value) ||
+    !schema.getApiV1TenantsByTenantDevicesByDeviceManagementActivitiesByIdResponse.validateRoot(
+      value,
+    ) ||
     value.personal ||
     value.activity.id !== id
   )
@@ -132,47 +141,48 @@ function detail(value: unknown, id: string): ActivityDetail {
     asOf: integer(value.asOf),
   }
 }
-export function createAuditAdapter(transport: HttpTransport): AuditPort {
+export function createAuditAdapter(transport: HttpTransport, tenant: string): AuditPort {
   return {
     search: (query) =>
-      api.getApiV1AuditEvents(
+      api.getApiV1TenantsByTenantAuditEvents(
         transport,
         {
+          pathParams: { tenant },
           query: requestInput(
             { limit: 100, ...query },
-            schema.getApiV1AuditEventsQuery.validateRoot,
+            schema.getApiV1TenantsByTenantAuditEventsQuery.validateRoot,
           ),
         },
         auditPage,
       ),
     timeline: (device, query) =>
-      api.getApiV1DevicesByDeviceTimeline(
+      api.getApiV1TenantsByTenantDevicesByDeviceTimeline(
         transport,
         {
-          pathParams: { device },
+          pathParams: { tenant, device },
           query: requestInput(
             { limit: 100, ...query },
-            schema.getApiV1DevicesByDeviceTimelineQuery.validateRoot,
+            schema.getApiV1TenantsByTenantDevicesByDeviceTimelineQuery.validateRoot,
           ),
         },
         auditPage,
       ),
     activities: (device, query) =>
-      api.getApiV1DevicesByDeviceManagementActivities(
+      api.getApiV1TenantsByTenantDevicesByDeviceManagementActivities(
         transport,
         {
-          pathParams: { device },
+          pathParams: { tenant, device },
           query: requestInput(
             { limit: 100, ...query },
-            schema.getApiV1DevicesByDeviceManagementActivitiesQuery.validateRoot,
+            schema.getApiV1TenantsByTenantDevicesByDeviceManagementActivitiesQuery.validateRoot,
           ),
         },
         activities,
       ),
     activity: (device, id) =>
-      api.getApiV1DevicesByDeviceManagementActivitiesById(
+      api.getApiV1TenantsByTenantDevicesByDeviceManagementActivitiesById(
         transport,
-        { pathParams: { device, id } },
+        { pathParams: { tenant, device, id } },
         (value) => detail(value, id),
       ),
   }
@@ -196,11 +206,17 @@ export function createAuditPolicyLookupAdapter(
   uuid(instance)
   return {
     resolve: (address) =>
-      api.postApiV1PoliciesResolve(
+      api.postApiV1TenantsByTenantPoliciesResolve(
         transport,
-        { body: requestInput(address, schema.postApiV1PoliciesResolveBody.validateRoot) },
+        {
+          pathParams: { tenant },
+          body: requestInput(
+            address,
+            schema.postApiV1TenantsByTenantPoliciesResolveBody.validateRoot,
+          ),
+        },
         (value): AuditPolicyIdentity => {
-          if (!schema.postApiV1PoliciesResolveResponse.validateRoot(value))
+          if (!schema.postApiV1TenantsByTenantPoliciesResolveResponse.validateRoot(value))
             throw new Error('Invalid policy identity')
           const { policy, capability } = value
           if (
@@ -224,9 +240,10 @@ export function createAuditPolicyLookupAdapter(
         },
       ),
     byEvent: (event, query) =>
-      api.getApiV1Policies(
+      api.getApiV1TenantsByTenantPolicies(
         transport,
         {
+          pathParams: { tenant },
           query: queryParameters({
             ...query,
             limit: query.limit ?? 100,

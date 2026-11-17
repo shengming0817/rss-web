@@ -62,7 +62,10 @@ const receipt = {
 }
 function fixture(reply: unknown) {
   const request = vi.fn(async (options: RequestOptions<unknown>) => options.decode(reply)),
-    adapter = createWebhooksAdapter({ request } as unknown as HttpTransport)
+    adapter = createWebhooksAdapter(
+      { request } as unknown as HttpTransport,
+      '11111111-1111-4111-8111-111111111111',
+    )
   return { request, adapter, core: createWebhooks(adapter) }
 }
 it('keeps directory omissions distinct from full subscription detail and preserves current extensions on CAS writes', async () => {
@@ -83,8 +86,8 @@ it('keeps directory omissions distinct from full subscription detail and preserv
   })
   expect(f.request.mock.lastCall![0]).toMatchObject({
     method: 'PUT',
-    path: '/api/v1/webhooks/subscriptions/{id}',
-    pathParams: { id },
+    path: '/api/v1/tenants/{tenant}/webhooks/subscriptions/{id}',
+    pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id },
     body: { operationId, expectedRevision: 4, change: { kind: 'put', value: settings } },
     successStatus: 200,
   })
@@ -102,7 +105,7 @@ it('uses catalog and test receipt identities independently of delivery state', a
     eventId,
   })
   expect(f.request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v1/webhooks/subscriptions/{id}/test',
+    path: '/api/v1/tenants/{tenant}/webhooks/subscriptions/{id}/test',
     body: { operationId, deviceId: '7f408d60-f79e-504d-8fdc-35d425b1946a' },
     successStatus: 200,
   })
@@ -110,7 +113,7 @@ it('uses catalog and test receipt identities independently of delivery state', a
 it('requires the exact full delivery page and does not fabricate fields in projected directories', async () => {
   const f = fixture({ items: [delivery], nextCursor: null })
   expect((await f.core.delivery(id)).transportObservation).toBe('unknown')
-  expect(f.request.mock.lastCall![0].path).toBe('/api/v1/webhooks/deliveries/{id}')
+  expect(f.request.mock.lastCall![0].path).toBe('/api/v1/tenants/{tenant}/webhooks/deliveries/{id}')
   const projected = fixture({ items: [{ id, status: 'pending' }], nextCursor: null })
   expect(
     (await projected.core.deliveries({ fields: ['id', 'status'] })).items[0],
@@ -130,13 +133,13 @@ it('binds replay and redrive to their different identities, version owner and fo
   const replayed = fixture({ id: replay, eventId, sourceDelivery: id })
   expect((await replayed.core.replay({ id, eventId }, operationId)).id).toBe(replay)
   expect(replayed.request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v1/webhooks/deliveries/{id}/replay',
+    path: '/api/v1/tenants/{tenant}/webhooks/deliveries/{id}/replay',
     body: { operationId },
   })
   const redriven = fixture({ id, operationId, status: 'redriven', recoveryVersion: 8 })
   expect((await redriven.core.redrive({ id, recoveryVersion: 7 }, operationId)).id).toBe(id)
   expect(redriven.request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v1/webhooks/deliveries/{id}/redrive',
+    path: '/api/v1/tenants/{tenant}/webhooks/deliveries/{id}/redrive',
     body: { operationId, expectedVersion: 7 },
   })
   await expect(
@@ -154,7 +157,7 @@ it('reads tenant health as source and delivery Outbox aggregates without leaking
     ],
   })
   expect((await f.core.health()).outbox).toHaveLength(2)
-  expect(f.request.mock.lastCall![0].path).toBe('/api/v1/webhooks/health')
+  expect(f.request.mock.lastCall![0].path).toBe('/api/v1/tenants/{tenant}/webhooks/health')
   await expect(
     fixture({ outbox: [{ domain: 'receiver-health', status: 'pending', count: 1 }] }).core.health(),
   ).rejects.toBeDefined()
@@ -163,7 +166,7 @@ it('uses material-specific header idempotency, safe original lookup and separate
   const f = fixture(material)
   expect((await f.core.prepare(operationId, input)).confirmed).toBe(false)
   expect(f.request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v1/webhooks/materials',
+    path: '/api/v1/tenants/{tenant}/webhooks/materials',
     headers: { 'Idempotency-Key': operationId },
     body: input,
     successStatus: 200,
@@ -171,8 +174,8 @@ it('uses material-specific header idempotency, safe original lookup and separate
   expect(f.request.mock.lastCall![0].body).not.toHaveProperty('operationId')
   await f.core.materialOperation(operationId)
   expect(f.request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v1/webhooks/materials/operations/{id}',
-    pathParams: { id: operationId },
+    path: '/api/v1/tenants/{tenant}/webhooks/materials/operations/{id}',
+    pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id: operationId },
   })
   const changed = fixture(receipt)
   await changed.core.transition(operationId, {
@@ -181,7 +184,7 @@ it('uses material-specific header idempotency, safe original lookup and separate
     action: { kind: 'activate', materialRevision: 5 },
   })
   expect(changed.request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v1/webhooks/materials/transitions',
+    path: '/api/v1/tenants/{tenant}/webhooks/materials/transitions',
     headers: { 'Idempotency-Key': operationId },
     body: {
       reference: 'key',
@@ -198,7 +201,9 @@ it('uses material-specific header idempotency, safe original lookup and separate
     },
   })
   expect((await directory.core.materials()).heads[0]!.revision).toBe(6)
-  expect(directory.request.mock.lastCall![0].path).toBe('/api/v1/webhooks/materials')
+  expect(directory.request.mock.lastCall![0].path).toBe(
+    '/api/v1/tenants/{tenant}/webhooks/materials',
+  )
   await expect(
     fixture({ ...material, secret: 'private' }).core.materialOperation(operationId),
   ).rejects.toBeDefined()

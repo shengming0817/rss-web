@@ -279,7 +279,7 @@ function rootFor(ref) {
 // Also export owner definitions used for editing, canonical bytes, and display mappings.
 const ownerNames = new Map()
 for (const e of endpoints) {
-  if (e.method === 'POST' && e.path === '/api/v1/resources/{id}') {
+  if (e.method === 'POST' && e.path === '/api/v1/tenants/{tenant}/resources/{id}') {
     const id = e.request.body.schema.schemaId
     for (const name of Object.keys(schemas[id].$defs)) ownerNames.set(name, { id, name })
     ownerNames.set('ResourceWrite', { id, name: 'Root', pointer: '' })
@@ -289,28 +289,28 @@ for (const e of endpoints) {
       pointer: '',
     })
   }
-  if (e.method === 'PUT' && e.path === '/api/v1/asset-fields/{field}') {
+  if (e.method === 'PUT' && e.path === '/api/v1/tenants/{tenant}/asset-fields/{field}') {
     const id = e.request.body.schema.schemaId
     ownerNames.set('FieldWrite', { id, name: 'Root', pointer: '' })
     for (const name of Object.keys(schemas[id].$defs))
       if (!ownerNames.has(name)) ownerNames.set(name, { id, name })
   }
-  if (e.method === 'GET' && e.path === '/api/v1/asset-fields/{field}') {
+  if (e.method === 'GET' && e.path === '/api/v1/tenants/{tenant}/asset-fields/{field}') {
     const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
     for (const name of ['FieldView']) ownerNames.set(name, { id, name })
   }
-  if (e.method === 'GET' && e.path === '/api/v1/asset-fields/{field}/references')
+  if (e.method === 'GET' && e.path === '/api/v1/tenants/{tenant}/asset-fields/{field}/references')
     ownerNames.set('FieldReferenceQuery', {
       id: e.request.query.schemaId,
       name: 'Root',
       pointer: '',
     })
-  if (e.method === 'GET' && e.path === '/api/v1/policies/{policy}') {
+  if (e.method === 'GET' && e.path === '/api/v1/tenants/{tenant}/policies/{policy}') {
     const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
     ownerNames.set('PolicyRead', { id, name: 'Root', pointer: '' })
     for (const name of Object.keys(schemas[id].$defs)) ownerNames.set('Policy' + name, { id, name })
   }
-  if (e.method === 'POST' && e.path === '/api/v1/policies/{policy}/previews') {
+  if (e.method === 'POST' && e.path === '/api/v1/tenants/{tenant}/policies/{policy}/previews') {
     const id = e.responses.find((r) => r.status === 200).body.schema.schemaId
     for (const name of ['TaskAdmission', 'TaskAdmissionState']) ownerNames.set(name, { id, name })
   }
@@ -561,9 +561,9 @@ const names = new Set()
 let index = ''
 let schemaIndex = ''
 const snapshotJson = new Map([
-  ['POST /api/v1/software/source-snapshots/{source}', 'request'],
-  ['GET /api/v1/software/source-snapshots/{source}', 'document'],
-  ['GET /api/v1/software/source-snapshots/{source}/entries/{entry}', 'data'],
+  ['POST /api/v1/tenants/{tenant}/software/source-snapshots/{source}', 'request'],
+  ['GET /api/v1/tenants/{tenant}/software/source-snapshots/{source}', 'document'],
+  ['GET /api/v1/tenants/{tenant}/software/source-snapshots/{source}/entries/{entry}', 'data'],
 ])
 for (const e of endpoints) {
   const name = operationName(e)

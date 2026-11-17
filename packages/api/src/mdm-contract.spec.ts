@@ -4,14 +4,14 @@ import MockAdapter from 'axios-mock-adapter'
 import { createMdmTransport } from './mdm'
 import { createMdmDemoTransport } from './mdm-demo'
 import {
-  getApiV1PoliciesByPolicyAssignments,
-  getApiV1AssetFields,
-  getApiV1ResourcesByIdVersionsByVersionScript,
+  getApiV1TenantsByTenantPoliciesByPolicyAssignments,
+  getApiV1TenantsByTenantAssetFields,
+  getApiV1TenantsByTenantResourcesByIdVersionsByVersionScript,
   getApiV1AgentEnrollPackagesByIdContent,
-  postApiV1PoliciesByPolicyReruns,
-  postApiV1ResourcesByIdUploadsByUploadComplete,
+  postApiV1TenantsByTenantPoliciesByPolicyReruns,
+  postApiV1TenantsByTenantResourcesByIdUploadsByUploadComplete,
   getReadyz,
-  getApiV1DeviceViewsByKindById,
+  getApiV1TenantsByTenantDeviceViewsByKindById,
 } from './generated/mdm'
 import { validateTaskAdmission, validatePolicyDefinition } from './generated/mdm/owner-validators'
 import { safeJson } from './mdm-contract-response'
@@ -27,7 +27,9 @@ describe('fixed producer HTTP operations', () => {
     try {
       const transport = createMdmTransport()
       const request = () =>
-        getApiV1DeviceViewsByKindById(transport, { pathParams: { kind: 'endpoint', id } })
+        getApiV1TenantsByTenantDeviceViewsByKindById(transport, {
+          pathParams: { tenant: '11111111-1111-4111-8111-111111111111', kind: 'endpoint', id },
+        })
       for (const [status, body, media, cause] of [
         [401, { code: 'invalid_credential' }, 'application/json', 'wire'],
         [403, { code: 'csrf_rejected' }, 'application/json', 'wire'],
@@ -36,7 +38,7 @@ describe('fixed producer HTTP operations', () => {
         [401, { code: 'invalid_credential' }, 'text/plain', 'protocol'],
       ] as const) {
         mock
-          .onGet(`/api/v1/device-views/endpoint/${id}`)
+          .onGet(`/api/v1/tenants/11111111-1111-4111-8111-111111111111/device-views/endpoint/${id}`)
           .reply(status, body, { 'content-type': media })
         await expect(request()).rejects.toMatchObject({
           cause,
@@ -65,7 +67,8 @@ describe('fixed producer HTTP operations', () => {
         capabilities: ['native_key'],
       },
     }
-    const validate = schemas.getApiV1DeviceAccessEnterpriseConfigurationResponse.validateRoot
+    const validate =
+      schemas.getApiV1TenantsByTenantDeviceAccessEnterpriseConfigurationResponse.validateRoot
     expect(validate({ items: [record], nextCursor: null })).toBe(true)
     expect(validate({ items: [{ ...record, unexpected: true }], nextCursor: null })).toBe(false)
     expect(
@@ -87,14 +90,19 @@ describe('fixed producer HTTP operations', () => {
       for (const [path, request] of [
         [
           `/api/v1/agent/enroll/packages/${id}/content`,
-          () => getApiV1AgentEnrollPackagesByIdContent(transport, { pathParams: { id }, headers }),
+          () =>
+            getApiV1AgentEnrollPackagesByIdContent(transport, {
+              pathParams: { id },
+              query: { tenantId: id },
+              headers,
+            }),
         ],
         [
-          `/api/v1/resources/${id}/versions/1/script`,
+          `/api/v1/tenants/11111111-1111-4111-8111-111111111111/resources/${id}/versions/1/script`,
           () =>
-            getApiV1ResourcesByIdVersionsByVersionScript(transport, {
+            getApiV1TenantsByTenantResourcesByIdVersionsByVersionScript(transport, {
               query: { variant: 'default', platform: 'macos', architecture: 'aarch64' },
-              pathParams: { id, version: '1' },
+              pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id, version: '1' },
               headers,
             }),
         ],
@@ -135,6 +143,7 @@ describe('fixed producer HTTP operations', () => {
       await expect(
         getApiV1AgentEnrollPackagesByIdContent(transport, {
           pathParams: { id },
+          query: { tenantId: id },
           headers: { Authorization: 'caller' } as never,
         }),
       ).rejects.toMatchObject({ cause: 'client' })
@@ -164,7 +173,7 @@ describe('fixed producer HTTP operations', () => {
       await expect(
         transport.request({
           method: 'GET',
-          path: '/api/v1/devices',
+          path: '/api/v1/tenants/{tenant}/devices',
           successStatus: 200,
           decode: (v) => v,
         }),
@@ -198,19 +207,24 @@ describe('fixed producer HTTP operations', () => {
   it('rejects out of budget requests before invoking transport', async () => {
     const request = vi.fn()
     const transport = { request } as HttpTransport
-    await expect(getApiV1AssetFields(transport, { query: { limit: 1025 } })).rejects.toMatchObject({
+    await expect(
+      getApiV1TenantsByTenantAssetFields(transport, {
+        pathParams: { tenant: '11111111-1111-4111-8111-111111111111' },
+        query: { limit: 1025 },
+      }),
+    ).rejects.toMatchObject({
       cause: 'client',
     })
     await expect(
-      getApiV1PoliciesByPolicyAssignments(transport, {
-        pathParams: { policy: id },
+      getApiV1TenantsByTenantPoliciesByPolicyAssignments(transport, {
+        pathParams: { tenant: '11111111-1111-4111-8111-111111111111', policy: id },
         query: { limit: 0 },
       }),
     ).rejects.toMatchObject({ cause: 'client' })
     expect(request).not.toHaveBeenCalled()
     await expect(
-      postApiV1PoliciesByPolicyReruns(transport, {
-        pathParams: { policy: id },
+      postApiV1TenantsByTenantPoliciesByPolicyReruns(transport, {
+        pathParams: { tenant: '11111111-1111-4111-8111-111111111111', policy: id },
         body: {
           operationId: id,
           expectedRevision: Number.MAX_SAFE_INTEGER + 1,
@@ -219,10 +233,13 @@ describe('fixed producer HTTP operations', () => {
       }),
     ).rejects.toMatchObject({ cause: 'client' })
     expect(request).not.toHaveBeenCalled()
-    await getApiV1AssetFields(transport, { query: { limit: 1000 } })
+    await getApiV1TenantsByTenantAssetFields(transport, {
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111' },
+      query: { limit: 1000 },
+    })
     expect(request).toHaveBeenCalledOnce()
-    await postApiV1PoliciesByPolicyReruns(transport, {
-      pathParams: { policy: id },
+    await postApiV1TenantsByTenantPoliciesByPolicyReruns(transport, {
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111', policy: id },
       body: { operationId: id, expectedRevision: Number.MAX_SAFE_INTEGER, input: { deadline: 1 } },
     })
     expect(request).toHaveBeenCalledTimes(2)
@@ -231,21 +248,31 @@ describe('fixed producer HTTP operations', () => {
     const request = vi.fn(async (options: RequestOptions<unknown> | NoContentRequest) =>
       options.decode?.({ items: [], nextCursor: null }),
     )
-    await getApiV1PoliciesByPolicyAssignments({ request } as HttpTransport, {
-      pathParams: { policy: id },
+    await getApiV1TenantsByTenantPoliciesByPolicyAssignments({ request } as HttpTransport, {
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111', policy: id },
       query: { limit: 1, cursor: 'YQ' },
     })
     expect(request.mock.calls[0]?.[0]).toMatchObject({
       method: 'GET',
-      path: '/api/v1/policies/{policy}/assignments',
+      path: '/api/v1/tenants/{tenant}/policies/{policy}/assignments',
       successStatus: 200,
       query: { limit: 1, cursor: 'YQ' },
     })
-    expect(getApiV1ResourcesByIdVersionsByVersionScript.url({ id: 'script', version: '1' })).toBe(
-      '/api/v1/resources/script/versions/1/script',
+    expect(
+      getApiV1TenantsByTenantResourcesByIdVersionsByVersionScript.url({
+        tenant: '11111111-1111-4111-8111-111111111111',
+        id: 'script',
+        version: '1',
+      }),
+    ).toBe(
+      '/api/v1/tenants/11111111-1111-4111-8111-111111111111/resources/script/versions/1/script',
     )
     expect(() =>
-      getApiV1ResourcesByIdVersionsByVersionScript.url({ id: '..', version: '1' }),
+      getApiV1TenantsByTenantResourcesByIdVersionsByVersionScript.url({
+        tenant: '11111111-1111-4111-8111-111111111111',
+        id: '..',
+        version: '1',
+      }),
     ).toThrow()
   })
   it('uses real status and media before exposing a response', async () => {
@@ -255,24 +282,30 @@ describe('fixed producer HTTP operations', () => {
     try {
       const transport = createMdmTransport()
       mock
-        .onGet(`/api/v1/policies/${id}/assignments`)
+        .onGet(`/api/v1/tenants/11111111-1111-4111-8111-111111111111/policies/${id}/assignments`)
         .reply(200, { items: [], nextCursor: null }, { 'Content-Type': 'application/json' })
       await expect(
-        getApiV1PoliciesByPolicyAssignments(transport, { pathParams: { policy: id } }),
+        getApiV1TenantsByTenantPoliciesByPolicyAssignments(transport, {
+          pathParams: { tenant: '11111111-1111-4111-8111-111111111111', policy: id },
+        }),
       ).resolves.toEqual({ items: [], nextCursor: null })
       mock.resetHandlers()
       mock
-        .onGet(`/api/v1/policies/${id}/assignments`)
+        .onGet(`/api/v1/tenants/11111111-1111-4111-8111-111111111111/policies/${id}/assignments`)
         .reply(201, { items: [], nextCursor: null }, { 'Content-Type': 'application/json' })
       await expect(
-        getApiV1PoliciesByPolicyAssignments(transport, { pathParams: { policy: id } }),
+        getApiV1TenantsByTenantPoliciesByPolicyAssignments(transport, {
+          pathParams: { tenant: '11111111-1111-4111-8111-111111111111', policy: id },
+        }),
       ).rejects.toMatchObject({ cause: 'protocol', status: 201 })
       mock.resetHandlers()
       mock
-        .onGet(`/api/v1/policies/${id}/assignments`)
+        .onGet(`/api/v1/tenants/11111111-1111-4111-8111-111111111111/policies/${id}/assignments`)
         .reply(200, { items: [], nextCursor: null }, { 'Content-Type': 'text/plain' })
       await expect(
-        getApiV1PoliciesByPolicyAssignments(transport, { pathParams: { policy: id } }),
+        getApiV1TenantsByTenantPoliciesByPolicyAssignments(transport, {
+          pathParams: { tenant: '11111111-1111-4111-8111-111111111111', policy: id },
+        }),
       ).rejects.toMatchObject({ cause: 'protocol', status: 200 })
     } finally {
       create.mockRestore()
@@ -282,8 +315,8 @@ describe('fixed producer HTTP operations', () => {
   it('keeps empty acknowledgement and readiness branches explicit', async () => {
     const request = vi.fn().mockResolvedValue(undefined),
       transport = { request } as HttpTransport
-    await postApiV1ResourcesByIdUploadsByUploadComplete(transport, {
-      pathParams: { id: 'script', upload: id },
+    await postApiV1TenantsByTenantResourcesByIdUploadsByUploadComplete(transport, {
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id: 'script', upload: id },
     })
     expect(request.mock.calls[0]?.[0]).toMatchObject({ successStatus: 201, responseType: 'empty' })
     await getReadyz(transport, {})
@@ -295,10 +328,14 @@ describe('fixed producer HTTP operations', () => {
     const create = vi.spyOn(axios, 'create').mockReturnValue(instance)
     try {
       const transport = createMdmTransport()
-      mock.onPost(`/api/v1/resources/script/uploads/${id}/complete`).reply(201, '')
+      mock
+        .onPost(
+          `/api/v1/tenants/11111111-1111-4111-8111-111111111111/resources/script/uploads/${id}/complete`,
+        )
+        .reply(201, '')
       await expect(
-        postApiV1ResourcesByIdUploadsByUploadComplete(transport, {
-          pathParams: { id: 'script', upload: id },
+        postApiV1TenantsByTenantResourcesByIdUploadsByUploadComplete(transport, {
+          pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id: 'script', upload: id },
         }),
       ).resolves.toBeUndefined()
       const observation = {
@@ -307,7 +344,6 @@ describe('fixed producer HTTP operations', () => {
         revision: 1,
         materialDigest: '0'.repeat(64),
         processGeneration: id,
-        tenantId: id,
         instanceId: id,
       }
       mock
@@ -375,20 +411,24 @@ it('validates a discriminator beside a referenced record without opening unknown
       effect: 'waiting',
     },
   }
-  expect(schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(value)).toBe(true)
   expect(
-    schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot({
+    schemas.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse.validateRoot(value),
+  ).toBe(true)
+  expect(
+    schemas.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse.validateRoot({
       ...value,
       unexpected: true,
     }),
   ).toBe(false)
   expect(
-    schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot({
+    schemas.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse.validateRoot({
       ...value,
       owner: 'unknown',
     }),
   ).toBe(false)
   const missing: Record<string, unknown> = { ...value }
   delete missing['commandId']
-  expect(schemas.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(missing)).toBe(false)
+  expect(
+    schemas.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse.validateRoot(missing),
+  ).toBe(false)
 })

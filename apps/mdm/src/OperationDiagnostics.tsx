@@ -246,19 +246,25 @@ function Execution({ value, locale }: { value: ExecutionEvidence; locale: Locale
   )
 }
 
-function currentResource(detail: OperationDetail): string | null {
+function currentResource(
+  detail: OperationDetail,
+  tenant: string,
+  context: DiagnosticsContext,
+): string | null {
   if (detail.originalResult.availability !== 'available' || !detail.currentResourceUrl) return null
-  // Translate only declared current API locators. A Scope UUID alone has no Policy owner.
-  const match = /^\/api\/v1\/(resources|policies|tenant-administration\/tenants)\/([^/?#]+)$/.exec(
-    detail.currentResourceUrl,
-  )
+  const match =
+    context === 'management'
+      ? /^\/api\/v1\/(tenant-administration\/tenants)\/([^/?#]+)$/.exec(detail.currentResourceUrl)
+      : new RegExp(`^/api/v1/tenants/${tenant}/(resources|policies)/([^/?#]+)$`).exec(
+          detail.currentResourceUrl,
+        )
   if (!match) return null
   try {
     const id = decodeURIComponent(match[2]!)
     if (id !== detail.originalResult.value.object) return null
-    if (match[1] === 'tenant-administration/tenants')
-      return `/platform/tenants?${new URLSearchParams({ tenant: id })}`
-    return `/${match[1]}?${new URLSearchParams({ [match[1] === 'resources' ? 'resource' : 'policy']: id })}`
+    if (context === 'management') return `/platform/tenants?${new URLSearchParams({ tenant: id })}`
+    const feature = match[1]!
+    return `/${feature}?${new URLSearchParams({ [feature === 'resources' ? 'resource' : 'policy']: id })}`
   } catch {
     return null
   }
@@ -268,12 +274,14 @@ function Results({
   selection,
   client,
   binding,
+  tenant,
   context,
   locale,
 }: {
   selection: DiagnosticSelection
   client: Diagnostics
   binding: string
+  tenant: string
   context: DiagnosticsContext
   locale: Locale
 }) {
@@ -308,7 +316,7 @@ function Results({
     detail?.auditEvidence.availability === 'available' ? detail.auditEvidence.value : undefined
   const request =
     detail?.requestEvidence.availability === 'available' ? detail.requestEvidence.value : undefined
-  const resource = detail ? currentResource(detail) : null
+  const resource = detail ? currentResource(detail, tenant, context) : null
   const evidenceContext = context === 'mdm' && detail?.operation.product === 'da' ? 'da' : context
   const denied = ['permission_denied', 'forbidden', 'unauthorized'].includes(codeOf(read.error))
   return (
@@ -578,6 +586,7 @@ export function OperationDiagnostics({ runtime, locale }: { runtime: Runtime; lo
           client={client}
           selection={selection}
           binding={binding}
+          tenant={runtime.tenant}
           context={context}
           locale={locale}
         />

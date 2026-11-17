@@ -15,7 +15,6 @@ import { AccountsPanel } from '../features/computers/Panels'
 import { Applications } from '../features/applications/Applications'
 import { AccountSecurity } from '../features/account-security/AccountSecurity'
 import { errorMessage, uncertain, needsProof } from './status'
-import { decodeHost } from '../config'
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const tenant = '11111111-1111-4111-8111-111111111111',
   id = '22222222-2222-4222-8222-222222222222'
@@ -291,22 +290,7 @@ it('requires explicit adoption of a reread CAS version and preserves a separate 
   })
   expect(h.output.revision).toBe(2)
 })
-it('validates static host configuration and gives closed error classifications', () => {
-  const config = {
-    canonicalOrigin: 'https://app.test',
-    tenant,
-    managementTenant: id,
-    serviceId: id,
-  }
-  expect(decodeHost(config, 'https://app.test').tenant).toBe(tenant)
-  for (const value of [
-    null,
-    [],
-    { ...config, tenant: id },
-    { ...config, extra: true },
-    { ...config, serviceId: 'bad' },
-  ])
-    expect(() => decodeHost(value, 'https://app.test')).toThrow()
+it('gives closed error classifications', () => {
   expect(errorMessage(new Error('SECRET'))).not.toContain('SECRET')
   expect(uncertain(new Error())).toBe(true)
   expect(uncertain(new CredentialWriteNotDispatched('cancelled'))).toBe(false)
@@ -571,7 +555,7 @@ it('keeps purpose authentication inside the removal dialog and binds it to the s
   const stepUp = vi.spyOn(r.session, 'stepUp').mockRejectedValue(new Error('unavailable'))
   const remove = vi.fn()
   Object.assign(r, {
-    host: { tenant },
+    tenant,
     security: {
       list: async () => [{ id: 'selected-credential', label: 'Security key' }],
       remove,

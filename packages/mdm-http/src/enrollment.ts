@@ -54,7 +54,7 @@ function user(value: User, tenant: string): User {
   return value
 }
 function usage(value: unknown, tenant: string, expected?: User): Usage {
-  if (!schema.getApiV1SelfEnrollmentsResponse.validateUsage(value))
+  if (!schema.getApiV1TenantsByTenantSelfEnrollmentsResponse.validateUsage(value))
     throw new Error('Invalid usage contract')
   user(value, tenant)
   if (
@@ -83,7 +83,7 @@ function usage(value: unknown, tenant: string, expected?: User): Usage {
   return value
 }
 function channelStatus(value: unknown, tenant: string): Channels {
-  if (!schema.getApiV1RegistrationChannelsResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantRegistrationChannelsResponse.validateRoot(value))
     throw new Error('Invalid registration channels')
   if (uuid(value.tenantId) !== tenant) throw new Error('Wrong registration tenant')
   uuid(value.instanceId)
@@ -115,7 +115,7 @@ function receipt(
   source?: string,
   id?: string,
 ): EnrollmentReceipt {
-  if (!schema.postApiV1EnrollmentsResponse.validateRoot(value))
+  if (!schema.postApiV1TenantsByTenantEnrollmentsResponse.validateRoot(value))
     throw new Error('Invalid enrollment receipt')
   if (
     value.operationId !== operationId ||
@@ -132,7 +132,10 @@ function receipt(
   }
 }
 function native(value: unknown, id: string): Enrollment {
-  if (!schema.getApiV1EnrollmentsByIdResponse.validateRoot(value) || value.enrollmentId !== id)
+  if (
+    !schema.getApiV1TenantsByTenantEnrollmentsByIdResponse.validateRoot(value) ||
+    value.enrollmentId !== id
+  )
     throw new Error('Wrong enrollment detail')
   const raw = value.instructions
   let instructions: NativeInstructions
@@ -194,7 +197,7 @@ function native(value: unknown, id: string): Enrollment {
   }
 }
 function quantity(value: unknown): Quantity {
-  if (!schema.postApiV1AgentConfigurationsResponse.validateQuantity(value))
+  if (!schema.postApiV1TenantsByTenantAgentConfigurationsResponse.validateQuantity(value))
     throw new Error('Invalid configuration quantity')
   if (value.kind === 'finite' && (!positive(value.count) || value.count > 4294967295))
     throw new Error('Invalid configuration quantity')
@@ -203,7 +206,7 @@ function quantity(value: unknown): Quantity {
 function targets(value: unknown): Target[] {
   if (!Array.isArray(value) || !value.length || value.length > 4) throw new Error('Invalid targets')
   const result = value.map((t: unknown) => {
-    if (!schema.getApiV1AgentPackagesResponse.validateTarget(t))
+    if (!schema.getApiV1TenantsByTenantAgentPackagesResponse.validateTarget(t))
       throw new Error('Invalid installation target')
     return { platform: t.platform, architecture: t.architecture }
   })
@@ -212,7 +215,7 @@ function targets(value: unknown): Target[] {
   return result
 }
 function configuration(value: unknown, tenant: string, service: string): Configuration {
-  if (!schema.postApiV1AgentConfigurationsResponse.validateConfiguration(value))
+  if (!schema.postApiV1TenantsByTenantAgentConfigurationsResponse.validateConfiguration(value))
     throw new Error('Invalid configuration')
   const signed = value.connections,
     connections = signed.configuration
@@ -258,7 +261,7 @@ function configurationDetail(
   service: string,
   id?: string,
 ): ConfigurationDetail {
-  if (!schema.getApiV1AgentConfigurationsByIdResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantAgentConfigurationsByIdResponse.validateRoot(value))
     throw new Error('Invalid configuration detail')
   const result = {
     ...value,
@@ -272,7 +275,7 @@ function configurationDetail(
   return result
 }
 function installer(value: unknown, tenant: string): Installer {
-  if (!schema.postApiV1AgentPackagesResponse.validateRoot(value))
+  if (!schema.postApiV1TenantsByTenantAgentPackagesResponse.validateRoot(value))
     throw new Error('Invalid installer contract')
   if (
     value.tenantId !== tenant ||
@@ -296,23 +299,36 @@ function installer(value: unknown, tenant: string): Installer {
 export function createPublicEnrollmentAdapter(
   transport: HttpTransport,
   tenant: string,
-): PublicEnrollmentPort {
+): Pick<PublicEnrollmentPort, 'packages' | 'package' | 'packageUrl'> {
   uuid(tenant)
   return {
     packages: () =>
-      api.getApiV1AgentEnrollPackages(transport, {}, (value) => {
+      api.getApiV1AgentEnrollPackages(transport, { query: { tenantId: tenant } }, (value) => {
         const items = value.map((v) => installer(v, tenant))
         if (new Set(items.map((p) => p.releaseId)).size !== items.length)
           throw new Error('Duplicate installer')
         return items
       }),
     package: (id) =>
-      api.getApiV1AgentEnrollPackagesById(transport, { pathParams: { id: uuid(id) } }, (value) => {
-        const item = installer(value, tenant)
-        if (item.releaseId !== id) throw new Error('Wrong installer')
-        return item
-      }),
-    packageUrl: (id) => api.getApiV1AgentEnrollPackagesByIdContent.url({ id: uuid(id) }),
+      api.getApiV1AgentEnrollPackagesById(
+        transport,
+        { pathParams: { id: uuid(id) }, query: { tenantId: tenant } },
+        (value) => {
+          const item = installer(value, tenant)
+          if (item.releaseId !== id) throw new Error('Wrong installer')
+          return item
+        },
+      ),
+    packageUrl: (id) =>
+      api.getApiV1AgentEnrollPackagesByIdContent.url({ id: uuid(id) }) +
+      '?' +
+      new URLSearchParams({ tenantId: tenant }),
+  }
+}
+export function createEntraTermsAdapter(
+  transport: HttpTransport,
+): Pick<PublicEnrollmentPort, 'terms' | 'termsFinishUrl'> {
+  return {
     terms: () =>
       api.getApiV1WindowsEntraTermsContext(transport, {}, (value) => {
         canonicalBase64(value.csrfToken, 32)
@@ -326,10 +342,11 @@ export function createPublicEnrollmentAdapter(
         return value satisfies Terms
       }),
     termsFinishUrl: () => api.postApiV1WindowsEntraTermsFinish.url({}),
-    appleBridgeUrl: () => api.getApiV1AppleAccountEnrollmentAuthenticate.url({}),
   }
 }
 /** Public profile-password failures do not invalidate the console's cookie session. */
+export const appleBridgeUrl = () => api.getApiV1AppleAccountEnrollmentAuthenticate.url({})
+
 export function createEnrollmentAdapter(
   transport: HttpTransport,
   publicTransport: HttpTransport,
@@ -356,47 +373,64 @@ export function createEnrollmentAdapter(
   }
   return {
     channels: () =>
-      api.getApiV1RegistrationChannels(transport, {}, (value) => channelStatus(value, tenant)),
+      api.getApiV1TenantsByTenantRegistrationChannels(
+        transport,
+        { pathParams: { tenant } },
+        (value) => channelStatus(value, tenant),
+      ),
     admission: (channel, operationId, expectedRevision, admission) =>
-      api.putApiV1RegistrationChannelsByChannelAdmission(transport, {
-        pathParams: { channel },
+      api.putApiV1TenantsByTenantRegistrationChannelsByChannelAdmission(transport, {
+        pathParams: { tenant, channel },
         headers: { 'Idempotency-Key': uuid(operationId) },
         body: { expectedRevision, admission },
       }),
     quota: (target) =>
       target
-        ? api.getApiV1RegistrationQuotasUsersByInstanceByPrincipal(transport, {
-            pathParams: quotaParams(target),
+        ? api.getApiV1TenantsByTenantRegistrationQuotasUsersByInstanceByPrincipal(transport, {
+            pathParams: { tenant, ...quotaParams(target) },
           })
-        : api.getApiV1RegistrationQuotasDefaults(transport, {}),
+        : api.getApiV1TenantsByTenantRegistrationQuotasDefaults(transport, {
+            pathParams: { tenant },
+          }),
     usage: (target) =>
       target
-        ? api.getApiV1RegistrationQuotasUsersByInstanceByPrincipalUsage(
+        ? api.getApiV1TenantsByTenantRegistrationQuotasUsersByInstanceByPrincipalUsage(
             transport,
-            { pathParams: quotaParams(target) },
+            { pathParams: { tenant, ...quotaParams(target) } },
             (value) => usage(value, tenant, target),
           )
-        : api.getApiV1RegistrationQuotasMe(transport, {}, (value) => usage(value, tenant)),
+        : api.getApiV1TenantsByTenantRegistrationQuotasMe(
+            transport,
+            { pathParams: { tenant } },
+            (value) => usage(value, tenant),
+          ),
     saveQuota: (target, operationId, expectedRevision, limits) => {
       const input = {
         headers: { 'Idempotency-Key': uuid(operationId) },
         body: { expectedRevision, limits },
       }
       return target
-        ? api.putApiV1RegistrationQuotasUsersByInstanceByPrincipal(transport, {
+        ? api.putApiV1TenantsByTenantRegistrationQuotasUsersByInstanceByPrincipal(transport, {
             ...input,
-            pathParams: quotaParams(target),
+            pathParams: { tenant, ...quotaParams(target) },
           })
-        : api.putApiV1RegistrationQuotasDefaults(transport, input)
+        : api.putApiV1TenantsByTenantRegistrationQuotasDefaults(transport, {
+            ...input,
+            pathParams: { tenant },
+          })
     },
     selfOptions: () =>
-      api.getApiV1SelfEnrollments(transport, {}, (value) => ({
-        channels: value.channels.map((c) => ({
-          ...c,
-          source: enumeration(c.source, ['mdm.windows', 'mdm.apple'] as const),
-        })),
-        quotas: usage(value.quotas, tenant),
-      })),
+      api.getApiV1TenantsByTenantSelfEnrollments(
+        transport,
+        { pathParams: { tenant } },
+        (value) => ({
+          channels: value.channels.map((c) => ({
+            ...c,
+            source: enumeration(c.source, ['mdm.windows', 'mdm.apple'] as const),
+          })),
+          quotas: usage(value.quotas, tenant),
+        }),
+      ),
     createNative: (intent, password) => {
       const body = {
           password,
@@ -404,29 +438,33 @@ export function createEnrollmentAdapter(
           ...(intent.source === 'mdm.windows' ? { windowsProfile: intent.windowsProfile } : {}),
         },
         headers = { 'Idempotency-Key': uuid(intent.operationId) }
-      return api.postApiV1SelfEnrollments(transport, { headers, body }, (value) =>
-        receipt(value, intent.operationId, intent.source),
+      return api.postApiV1TenantsByTenantSelfEnrollments(
+        transport,
+        { pathParams: { tenant }, headers, body },
+        (value) => receipt(value, intent.operationId, intent.source),
       )
     },
     enrollment: (id) =>
-      api.getApiV1EnrollmentsById(transport, { pathParams: { id: uuid(id) } }, (value) =>
-        native(value, id),
+      api.getApiV1TenantsByTenantEnrollmentsById(
+        transport,
+        { pathParams: { tenant, id: uuid(id) } },
+        (value) => native(value, id),
       ),
     resume: (id, operationId, password) =>
-      api.postApiV1EnrollmentsByIdResume(
+      api.postApiV1TenantsByTenantEnrollmentsByIdResume(
         transport,
         {
-          pathParams: { id: uuid(id) },
+          pathParams: { tenant, id: uuid(id) },
           headers: { 'Idempotency-Key': uuid(operationId) },
           body: { password },
         },
         (value) => receipt(value, operationId, undefined, id),
       ),
     cancel: (id, operationId) =>
-      api.postApiV1EnrollmentsByIdCancel(
+      api.postApiV1TenantsByTenantEnrollmentsByIdCancel(
         transport,
         {
-          pathParams: { id: uuid(id) },
+          pathParams: { tenant, id: uuid(id) },
           headers: { 'Idempotency-Key': uuid(operationId) },
           body: {},
         },
@@ -445,19 +483,19 @@ export function createEnrollmentAdapter(
           ),
       ),
     registration: (device, signal) =>
-      api.getApiV1DevicesByDeviceRegistration(
+      api.getApiV1TenantsByTenantDevicesByDeviceRegistration(
         transport,
-        { signal, pathParams: { device: identifier(device) } },
+        { signal, pathParams: { tenant, device: identifier(device) } },
         (value) => {
           if (value.deviceId !== device) throw new Error('Wrong registration device')
           return value
         },
       ),
     revokeRegistration: (device, operationId) =>
-      api.postApiV1DevicesByDeviceRegistrationRevoke(
+      api.postApiV1TenantsByTenantDevicesByDeviceRegistrationRevoke(
         transport,
         {
-          pathParams: { device: identifier(device) },
+          pathParams: { tenant, device: identifier(device) },
           headers: { 'Idempotency-Key': uuid(operationId) },
           body: {},
         },
@@ -467,9 +505,11 @@ export function createEnrollmentAdapter(
           return { operationId, deviceId: device }
         },
       ),
-    agentSettings: () => api.getApiV1AgentEnrollmentSettings(transport, {}),
+    agentSettings: () =>
+      api.getApiV1TenantsByTenantAgentEnrollmentSettings(transport, { pathParams: { tenant } }),
     saveAgentSettings: (operationId, expectedRevision, values) =>
-      api.putApiV1AgentEnrollmentSettings(transport, {
+      api.putApiV1TenantsByTenantAgentEnrollmentSettings(transport, {
+        pathParams: { tenant },
         body: {
           operationId: uuid(operationId),
           expectedRevision,
@@ -479,9 +519,9 @@ export function createEnrollmentAdapter(
     configurations: (query) => {
       if (query.fields && !query.fields.includes('configurationId'))
         throw new Error('Configuration identity required')
-      return api.getApiV1AgentConfigurations(
+      return api.getApiV1TenantsByTenantAgentConfigurations(
         transport,
-        { query: queryParameters(query) },
+        { pathParams: { tenant }, query: queryParameters(query) },
         (value) =>
           projectedPage(value, configurationFields, query.fields, [
             'configurationId',
@@ -489,19 +529,22 @@ export function createEnrollmentAdapter(
       )
     },
     configuration: (id) =>
-      api.getApiV1AgentConfigurationsById(transport, { pathParams: { id: uuid(id) } }, (value) =>
-        configurationDetail(value, tenant, service, id),
+      api.getApiV1TenantsByTenantAgentConfigurationsById(
+        transport,
+        { pathParams: { tenant, id: uuid(id) } },
+        (value) => configurationDetail(value, tenant, service, id),
       ),
     configurationOperation: (id) =>
-      api.getApiV1AgentConfigurationOperationsById(
+      api.getApiV1TenantsByTenantAgentConfigurationOperationsById(
         transport,
-        { pathParams: { id: uuid(id) } },
+        { pathParams: { tenant, id: uuid(id) } },
         (value) => (value === null ? null : configurationDetail(value, tenant, service)),
       ),
     issueConfiguration: (intent, secret) =>
-      api.postApiV1AgentConfigurations(
+      api.postApiV1TenantsByTenantAgentConfigurations(
         transport,
         {
+          pathParams: { tenant },
           body: {
             ...intent,
             quantity: { ...intent.quantity },
@@ -515,7 +558,7 @@ export function createEnrollmentAdapter(
             const raw: unknown = JSON.parse(
               new TextDecoder('utf-8', { fatal: true }).decode(file.bytes),
             )
-            if (!schema.postApiV1AgentConfigurationsResponse.validateRoot(raw))
+            if (!schema.postApiV1TenantsByTenantAgentConfigurationsResponse.validateRoot(raw))
               throw new Error('Invalid configuration document')
             canonicalBase64(raw.secret, 32)
             canonicalBase64(raw.signature, 64)
@@ -528,15 +571,17 @@ export function createEnrollmentAdapter(
         },
       ),
     revokeConfiguration: (id, operationId) =>
-      api.postApiV1AgentConfigurationsByIdRevoke(transport, {
-        pathParams: { id: uuid(id) },
+      api.postApiV1TenantsByTenantAgentConfigurationsByIdRevoke(transport, {
+        pathParams: { tenant, id: uuid(id) },
         body: { operationId: uuid(operationId) },
       }),
-    entra: () => api.getApiV1WindowsEntraPolicy(transport, {}),
+    entra: () =>
+      api.getApiV1TenantsByTenantWindowsEntraPolicy(transport, { pathParams: { tenant } }),
     saveEntra: (operationId, expectedRevision, policy) =>
-      api.putApiV1WindowsEntraPolicy(
+      api.putApiV1TenantsByTenantWindowsEntraPolicy(
         transport,
         {
+          pathParams: { tenant },
           body: {
             operationId: uuid(operationId),
             expectedRevision,

@@ -11,7 +11,7 @@ const snapshotFields = {
   entryCount: count,
   importedAt: count,
   extraction: (value: unknown) =>
-    value as api.postApiV1SoftwareSourceSnapshotsBySourceContract.Body.Extraction,
+    value as api.postApiV1TenantsByTenantSoftwareSourceSnapshotsBySourceContract.Body.Extraction,
 }
 const entryFields = {
   entryId: uuid,
@@ -21,7 +21,7 @@ const entryFields = {
   name: (value: unknown) => nullable(value, text),
   version: (value: unknown) => nullable(value, text),
 }
-type Receipt = api.postApiV1SoftwareSourceSnapshotsBySourceContract.Output
+type Receipt = api.postApiV1TenantsByTenantSoftwareSourceSnapshotsBySourceContract.Output
 const summary = <T extends Omit<Receipt, 'operationId'>>(value: T) => ({
   ...value,
   revision: count(value.revision),
@@ -30,42 +30,45 @@ const summary = <T extends Omit<Receipt, 'operationId'>>(value: T) => ({
 })
 const receipt = (value: Receipt) => ({ ...summary(value), operationId: uuid(value.operationId) })
 
-export function createSoftwareSnapshotsAdapter(transport: HttpTransport): SoftwareSnapshotsPort {
+export function createSoftwareSnapshotsAdapter(
+  transport: HttpTransport,
+  tenant: string,
+): SoftwareSnapshotsPort {
   return {
     sources: (query, signal) =>
-      api.getApiV1SoftwareSourceSnapshots(
+      api.getApiV1TenantsByTenantSoftwareSourceSnapshots(
         transport,
-        { query: queryParameters(query), signal },
+        { pathParams: { tenant }, query: queryParameters(query), signal },
         (value) => projectedPage(value, snapshotFields, query.fields, ['source']),
       ),
     snapshot: (source, signal) =>
-      api.getApiV1SoftwareSourceSnapshotsBySource(
+      api.getApiV1TenantsByTenantSoftwareSourceSnapshotsBySource(
         transport,
-        { pathParams: { source }, signal },
+        { pathParams: { tenant, source }, signal },
         (value) => ({ ...summary(value), document: text(value.document) }),
       ),
     entries: (source, query, signal) =>
-      api.getApiV1SoftwareSourceSnapshotsBySourceEntries(
+      api.getApiV1TenantsByTenantSoftwareSourceSnapshotsBySourceEntries(
         transport,
-        { pathParams: { source }, query: queryParameters(query), signal },
+        { pathParams: { tenant, source }, query: queryParameters(query), signal },
         (value) => projectedPage(value, entryFields, query.fields, ['entryId']),
       ),
     entry: (source, entry, signal) =>
-      api.getApiV1SoftwareSourceSnapshotsBySourceEntriesByEntry(
+      api.getApiV1TenantsByTenantSoftwareSourceSnapshotsBySourceEntriesByEntry(
         transport,
-        { pathParams: { source, entry }, signal },
+        { pathParams: { tenant, source, entry }, signal },
         (value) => ({ ...value, revision: count(value.revision), data: text(value.data) }),
       ),
     replace: (source, intent) =>
-      api.postApiV1SoftwareSourceSnapshotsBySource(
+      api.postApiV1TenantsByTenantSoftwareSourceSnapshotsBySource(
         transport,
-        { pathParams: { source }, body: { ...intent, input: { ...intent.input } } },
+        { pathParams: { tenant, source }, body: { ...intent, input: { ...intent.input } } },
         receipt,
       ),
     receipt: (source, operation) =>
-      api.getApiV1SoftwareSourceSnapshotsBySourceOperationsByOperation(
+      api.getApiV1TenantsByTenantSoftwareSourceSnapshotsBySourceOperationsByOperation(
         transport,
-        { pathParams: { source, operation } },
+        { pathParams: { tenant, source, operation } },
         receipt,
       ),
   }

@@ -51,7 +51,7 @@ try {
   }
   await run.login(p)
   run.step('device-confirmation-and-unknown-acceptance')
-  const endpoint = await api('GET', `/api/v1/devices/${f.mdm}`)
+  const endpoint = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}`)
   const restart = endpoint.capabilities.find(
     (fact) => fact.channel === 'mdm' && fact.action === 'restart',
   )
@@ -86,23 +86,31 @@ try {
   // Changing device abandons the confirmation and cannot submit to the former device.
   await run.nav(p, `/devices/endpoint/${f.alone}`, '设备详情')
   assert.equal(await p.getByRole('dialog', { name: '确认设备动作', exact: true }).count(), 0)
-  assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.mdm}/operations`), 0)
+  assert.equal(
+    run.count(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations`),
+    0,
+  )
   await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   await button('核对设备与动作').click()
   dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
   await dialog.getByRole('checkbox').check()
   let original
-  await p.context().route(`**/api/v1/devices/${f.mdm}/operations`, async (route) => {
-    if (route.request().method() !== 'POST') return route.continue()
-    original = route.request().postDataJSON()
-    const response = await route.fetch()
-    assert.equal(response.status(), 202)
-    await route.abort('failed')
-  })
+  await p
+    .context()
+    .route(`**/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations`, async (route) => {
+      if (route.request().method() !== 'POST') return route.continue()
+      original = route.request().postDataJSON()
+      const response = await route.fetch()
+      assert.equal(response.status(), 202)
+      await route.abort('failed')
+    })
   await dialog.getByRole('button', { name: '确认提交此动作', exact: true }).click()
   await p.getByText('提交结果未知，请查询原操作，勿重新创建', { exact: false }).waitFor()
-  assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.mdm}/operations`), 1)
-  await p.context().unroute(`**/api/v1/devices/${f.mdm}/operations`)
+  assert.equal(
+    run.count(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations`),
+    1,
+  )
+  await p.context().unroute(`**/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations`)
   await p
     .locator('a')
     .filter({ hasText: '查看操作排障' })
@@ -112,14 +120,20 @@ try {
   await p.getByText('原操作结果', { exact: true }).waitFor()
   await p.getByText('执行证据', { exact: true }).waitFor()
   await p.getByText('已受理', { exact: true }).waitFor()
-  assert.equal(run.count(p, 'POST', `/api/v1/devices/${f.mdm}/operations`), 1)
+  assert.equal(
+    run.count(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations`),
+    1,
+  )
   const execution = new URLSearchParams({ kind: 'command', operation: original.operationId })
   await run.nav(p, '/operations?' + execution, '执行与结果')
   await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
   await p.getByText('原操作与结果', { exact: true }).waitFor()
   await button('读取详细结果与证据').click()
   await p.getByText('维护原设备动作', { exact: true }).waitFor()
-  const facts = await api('GET', `/api/v1/devices/${f.mdm}/operations/${original.operationId}`)
+  const facts = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations/${original.operationId}`,
+  )
   assert.equal(facts.commandId, original.operationId)
   assert.notEqual(facts.observation.effect, 'verified')
   checks.push(
@@ -130,7 +144,7 @@ try {
     .getByRole('checkbox', { name: '我已核对原操作及设备，并明确确认本次恢复', exact: true })
     .check()
   let cancellation
-  const path = `/api/v1/devices/${f.mdm}/operations/${original.operationId}/cancel`
+  const path = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations/${original.operationId}/cancel`
   await p.context().route('**' + path, async (route) => {
     cancellation = route.request().postDataJSON()
     const response = await route.fetch()
@@ -159,7 +173,11 @@ try {
   assert.equal(await button('核对设备与动作').isDisabled(), true)
   assert.equal(await p.getByRole('dialog', { name: '确认设备动作', exact: true }).count(), 0)
   assert.equal(
-    run.count(p, 'POST', '/api/v1/devices/d8befebe-00eb-524f-a5c4-81613bb0a344/operations'),
+    run.count(
+      p,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/devices/d8befebe-00eb-524f-a5c4-81613bb0a344/operations`,
+    ),
     0,
   )
   checks.push('real-macos-capability-unknown-blocked-before-pin-confirmation-and-post')
@@ -721,7 +739,7 @@ try {
   if (enterpriseRead.status() === 403) {
     assert.equal((await enterpriseRead.json()).code, 'permission_denied')
     for (const path of [
-      `/api/v1/devices/${f.executionAccess.device}/device-access?limit=1`,
+      `/api/v1/tenants/${run.fixture.tenant}/devices/${f.executionAccess.device}/device-access?limit=1`,
       `/api/v1/apple/platform-sso/configuration?deviceId=${f.executionAccess.device}`,
     ])
       assert.equal((await api('GET', path, undefined, 403)).code, 'permission_denied')
@@ -731,7 +749,14 @@ try {
       'Device Access',
     )
     await p.getByText('当前账户没有此操作权限。', { exact: true }).first().waitFor()
-    assert.equal(run.count(p, 'POST', '/api/v1/device-access/enterprise/configuration'), 0)
+    assert.equal(
+      run.count(
+        p,
+        'POST',
+        `/api/v1/tenants/${run.fixture.tenant}/device-access/enterprise/configuration`,
+      ),
+      0,
+    )
     await p.screenshot({
       path: join(screenshots, 'device-access-permission-denied.png'),
       fullPage: true,
@@ -790,7 +815,7 @@ try {
     const bindingId = new URL(write.url()).pathname.split('/').at(-1)
     const receipt = await api(
       'GET',
-      `/api/v1/devices/${f.executionAccess.device}/device-access/operations/${bindingInput.operationId}`,
+      `/api/v1/tenants/${run.fixture.tenant}/devices/${f.executionAccess.device}/device-access/operations/${bindingInput.operationId}`,
     )
     assert.equal(receipt.id, bindingId)
     assert.equal(receipt.operationId, bindingInput.operationId)
@@ -801,7 +826,7 @@ try {
       run.count(
         p,
         'PUT',
-        `/api/v1/devices/${f.executionAccess.device}/device-access/bindings/${bindingId}`,
+        `/api/v1/tenants/${run.fixture.tenant}/devices/${f.executionAccess.device}/device-access/bindings/${bindingId}`,
       ),
       1,
     )
@@ -819,7 +844,7 @@ try {
     await run.response(
       p,
       'PUT',
-      `/api/v1/devices/${f.executionAccess.device}/device-access/bindings/${bindingId}`,
+      `/api/v1/tenants/${run.fixture.tenant}/devices/${f.executionAccess.device}/device-access/bindings/${bindingId}`,
       () => button('确认保存绑定操作').click(),
     )
     await button('结束或重新编辑此任务').click()
@@ -847,14 +872,17 @@ try {
     await button('验证此企业配置用途').click()
     await p.getByText('用途验证已完成', { exact: true }).last().waitFor()
     await p.getByRole('checkbox', { name: '我已核对目标、版本及企业登录影响', exact: true }).check()
-    await run.response(p, 'POST', '/api/v1/device-access/enterprise/configuration', () =>
-      button('确认保存企业配置').click(),
+    await run.response(
+      p,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/device-access/enterprise/configuration`,
+      () => button('确认保存企业配置').click(),
     )
     await button('刷新当前配置以核对').click()
     await p.getByText('已读取当前配置版本:', { exact: false }).waitFor()
     await button('结束或重新编辑此任务').last().click()
     checks.push('real-purpose-bound-enterprise-subject-save-and-current-configuration-comparison')
-    const daBase = '/api/v1/device-access/operation-diagnostics'
+    const daBase = `/api/v1/tenants/${run.fixture.tenant}/device-access/operation-diagnostics`
     const daOperation = `${daBase}/operations/device_access/${bindingInput.operationId}`
     const daQuery = new URLSearchParams({
       context: 'da',
@@ -900,7 +928,7 @@ try {
   await run.nav(p, '/operations', '执行与结果')
   await button('读取信任与当前权限').click()
   await p.getByRole('checkbox', { name: '已核对信任版本、设备分发与轮换影响', exact: true }).check()
-  await run.response(p, 'POST', '/api/v1/task-signing/trust', () =>
+  await run.response(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/task-signing/trust`, () =>
     button('准备新的签名 Key').click(),
   )
   await button('查询原信任变更').click()
@@ -908,7 +936,7 @@ try {
   checks.push('real-trust-prepare-and-original-receipt-distinct-from-device-observations')
   const directory = await api(
     'GET',
-    `/api/v1/operations?filter=${encodeURIComponent(`device=='${f.mdm}'`)}&limit=100`,
+    `/api/v1/tenants/${run.fixture.tenant}/operations?filter=${encodeURIComponent(`device=='${f.mdm}'`)}&limit=100`,
   )
   assert.ok(directory.items.some((item) => item.id === original.operationId))
   for (const [name, width] of [
@@ -966,14 +994,14 @@ try {
   })
   checks.push('real-public-desktop-tablet-mobile-dark-layout-and-no-viewport-overflow')
   run.step('session-change-discards-device-confirmation')
-  const controlPath = `/api/v1/devices/${f.mdm}/operations`
+  const controlPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations`
   const postsBeforeSignout = run.count(p, 'POST', controlPath)
   await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
   await button('核对设备与动作').click()
   dialog = p.getByRole('dialog', { name: '确认设备动作', exact: true })
   await dialog.getByRole('checkbox').check()
   const otherTab = await p.context().newPage()
-  await otherTab.goto(origin + '/security')
+  await otherTab.goto(origin + `/tenants/${run.fixture.tenant}` + '/security')
   await otherTab.getByRole('button', { name: '退出登录', exact: true }).click()
   await otherTab.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
   await p.bringToFront()

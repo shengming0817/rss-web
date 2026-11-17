@@ -25,7 +25,7 @@ it('uses the real first-use operation, tenant binding and current progress state
   const f = fixture(progress)
   expect((await f.setup.read()).steps[0]?.status).toBe('unknown')
   expect(f.request).toHaveBeenCalledWith(
-    expect.objectContaining({ method: 'GET', path: '/api/v1/settings/first-use' }),
+    expect.objectContaining({ method: 'GET', path: '/api/v1/tenants/{tenant}/settings/first-use' }),
   )
   await expect(fixture({ ...progress, tenantId: operationId }).setup.read()).rejects.toThrow()
   await expect(
@@ -42,7 +42,7 @@ it('binds generated writes and operation receipts to exact UUID, CAS and frozen 
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       method: 'PUT',
-      path: '/api/v1/settings/first-use',
+      path: '/api/v1/tenants/{tenant}/settings/first-use',
       headers: expect.objectContaining({ 'Idempotency-Key': operationId }),
       body: { expectedRevision: 0, intent: selection },
     }),
@@ -51,15 +51,15 @@ it('binds generated writes and operation receipts to exact UUID, CAS and frozen 
   expect(f.request).toHaveBeenLastCalledWith(
     expect.objectContaining({
       method: 'GET',
-      path: '/api/v1/settings/first-use/operations/{id}',
-      pathParams: { id: operationId },
+      path: '/api/v1/tenants/{tenant}/settings/first-use/operations/{id}',
+      pathParams: { tenant, id: operationId },
     }),
   )
 })
 it('uses separate permission-filtered business and platform catalog operations', async () => {
   const f = fixture({ items: [], domains: [{ id: 'policies', href: 'https://untrusted.invalid' }] })
   expect((await f.setup.catalog()).domains[0]?.href).toBe('https://untrusted.invalid')
-  await createCatalogAdapter(f.transport, true)()
+  await createCatalogAdapter(f.transport, true, tenant)()
   expect(f.request).toHaveBeenLastCalledWith(
     expect.objectContaining({ path: '/api/v1/tenant-administration/settings/catalog' }),
   )

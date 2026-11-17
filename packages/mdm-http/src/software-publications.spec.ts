@@ -50,7 +50,10 @@ function fixture(read: (options: RequestOptions<unknown>) => unknown | Promise<u
   const request = vi.fn(async (options: RequestOptions<unknown>) =>
       options.decode(await read(options)),
     ),
-    adapter = createPublicationsAdapter({ request } as unknown as HttpTransport)
+    adapter = createPublicationsAdapter(
+      { request } as unknown as HttpTransport,
+      '11111111-1111-4111-8111-111111111111',
+    )
   return { request, adapter, publications: createPublications(adapter) }
 }
 it('finds a host-configured target by its exact ID and digest without fabricating a target-write endpoint', async () => {
@@ -59,7 +62,7 @@ it('finds a host-configured target by its exact ID and digest without fabricatin
   expect(await f.publications.target('host-brew')).toEqual(target)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/software/publication-targets',
+    path: '/api/v1/tenants/{tenant}/software/publication-targets',
     query: { filter: "id=='host-brew'", fields: 'id,digest,protocol', limit: 2 },
   })
   const absent = fixture(() => ({ items: [], nextCursor: null }))
@@ -104,7 +107,7 @@ it('queries an original mutation UUID through the formal filter while keeping th
   ).toBe(id)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/software/publications',
+    path: '/api/v1/tenants/{tenant}/software/publications',
     query: { filter: "operationId=='" + operation + "'", cursor: 'cHJldmlvdXM', limit: 1 },
   })
   expect(f.request).toHaveBeenCalledTimes(1)
@@ -127,7 +130,7 @@ it('publishes an exact Resource revision and target snapshot with 202, preservin
   await f.publications.publish(change)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/software/publications',
+    path: '/api/v1/tenants/{tenant}/software/publications',
     successStatus: 202,
     body: change,
   })
@@ -146,8 +149,8 @@ it('keeps recover/retry/withdraw explicit and rejects undeclared native document
     await f.publications.change(id, change)
     expect(f.request.mock.calls[0]?.[0]).toMatchObject({
       method: 'POST',
-      path: '/api/v1/software/publications/{id}',
-      pathParams: { id },
+      path: '/api/v1/tenants/{tenant}/software/publications/{id}',
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id },
       body: change,
     })
     expect(f.request).toHaveBeenCalledTimes(1)

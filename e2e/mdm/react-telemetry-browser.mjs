@@ -42,7 +42,7 @@ try {
   const write = (method, path, input, expectedRevision = 0) =>
     api(method, path, { operationId: randomUUID(), expectedRevision, input })
   run.step('formal-fields-and-template')
-  await write('POST', '/api/v1/asset-retention-policies', {
+  await write('POST', `/api/v1/tenants/${run.fixture.tenant}/asset-retention-policies`, {
     key: 'browser_telemetry',
     revision: 1,
     rawSeconds: 604800,
@@ -91,10 +91,13 @@ try {
         maxResources: 1,
       },
     }
-    await write('PUT', `/api/v1/asset-fields/${definition.key}`, { action: 'put', definition })
+    await write('PUT', `/api/v1/tenants/${run.fixture.tenant}/asset-fields/${definition.key}`, {
+      action: 'put',
+      definition,
+    })
   }
   const invalidCounter = await page.request.put(
-    origin + '/api/v1/asset-fields/custom.browser.invalid_counter',
+    origin + `/api/v1/tenants/${run.fixture.tenant}/asset-fields/custom.browser.invalid_counter`,
     {
       headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
       data: {
@@ -132,7 +135,10 @@ try {
   const template = randomUUID(),
     content = Buffer.from('#!/bin/sh\n# Controlled synthetic telemetry fixture.\n')
   run.step('formal-template')
-  await write('POST', `/api/v1/resources/${template}`, { action: 'create', kind: 'script' })
+  await write('POST', `/api/v1/tenants/${run.fixture.tenant}/resources/${template}`, {
+    action: 'create',
+    kind: 'script',
+  })
   const spec = {
     profile: 'posix_sh',
     sql: null,
@@ -175,7 +181,7 @@ try {
   }
   await write(
     'POST',
-    `/api/v1/resources/${template}`,
+    `/api/v1/tenants/${run.fixture.tenant}/resources/${template}`,
     {
       action: 'version',
       version: 'v1',
@@ -201,11 +207,16 @@ try {
   )
   await api(
     'POST',
-    `/api/v1/resources/${template}/content?version=v1&variant=default&platform=macos&architecture=aarch64&operation=${randomUUID()}`,
+    `/api/v1/tenants/${run.fixture.tenant}/resources/${template}/content?version=v1&variant=default&platform=macos&architecture=aarch64&operation=${randomUUID()}`,
     content,
     true,
   )
-  await write('POST', `/api/v1/resources/${template}`, { action: 'activate', version: 'v1' }, 2)
+  await write(
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/resources/${template}`,
+    { action: 'activate', version: 'v1' },
+    2,
+  )
   run.step('publish-exact-profile')
   const profile = randomUUID(),
     definition = {
@@ -229,13 +240,13 @@ try {
       backfillSeconds: 86400,
     },
     bytes = Buffer.from(JSON.stringify(definition))
-  await write('POST', `/api/v1/resources/${profile}`, {
+  await write('POST', `/api/v1/tenants/${run.fixture.tenant}/resources/${profile}`, {
     action: 'create',
     kind: 'telemetry_profile',
   })
   await write(
     'POST',
-    `/api/v1/resources/${profile}`,
+    `/api/v1/tenants/${run.fixture.tenant}/resources/${profile}`,
     {
       action: 'version',
       version: 'profile-v1',
@@ -261,18 +272,18 @@ try {
   )
   await api(
     'POST',
-    `/api/v1/resources/${profile}/content?version=profile-v1&variant=default&platform=macos&architecture=aarch64&operation=${randomUUID()}`,
+    `/api/v1/tenants/${run.fixture.tenant}/resources/${profile}/content?version=profile-v1&variant=default&platform=macos&architecture=aarch64&operation=${randomUUID()}`,
     bytes,
     true,
   )
   await write(
     'POST',
-    `/api/v1/resources/${profile}`,
+    `/api/v1/tenants/${run.fixture.tenant}/resources/${profile}`,
     { action: 'activate', version: 'profile-v1' },
     2,
   )
   const policyId = randomUUID()
-  await write('POST', `/api/v1/policies/${policyId}`, {
+  await write('POST', `/api/v1/tenants/${run.fixture.tenant}/policies/${policyId}`, {
     action: 'put',
     enabled: true,
     definition: {
@@ -291,7 +302,7 @@ try {
       },
     },
   })
-  const policy = await api('GET', `/api/v1/policies/${policyId}`)
+  const policy = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/policies/${policyId}`)
   for (let attempt = 0; ; attempt++) {
     const scope = await page.request.get(`${origin}/api/v1/policies/${policyId}/scope`)
     assert.ok(scope.status() === 200 || scope.status() === 503)
@@ -341,29 +352,42 @@ try {
     after: null,
   }
   for (let i = 0; i < 80; i++) {
-    const result = await api('POST', '/api/v1/telemetry/history', query)
+    const result = await api(
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`,
+      query,
+    )
     if (result.rows.length === 12) break
     assert.ok(i < 79, 'observation publication deadline')
     await new Promise((done) => setTimeout(done, 250))
   }
   run.step('cursor-coordinate-rejection')
-  const small = await api('POST', '/api/v1/telemetry/history', { ...query, maxPoints: 2 })
+  const small = await api('POST', `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`, {
+    ...query,
+    maxPoints: 2,
+  })
   assert.ok(small.next, 'history continuation')
   for (const changed of [
     { device: fixture.alone },
     { field: 'custom.browser.counter' },
     { resource: 'other' },
   ]) {
-    const response = await page.request.post(origin + '/api/v1/telemetry/history', {
-      headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
-      data: { ...query, maxPoints: 2, after: small.next, ...changed },
-    })
+    const response = await page.request.post(
+      origin + `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`,
+      {
+        headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
+        data: { ...query, maxPoints: 2, after: small.next, ...changed },
+      },
+    )
     assert.equal(response.status(), 400, 'cursor rejects changed coordinates')
   }
-  const foreign = await page.request.post(origin + '/api/v1/telemetry/history', {
-    headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
-    data: { ...query, tenant: fixture.otherTenant },
-  })
+  const foreign = await page.request.post(
+    origin + `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`,
+    {
+      headers: { Origin: origin, 'X-Identity-Request': '1', 'X-CSRF-Token': csrf },
+      data: { ...query, tenant: fixture.otherTenant },
+    },
+  )
   assert.equal(foreign.status(), 400, 'tenant cannot be overridden through the query DTO')
   const otherSession = await page.request.get(
     origin + `/api/v1/identity/tenants/${fixture.otherTenant}/session`,
@@ -377,8 +401,11 @@ try {
   await label('字段键').fill(query.field)
   await label('序列资源').fill('device')
   await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 16))
-  const firstHistoryResponse = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
-    button('查询已上报数据').click(),
+  const firstHistoryResponse = await run.response(
+    page,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`,
+    () => button('查询已上报数据').click(),
   )
   const representativeHistory = await firstHistoryResponse.json()
   await page.locator('.telemetry-results').getByText('-12.5 degree', { exact: true }).waitFor()
@@ -387,8 +414,11 @@ try {
   await page.locator('.telemetry-chart svg').waitFor()
   assert.equal(await page.locator('.telemetry-point').count(), 10)
   await label('分辨率（秒）').fill('300.5')
-  const aggregateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
-    button('查询聚合').click(),
+  const aggregateResponse = await run.response(
+    page,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/telemetry/aggregate`,
+    () => button('查询聚合').click(),
   )
   assert.equal(aggregateResponse.request().postDataJSON().resolutionMicros, '300500000')
   const aggregatePage = await aggregateResponse.json(),
@@ -438,8 +468,11 @@ try {
   async function queryField(field) {
     await label('字段键').fill(field)
     await label('序列资源').fill('device')
-    const response = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
-      button('查询已上报数据').click(),
+    const response = await run.response(
+      page,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`,
+      () => button('查询已上报数据').click(),
     )
     await page.locator('.telemetry-results table tbody tr').first().waitFor()
     return response.json()
@@ -448,8 +481,11 @@ try {
   await selectSeries()
   await run.choose(page, label('聚合含义'), '每秒速率')
   await label('最大连续间隔（秒，计数器必填）').fill('300.5')
-  const rateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
-      button('查询聚合').click(),
+  const rateResponse = await run.response(
+      page,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/telemetry/aggregate`,
+      () => button('查询聚合').click(),
     ),
     ratePage = await rateResponse.json(),
     rateBucket = ratePage.buckets.find(
@@ -478,8 +514,11 @@ try {
   }
   await selectSeries()
   await run.choose(page, label('聚合含义'), '合计')
-  const sumResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
-    button('查询聚合').click(),
+  const sumResponse = await run.response(
+    page,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/telemetry/aggregate`,
+    () => button('查询聚合').click(),
   )
   const sums = (await sumResponse.json()).buckets.filter(
     (bucket) => typeof bucket.value === 'object' && bucket.value && 'Sum' in bucket.value,
@@ -501,8 +540,11 @@ try {
     0,
     'discrete values never drawn as a numeric curve',
   )
-  const stateResponse = await run.response(page, 'POST', '/api/v1/telemetry/aggregate', () =>
-      button('查询聚合').click(),
+  const stateResponse = await run.response(
+      page,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/telemetry/aggregate`,
+      () => button('查询聚合').click(),
     ),
     statePage = await stateResponse.json(),
     stateBucket = statePage.buckets.find(
@@ -524,8 +566,11 @@ try {
   await label('结束时间（UTC，不含）').fill(
     new Date(Date.now() - 82_800_000).toISOString().slice(0, 16),
   )
-  const emptyResponse = await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
-    button('查询已上报数据').click(),
+  const emptyResponse = await run.response(
+    page,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`,
+    () => button('查询已上报数据').click(),
   )
   assert.equal((await emptyResponse.json()).rows.length, 0)
   await page.locator('.telemetry-results').getByText('没有数据', { exact: true }).first().waitFor()
@@ -539,12 +584,12 @@ try {
     value: { type: 'i64', value: '01' },
   }
   await page.route(
-    '**/api/v1/telemetry/history',
+    `**/api/v1/tenants/${run.fixture.tenant}/telemetry/history`,
     (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(unsafe) }),
     { times: 1 },
   )
-  await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+  await run.response(page, 'POST', `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`, () =>
     button('查询已上报数据').click(),
   )
   await page
@@ -554,13 +599,13 @@ try {
   assert.equal(await page.locator('.telemetry-results table tbody tr').count(), 0)
   coverage.push('real-empty-query-distinct-from-malformed-integer-rejection')
   await run.choose(page, label('查询模式'), '最新有效来源')
-  await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+  await run.response(page, 'POST', `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`, () =>
     button('查询已上报数据').click(),
   )
   assert.equal(await button('下一页观察').count(), 0)
   coverage.push('latest-server-selected-source-without-continuation')
   run.step('configuration-preview-and-links')
-  const configurationPath = `/api/v1/devices/${device}/telemetry-configurations`
+  const configurationPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${device}/telemetry-configurations`
   const configurationResponse = () =>
     page.waitForResponse(
       (response) =>
@@ -672,12 +717,15 @@ try {
   await label('字段键').fill(query.field)
   await label('序列资源').fill('device')
   await label('结束时间（UTC，不含）').fill(new Date(Date.now() + 60000).toISOString().slice(0, 16))
-  await run.response(page, 'POST', '/api/v1/telemetry/history', () =>
+  await run.response(page, 'POST', `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`, () =>
     button('查询已上报数据').click(),
   )
   await page.locator('.telemetry-results').getByText('-12.5 degree', { exact: true }).waitFor()
-  const scoped = await api('GET', '/api/v1/authorization/rules/' + fixture.ruleId)
-  await api('PUT', '/api/v1/authorization/rules/' + fixture.ruleId, {
+  const scoped = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/authorization/rules/` + fixture.ruleId,
+  )
+  await api('PUT', `/api/v1/tenants/${run.fixture.tenant}/authorization/rules/` + fixture.ruleId, {
     operationId: randomUUID(),
     expectedRevision: scoped.revision,
     value: {
@@ -688,7 +736,7 @@ try {
   await run.response(
     page,
     'POST',
-    '/api/v1/telemetry/history',
+    `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`,
     () => button('重新读取数据').click(),
     403,
   )

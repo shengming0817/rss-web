@@ -29,7 +29,7 @@ it('preserves a projected endpoint row and sends formal server query controls', 
   ).toEqual([{ id: '17322c55-8461-54b1-9d68-c62afc8b6cc1', status: 'active' }])
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      path: '/api/v1/devices',
+      path: '/api/v1/tenants/{tenant}/devices',
       signal,
       query: { fields: 'id,status', filter: "status=='active'", sort: '-id', limit: 3 },
     }),
@@ -42,7 +42,7 @@ it('uses the relationship directory and keeps empty candidate windows continuabl
   expect((await client.associations({ fields: ['id', 'version'] })).nextCursor).toBe('eA')
   expect(f.request).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      path: '/api/v1/device-associations',
+      path: '/api/v1/tenants/{tenant}/device-associations',
       query: { fields: 'id,version', limit: 100 },
     }),
   )
@@ -52,7 +52,7 @@ it('uses the relationship directory and keeps empty candidate windows continuabl
   ).toBe('eA')
   expect(f.request).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      pathParams: { device: '17322c55-8461-54b1-9d68-c62afc8b6cc1' },
+      pathParams: { tenant, device: '17322c55-8461-54b1-9d68-c62afc8b6cc1' },
       query: { channel: 'mdm', limit: 2 },
     }),
   )
@@ -78,8 +78,8 @@ it('keeps personnel idempotency in the header and rejects foreign-tenant read re
   })
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      path: '/api/v1/devices/{device}/registration-user',
-      pathParams: { device: '17322c55-8461-54b1-9d68-c62afc8b6cc1' },
+      path: '/api/v1/tenants/{tenant}/devices/{device}/registration-user',
+      pathParams: { tenant, device: '17322c55-8461-54b1-9d68-c62afc8b6cc1' },
       headers: expect.objectContaining({ 'Idempotency-Key': operationId }),
       body: { expectedRevision: 3, user: null },
     }),

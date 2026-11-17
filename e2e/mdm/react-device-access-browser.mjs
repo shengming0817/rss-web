@@ -12,7 +12,8 @@ try {
   const { fixture: f, origin, checks } = run,
     p = await run.page()
   const button = (name) => p.getByRole('button', { name, exact: true }).filter({ visible: true })
-  const path = (value) => origin + value
+  const base = `/tenants/${f.tenant}`
+  const path = (value) => origin + base + value
   run.step('independent-login')
   await p.goto(path('/login'))
   await p.locator('#da-login').fill(f.login)
@@ -22,7 +23,9 @@ try {
   checks.push('independent-da-cookie-session-and-host-config')
   run.step('computer-directory-and-detail')
   const directory = p.waitForResponse(
-    (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/v1/device-views',
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === '/api/v1' + base + '/device-views',
   )
   await p.goto(path('/computers'))
   assert.equal((await directory).status(), 200)
@@ -75,7 +78,7 @@ try {
   const enterprise = p.waitForResponse(
     (r) =>
       r.request().method() === 'GET' &&
-      new URL(r.url()).pathname === '/api/v1/device-access/enterprise/configuration',
+      new URL(r.url()).pathname === '/api/v1' + base + '/device-access/enterprise/configuration',
   )
   await p.goto(path('/applications'))
   const response = await enterprise
@@ -83,7 +86,7 @@ try {
     blocked.push({ area: 'da-enterprise-success', status: 403, issue: 3138 })
   else assert.equal(response.status(), 200)
   const binding = await p.request.get(
-    path(`/api/v1/devices/${f.executionAccess.device}/device-access?limit=1`),
+    `${origin}/api/v1${base}/devices/${f.executionAccess.device}/device-access?limit=1`,
   )
   if (binding.status() === 403)
     blocked.push({ area: 'da-binding-and-material-success', status: 403, issue: 3138 })

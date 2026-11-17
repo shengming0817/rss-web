@@ -91,7 +91,11 @@ function setup() {
       return o.decode(replies.shift())
     },
   } as HttpTransport
-  return { client: createLiveClient(transport), requests, replies }
+  return {
+    client: createLiveClient(transport, '11111111-1111-4111-8111-111111111111'),
+    requests,
+    replies,
+  }
 }
 describe('native public DA adapters', () => {
   it('uses endpoint identity even when the directory contains associated views', async () => {
@@ -448,7 +452,7 @@ describe('native public DA adapters', () => {
       (await f.client.audit('33333333-3333-4333-8333-333333333333', null, signal)).items[0]?.device,
     ).toBe('33333333-3333-4333-8333-333333333333')
     await f.client.audit(null, 'cursor', signal)
-    expect(f.requests[2]?.path).toBe('/api/v1/audit-events')
+    expect(f.requests[2]?.path).toBe('/api/v1/tenants/{tenant}/audit-events')
   })
 })
 it('bounds candidate view models and rejects cross-device data and personal records', () => {

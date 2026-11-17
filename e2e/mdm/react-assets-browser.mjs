@@ -18,7 +18,7 @@ try {
   diagnosticPage = p
   p.on('request', (request) => {
     const path = new URL(request.url()).pathname
-    if (path.startsWith('/api/v1/groups/')) {
+    if (path.startsWith(`/api/v1/tenants/${run.fixture.tenant}/groups/`)) {
       groupRequests.push({ method: request.method(), path })
       if (groupRequests.length > 12) groupRequests.shift()
     }
@@ -98,7 +98,7 @@ try {
   }
   async function settleQuery(task, expectedDevice) {
     const state = await poll(
-      `/api/v1/device-queries/${task}`,
+      `/api/v1/tenants/${run.fixture.tenant}/device-queries/${task}`,
       () => p.getByRole('button', { name: '读取查询进度与结果', exact: true }).click(),
       (v) => v.asset,
       (v) => ['completed', 'failed'].includes(v.status),
@@ -111,15 +111,17 @@ try {
   }
   async function openGroup(id, name) {
     await run.nav(p, '/groups', '设备组')
-    await run.response(p, 'GET', '/api/v1/groups', () => run.directoryFilter(p, `id=='${id}'`))
+    await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/groups`, () =>
+      run.directoryFilter(p, `id=='${id}'`),
+    )
     const card = p.locator('.asset-group-card').filter({ hasText: name })
-    await run.response(p, 'GET', `/api/v1/groups/${id}`, () =>
+    await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/groups/${id}`, () =>
       card.getByRole('button', { name: '查看定义与成员 →', exact: true }).click(),
     )
   }
   async function settleGroup(id, task) {
     const value = await poll(
-      `/api/v1/groups/${id}/tasks/${task}`,
+      `/api/v1/tenants/${run.fixture.tenant}/groups/${id}/tasks/${task}`,
       () => p.getByRole('button', { name: '读取任务进度', exact: true }).click(),
       (v) => v,
       (v) => ['completed', 'failed', 'superseded'].includes(v.status),
@@ -129,7 +131,7 @@ try {
   }
   async function settleCompliance(id, task) {
     const value = await poll(
-      `/api/v1/compliance-rules/${id}/tasks/${task}`,
+      `/api/v1/tenants/${run.fixture.tenant}/compliance-rules/${id}/tasks/${task}`,
       () => p.getByRole('button', { name: '读取合规进度', exact: true }).first().click(),
       (v) => v,
       (v) => v.completed,
@@ -149,7 +151,7 @@ try {
       await run.response(
         p,
         'POST',
-        '/api/v1/device-queries',
+        `/api/v1/tenants/${run.fixture.tenant}/device-queries`,
         () => p.getByRole('button', { name: '运行资产查询', exact: true }).click(),
         202,
       )
@@ -158,12 +160,13 @@ try {
   const state = await settleQuery(accepted.task, f.mdm)
   assert.ok(state.summary.total >= 27)
   assert.equal(state.summary.matched, 1)
-  const fixedPath = `/api/v1/device-queries/${accepted.task}/items?limit=1`,
+  const fixedPath = `/api/v1/tenants/${run.fixture.tenant}/device-queries/${accepted.task}/items?limit=1`,
     fixed = (await api('GET', fixedPath)).asset,
-    live = (await api('GET', `/api/v1/devices/${f.mdm}/inventory`)).asset.device
+    live = (await api('GET', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/inventory`))
+      .asset.device
   await api(
     'PUT',
-    `/api/v1/devices/${f.mdm}/manual-fields/custom.asset_tag`,
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/manual-fields/custom.asset_tag`,
     operation(
       { action: 'set', value: { kind: 'string', value: 'fixture-updated' } },
       live.revisions['custom.asset_tag'],
@@ -171,8 +174,8 @@ try {
   )
   assert.deepEqual((await api('GET', fixedPath)).asset, fixed)
   assert.equal(
-    (await api('GET', `/api/v1/devices/${f.mdm}/inventory`)).asset.device.fields['custom.asset_tag']
-      .state.value.value,
+    (await api('GET', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/inventory`)).asset
+      .device.fields['custom.asset_tag'].state.value.value,
     'fixture-updated',
   )
   checks.push('real-async-full-authorized-query-and-immutable-results-distinct-from-live')
@@ -186,7 +189,7 @@ try {
     savedReplay,
     savedId,
     savedCommits = 0
-  const savedPattern = origin + '/api/v1/saved-queries/*'
+  const savedPattern = origin + `/api/v1/tenants/${run.fixture.tenant}/saved-queries/*`
   await intercept(savedPattern, async (route) => {
     if (route.request().method() !== 'PUT') return route.continue()
     const body = route.request().postDataJSON()
@@ -209,9 +212,15 @@ try {
   await p.getByRole('button', { name: '读取资产入口权限', exact: true }).click()
   await tab('字段目录')
   await tab('保存查询')
-  assert.equal(run.count(p, 'PUT', `/api/v1/saved-queries/${savedId}`), 1)
-  await run.response(p, 'PUT', `/api/v1/saved-queries/${savedId}`, () =>
-    p.getByRole('button', { name: '显式重提原保存查询变更', exact: true }).click(),
+  assert.equal(
+    run.count(p, 'PUT', `/api/v1/tenants/${run.fixture.tenant}/saved-queries/${savedId}`),
+    1,
+  )
+  await run.response(
+    p,
+    'PUT',
+    `/api/v1/tenants/${run.fixture.tenant}/saved-queries/${savedId}`,
+    () => p.getByRole('button', { name: '显式重提原保存查询变更', exact: true }).click(),
   )
   assert.deepEqual(savedReplay, savedOriginal)
   await p.unroute(savedPattern)
@@ -220,14 +229,14 @@ try {
   const savedExecution = await run.response(
     p,
     'POST',
-    `/api/v1/saved-queries/${savedId}/execute`,
+    `/api/v1/tenants/${run.fixture.tenant}/saved-queries/${savedId}/execute`,
     () => p.getByRole('button', { name: '执行已读取版本的保存查询', exact: true }).click(),
     202,
   )
   assert.equal(savedExecution.request().postDataJSON().expectedRevision, 1)
   const savedTask = (await savedExecution.json()).asset.task
   await settleQuery(savedTask)
-  const itemsPath = `/api/v1/device-queries/${savedTask}/items`
+  const itemsPath = `/api/v1/tenants/${run.fixture.tenant}/device-queries/${savedTask}/items`
   const firstPage = (
     await (
       await run.response(p, 'GET', itemsPath, () => visibleLabel('固定结果每页条目').fill('1'))
@@ -243,10 +252,12 @@ try {
     fixedPanel.getByRole('button', { name: '下一页', exact: true }).first().click(),
   )
   assert.equal(new URL(following.url()).searchParams.get('cursor'), firstPage.nextCursor)
-  const stored = (await api('GET', `/api/v1/saved-queries/${savedId}`)).asset.query
+  const stored = (
+    await api('GET', `/api/v1/tenants/${run.fixture.tenant}/saved-queries/${savedId}`)
+  ).asset.query
   await api(
     'PUT',
-    `/api/v1/saved-queries/${savedId}`,
+    `/api/v1/tenants/${run.fixture.tenant}/saved-queries/${savedId}`,
     operation(
       { action: 'put', definition: { ...stored.definition, name: 'React saved updated' } },
       stored.revision,
@@ -256,7 +267,7 @@ try {
   await run.response(
     p,
     'POST',
-    `/api/v1/saved-queries/${savedId}/execute`,
+    `/api/v1/tenants/${run.fixture.tenant}/saved-queries/${savedId}/execute`,
     () => p.getByRole('button', { name: '执行已读取版本的保存查询', exact: true }).click(),
     409,
   )
@@ -273,8 +284,11 @@ try {
   await p.getByRole('checkbox', { name: '允许手工录入', exact: true }).check()
   await run.choose(p, visibleLabel('添加字段来源'), 'manual')
   await p.getByRole('button', { name: '添加来源', exact: true }).click()
-  await run.response(p, 'PUT', '/api/v1/asset-fields/custom.react_ready', () =>
-    p.getByRole('button', { name: '保存字段新版本', exact: true }).click(),
+  await run.response(
+    p,
+    'PUT',
+    `/api/v1/tenants/${run.fixture.tenant}/asset-fields/custom.react_ready`,
+    () => p.getByRole('button', { name: '保存字段新版本', exact: true }).click(),
   )
   await p.getByRole('button', { name: '字段变更已确认，重新读取', exact: true }).click()
   await tab('展示布局')
@@ -284,7 +298,7 @@ try {
   const layoutFields = p.getByRole('group', { name: '自定义字段顺序', exact: true })
   await layoutFields.getByRole('button', { name: '添加', exact: true }).click()
   await visibleLabel('自定义字段顺序 1').fill('custom.react_ready')
-  await run.response(p, 'PUT', '/api/v1/asset-field-layout', () =>
+  await run.response(p, 'PUT', `/api/v1/tenants/${run.fixture.tenant}/asset-field-layout`, () =>
     p.getByRole('button', { name: '保存布局', exact: true }).click(),
   )
   await run.nav(p, `/devices/endpoint/${f.mdm}`, '设备详情')
@@ -294,7 +308,7 @@ try {
   const assignableField = await run.response(
     p,
     'GET',
-    '/api/v1/asset-fields/custom.react_ready',
+    `/api/v1/tenants/${run.fixture.tenant}/asset-fields/custom.react_ready`,
     () => p.getByRole('button', { name: '读取字段与写入版本', exact: true }).click(),
   )
   assert.equal((await assignableField.json()).asset.field.manual, true)
@@ -303,7 +317,7 @@ try {
   const assigned = await run.response(
     p,
     'PUT',
-    `/api/v1/devices/${f.mdm}/manual-fields/custom.react_ready`,
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/manual-fields/custom.react_ready`,
     () => p.getByRole('button', { name: '设置手工值', exact: true }).click(),
   )
   assert.deepEqual(assigned.request().postDataJSON().input, {
@@ -311,12 +325,11 @@ try {
     value: { kind: 'boolean', value: false },
   })
   assert.deepEqual(
-    (await api('GET', `/api/v1/devices/${f.mdm}/inventory`)).asset.device.fields[
-      'custom.react_ready'
-    ].state,
+    (await api('GET', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/inventory`)).asset
+      .device.fields['custom.react_ready'].state,
     { kind: 'known', value: { kind: 'boolean', value: false } },
   )
-  const listPath = `/api/v1/devices/${f.mdm}/inventory-lists/custom.browser_list`,
+  const listPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/inventory-lists/custom.browser_list`,
     namespaceList = () =>
       p
         .locator('.asset-editor-section')
@@ -361,7 +374,7 @@ try {
     const candidate = randomUUID()
     await api(
       'POST',
-      `/api/v1/groups/${candidate}`,
+      `/api/v1/tenants/${run.fixture.tenant}/groups/${candidate}`,
       operation({
         action: 'create',
         presentation: { name: `Asset candidate ${i}`, description: '' },
@@ -379,14 +392,14 @@ try {
   const candidateContinuation = p.waitForResponse(
     (r) =>
       r.request().method() === 'GET' &&
-      new URL(r.url()).pathname === '/api/v1/groups' &&
+      new URL(r.url()).pathname === `/api/v1/tenants/${run.fixture.tenant}/groups` &&
       new URL(r.url()).searchParams.has('cursor'),
   )
   await picker.getByRole('button', { name: '下一页', exact: true }).click()
   const nextCandidates = await candidateContinuation
   assert.equal(nextCandidates.status(), 200)
   assert.ok(new URL(nextCandidates.url()).searchParams.get('cursor'))
-  await run.response(p, 'GET', '/api/v1/groups', () =>
+  await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/groups`, () =>
     run.directoryFilter(picker, `id=='${staticGroup.id}'`),
   )
   await picker
@@ -411,7 +424,7 @@ try {
   const recomputeResponse = await run.response(
       p,
       'POST',
-      `/api/v1/groups/${nestedId}`,
+      `/api/v1/tenants/${run.fixture.tenant}/groups/${nestedId}`,
       () => p.getByRole('button', { name: '请求正式重算', exact: true }).click(),
       202,
     ),
@@ -420,7 +433,7 @@ try {
   await p.getByRole('button', { name: '读取此任务固定结果', exact: true }).click()
   const memberResult = await api(
     'GET',
-    `/api/v1/groups/${nestedId}/results/${recompute.task}/members`,
+    `/api/v1/tenants/${run.fixture.tenant}/groups/${nestedId}/results/${recompute.task}/members`,
   )
   assert.equal(memberResult.totalMembers, 0)
   assert.ok(
@@ -435,16 +448,22 @@ try {
   run.step('preview-separation-and-static-membership')
   await p.getByRole('button', { name: '任务已受理，重新读取组事实', exact: true }).click()
   await openGroup(nestedId, 'React nested assets')
-  const beforePreview = await api('GET', `/api/v1/groups/${nestedId}`)
+  const beforePreview = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/groups/${nestedId}`)
   await visibleLabel('设备组名称').fill('Unsaved title')
-  const previewResponse = await run.response(p, 'POST', '/api/v1/groups/previews', () =>
-      p.getByRole('button', { name: '预览当前条件样例（不保存）', exact: true }).click(),
+  const previewResponse = await run.response(
+      p,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/groups/previews`,
+      () => p.getByRole('button', { name: '预览当前条件样例（不保存）', exact: true }).click(),
     ),
     preview = await previewResponse.json()
   assert.equal(previewResponse.request().postDataJSON().editing.groupId, nestedId)
   assert.ok(preview.items.length <= 1000)
   assert.equal('task' in preview, false)
-  assert.equal((await api('GET', `/api/v1/groups/${nestedId}`)).memberSet, beforePreview.memberSet)
+  assert.equal(
+    (await api('GET', `/api/v1/tenants/${run.fixture.tenant}/groups/${nestedId}`)).memberSet,
+    beforePreview.memberSet,
+  )
   await openGroup(staticGroup.id, 'React empty source')
   const additions = p.getByRole('group', { name: '添加终端标识', exact: true })
   await additions.getByRole('button', { name: '添加', exact: true }).click()
@@ -453,7 +472,7 @@ try {
     await run.response(
       p,
       'POST',
-      `/api/v1/groups/${staticGroup.id}`,
+      `/api/v1/tenants/${run.fixture.tenant}/groups/${staticGroup.id}`,
       () => p.getByRole('button', { name: '提交成员增减', exact: true }).click(),
       202,
     )
@@ -462,7 +481,7 @@ try {
   await settleGroup(staticGroup.id, members.task)
   const addedMembers = await api(
     'GET',
-    `/api/v1/groups/${staticGroup.id}/results/${members.task}/members`,
+    `/api/v1/tenants/${run.fixture.tenant}/groups/${staticGroup.id}/results/${members.task}/members`,
   )
   assert.equal(addedMembers.totalMembers, 1)
   assert.deepEqual(addedMembers.page.items, [{ kind: 'endpoint', id: f.mdm }])
@@ -502,7 +521,10 @@ try {
   checks.push('design-218-sidebar-58-topbar-group-cards-mobile-and-dark')
 
   run.step('compliance-rule-task-current-and-history')
-  const beforeRules = await api('GET', `/api/v1/devices/${f.alone}/compliance`)
+  const beforeRules = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.alone}/compliance`,
+  )
   assert.equal(beforeRules.reason, 'no_rules')
   assert.equal(beforeRules.status, 'unknown')
   await run.nav(p, '/compliance', '安全与合规')
@@ -520,7 +542,7 @@ try {
   const ruleResponse = await creatingRule
   assert.equal(ruleResponse.status(), 200)
   const rule = await ruleResponse.json(),
-    rulePath = `/api/v1/compliance-rules/${rule.id}`
+    rulePath = `/api/v1/tenants/${run.fixture.tenant}/compliance-rules/${rule.id}`
   assert.notEqual(rule.task, ruleResponse.request().postDataJSON().operationId)
   await settleCompliance(rule.id, rule.task)
   await p.getByRole('button', { name: '原规则操作已确认，重新读取', exact: true }).click()
@@ -553,13 +575,13 @@ try {
   await visibleLabel('终端标识').fill(f.mdm)
   await p.getByRole('button', { name: '读取此终端合规', exact: true }).click()
   const current = await poll(
-    `/api/v1/devices/${f.mdm}/compliance`,
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/compliance`,
     () => p.getByRole('button', { name: '读取设备当前合规', exact: true }).click(),
     (v) => v,
     (v) => v.rules.some((r) => r.ruleId === rule.id && r.current?.ruleVersion === 2),
   )
   assert.equal(current.rules.find((r) => r.ruleId === rule.id).current.status, 'non_compliant')
-  const historyPath = `/api/v1/devices/${f.mdm}/compliance/history`
+  const historyPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/compliance/history`
   await visibleLabel('历史每页条目').fill('1')
   const history = await (
     await run.response(p, 'GET', historyPath, () =>
@@ -625,12 +647,15 @@ try {
   run.step('mapping-fixed-version-and-content-recovery')
   const resources = await api(
       'GET',
-      '/api/v1/resources?' +
+      `/api/v1/tenants/${run.fixture.tenant}/resources?` +
         new URLSearchParams({ filter: 'kind==native_collection', limit: '1000' }),
     ),
     sourceId = resources.items[0]?.id
   assert.ok(sourceId)
-  const source = await api('GET', `/api/v1/resources/${encodeURIComponent(sourceId)}`)
+  const source = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/resources/${encodeURIComponent(sourceId)}`,
+  )
   await run.nav(p, '/inventory', '资产查询')
   await tab('采集映射')
   await visibleLabel('服务端筛选').fill(`id=='${sourceId}'`)
@@ -640,8 +665,11 @@ try {
   await visibleLabel('新固定版本名称').fill(version)
   await visibleLabel('JSON 指针').first().fill('/fixture')
   await p.getByRole('button', { name: '准备新版本内容与摘要', exact: true }).click()
-  await run.response(p, 'POST', `/api/v1/resources/${encodeURIComponent(sourceId)}`, () =>
-    p.getByRole('button', { name: '声明新固定版本', exact: true }).click(),
+  await run.response(
+    p,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/resources/${encodeURIComponent(sourceId)}`,
+    () => p.getByRole('button', { name: '声明新固定版本', exact: true }).click(),
   )
   await tab('字段目录')
   await tab('采集映射')
@@ -652,7 +680,9 @@ try {
     let uploadPath,
       firstBegin = true,
       beginCommitted = false
-    const pattern = origin + `/api/v1/resources/${encodeURIComponent(sourceId)}/uploads/*`
+    const pattern =
+      origin +
+      `/api/v1/tenants/${run.fixture.tenant}/resources/${encodeURIComponent(sourceId)}/uploads/*`
     await intercept(pattern, async (route) => {
       if (
         route.request().method() === 'POST' &&
@@ -690,13 +720,16 @@ try {
       () => card.getByRole('button', { name: '完成原上传', exact: true }).click(),
       201,
     )
-    const receiptPath = `/api/v1/resources/${encodeURIComponent(sourceId)}/content/operations/${uploadPath.split('/').at(-1)}`
+    const receiptPath = `/api/v1/tenants/${run.fixture.tenant}/resources/${encodeURIComponent(sourceId)}/content/operations/${uploadPath.split('/').at(-1)}`
     const receipt = await api('GET', receiptPath)
     assert.equal(receipt.committed, true)
     assert.equal(receipt.version, version)
     await p.unroute(pattern)
   }
-  const updated = await api('GET', `/api/v1/resources/${encodeURIComponent(sourceId)}`),
+  const updated = await api(
+      'GET',
+      `/api/v1/tenants/${run.fixture.tenant}/resources/${encodeURIComponent(sourceId)}`,
+    ),
     fixedVersion = updated.versions.find((v) => v.id === version)
   assert.equal(fixedVersion.state, 'frozen')
   assert.equal(fixedVersion.variants.length, source.versions[0].variants.length)
@@ -709,7 +742,7 @@ try {
   await visibleLabel('精确资源标识').fill(sourceId)
   await p.getByRole('button', { name: '读取精确资源', exact: true }).click()
   await run.choose(p, visibleLabel('资源固定版本'), `${version} · frozen`)
-  const resourceReferencePath = `/api/v1/resources/${encodeURIComponent(sourceId)}/versions/${encodeURIComponent(version)}/references`
+  const resourceReferencePath = `/api/v1/tenants/${run.fixture.tenant}/resources/${encodeURIComponent(sourceId)}/versions/${encodeURIComponent(version)}/references`
   const resourceReferences = await run.response(p, 'GET', resourceReferencePath, () =>
     p.getByRole('button', { name: '读取资源引用', exact: true }).click(),
   )
@@ -725,7 +758,7 @@ try {
   const fieldReferences = await run.response(
     p,
     'GET',
-    `/api/v1/asset-fields/${encodeURIComponent(mappedField)}/references`,
+    `/api/v1/tenants/${run.fixture.tenant}/asset-fields/${encodeURIComponent(mappedField)}/references`,
     () => p.getByRole('button', { name: '读取影响', exact: true }).click(),
   )
   assert.equal(fieldReferences.status(), 200)
@@ -739,39 +772,59 @@ try {
     ),
   )
   await p.getByRole('cell', { name: sourceId, exact: true }).first().waitFor()
-  const registration = await api('GET', `/api/v1/devices/${f.agent}/registration`)
+  const registration = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.agent}/registration`,
+  )
   assert.equal(registration.deviceId, f.agent)
   assert.equal(typeof registration.certificateGrantId, 'string')
   checks.push('real-device-registration-summary-and-certificate-grant-binding')
 
   run.step('associated-conflict-missing-and-authorization')
-  const mdm = await api('GET', `/api/v1/devices/${f.mdm}`),
-    agent = await api('GET', `/api/v1/devices/${f.agent}`),
+  const mdm = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}`),
+    agent = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.agent}`),
     primary = (device, channel) => {
       assert.equal(device.channel, channel)
       assert.equal(device.status, 'active')
       return { device: device.id, channel }
     }
-  const association = await api('POST', '/api/v1/device-associations', {
-    operationId: randomUUID(),
-    associationId: null,
-    expectedVersion: 0,
-    mdm: primary(mdm, 'mdm'),
-    agent: primary(agent, 'agent'),
-    evidence: 'Synthetic independently identified fixture endpoints',
-  })
+  const association = await api(
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/device-associations`,
+    {
+      operationId: randomUUID(),
+      associationId: null,
+      expectedVersion: 0,
+      mdm: primary(mdm, 'mdm'),
+      agent: primary(agent, 'agent'),
+      evidence: 'Synthetic independently identified fixture endpoints',
+    },
+  )
   await run.nav(p, `/devices/association/${association.id}`, '设备详情')
   await tab('资产信息')
-  const associated = await api('GET', `/api/v1/device-views/association/${association.id}`)
+  const associated = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/device-views/association/${association.id}`,
+  )
   assert.equal(associated.fields['custom.asset_tag'].state.kind, 'conflict')
   await p.getByText('数据冲突', { exact: true }).first().waitFor()
-  assert.equal((await p.request.get(origin + `/api/v1/devices/${f.foreignDevice}`)).status(), 404)
-  const otherDevice = await api('GET', `/api/v1/devices/${f.alone}/compliance`)
+  assert.equal(
+    (
+      await p.request.get(
+        origin + `/api/v1/tenants/${run.fixture.tenant}/devices/${f.foreignDevice}`,
+      )
+    ).status(),
+    404,
+  )
+  const otherDevice = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.alone}/compliance`,
+  )
   assert.ok(['unknown', 'non_compliant', 'not_applicable', 'pending'].includes(otherDevice.status))
   const hiddenReferenceRule = randomUUID()
   await api(
     'PUT',
-    `/api/v1/compliance-rules/${hiddenReferenceRule}`,
+    `/api/v1/tenants/${run.fixture.tenant}/compliance-rules/${hiddenReferenceRule}`,
     operation({
       presentation: { name: 'Hidden dependency' },
       enabled: false,
@@ -785,9 +838,9 @@ try {
       },
     }),
   )
-  const authorization = (await api('GET', '/api/v1/authorization/rules')).items.find(
-    (rule) => rule.id === f.ruleId,
-  )
+  const authorization = (
+    await api('GET', `/api/v1/tenants/${run.fixture.tenant}/authorization/rules`)
+  ).items.find((rule) => rule.id === f.ruleId)
   const reduced = f.rule.grants.filter(
     (grant) =>
       ![
@@ -797,12 +850,15 @@ try {
         'inventory_fields_write',
       ].includes(grant.operation),
   )
-  await api('PUT', `/api/v1/authorization/rules/${f.ruleId}`, {
+  await api('PUT', `/api/v1/tenants/${run.fixture.tenant}/authorization/rules/${f.ruleId}`, {
     operationId: randomUUID(),
     expectedRevision: authorization.revision,
     value: { ...f.rule, grants: reduced },
   })
-  const references = await api('GET', `/api/v1/groups/${candidates[0]}/references`)
+  const references = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/groups/${candidates[0]}/references`,
+  )
   assert.ok(
     references.items.some(
       (item) =>
@@ -812,21 +868,24 @@ try {
     ),
   )
   assert.equal('deletionBlocked' in references, false)
-  const impacts = await api('GET', `/api/v1/groups/${candidates[0]}/impacts`)
+  const impacts = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/groups/${candidates[0]}/impacts`,
+  )
   assert.equal(impacts.items.length, 0)
   await openGroup(candidates[0], 'Asset candidate 0')
   await p.getByRole('cell', { name: hiddenReferenceRule, exact: true }).waitFor()
   assert.equal(await p.getByRole('button', { name: '删除设备组', exact: true }).isDisabled(), true)
   await api(
     'PUT',
-    '/api/v1/asset-fields/custom.react_ready',
+    `/api/v1/tenants/${run.fixture.tenant}/asset-fields/custom.react_ready`,
     operation({ action: 'delete' }, 1),
     403,
   )
-  const latestAuthority = (await api('GET', '/api/v1/authorization/rules')).items.find(
-    (rule) => rule.id === f.ruleId,
-  )
-  await api('PUT', `/api/v1/authorization/rules/${f.ruleId}`, {
+  const latestAuthority = (
+    await api('GET', `/api/v1/tenants/${run.fixture.tenant}/authorization/rules`)
+  ).items.find((rule) => rule.id === f.ruleId)
+  await api('PUT', `/api/v1/tenants/${run.fixture.tenant}/authorization/rules/${f.ruleId}`, {
     operationId: randomUUID(),
     expectedRevision: latestAuthority.revision,
     value: f.rule,
@@ -839,7 +898,7 @@ try {
   ]) {
     const collectionResource = randomUUID(),
       collectionPolicy = randomUUID(),
-      collectionPath = '/api/v1/resources/' + collectionResource
+      collectionPath = `/api/v1/tenants/${run.fixture.tenant}/resources/` + collectionResource
     const sourceResource = await api(
       'POST',
       collectionPath,
@@ -861,7 +920,7 @@ try {
     )
     const installed = await api(
       'POST',
-      '/api/v1/policies/' + collectionPolicy,
+      `/api/v1/tenants/${run.fixture.tenant}/policies/` + collectionPolicy,
       operation({
         action: 'put',
         enabled: true,
@@ -921,7 +980,7 @@ try {
         ? { kind: 'device' }
         : { kind: 'macos_applications', root: 'local', uid: null }
     const inventoryPath =
-      '/api/v1/devices/' +
+      `/api/v1/tenants/${run.fixture.tenant}/devices/` +
       collector +
       '/inventory?' +
       new URLSearchParams({ scope: JSON.stringify(namespace) })
@@ -938,7 +997,7 @@ try {
     }
     await api(
       'POST',
-      '/api/v1/policies/' + collectionPolicy,
+      `/api/v1/tenants/${run.fixture.tenant}/policies/` + collectionPolicy,
       operation({ action: 'disable' }, installed.revision),
     )
   }
@@ -947,7 +1006,7 @@ try {
   for (const [index, group] of overlappingGroups.entries()) {
     const created = await api(
       'POST',
-      '/api/v1/groups/' + group,
+      `/api/v1/tenants/${run.fixture.tenant}/groups/` + group,
       operation({
         action: 'create',
         presentation: { name: 'Software overlap ' + index, description: '' },
@@ -957,7 +1016,7 @@ try {
     )
     const membership = await api(
       'POST',
-      '/api/v1/groups/' + group,
+      `/api/v1/tenants/${run.fixture.tenant}/groups/` + group,
       operation(
         {
           action: 'members',
@@ -969,7 +1028,10 @@ try {
       202,
     )
     for (let attempt = 0; attempt < 60; attempt++) {
-      const result = await api('GET', '/api/v1/groups/' + group + '/tasks/' + membership.task)
+      const result = await api(
+        'GET',
+        `/api/v1/tenants/${run.fixture.tenant}/groups/` + group + '/tasks/' + membership.task,
+      )
       if (result.status === 'completed') break
       assert.ok(attempt < 59, 'software group publication deadline')
       await new Promise((done) => setTimeout(done, 250))
@@ -992,7 +1054,7 @@ try {
   async function chooseOverlap(container) {
     await container.getByRole('button', { name: '选择同域设备组', exact: true }).click()
     for (const id of overlappingGroups) {
-      await run.response(p, 'GET', '/api/v1/groups', () =>
+      await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/groups`, () =>
         run.directoryFilter(container, `id=='${id}'`),
       )
       await container
@@ -1005,7 +1067,7 @@ try {
   }
   await chooseOverlap(endpointAssessment)
   let standard
-  const standardPattern = '**/api/v1/standard-software/*'
+  const standardPattern = `**/api/v1/tenants/${run.fixture.tenant}/standard-software/*`
   await intercept(standardPattern, async (route) => {
     if (route.request().method() !== 'PUT') return route.continue()
     const response = await route.fetch()
@@ -1029,7 +1091,9 @@ try {
   const mappingSaved = p.waitForResponse(
     (response) =>
       response.request().method() === 'PUT' &&
-      new URL(response.url()).pathname.startsWith('/api/v1/software-mappings/'),
+      new URL(response.url()).pathname.startsWith(
+        `/api/v1/tenants/${run.fixture.tenant}/software-mappings/`,
+      ),
   )
   await assetButton('保存映射').click()
   assert.equal((await mappingSaved).status(), 200)
@@ -1045,14 +1109,14 @@ try {
     const accepted = await run.response(
       p,
       'POST',
-      '/api/v1/software-asset-queries',
+      `/api/v1/tenants/${run.fixture.tenant}/software-asset-queries`,
       () => assetButton('提交软件查询').click(),
       202,
     )
     const task = (await accepted.json()).asset.task
     assert.ok(task)
     const state = await poll(
-      '/api/v1/software-asset-queries/' + task,
+      `/api/v1/tenants/${run.fixture.tenant}/software-asset-queries/` + task,
       () => assetButton('读取任务状态').click(),
       (value) => value.asset.response,
       (value) => value.status === 'completed' || value.status === 'failed',
@@ -1061,7 +1125,10 @@ try {
     assert.equal(state.coordinates.context, domain)
     await assetButton('Browser standard editor').click()
     const bucket = (
-      await api('GET', '/api/v1/software-asset-queries/' + task + '/software')
+      await api(
+        'GET',
+        `/api/v1/tenants/${run.fixture.tenant}/software-asset-queries/` + task + '/software',
+      )
     ).asset.response.items.find((row) => row.identity.id === standard)
     assert.equal(bucket.devices, 1)
     const renderedBucket = p.getByRole('row').filter({ hasText: 'Browser standard editor' })
@@ -1072,7 +1139,10 @@ try {
       assert.equal(bucket.compliance.compliant, 1)
     }
     const base =
-      '/api/v1/software-asset-queries/' + task + '/software/' + encodeURIComponent(bucket.id)
+      `/api/v1/tenants/${run.fixture.tenant}/software-asset-queries/` +
+      task +
+      '/software/' +
+      encodeURIComponent(bucket.id)
     const evidencePattern = '**/evidence*'
     if (domain === 'endpoint')
       await intercept(evidencePattern, async (route) => {
@@ -1145,16 +1215,19 @@ try {
     const coverage = await run.response(
       p,
       'GET',
-      '/api/v1/software-asset-queries/' + task + '/coverage',
+      `/api/v1/tenants/${run.fixture.tenant}/software-asset-queries/` + task + '/coverage',
       () => assetButton('查看覆盖质量').click(),
     )
     assert.equal((await coverage.json()).asset.response.task, task)
     await assetButton('释放结果').click()
-    await run.response(p, 'POST', '/api/v1/software-asset-queries/' + task + '/release', () =>
-      p.getByRole('button', { name: '确定', exact: true }).filter({ visible: true }).click(),
+    await run.response(
+      p,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/software-asset-queries/` + task + '/release',
+      () => p.getByRole('button', { name: '确定', exact: true }).filter({ visible: true }).click(),
     )
     await poll(
-      '/api/v1/software-asset-queries/' + task,
+      `/api/v1/tenants/${run.fixture.tenant}/software-asset-queries/` + task,
       () => assetButton('读取任务状态').click(),
       (value) => value.asset.response,
       (value) => value.resultState === 'released',
@@ -1163,8 +1236,8 @@ try {
     await assetButton('Browser standard editor').waitFor({ state: 'hidden' })
   }
   assert.equal(
-    (await api('GET', '/api/v1/standard-software/' + standard)).asset.response.record.definition
-      .risk,
+    (await api('GET', `/api/v1/tenants/${run.fixture.tenant}/standard-software/` + standard)).asset
+      .response.record.definition.risk,
     'medium',
   )
   checks.push('real-software-asset-standard-mapping-two-query-domains-coverage-and-release')
@@ -1181,7 +1254,10 @@ try {
   checks.push('software-asset-bilingual-keyboard-mobile-and-dark')
 
   const anonymous = await run.page()
-  assert.equal((await anonymous.request.get(origin + '/api/v1/groups')).status(), 401)
+  assert.equal(
+    (await anonymous.request.get(origin + `/api/v1/tenants/${run.fixture.tenant}/groups`)).status(),
+    401,
+  )
   checks.push(
     'real-associated-conflict-foreign-tenant-404-denied-403-anonymous-401-and-minimal-blocker-identity-with-empty-filtered-impacts',
   )
