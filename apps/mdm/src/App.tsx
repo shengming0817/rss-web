@@ -9,7 +9,7 @@ import { DeviceAccess } from './DeviceAccess'
 import { ReadEpoch } from './AdminUi'
 import { DirectoryCatalogContext } from './DirectorySearch'
 import { Policies } from './Policies'
-import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
+import { Activity, useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import {
   Alert,
@@ -529,13 +529,13 @@ function Protected({ runtime, locale, children }: Ui & { children: ReactNode }) 
   const state = useSession(runtime),
     t = messages(locale),
     operation = useOperation(locale)
-  if (state.status === 'checking')
-    return (
-      <div className="center-state" role="status">
-        <Spin />
-        <p>{t.checking}</p>
-      </div>
-    )
+  const checking = (
+    <div className="center-state" role="status">
+      <Spin />
+      <p>{t.checking}</p>
+    </div>
+  )
+  if (state.status === 'checking') return checking
   if (state.status === 'unavailable')
     return (
       <Result
@@ -554,7 +554,12 @@ function Protected({ runtime, locale, children }: Ui & { children: ReactNode }) 
     )
   if (state.status !== 'authenticated' || state.tenant !== runtime.tenant)
     return <Navigate to={runtime.login} replace />
-  return children
+  return (
+    <>
+      {state.revalidating && checking}
+      <Activity mode={state.revalidating ? 'hidden' : 'visible'}>{children}</Activity>
+    </>
+  )
 }
 function Navigation({ runtime, locale, close }: Ui & { close: () => void }) {
   const t = messages(locale),

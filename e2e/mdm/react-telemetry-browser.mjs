@@ -304,7 +304,9 @@ try {
   })
   const policy = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/policies/${policyId}`)
   for (let attempt = 0; ; attempt++) {
-    const scope = await page.request.get(`${origin}/api/v1/policies/${policyId}/scope`)
+    const scope = await page.request.get(
+      `${origin}/api/v1/tenants/${run.fixture.tenant}/policies/${policyId}/scope`,
+    )
     assert.ok(scope.status() === 200 || scope.status() === 503)
     if (scope.status() === 200 && (await scope.json()).resolution !== null) break
     await scope.dispose()

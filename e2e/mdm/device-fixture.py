@@ -187,7 +187,9 @@ try:
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     storage(environment, binary, config, TENANTS[0])
     if browser_module == 'react-software-browser.mjs':
-        config['publication']['sources'] = [dict(name='internal', credentials={}, target=dict(Winget=dict(base=initialized['origin']+'/api/v1/software/native/sources/internal/', artifacts_base=initialized['origin']+'/api/v1/software/native/sources/internal/artifacts/')))]
+        source_base = initialized['origin'] + '/api/v1/tenants/{tenant}/software/native/sources/internal/'
+        config['publication']['sources'] = [dict(name='internal', credentials={},
+            target=dict(Winget=dict(base=source_base, artifacts_base=source_base+'artifacts/')))]
         import socket, threading, hashlib
         from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
         payload = b'abc'
@@ -377,7 +379,10 @@ try:
         foreign_grant = str(uuid.uuid4())
         environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','316fdd38-45b8-529e-b278-8baccd6aa0e2','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','316fdd38-45b8-529e-b278-8baccd6aa0e2','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
     agent_fixture = None
-    if browser_module not in {'react-device-access-browser.mjs', 'react-devices-browser.mjs'}:
+    if browser_module not in {
+        'react-device-access-browser.mjs', 'react-devices-browser.mjs',
+        'react-policy-browser.mjs', 'react-software-browser.mjs',
+    }:
         phase = 'collector-registration'
         module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
         collector = importlib.util.module_from_spec(module)

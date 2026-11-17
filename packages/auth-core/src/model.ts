@@ -74,6 +74,7 @@ export interface AuthPort {
 }
 export interface SessionState {
   readonly status: 'anonymous' | 'checking' | 'authenticated' | 'unavailable'
+  readonly revalidating: boolean
   readonly tenant: string | null
   readonly session: Session | null
   readonly identity: Identity | null

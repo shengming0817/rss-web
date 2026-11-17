@@ -3,6 +3,32 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { realBrowser } from './react-mdm-browser.mjs'
 
+async function holdRead(page, url) {
+  const received = Promise.withResolvers()
+  const release = Promise.withResolvers()
+  const settled = Promise.withResolvers()
+  await page.route(
+    url,
+    async (route) => {
+      let response
+      try {
+        response = await route.fetch({ maxRetries: 0 })
+        received.resolve(response.status())
+        await release.promise
+        await route.fulfill({ response })
+      } catch {
+        received.resolve(undefined)
+        await route.abort('failed').catch(() => undefined)
+      } finally {
+        await response?.dispose().catch(() => undefined)
+        settled.resolve()
+      }
+    },
+    { times: 1 },
+  )
+  return { received: received.promise, release: release.resolve, settled: settled.promise }
+}
+
 const run = await realBrowser('MDM_SHARED_BROWSER_FIXTURE', 'react-shared-tenant', {
   ignoreDefaultArgs: ['--disable-back-forward-cache'],
 })
@@ -64,7 +90,22 @@ try {
   await retainedA.getByRole('button', { name: '保存意图', exact: true }).waitFor()
 
   await run.choose(a, a.getByRole('combobox', { name: '邮件', exact: true }), '显式跳过')
-  await a.getByRole('textbox', { name: '邮件 跳过原因', exact: true }).fill('A-only unsaved draft')
+  const draft = a.getByRole('textbox', { name: '邮件 跳过原因', exact: true })
+  await draft.fill('A-only unsaved draft')
+  const validation = await holdRead(
+    a,
+    origin + '/api/v1/identity' + path(fixture.tenant) + '/session',
+  )
+  await a.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  try {
+    assert.equal(await validation.received, 200)
+    await draft.waitFor({ state: 'hidden' })
+  } finally {
+    validation.release()
+  }
+  await draft.waitFor()
+  assert.equal(await draft.inputValue(), 'A-only unsaved draft')
+  checks.push('same-session-revalidation-retains-draft')
 
   run.step('provision-original-operation')
   await manager.goto(origin + '/platform/login')
@@ -77,16 +118,13 @@ try {
   await dialog.getByLabel('初始管理员登录名', { exact: true }).fill('tenant-admin')
   await dialog.getByLabel('初始管理员密码', { exact: true }).fill(password)
   const provisioning = '/api/v1/tenant-administration/provisionings'
-  let operation,
-    writes = 0,
-    intercepted
+  let operation, intercepted
   const submission = new Promise((resolve) => {
     intercepted = resolve
   })
   const lose = async (route) => {
     if (route.request().method() !== 'POST') return route.fallback().catch(() => undefined)
     operation = route.request().headers()['idempotency-key']
-    writes++
     let status
     try {
       const response = await route.fetch({ maxRetries: 0 })
@@ -122,7 +160,7 @@ try {
     await entry.waitFor({ timeout: 1200 }).catch(() => undefined)
   }
   assert.ok(await entry.count(), 'provisioning entry missing after ' + progress?.phase)
-  assert.equal(writes, 1)
+  assert.equal(run.count(manager, 'POST', provisioning), 1)
   assert.ok(operation)
   const href = await entry.getAttribute('href')
   assert.match(href, /^\/tenants\/[0-9a-f-]{36}$/)
@@ -133,6 +171,9 @@ try {
   checks.push('original-provisioning-read-without-write-replay')
 
   run.step('tenant-b')
+  const lateRead = await holdRead(retainedA, api(fixture.tenant, '/settings/first-use'))
+  await retainedA.getByRole('button', { name: '刷新当前状态', exact: true }).click()
+  assert.equal(await lateRead.received, 200)
   await entry.click()
   await manager.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
   await a.goto(origin + href)
@@ -161,7 +202,14 @@ try {
   await retainedA.bringToFront()
   // Headless Chromium can keep both tabs visible. Exercise the same visibility handler.
   await retainedA.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
-  await retainedA.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
+  try {
+    await retainedA.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
+  } finally {
+    lateRead.release()
+  }
+  await lateRead.settled
+  assert.equal(await retainedA.getByRole('heading', { name: '租户初始化', exact: true }).count(), 0)
+  checks.push('tenant-change-fences-in-flight-old-response')
   await a.bringToFront()
   await a.goto(origin + path(fixture.tenant) + '/setup')
   await a.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()

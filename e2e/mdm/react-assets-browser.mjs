@@ -357,12 +357,11 @@ try {
 
   run.step('empty-static-and-nested-rule-authoring')
   await run.nav(p, '/groups', '设备组')
+  const groupDefinition = new RegExp(`^/api/v1/tenants/${f.tenant}/groups/[a-f0-9-]+$`)
   await p.getByRole('button', { name: '新建设备组', exact: true }).click()
   await visibleLabel('设备组名称').fill('React empty source')
   const createdStaticResponse = p.waitForResponse(
-    (r) =>
-      r.request().method() === 'POST' &&
-      /^\/api\/v1\/groups\/[a-f0-9-]+$/.test(new URL(r.url()).pathname),
+    (r) => r.request().method() === 'POST' && groupDefinition.test(new URL(r.url()).pathname),
   )
   await p.getByRole('button', { name: '创建设备组', exact: true }).click()
   const staticResponse = await createdStaticResponse
@@ -408,9 +407,7 @@ try {
     .getByRole('button', { name: '使用此组', exact: true })
     .click()
   const nestedAcceptedResponse = p.waitForResponse(
-    (r) =>
-      r.request().method() === 'POST' &&
-      /^\/api\/v1\/groups\/[a-f0-9-]+$/.test(new URL(r.url()).pathname),
+    (r) => r.request().method() === 'POST' && groupDefinition.test(new URL(r.url()).pathname),
   )
   await p.getByRole('button', { name: '创建设备组', exact: true }).click()
   const nestedResponse = await nestedAcceptedResponse
@@ -536,7 +533,9 @@ try {
   const creatingRule = p.waitForResponse(
     (r) =>
       r.request().method() === 'PUT' &&
-      /^\/api\/v1\/compliance-rules\/[a-f0-9-]+$/.test(new URL(r.url()).pathname),
+      new RegExp(`^/api/v1/tenants/${f.tenant}/compliance-rules/[a-f0-9-]+$`).test(
+        new URL(r.url()).pathname,
+      ),
   )
   await p.getByRole('button', { name: '保存合规规则新版本', exact: true }).click()
   const ruleResponse = await creatingRule

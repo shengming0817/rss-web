@@ -32,6 +32,44 @@ RECOVERY = BACKEND / 'artifacts/dev-environment' / (
 MARKER = RECOVERY / 'owner.json'
 
 
+def publish_private(path, value):
+    staged = path.with_suffix(path.suffix + '.pending')
+    try:
+        private(staged, value)
+        staged.replace(path)
+    finally:
+        staged.unlink(missing_ok=True)
+
+
+def open_installation(root, project):
+    compose = root / 'production.compose.yaml'
+    # The fixture owns Compose interpolation. Preserve the Docker client's connection environment.
+    variables = re.findall(r'\$\{(MDM_[A-Z0-9_]+)', compose.read_text())
+    for key in {*variables, 'COMPOSE_PROFILES', 'COMPOSE_ENV_FILES', 'COMPOSE_DISABLE_ENV_FILE'}:
+        os.environ.pop(key, None)
+    return Installation(root, compose, project)
+
+
+def report_readiness(owner, browser):
+    for service in ('server', 'gateway', 'maintenance'):
+        try:
+            capture = subprocess.run(
+                [*owner.prefix, '-f', str(owner.ports_file), 'logs', '--no-color', '--tail', '16', service],
+                check=True, capture_output=True, text=True, timeout=15,
+            )
+            categories = re.findall(r'\|\s+([a-z_]+(?:[.][a-z_]+)+: [a-z_ ]+)\s*$', capture.stdout, re.MULTILINE)
+            print(json.dumps(dict(phase='readiness-diagnostic', service=service, categories=categories)), flush=True)
+        except (OSError, subprocess.SubprocessError, UnicodeError) as error:
+            print(json.dumps(dict(phase='readiness-diagnostic', service=service,
+                classification=type(error).__name__)), flush=True)
+    try:
+        status, reply = browser.call('GET', '/readyz')
+        print(json.dumps(dict(phase='readiness-response', status=status,
+            observed=isinstance(reply, dict) and 'observation' in reply)), flush=True)
+    except Exception as error:
+        print(json.dumps(dict(phase='readiness-response', classification=type(error).__name__)), flush=True)
+
+
 def cleanup():
     if not MARKER.exists():
         return
@@ -40,7 +78,7 @@ def cleanup():
     if value['web'] != str(WEB) or not root.name.startswith('rss-web-shared-') or not re.fullmatch(r'mdm-web-shared-[0-9a-f]{12}', project):
         raise RuntimeError('foreign Compose owner')
     if (root / '.env').exists():
-        owner = Installation(root, root / 'production.compose.yaml', project)
+        owner = open_installation(root, project)
         ports = root / 'gateway-ports.compose.yaml'
         if ports.exists():
             owner.ports_file = ports
@@ -68,10 +106,18 @@ def install():
     ui = image_identity(os.environ['MDM_REACT_ADMIN_WEB_IMAGE'])
     if f"{ui['os']}/{ui['architecture']}" != manifest['platform']:
         raise RuntimeError('Web image platform differs from fixed MDM candidate')
-    project = 'mdm-web-shared-' + uuid.uuid4().hex[:12]
-    root = Path(tempfile.mkdtemp(prefix='rss-web-shared-'))
+    identifier = uuid.uuid4().hex[:12]
+    project = 'mdm-web-shared-' + identifier
+    root = Path(tempfile.gettempdir()) / ('rss-web-shared-' + identifier)
+    if root.exists():
+        raise RuntimeError('temporary installation directory already exists')
     RECOVERY.mkdir(parents=True, exist_ok=True, mode=0o700)
-    private(MARKER, dict(web=str(WEB), root=str(root), project=project))
+    try:
+        root.mkdir(mode=0o700)
+        publish_private(MARKER, dict(web=str(WEB), root=str(root), project=project))
+    finally:
+        if not MARKER.exists() and root.exists():
+            root.rmdir()
     inputs = root / 'inputs'
     inputs.mkdir(mode=0o700)
     tls(inputs)
@@ -105,13 +151,20 @@ def install():
         MDM_PRODUCT_ORIGIN=origin, MDM_PG_MAX_CONNECTIONS=160,
         MDM_GATEWAY_BIND_IP='127.0.0.1', **network.allocate(),
     )
-    private(root / '.env', ''.join(f'{key}={value}\n' for key, value in values.items()))
-    owner = Installation(root, root / 'production.compose.yaml', project)
+    publish_private(root / '.env', ''.join(f'{key}={value}\n' for key, value in values.items()))
+    owner = open_installation(root, project)
+    services = json.loads(owner.compose('config', '--format', 'json'))['services']
+    for service, key in (
+        ('postgres', 'POSTGRES'), ('init', 'INSTALLER'), ('maintenance', 'INSTALLER'),
+        ('server', 'SERVER'), ('gateway', 'GATEWAY'), ('web', 'WEB'),
+    ):
+        if services[service]['image'] != values[f'MDM_{key}_IMAGE']:
+            raise RuntimeError('Compose image differs from fixed input: ' + service)
     owner.compose('up', '-d', 'postgres')
     owner.compose('run', '--rm', 'init')
     exported = owner.read('/var/lib/rss-mdm/runtime/gateway/gateway-ports.compose.yaml')
     owner.ports_file = root / 'gateway-ports.compose.yaml'
-    owner.ports_file.write_text(exported)
+    publish_private(owner.ports_file, exported)
     model = json.loads(owner.compose('config', '--format', 'json'))
     spec = importlib.util.spec_from_file_location('shared_gateway', root / 'render_gateway.py')
     renderer = importlib.util.module_from_spec(spec)
@@ -125,16 +178,7 @@ def install():
     try:
         until(browser.ready)
     except RuntimeError:
-        for service in ('server', 'gateway', 'maintenance'):
-            log = owner.compose('logs', '--no-color', '--tail', '16', service)
-            categories = re.findall(r'\|\s+([a-z_]+(?:[.][a-z_]+)+: [a-z_ ]+)\s*$', log, re.MULTILINE)
-            print(json.dumps(dict(phase='readiness-diagnostic', service=service, categories=categories)), flush=True)
-        try:
-            status, reply = browser.call('GET', '/readyz')
-            print(json.dumps(dict(phase='readiness-response', status=status,
-                observed=isinstance(reply, dict) and 'observation' in reply)), flush=True)
-        except OSError as error:
-            print(json.dumps(dict(phase='readiness-response', classification=type(error).__name__)), flush=True)
+        report_readiness(owner, browser)
         raise
     status, host = browser.call('GET', '/api/v1/mdm-host/config.json')
     if status != 200:

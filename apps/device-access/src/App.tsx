@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react'
+import {
+  Activity,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ComponentType,
+} from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Alert, Button, Card, Form, Input, Layout, Menu, Select, Space, Switch } from 'antd'
 import { usePresentation } from '@rss/core'
@@ -178,8 +185,10 @@ export function App({
         void session.activity().catch(() => undefined)
     }
     const visibility = () => {
+      const { status } = session.getSnapshot()
       if (document.hidden) session.leavePage()
-      else void session.check(tenant).catch(() => undefined)
+      else if (status === 'authenticated') void session.revalidate(tenant).catch(() => undefined)
+      else if (status !== 'checking') void session.check(tenant).catch(() => undefined)
     }
     const depart = () => session.suspend()
     const restore = (event: PageTransitionEvent) => {
@@ -234,7 +243,7 @@ export function App({
     ['/security', '账户安全'],
     ['/audit', '审计'],
   ]
-  return (
+  const workspace = (
     <Layout className="da-surface">
       {Controls && <Controls />}
       <Layout.Header>
@@ -296,5 +305,11 @@ export function App({
         </Routes>
       </Layout.Content>
     </Layout>
+  )
+  return (
+    <>
+      {state.revalidating && <p role="status">正在检查会话…</p>}
+      <Activity mode={state.revalidating ? 'hidden' : 'visible'}>{workspace}</Activity>
+    </>
   )
 }

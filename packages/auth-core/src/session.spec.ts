@@ -110,6 +110,53 @@ it('rejects late responses and queued controls after tenant changes', async () =
   expect(port.refresh).not.toHaveBeenCalled()
   expect(owner.getSnapshot().host?.tenantId).toBe(other)
 })
+it('fences old business replies immediately and retains the current binding after revalidation', async () => {
+  const { owner, port } = fixture()
+  await owner.check(tenant)
+  const host = owner.getSnapshot().host
+  const read = deferred<string>()
+  const denied = deferred<void>()
+  const reply = deferred<SessionEnvelope>()
+  const readWork = vi.fn(() => read.promise)
+  const deniedWork = vi.fn(() => denied.promise.then(() => Promise.reject('401')))
+  const oldRead = expect(owner.business(readWork)).rejects.toThrow('Stale response')
+  const oldDenial = expect(owner.business(deniedWork)).rejects.toThrow('Stale response')
+  await vi.waitFor(() => {
+    expect(readWork).toHaveBeenCalled()
+    expect(deniedWork).toHaveBeenCalled()
+  })
+  vi.mocked(port.check).mockReturnValueOnce(reply.promise)
+  const validation = owner.revalidate(tenant)
+  expect(owner.revalidate(tenant)).toBe(validation)
+  expect(owner.getSnapshot()).toMatchObject({
+    status: 'authenticated',
+    revalidating: true,
+    host,
+  })
+  await expect(owner.business(async () => undefined)).rejects.toThrow('Session required')
+  expect(port.check).toHaveBeenCalledTimes(2)
+  read.resolve('old data')
+  denied.resolve()
+  await Promise.all([oldRead, oldDenial])
+  reply.resolve(envelope('b'))
+  await validation
+  expect(owner.getSnapshot()).toMatchObject({ status: 'authenticated', revalidating: false, host })
+  await owner.business(async ({ csrf }) => expect(csrf).toBe('b'.repeat(64)))
+})
+it('clears the old binding when revalidation sees a different session', async () => {
+  const { owner, port } = fixture()
+  await owner.check(tenant)
+  const replacement = envelope()
+  replacement.session = { ...replacement.session, id: other }
+  vi.mocked(port.check).mockResolvedValueOnce(replacement)
+  await owner.revalidate(tenant)
+  expect(owner.getSnapshot()).toMatchObject({
+    status: 'anonymous',
+    revalidating: false,
+    session: null,
+    invalidated: true,
+  })
+})
 it('accepts dispatched rotation across page cancellation while discarding page business results', async () => {
   const { owner, port } = fixture()
   await owner.check(tenant)

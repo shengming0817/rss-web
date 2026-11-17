@@ -28,7 +28,7 @@ try {
         document.visibilityState === 'visible' &&
         runtime.owner.getSnapshot().status === 'authenticated'
       )
-        recheck()
+        void runtime.owner.revalidate(runtime.tenant).catch(() => undefined)
     })
   }
   root.render(<App startup={startup} />)

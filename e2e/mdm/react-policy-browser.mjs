@@ -31,7 +31,9 @@ try {
   }
   async function settled(policy) {
     for (let i = 0; i < 90; i++) {
-      const response = await p.request.get(`${origin}/api/v1/policies/${policy}/scope`)
+      const response = await p.request.get(
+        `${origin}/api/v1/tenants/${f.tenant}/policies/${policy}/scope`,
+      )
       if (response.status() === 503) {
         await response.dispose()
         await new Promise((resolve) => setTimeout(resolve, 500))
@@ -158,7 +160,7 @@ try {
   const save = p.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
-      /\/api\/v1\/policies\/[^/]+$/.test(new URL(r.url()).pathname),
+      new RegExp(`^/api/v1/tenants/${f.tenant}/policies/[^/]+$`).test(new URL(r.url()).pathname),
   )
   await button('保存策略定义').click()
   const response = await save,

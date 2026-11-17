@@ -51,15 +51,48 @@ try {
       automaticPresenceSimulation: true,
     },
   })
+  run.step('same-session-unknown-write')
+  const completion = Promise.withResolvers()
+  await p.route(
+    '**/webauthn/register/finish',
+    async (route) => {
+      try {
+        const result = await route.fetch({ maxRetries: 0 })
+        const status = result.status()
+        await result.dispose()
+        await route.abort('failed')
+        completion.resolve(status)
+      } catch {
+        await route.abort('failed').catch(() => undefined)
+        completion.resolve(undefined)
+      }
+    },
+    { times: 1 },
+  )
   await button('注册 WebAuthn 凭据').click()
   await p.getByLabel('凭据名称', { exact: true }).fill('Browser DA credential')
-  const registered = p.waitForResponse(
-    (r) =>
-      r.request().method() === 'POST' &&
-      new URL(r.url()).pathname.endsWith('/webauthn/register/finish'),
-  )
   await button('明确注册').click()
-  assert.equal((await registered).status(), 200)
+  const original = p
+    .getByRole('dialog')
+    .getByRole('status')
+    .filter({ hasText: /原操作.*unknown/ })
+  await original.waitFor()
+  assert.equal(await completion.promise, 200)
+  const operationId = await original.locator('code').textContent()
+  assert.match(operationId, /^[a-f0-9-]{36}$/)
+  const revalidated = p.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === '/api/v1/identity' + base + '/session',
+  )
+  await p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  assert.equal((await revalidated).status(), 200)
+  await original.waitFor()
+  assert.equal(await original.locator('code').textContent(), operationId)
+  assert.equal(await button('明确注册').isDisabled(), true)
+  checks.push('same-session-revalidation-retains-unknown-write')
+  await p.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
+  await button('刷新凭据目录').click()
   await p.getByText('Browser DA credential', { exact: true }).waitFor()
   await p
     .getByRole('row')
