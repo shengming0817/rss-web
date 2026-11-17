@@ -157,6 +157,32 @@ it('clears the old binding when revalidation sees a different session', async ()
     invalidated: true,
   })
 })
+it('ignores a pre-cache session response and keeps the binding paused until restoration checks it', async () => {
+  const { owner, port } = fixture()
+  await owner.check(tenant)
+  const beforeCache = deferred<SessionEnvelope>()
+  const afterCache = deferred<SessionEnvelope>()
+  vi.mocked(port.check)
+    .mockReturnValueOnce(beforeCache.promise)
+    .mockReturnValueOnce(afterCache.promise)
+  const earlier = owner.revalidate(tenant)
+  await vi.waitFor(() => expect(port.check).toHaveBeenCalledTimes(2))
+  owner.pauseRevalidation()
+  expect(owner.getSnapshot()).toMatchObject({ revalidating: true, session: { id: sessionId } })
+  const restored = owner.revalidate(tenant)
+  expect(restored).not.toBe(earlier)
+  beforeCache.resolve({
+    ...envelope('b'),
+    identity: { principalId: other, hasLocalPassword: true },
+  })
+  await earlier
+  expect(owner.getSnapshot()).toMatchObject({ revalidating: true, session: { id: sessionId } })
+  await expect(owner.business(async () => undefined)).rejects.toThrow('Session required')
+  afterCache.resolve(envelope('c'))
+  await restored
+  expect(owner.getSnapshot()).toMatchObject({ revalidating: false, session: { id: sessionId } })
+  await owner.business(async ({ csrf }) => expect(csrf).toBe('c'.repeat(64)))
+})
 it('accepts dispatched rotation across page cancellation while discarding page business results', async () => {
   const { owner, port } = fixture()
   await owner.check(tenant)

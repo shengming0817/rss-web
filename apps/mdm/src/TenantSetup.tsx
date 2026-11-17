@@ -28,6 +28,7 @@ import {
   validateInput,
 } from './AdminUi'
 import { useAdministration } from './useAdministration'
+import { useProtectedDelivery } from './useProtectedDelivery'
 import { setupDestination, setupName } from './setup-presentation'
 import { SetupStatus } from './SetupStatus'
 const empty: Intent = { channels: [], capabilities: {}, completionRequested: false }
@@ -79,13 +80,7 @@ function SetupJourney({
       setBaseRevision(progress.value.saved.revision)
     }
   }, [progress.value, draft])
-  useEffect(() => {
-    const clear = () => {
-      if (document.visibilityState === 'hidden') setPassword('')
-    }
-    document.addEventListener('visibilitychange', clear)
-    return () => document.removeEventListener('visibilitychange', clear)
-  }, [])
+  useProtectedDelivery(() => setPassword(''))
   const has = (operation: string) =>
       !denied &&
       !permissions.busy &&

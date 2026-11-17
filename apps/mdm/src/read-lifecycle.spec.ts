@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act, createElement as h } from 'react'
+import { act, createElement as h, Fragment } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { decodeMdmError } from '@rss/api/mdm'
+import { PageLoading } from './PageLoading'
 import { ReadEpoch, usePageRead, useAction, type ReadOptions } from './AdminUi'
 
 let root: Root, host: HTMLDivElement
@@ -46,6 +47,30 @@ afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
   vi.useRealTimers()
+})
+it('preserves a read-dependent editor and its draft during page revalidation', async () => {
+  const read = vi.fn(async () => 'server value')
+  function Editor() {
+    const value = usePageRead('configuration', read).value
+    return value ? h('input', { defaultValue: value }) : null
+  }
+  const show = (checking: boolean) =>
+    act(async () =>
+      root.render(
+        h(Fragment, null, checking && h(PageLoading, { children: 'Checking session' }), h(Editor)),
+      ),
+    )
+  await show(false)
+  const input = host.querySelector('input')!
+  input.value = 'unsaved draft'
+  await show(true)
+  expect(document.body.querySelector('[data-rss-page-loading]')?.textContent).toBe(
+    'Checking session',
+  )
+  await show(false)
+  expect(host.querySelector('input')).toBe(input)
+  expect(input.value).toBe('unsaved draft')
+  expect(read).toHaveBeenCalledTimes(1)
 })
 it('bounds canonical first-page conflicts to three reads with 150/300 ms spacing', async () => {
   const read = vi.fn<(signal: AbortSignal) => Promise<string>>().mockRejectedValue(conflict())

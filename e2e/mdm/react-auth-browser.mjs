@@ -322,7 +322,7 @@ try {
     await route.abort('failed')
   }
   await page.route('**/session/refresh', drop)
-  await page.getByRole('button', { name: 'Refresh session', exact: true }).click()
+  await page.getByRole('button', { name: /^(?:loading )?Refresh session$/ }).click()
   await page.getByText('Session could not be confirmed', { exact: true }).waitFor()
   assert.equal(rotations, 1)
   await page.unroute('**/session/refresh', drop)

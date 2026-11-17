@@ -218,7 +218,7 @@ export function useAction() {
       return { ok: false, error }
     } finally {
       running.current = false
-      setBusy(false)
+      if (live.current) setBusy(false)
     }
   }
   return { busy, error, run, clear: () => setError(null) }

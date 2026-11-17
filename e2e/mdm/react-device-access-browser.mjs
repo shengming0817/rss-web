@@ -91,7 +91,29 @@ try {
   assert.equal(await original.locator('code').textContent(), operationId)
   assert.equal(await button('明确注册').isDisabled(), true)
   checks.push('same-session-revalidation-retains-unknown-write')
-  await p.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
+  await p.evaluate(() =>
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })),
+  )
+  await original.waitFor({ state: 'hidden' })
+  const restored = p.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === '/api/v1/identity' + base + '/session',
+  )
+  await p.evaluate(() =>
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })),
+  )
+  assert.equal((await restored).status(), 200)
+  const restoredRecord = p
+    .locator('.da-surface')
+    .getByRole('status')
+    .filter({
+      hasText: /原操作.*unknown/,
+    })
+  await restoredRecord.waitFor()
+  assert.equal(await restoredRecord.locator('code').textContent(), operationId)
+  assert.equal(await button('注册 WebAuthn 凭据').isDisabled(), true)
+  checks.push('page-cache-restoration-retains-unknown-write')
   await button('刷新凭据目录').click()
   await p.getByText('Browser DA credential', { exact: true }).waitFor()
   await p

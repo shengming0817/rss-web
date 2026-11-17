@@ -46,11 +46,13 @@ export function AccountSecurity({ oidc }: { oidc: boolean }) {
       if (document.hidden) cancel()
     }
     document.addEventListener('visibilitychange', hidden)
+    window.addEventListener('pagehide', cancel)
     return () => {
       active.current = false
       controller.current?.abort()
       void r.security.cancel().catch(() => undefined)
       document.removeEventListener('visibilitychange', hidden)
+      window.removeEventListener('pagehide', cancel)
     }
   }, [r])
   async function add() {

@@ -29,7 +29,7 @@ export function createSession(
   let pending: Promise<void> | undefined
   let rotation: Promise<void> | undefined
   let departure: Promise<void> | undefined
-  let validation: Promise<void> | undefined
+  let validation: { check?: Promise<void> } | undefined
   const leases = new Set<Promise<void>>()
   function publish(patch: Partial<SessionState>) {
     state = Object.freeze({ ...state, ...patch })
@@ -39,6 +39,7 @@ export function createSession(
     generation++
     lifetime++
     csrf = undefined
+    validation = undefined
     clearTimeout(timer)
     publish({
       status,
@@ -168,18 +169,27 @@ export function createSession(
       throw error
     }
   }
-  function revalidate(tenant: string) {
-    if (validation) return validation
-    const binding = scope()
-    if (!binding || state.tenant !== tenant) return Promise.resolve()
+  function pauseRevalidation() {
+    if (!scope()) return
+    const attempt: NonNullable<typeof validation> = {}
+    validation = attempt
     page++
     publish({ revalidating: true })
+    return attempt
+  }
+  function revalidate(tenant: string) {
+    const binding = scope()
+    if (!binding || state.tenant !== tenant) return Promise.resolve()
+    const attempt = validation ?? pauseRevalidation()
+    if (!attempt) return Promise.resolve()
+    if (attempt.check) return attempt.check
     // Checking the current binding is read-only. Fence old responses before asking the server.
-    validation = serial(async () => {
-      if (disposed || !state.revalidating || scope() !== binding) return
+    attempt.check = serial(async () => {
+      if (disposed || validation !== attempt || scope() !== binding) return
       const expected = generation
       try {
         const value = await port.check(tenant)
+        if (validation !== attempt) return
         assertLive(expected)
         if (
           value.identity.principalId !== state.identity?.principalId ||
@@ -195,6 +205,7 @@ export function createSession(
         })
         expire()
       } catch (error) {
+        if (validation !== attempt) return
         if (expected !== generation) throw error
         if (port.classify(error) === 'unauthenticated') {
           clear('anonymous', true)
@@ -204,10 +215,12 @@ export function createSession(
         throw error
       }
     }, false).finally(() => {
-      validation = undefined
-      if (state.revalidating) publish({ revalidating: false })
+      if (validation === attempt) {
+        validation = undefined
+        publish({ revalidating: false })
+      }
     })
-    return validation
+    return attempt.check
   }
   async function business<T>(
     work: (credentials: { tenant: string; csrf: string }) => Promise<T>,
@@ -298,6 +311,7 @@ export function createSession(
     business,
     refresh,
     logout,
+    pauseRevalidation,
     revalidate,
     check(tenant: string) {
       const selected = selection
@@ -404,7 +418,9 @@ export function createSession(
       return business(({ tenant, csrf: token }) => port.stepUp(tenant, token, provider, operation))
     },
     activity() {
-      return state.session && state.session.idleExpiresAt * 1000 - now() < 120_000
+      return !state.revalidating &&
+        state.session &&
+        state.session.idleExpiresAt * 1000 - now() < 120_000
         ? refresh()
         : Promise.resolve()
     },

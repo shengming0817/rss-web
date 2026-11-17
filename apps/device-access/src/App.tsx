@@ -1,11 +1,5 @@
-import {
-  Activity,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ComponentType,
-} from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react'
+import { createPortal, flushSync } from 'react-dom'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Alert, Button, Card, Form, Input, Layout, Menu, Select, Space, Switch } from 'antd'
 import { usePresentation } from '@rss/core'
@@ -190,9 +184,15 @@ export function App({
       else if (status === 'authenticated') void session.revalidate(tenant).catch(() => undefined)
       else if (status !== 'checking') void session.check(tenant).catch(() => undefined)
     }
-    const depart = () => session.suspend()
+    const depart = (event: PageTransitionEvent) => {
+      if (event.persisted) flushSync(() => session.pauseRevalidation())
+      else session.suspend()
+    }
     const restore = (event: PageTransitionEvent) => {
-      if (event.persisted) void session.check(tenant).catch(() => undefined)
+      if (!event.persisted) return
+      const check =
+        session.getSnapshot().status === 'authenticated' ? session.revalidate : session.check
+      void check(tenant).catch(() => undefined)
     }
     window.addEventListener('pointerdown', activity, true)
     window.addEventListener('keydown', activity, true)
@@ -308,8 +308,14 @@ export function App({
   )
   return (
     <>
-      {state.revalidating && <p role="status">正在检查会话…</p>}
-      <Activity mode={state.revalidating ? 'hidden' : 'visible'}>{workspace}</Activity>
+      {state.revalidating &&
+        createPortal(
+          <p data-rss-page-loading="" role="status">
+            正在检查会话…
+          </p>,
+          document.body,
+        )}
+      {workspace}
     </>
   )
 }

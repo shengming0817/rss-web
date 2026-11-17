@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client'
+import { flushSync } from 'react-dom'
 import { App } from './App'
 import { startRuntime } from './runtime'
 import 'virtual:mdm-theme.css'
@@ -16,12 +17,14 @@ try {
     const { runtime, resumed } = startup
     if (resumed) window.history.replaceState(null, '', resumed)
     window.addEventListener('pagehide', (event) => {
-      if (event.persisted) runtime.owner.suspend()
+      if (event.persisted) flushSync(() => runtime.owner.pauseRevalidation())
       else runtime.owner.dispose()
     })
-    const recheck = () => void runtime.owner.check(runtime.tenant).catch(() => undefined)
     window.addEventListener('pageshow', (event) => {
-      if (event.persisted) recheck()
+      if (!event.persisted) return
+      const { owner, tenant } = runtime
+      const check = owner.getSnapshot().status === 'authenticated' ? owner.revalidate : owner.check
+      void check(tenant).catch(() => undefined)
     })
     document.addEventListener('visibilitychange', () => {
       if (

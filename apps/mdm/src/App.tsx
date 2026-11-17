@@ -9,7 +9,9 @@ import { DeviceAccess } from './DeviceAccess'
 import { ReadEpoch } from './AdminUi'
 import { DirectoryCatalogContext } from './DirectorySearch'
 import { Policies } from './Policies'
-import { Activity, useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
+import { PageLoading } from './PageLoading'
+import { useProtectedDelivery } from './useProtectedDelivery'
 import type { ReactNode } from 'react'
 import {
   Alert,
@@ -400,6 +402,7 @@ function SessionSecurity({ runtime, locale }: Ui) {
     operation = useOperation(locale)
   const [reauthenticate, setReauthenticate] = useState(false)
   const [form] = Form.useForm<{ password: string }>()
+  useProtectedDelivery(() => form.resetFields(['password']))
   return (
     <>
       <div className="page-heading">
@@ -556,8 +559,8 @@ function Protected({ runtime, locale, children }: Ui & { children: ReactNode }) 
     return <Navigate to={runtime.login} replace />
   return (
     <>
-      {state.revalidating && checking}
-      <Activity mode={state.revalidating ? 'hidden' : 'visible'}>{children}</Activity>
+      {state.revalidating && <PageLoading>{checking}</PageLoading>}
+      {children}
     </>
   )
 }

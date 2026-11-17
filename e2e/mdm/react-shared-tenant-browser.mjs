@@ -92,6 +92,8 @@ try {
   await run.choose(a, a.getByRole('combobox', { name: '邮件', exact: true }), '显式跳过')
   const draft = a.getByRole('textbox', { name: '邮件 跳过原因', exact: true })
   await draft.fill('A-only unsaved draft')
+  const settingsPath = '/api/v1' + path(fixture.tenant) + '/settings/first-use'
+  const originalReads = run.count(a, 'GET', settingsPath)
   const validation = await holdRead(
     a,
     origin + '/api/v1/identity' + path(fixture.tenant) + '/session',
@@ -105,6 +107,7 @@ try {
   }
   await draft.waitFor()
   assert.equal(await draft.inputValue(), 'A-only unsaved draft')
+  assert.equal(run.count(a, 'GET', settingsPath), originalReads)
   checks.push('same-session-revalidation-retains-draft')
 
   run.step('provision-original-operation')
@@ -141,7 +144,8 @@ try {
   await manager.route('**' + provisioning, lose)
   await dialog.getByRole('button', { name: '创建并供应租户', exact: true }).click()
   await dialog.getByRole('button', { name: '查询原供应操作', exact: true }).waitFor()
-  assert.ok([200, 202].includes(await submission), 'provisioning interception failed')
+  const committed = await submission
+  assert.ok([200, 202].includes(committed), 'provisioning interception HTTP ' + committed)
   await manager.unroute('**' + provisioning, lose)
   const entry = dialog.getByRole('link', { name: '进入业务租户', exact: false })
   const deadline = Date.now() + 120000

@@ -394,6 +394,9 @@ input:focus-visible {
 }
 
 /* Inline portals avoid runtime style injection under the host's strict CSP. */
+body:has(> [data-rss-page-loading]) > :not([data-rss-page-loading]) {
+  display: none !important;
+}
 html:has(.mdm-overlay-open) {
   overflow: hidden;
   scrollbar-gutter: stable;
