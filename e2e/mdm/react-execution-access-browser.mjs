@@ -792,7 +792,7 @@ try {
       `/device-access?device=${encodeURIComponent(f.executionAccess.device)}`,
       'Device Access',
     )
-    await p.getByText('fixture-da', { exact: false }).first().waitFor()
+    await p.getByText(f.executionAccess.device, { exact: false }).first().waitFor()
     await button('新建账户绑定').click()
     await label('Identity 实例 UUID').fill(f.instance)
     await label('账户主体 UUID').fill(f.principal)

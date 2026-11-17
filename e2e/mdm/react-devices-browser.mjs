@@ -26,7 +26,7 @@ try {
     assert.equal(result.status(), 200)
   }
   await run.login(p)
-  await run.nav(p, '/devices', '设备')
+  await run.nav(p, '/devices?endpoints.limit=20', '设备')
   run.step('endpoint-directory')
   const endpointResponse = p.waitForResponse(
     (r) =>

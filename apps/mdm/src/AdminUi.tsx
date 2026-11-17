@@ -1,5 +1,6 @@
 import { uuid } from '@rss/mdm-inventory'
 import type { DiagnosticsContext } from '@rss/mdm-audit'
+import { useInRouterContext } from 'react-router-dom'
 import { DiagnosticReference } from './DiagnosticReference'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -82,6 +83,7 @@ export function Failure({
   kind?: 'read' | 'write'
   diagnosticContext?: DiagnosticsContext | undefined
 }) {
+  const routed = useInRouterContext()
   if (!error) return null
   const l = labels(locale),
     code = codeOf(error)
@@ -172,13 +174,18 @@ export function Failure({
       title={title}
       role="alert"
       description={
-        requestId && (
+        requestId &&
+        (routed ? (
           <DiagnosticReference
             locale={locale}
             context={diagnosticContext}
             selection={{ mode: 'request', id: requestId }}
           />
-        )
+        ) : (
+          <span>
+            {l('HTTP 请求编号', 'HTTP request ID')} <code>{requestId}</code>
+          </span>
+        ))
       }
     />
   )

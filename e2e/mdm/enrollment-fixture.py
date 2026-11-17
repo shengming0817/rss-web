@@ -185,7 +185,7 @@ try:
         providers.enter_context(pki(next_root, provider_env, case=str(WEB)+':enrollment-browser:next', agent=True, agent_origin=initialized['origin']))
         agent = json.loads((root/'agent-pki.json').read_text())
         config.update(native_protocols=dict(windows=json.loads((root/'windows.json').read_text())),
-                      agent_pki=agent, device_pki=json.loads((root/'device-pki.json').read_text())+json.loads((next_root/'device-pki.json').read_text()))
+                      agent_pki={key: agent[key] for key in ('mode', 'endpoint', 'lifetime')}, device_pki=json.loads((root/'device-pki.json').read_text())+json.loads((next_root/'device-pki.json').read_text()))
         private(config_path, config)
         phase = 'browser'
         start(binary, initialized, log)

@@ -11,6 +11,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import traceback
 import uuid
 
 WEB = Path(sys.argv[1]).resolve()
@@ -76,6 +77,7 @@ def install():
     tls(inputs)
     # The browser helper uses localhost. Issue a leaf for that exact origin.
     (inputs / 'localhost.ext').write_text(
+        'subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n'
         'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n'
         'extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost\n'
     )
@@ -120,7 +122,20 @@ def install():
     owner.compose('up', '-d')
     first = json.loads(owner.read('/var/lib/rss-mdm/installation/installation.json'))['receipt']
     browser = Browser(origin, inputs / 'gateway-ca.crt', port)
-    until(browser.ready)
+    try:
+        until(browser.ready)
+    except RuntimeError:
+        for service in ('server', 'gateway', 'maintenance'):
+            log = owner.compose('logs', '--no-color', '--tail', '16', service)
+            categories = re.findall(r'\|\s+([a-z_]+(?:[.][a-z_]+)+: [a-z_ ]+)\s*$', log, re.MULTILINE)
+            print(json.dumps(dict(phase='readiness-diagnostic', service=service, categories=categories)), flush=True)
+        try:
+            status, reply = browser.call('GET', '/readyz')
+            print(json.dumps(dict(phase='readiness-response', status=status,
+                observed=isinstance(reply, dict) and 'observation' in reply)), flush=True)
+        except OSError as error:
+            print(json.dumps(dict(phase='readiness-response', classification=type(error).__name__)), flush=True)
+        raise
     status, host = browser.call('GET', '/api/v1/mdm-host/config.json')
     if status != 200:
         raise RuntimeError('public host unavailable')
@@ -158,5 +173,10 @@ try:
             raise RuntimeError('run independent cleanup first')
         install()
 except BaseException as error:
-    print(json.dumps(dict(phase='shared-installation', result='failed', classification=type(error).__name__, recoveryDirectory=str(RECOVERY))), flush=True)
+    failure = traceback.extract_tb(error.__traceback__)
+    print(json.dumps(dict(
+        phase='shared-installation', result='failed',
+        classification=type(error).__name__, recoveryDirectory=str(RECOVERY),
+        frames=[f'{Path(frame.filename).name}:{frame.lineno}' for frame in failure[-5:]],
+    )), flush=True)
     sys.exit(1)

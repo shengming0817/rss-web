@@ -121,7 +121,8 @@ with ExitStack() as providers:
             return value
         def mount_file(value):
             source=Path(value); return owned_file(uuid.uuid4().hex+'-'+source.name,source.read_bytes())
-        agent=mounted(json.loads((native/'agent-pki.json').read_text()))
+        agent_input=json.loads((native/'agent-pki.json').read_text())
+        agent=mounted({key: agent_input[key] for key in ('mode', 'endpoint', 'lifetime')})
         configured=mounted(json.loads((native/'device-pki.json').read_text()))
         for entry in configured: entry['origin']='https://'+provider.internal_host+':19443'
         installation=json.loads(owner.read('/var/lib/rss-mdm/installation-input.json'))

@@ -41,7 +41,7 @@ def call(origin, ca, path, body=None, cert=None, key=None, method='POST', header
 def register(origin, ca, native, operator, private, tenant, capabilities=None, activate=True):
     csr = base64.b64encode((native/'agent.der').read_bytes()).decode()
     secret = secrets.token_urlsafe(32)
-    request = call(origin, ca, '/api/v1/agent/enroll/requests', dict(wireVersion=1, operationId=str(uuid.uuid4()), secret=secret, platform='macos', csr=csr))
+    request = call(origin, ca, '/api/v1/agent/enroll/requests', dict(tenantId=tenant, wireVersion=1, operationId=str(uuid.uuid4()), secret=secret, platform='macos', csr=csr))
     status, grant = operator.call('POST', operator.business_path('/agent-requests/'+request['grantId']+'/authorize'), dict(operationId=str(uuid.uuid4())))
     check(status == 200, 'collector-authorization')
     context = dict(revision=1, osVersion=[14,0,0,0], userHelper=True, systemBroker=True,
@@ -236,7 +236,7 @@ def acknowledge_pki(path, revision=None):
             if result and result.get('operation') == operation:
                 check(result['revision'] == int(revision),'collector-pki-loaded-revision'); break
             check(time.monotonic()<deadline,'collector-pki-reload-deadline'); time.sleep(.1)
-    trust = call(agent['origin'], agent['ca'], '/api/v1/agent/enroll/trust', cert=agent['cert'], key=agent['key'], method='GET')
+    trust = call(agent['origin'], agent['ca'], '/api/v1/agent/enroll/trust?tenantId='+fixture['tenant'], cert=agent['cert'], key=agent['key'], method='GET')
     check(trust['tenant'] == fixture['tenant'] and trust['purpose'] == 'agent', 'collector-pki-binding')
     installed = Path(agent['cert']).parent / 'collector-pki-trust.json'
     installed.write_text(json.dumps(trust)); installed.chmod(0o600)

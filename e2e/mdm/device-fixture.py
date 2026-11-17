@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 import tempfile
+import traceback
 from urllib.parse import urlsplit
 import http.client
 import uuid
@@ -273,7 +274,7 @@ try:
         child.wait(timeout=10)
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
-    config['agent_pki'] = agent
+    config['agent_pki'] = {key: agent[key] for key in ('mode', 'endpoint', 'lifetime')}
     if browser_module == 'react-execution-access-browser.mjs':
         # Exercise the real configured Windows channel alongside the bounded synthetic device facts.
         windows = windows_inputs(native)
@@ -375,11 +376,13 @@ try:
         environment.sql(installation_sql()+f"SELECT public.create_new_tenant('{TENANTS[1]}',1,NULL,NULL) WHERE NOT EXISTS (SELECT 1 FROM public.mdm_tenants WHERE tenant_id='{TENANTS[1]}')", 'mdm_dev')
         foreign_grant = str(uuid.uuid4())
         environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','316fdd38-45b8-529e-b278-8baccd6aa0e2','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','316fdd38-45b8-529e-b278-8baccd6aa0e2','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
-    phase = 'collector-registration'
-    module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
-    collector = importlib.util.module_from_spec(module)
-    module.loader.exec_module(collector)
-    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module in {'react-setup-browser.mjs', 'react-telemetry-browser.mjs','react-execution-access-browser.mjs'} else None)
+    agent_fixture = None
+    if browser_module not in {'react-device-access-browser.mjs', 'react-devices-browser.mjs'}:
+        phase = 'collector-registration'
+        module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
+        collector = importlib.util.module_from_spec(module)
+        module.loader.exec_module(collector)
+        agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module in {'react-setup-browser.mjs', 'react-telemetry-browser.mjs','react-execution-access-browser.mjs'} else None)
     if browser_module == 'react-recovery-browser.mjs':
         phase = 'recovery-prerequisites'
         recovery_fixture.prepare(operator, recovery, environment, private)
@@ -391,7 +394,9 @@ try:
 except BaseException as error:
     if phase == 'readiness' and readiness:
         print(json.dumps(dict(phase=phase, result='failed', **readiness)), flush=True)
-    print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
+    frames = traceback.extract_tb(error.__traceback__)[-5:]
+    print(json.dumps(dict(phase=phase, result='failed', classification=type(error).__name__,
+        frames=[f'{Path(frame.filename).name}:{frame.lineno}' for frame in frames])), flush=True)
     if phase == 'collector-registration' and isinstance(error, RuntimeError) and re.fullmatch(r'collector-[a-z0-9_-]+', str(error)):
         print(json.dumps(dict(phase=phase, reason=str(error))), flush=True)
     if phase == 'readiness':

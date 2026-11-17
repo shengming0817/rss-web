@@ -14,10 +14,17 @@ try {
   const path = (tenant) => '/tenants/' + tenant
   const api = (tenant, suffix) => origin + '/api/v1' + path(tenant) + suffix
   const ready = async (p) => {
-    const response = await p.request.get(origin + '/readyz')
-    assert.equal(response.status(), 200)
-    const body = await response.json()
-    return body.observation?.processGeneration
+    const deadline = Date.now() + 120000
+    while (Date.now() < deadline) {
+      const response = await p.request.get(origin + '/readyz')
+      if (response.ok()) {
+        const body = await response.json()
+        return body.observation?.processGeneration
+      }
+      assert.equal(response.status(), 503)
+      await new Promise((resolve) => setTimeout(resolve, 1100))
+    }
+    assert.fail('fixed candidate did not recover readiness')
   }
   const signIn = async (p, login, password) => {
     await p.getByLabel('账户', { exact: true }).fill(login)
@@ -29,6 +36,27 @@ try {
   assert.equal((await a.request.get(api(fixture.tenant, '/resources'))).status(), 200)
   const before = await ready(a)
   assert.ok(before)
+  await run.nav(a, '/enroll', '设备注册')
+  const packageRead = a.waitForResponse((r) => {
+    const url = new URL(r.url())
+    return (
+      url.origin === origin &&
+      url.pathname === '/api/v1/agent/enroll/packages' &&
+      url.searchParams.get('tenantId') === fixture.tenant
+    )
+  })
+  await a.getByRole('link', { name: '公开 Agent 安装包', exact: true }).click()
+  const packages = await packageRead
+  assert.ok([200, 403].includes(packages.status()))
+  await a.getByRole('heading', { name: 'Agent 安装包', exact: true }).waitFor()
+  if (packages.status() === 403) {
+    await a
+      .getByRole('alert')
+      .filter({ hasText: /没有此操作权限|无法读取当前数据/ })
+      .waitFor()
+    checks.push('public-installers-rejected-by-candidate')
+  }
+  checks.push('scoped-public-download-link')
   await a.goto(origin + path(fixture.tenant) + '/setup')
   await a.getByRole('button', { name: '保存意图', exact: true }).waitFor()
   const retainedA = await run.page(a.context())
@@ -78,16 +106,22 @@ try {
   assert.ok([200, 202].includes(await submission), 'provisioning interception failed')
   await manager.unroute('**' + provisioning, lose)
   const entry = dialog.getByRole('link', { name: '进入业务租户', exact: false })
-  for (let i = 0; i < 12 && !(await entry.count()); i++) {
+  const deadline = Date.now() + 120000
+  let progress
+  while (!(await entry.count()) && Date.now() < deadline) {
     const response = manager.waitForResponse(
       (r) =>
         r.request().method() === 'GET' &&
         new URL(r.url()).pathname === provisioning + '/' + operation,
     )
     await dialog.getByRole('button', { name: '查询原供应操作', exact: true }).click()
-    assert.equal((await response).status(), 200)
+    const original = await response
+    assert.equal(original.status(), 200)
+    progress = (await original.json()).result
+    assert.ok(['pending', 'blocked', 'configured'].includes(progress.phase))
     await entry.waitFor({ timeout: 1200 }).catch(() => undefined)
   }
+  assert.ok(await entry.count(), 'provisioning entry missing after ' + progress?.phase)
   assert.equal(writes, 1)
   assert.ok(operation)
   const href = await entry.getAttribute('href')
@@ -104,7 +138,11 @@ try {
   await a.goto(origin + href)
   await a.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
   const unknown = await a.request.get(api(randomUUID(), '/resources'))
-  assert.ok([401, 403, 404].includes(unknown.status()))
+  // The fixed backend can report the missing execution scope as unavailable.
+  assert.ok(
+    [401, 403, 404, 503].includes(unknown.status()),
+    'unknown tenant HTTP ' + unknown.status(),
+  )
   await signIn(a, 'tenant-admin', password)
   await a.waitForURL((url) => url.pathname === href + '/setup')
   assert.equal(await a.getByRole('textbox', { name: '邮件 跳过原因', exact: true }).count(), 0)

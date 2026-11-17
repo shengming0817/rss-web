@@ -56,7 +56,14 @@ try {
   })
   page = await context.newPage()
   page.setDefaultTimeout(15_000)
-  page.on('pageerror', (error) => pageErrors.push(error.name))
+  page.on('pageerror', (error) => {
+    const reactCode = /Minified React error #(\d+)/.exec(error.message)?.[1]
+    pageErrors.push(reactCode ? error.name + '#' + reactCode : error.name)
+    if (phase === 'public-static-routes' && !reactCode) {
+      const safeError = /^[a-zA-Z][a-zA-Z ()_.#-]{0,160}$/.test(error.message)
+      if (safeError) console.error(JSON.stringify({ phase, pageError: error.message }))
+    }
+  })
   await page.addInitScript(() => {
     window.addEventListener('securitypolicyviolation', (event) =>
       console.info(

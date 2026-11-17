@@ -18,6 +18,7 @@ sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import TENANTS
 from build_run import lease_fds
+from runtime_fixture import storage
 
 environment = Environment(BACKEND, group='react-auth-browser')
 children = []
@@ -49,10 +50,15 @@ try:
         configuration = gateway.read_text()
         if source not in configuration: raise RuntimeError('web-gateway-location')
         private(gateway, configuration.replace(source, 'location / { proxy_pass http://'+endpoint+'; }'))
+    binary = Path(os.environ['CARGO_TARGET_DIR']) / 'debug/rss-mdm'
+    config_path = Path(initialized['configuration'])
+    config = json.loads(config_path.read_text())
+    storage(environment, binary, config, TENANTS[0])
+    private(config_path, config)
     log_path = private(environment.root / 'product.log', '')
     phase = 'host'
     with log_path.open('w') as log:
-        for args in ([str(Path(os.environ['CARGO_TARGET_DIR']) / 'debug/rss-mdm'), 'serve', '--config', initialized['configuration']],
+        for args in ([str(binary), 'serve', '--config', initialized['configuration']],
                      ['nginx', '-c', initialized['gateway'], '-g', 'daemon off;']):
             children.append(subprocess.Popen(args, cwd=BACKEND, stdout=log, stderr=log, pass_fds=lease_fds()))
         deadline = time.monotonic() + 120
@@ -60,6 +66,10 @@ try:
         while True:
             if any(child.poll() is not None for child in children):
                 log.flush()
+                for line in log_path.read_text().splitlines():
+                    category = re.match(r'^([a-z_]+(?:[.][a-z_]+)+: [a-zA-Z_ =]+|configuration (?:JSON rejected at line [0-9]+, column [0-9]+|file unavailable or unsafe))', line)
+                    if category:
+                        print(json.dumps(dict(phase='host-diagnostic', category=category[1])), flush=True)
                 print(json.dumps(dict(phase='host-exit', processes=[dict(name=Path(child.args[0]).name, exitCode=child.poll()) for child in children], nginxErrors=re.findall(r'nginx: \[emerg\] ([a-z ]+(?:"[a-z_]+")?)', log_path.read_text())[-3:])), flush=True)
                 raise RuntimeError('host-exit')
             try:
