@@ -115,21 +115,57 @@ try {
   await label('唯一别名').fill('react.policy.scope')
   await label('共享事件名').fill('react.policy.event')
   await p.getByRole('tab', { name: '范围', exact: true }).click()
-  for (const endpoint of [f.mdm, f.agent]) {
+  const directoryPath = `/api/v1/tenants/${f.tenant}/device-views`
+  for (const [channel, endpoint] of [
+    ['mdm', f.mdm],
+    ['agent', f.agent],
+  ]) {
+    run.step(`owned-scope-endpoint-picker-${channel}`)
     await p
       .getByRole('region', { name: '目标（并集）', exact: true })
       .getByRole('button', { name: '添加终端', exact: true })
       .click()
     const drawer = p.getByRole('dialog', { name: '目标（并集） · 选择对象', exact: true })
-    await drawer.locator('.directory-advanced summary').click()
-    await drawer.getByRole('radio', { name: 'RSQL', exact: true }).check()
-    await drawer
-      .getByRole('textbox', { name: 'RSQL', exact: true })
-      .fill(`key=='endpoint:${endpoint}'`)
-    await drawer.getByRole('button', { name: '应用', exact: true }).click()
-    const choice = drawer.getByRole('row').filter({ hasText: endpoint }).getByRole('checkbox')
+    const filter = `reference.kind=='endpoint';reference.id=='${endpoint}'`
+    const [response] = await Promise.all([
+      p.waitForResponse((r) => {
+        const url = new URL(r.url())
+        return (
+          r.request().method() === 'GET' &&
+          url.origin === origin &&
+          url.pathname === directoryPath &&
+          url.searchParams.get('filter') === filter
+        )
+      }),
+      run.directoryFilter(drawer, filter),
+    ])
+    const body = await response.json().catch(() => null),
+      rows = Array.isArray(body?.items) ? body.items : [],
+      matches = rows.filter(
+        (row) =>
+          row?.reference?.kind === 'endpoint' &&
+          row.reference.id === endpoint &&
+          Array.isArray(row.endpoints) &&
+          row.endpoints.some(
+            (candidate) => candidate?.id === endpoint && candidate.channel === channel,
+          ),
+      )
+    console.log(
+      JSON.stringify({
+        journey: 'react-policy',
+        phase: 'owned-scope-endpoint-picker',
+        filter: "reference.kind=='endpoint';reference.id==<fixture>",
+        channel,
+        status: response.status(),
+        projectedRows: Array.isArray(body?.items) ? rows.length : null,
+        expectedEndpointPresent: matches.length > 0,
+      }),
+    )
+    assert.equal(response.status(), 200)
+    assert.equal(matches.length, 1)
+    const choice = drawer.locator(`[data-row-key="${endpoint}"]`).getByRole('checkbox')
     await choice.click()
-    await p.waitForFunction((input) => input.checked, await choice.elementHandle())
+    await choice.and(p.locator(':checked')).waitFor()
     await drawer.getByRole('button', { name: '完成选择', exact: true }).click()
   }
   run.step('owned-scope-draft-preview')
@@ -173,12 +209,26 @@ try {
   )
   assert.equal(policy.definition.scope.limitations, null)
   assert.equal(policy.state, 'disabled')
+  run.step('owned-scope-published-members')
   const published = await settled(policy.id)
-  const members = await api(
-    'GET',
-    `${path}/scope/results/${published.resolution}/members?channel=mdm&limit=100`,
-  )
-  assert.equal(members.scope, published.id)
+  assert.deepEqual(published.definition, policy.definition.scope)
+  for (const [channel, id] of [
+    ['mdm', f.mdm],
+    ['agent', f.agent],
+  ]) {
+    const members = await api(
+      'GET',
+      `${path}/scope/results/${published.resolution}/members?channel=${channel}&limit=100`,
+    )
+    assert.equal(members.scope, published.id)
+    assert.equal(members.result, published.resolution)
+    assert.equal(members.channel, channel)
+    assert.equal(members.page.kind, 'members')
+    assert.deepEqual(
+      members.page.items.map((item) => item.object),
+      [{ kind: 'endpoint', id }],
+    )
+  }
   checks.push('real-policy-atomic-config-and-owned-scope-save-bounded-draft-preview')
   run.step('owned-scope-recompute-original-operation')
   await button('读取已保存范围').click()

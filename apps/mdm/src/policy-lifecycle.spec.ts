@@ -570,7 +570,10 @@ it('retains an Agent entry selection while URL navigation refreshes its current 
     page = { items: [row], nextCursor: null },
     endpoint = { id: 'pc', channel: 'agent', status: 'active' },
     devices = {
-      views: async () => ({ items: [{ endpoints: [endpoint] }], nextCursor: null }),
+      views: async () => ({
+        items: [{ reference: { kind: 'endpoint', id: endpoint.id }, endpoints: [endpoint] }],
+        nextCursor: null,
+      }),
       endpoint: async () => endpoint,
     }
   let hold = false,

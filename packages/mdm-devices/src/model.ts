@@ -110,8 +110,7 @@ export interface DeviceView {
   readonly fields: Readonly<Record<string, FieldState>>
 }
 export interface ViewRow {
-  readonly key: string
-  readonly reference?: DeviceRef
+  readonly reference: DeviceRef
   readonly association?: Association | null
   readonly endpoints?: readonly ViewEndpoint[]
 }

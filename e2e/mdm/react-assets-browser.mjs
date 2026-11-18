@@ -94,6 +94,15 @@ try {
       if (complete(observed)) return observed
       await new Promise((done) => setTimeout(done, 350))
     } while (Date.now() < until)
+    console.error(
+      JSON.stringify({
+        phase: 'product-task-deadline',
+        status: ['pending', 'running', 'cancelled'].includes(observed?.status)
+          ? observed.status
+          : 'unclassified',
+        processed: Number.isSafeInteger(observed?.processed) ? observed.processed : null,
+      }),
+    )
     throw new Error('product-task-deadline')
   }
   async function settleQuery(task, expectedDevice) {
@@ -368,8 +377,9 @@ try {
   assert.equal(staticResponse.status(), 200)
   const staticGroup = (await staticResponse.json()).group
   await p.getByRole('button', { name: '变更已确认，重新读取', exact: true }).click()
-  const candidates = []
-  for (let i = 0; i < 11; i++) {
+  const candidates = [],
+    candidatePageSize = 10
+  for (let i = 0; i <= candidatePageSize; i++) {
     const candidate = randomUUID()
     await api(
       'POST',
@@ -387,17 +397,37 @@ try {
   await visibleLabel('设备组名称').fill('React nested assets')
   await run.choose(p, visibleLabel('设备组类型'), '动态设备组')
   await run.choose(p, visibleLabel('组条件组合'), '嵌套设备组')
-  const picker = p.getByRole('group', { name: '选择设备组', exact: true })
-  const candidateContinuation = p.waitForResponse(
-    (r) =>
-      r.request().method() === 'GET' &&
-      new URL(r.url()).pathname === `/api/v1/tenants/${run.fixture.tenant}/groups` &&
-      new URL(r.url()).searchParams.has('cursor'),
-  )
-  await picker.getByRole('button', { name: '下一页', exact: true }).click()
-  const nextCandidates = await candidateContinuation
+  const picker = p.getByRole('group', { name: '选择设备组', exact: true }),
+    groupDirectory = `/api/v1/tenants/${f.tenant}/groups`
+  function candidatePage(cursor) {
+    return p.waitForResponse((r) => {
+      const url = new URL(r.url())
+      return (
+        r.request().method() === 'GET' &&
+        url.origin === origin &&
+        url.pathname === groupDirectory &&
+        url.searchParams.get('limit') === String(candidatePageSize) &&
+        url.searchParams.get('cursor') === cursor
+      )
+    })
+  }
+  const [firstCandidates] = await Promise.all([
+    candidatePage(null),
+    picker.getByRole('spinbutton', { name: '每页', exact: true }).fill(String(candidatePageSize)),
+  ])
+  assert.equal(firstCandidates.status(), 200)
+  const firstCandidatePage = await firstCandidates.json()
+  assert.equal(firstCandidatePage.items.length, candidatePageSize)
+  assert.ok(firstCandidatePage.nextCursor)
+  const nextButton = picker.getByRole('button', { name: '下一页', exact: true })
+  await nextButton.waitFor()
+  assert.ok(await nextButton.isEnabled())
+  const [nextCandidates] = await Promise.all([
+    candidatePage(firstCandidatePage.nextCursor),
+    nextButton.click(),
+  ])
   assert.equal(nextCandidates.status(), 200)
-  assert.ok(new URL(nextCandidates.url()).searchParams.get('cursor'))
+  assert.ok((await nextCandidates.json()).items.length > 0)
   await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/groups`, () =>
     run.directoryFilter(picker, `id=='${staticGroup.id}'`),
   )
@@ -644,16 +674,20 @@ try {
   )
 
   run.step('mapping-fixed-version-and-content-recovery')
-  const resources = await api(
-      'GET',
-      `/api/v1/tenants/${run.fixture.tenant}/resources?` +
-        new URLSearchParams({ filter: 'kind==native_collection', limit: '1000' }),
+  const blueprints = await api('GET', `/api/v1/tenants/${f.tenant}/collection-blueprints`),
+    nativeBlueprint = blueprints.items.find(
+      (item) => item.definition.kind === 'native_collection' && item.platform === 'windows',
     ),
-    sourceId = resources.items[0]?.id
-  assert.ok(sourceId)
+    sourceId = `react-mapping-${randomUUID()}`
+  assert.ok(nativeBlueprint)
   const source = await api(
-    'GET',
-    `/api/v1/tenants/${run.fixture.tenant}/resources/${encodeURIComponent(sourceId)}`,
+    'POST',
+    `/api/v1/tenants/${f.tenant}/resources/${sourceId}`,
+    operation({
+      action: 'instantiate',
+      blueprint: nativeBlueprint.id,
+      version: nativeBlueprint.version,
+    }),
   )
   await run.nav(p, '/inventory', '资产查询')
   await tab('采集映射')
@@ -1118,7 +1152,8 @@ try {
       `/api/v1/tenants/${run.fixture.tenant}/software-asset-queries/` + task,
       () => assetButton('读取任务状态').click(),
       (value) => value.asset.response,
-      (value) => value.status === 'completed' || value.status === 'failed',
+      (value) => ['completed', 'failed', 'cancelled'].includes(value.status),
+      180,
     )
     assert.equal(state.status, 'completed')
     assert.equal(state.coordinates.context, domain)

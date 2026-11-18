@@ -217,12 +217,11 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
     views: (query, signal) =>
       api.getApiV1TenantsByTenantDeviceViews(
         transport,
-        { pathParams: { tenant }, signal, query: directory(query, 'key', 100) },
+        { pathParams: { tenant }, signal, query: directory(query, 'reference', 100) },
         (value) => {
           const page = projectedPage(
             value,
             {
-              key: text,
               reference,
               association: (v: unknown) => (v === null ? null : association(v)),
               endpoints: (v: unknown) => {
@@ -231,13 +230,11 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
               },
             },
             query.fields,
-            ['key'],
           ) as Page<ViewRow>
+          unique(page.items, (row) => referenceKey(row.reference))
           for (const row of page.items)
-            if (row.reference && row.endpoints && row.association !== undefined) {
+            if (row.endpoints && row.association !== undefined)
               validateViewBinding(row.reference, row.association, row.endpoints)
-              if (row.key !== referenceKey(row.reference)) throw new Error('Wrong view key')
-            }
           return page
         },
       ),

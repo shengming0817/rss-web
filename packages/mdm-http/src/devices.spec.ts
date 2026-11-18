@@ -57,6 +57,23 @@ it('uses the relationship directory and keeps empty candidate windows continuabl
     }),
   )
 })
+it('uses projected typed view identities and rejects duplicate references', async () => {
+  const endpoint = { reference: { kind: 'endpoint', id: operationId } },
+    association = { reference: { kind: 'association', id: operationId } },
+    page = { items: [endpoint, association], nextCursor: null },
+    f = fixture(page),
+    client = createDevicesAdapter(f.transport, tenant),
+    query = { fields: ['reference'], sort: ['reference.kind', 'reference.id'] } as const
+  expect(await client.views(query)).toEqual(page)
+  expect(f.request).toHaveBeenCalledWith(
+    expect.objectContaining({
+      path: '/api/v1/tenants/{tenant}/device-views',
+      query: { fields: 'reference', sort: 'reference.kind,reference.id', limit: 100 },
+    }),
+  )
+  page.items = [endpoint, { reference: { id: operationId, kind: 'endpoint' } }]
+  await expect(client.views(query)).rejects.toThrow('Duplicate device identity')
+})
 it('decodes current nonempty association candidates by device and channel', async () => {
   const f = fixture({
       items: [{ device: '621f76f9-bea3-58dd-9ee4-fcffe7f1f3f5', channel: 'agent' }],

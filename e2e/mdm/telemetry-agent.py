@@ -8,6 +8,9 @@ import time
 from urllib.parse import urlsplit
 import uuid
 
+sys.dont_write_bytecode = True
+from agent_http import read_json
+
 
 def exercise(path, policy, version):
     file = Path(path)
@@ -21,23 +24,19 @@ def exercise(path, policy, version):
     context = ssl.create_default_context(cafile=agent['ca'])
     context.load_cert_chain(agent['cert'], agent['key'])
 
-    def call(path, body=None, expected=200):
+    def call(stage, path, body=None, expected=200):
         connection = http.client.HTTPSConnection(endpoint.hostname, endpoint.port, context=context, timeout=20)
         try:
             connection.request('GET' if body is None else 'POST', path,
                 None if body is None else json.dumps(body), {'Content-Type': 'application/json'})
-            response = connection.getresponse()
-            result = json.loads(response.read())
-            if response.status != expected:
-                raise RuntimeError('agent-http-' + str(response.status) + '-' + str(result.get('code', '')))
-            return result
+            return read_json(connection.getresponse(), expected, 'agent-http-' + stage)
         finally:
             connection.close()
 
-    call('/api/v1/agent/runtime/tasks/claim', dict(wireVersion=1, operationId=str(uuid.uuid4()),
+    call('claim', '/api/v1/agent/runtime/tasks/claim', dict(wireVersion=1, operationId=str(uuid.uuid4()),
         profiles=['posix_sh'], environment=dict(edition=None, tools={}, nativeEngines={'macos.performance': 1}),
         executionContext=agent['executionContext']))
-    configuration = call('/api/v1/agent/runtime/telemetry/configurations/' + policy + '/' + version)
+    configuration = call('configuration', '/api/v1/agent/runtime/telemetry/configurations/' + policy + '/' + version)
     # Samples belong to this signed lease; synthetic history never predates its issue time.
     time.sleep(.5)
     now = time.time_ns() // 1000
@@ -56,11 +55,11 @@ def exercise(path, policy, version):
             values[key] = reading
         observations.append(dict(id=str(uuid.uuid4()), sequence=i+1, observedAt=observed, values=values))
     body = dict(batchId=str(uuid.uuid4()), configuration=configuration, observations=observations)
-    accepted = call('/api/v1/agent/runtime/telemetry/batches', body, 202)
-    replayed = call('/api/v1/agent/runtime/telemetry/batches', body, 202)
+    accepted = call('batch', '/api/v1/agent/runtime/telemetry/batches', body, 202)
+    replayed = call('batch-replay', '/api/v1/agent/runtime/telemetry/batches', body, 202)
     if accepted['replayed'] or not replayed['replayed']:
         raise RuntimeError('batch-replay')
-    call('/api/v1/agent/runtime/telemetry/gaps', dict(reportId=str(uuid.uuid4()),
+    call('gaps', '/api/v1/agent/runtime/telemetry/gaps', dict(reportId=str(uuid.uuid4()),
         deviceId=agent['runtime']['deviceId'],
         createdAt=now, gaps=[dict(reason='capacity',count=3,first=now-90_000_000,last=now-60_000_000),
               dict(reason='expired',count=2,first=now-180_000_000,last=now-150_000_000)]), 202)

@@ -323,10 +323,9 @@ try {
     await names.getByText('稳定工具名（只读）', { exact: true }).waitFor()
     await button('显示 Agent 查看入口').click()
     await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
-    await run.directoryFilter(names, `key=='endpoint:${f.agent}'`)
+    await run.directoryFilter(names, `reference.kind=='endpoint';reference.id=='${f.agent}'`)
     await names
-      .getByRole('row')
-      .filter({ hasText: f.agent })
+      .locator(`[data-row-key="${f.agent}"]`)
       .getByRole('button', { name: '使用此终端', exact: true })
       .click()
     await button('复制链接 · 共享事件').click()

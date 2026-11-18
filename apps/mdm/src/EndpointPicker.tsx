@@ -16,6 +16,7 @@ import { deviceName, Status } from './DevicePresentation'
 import { usePendingSelection } from './SelectionGuard'
 import { useDirectoryQuery } from './directory-location'
 export type DevicesUseCases = ReturnType<typeof createDevices>
+const fields = ['reference', 'association', 'endpoints'] as const
 
 export function EndpointPicker({
   devices,
@@ -37,18 +38,14 @@ export function EndpointPicker({
     [query, setQuery] = useDirectoryQuery(queryPrefix, { limit: 100 }),
     read = useRead(
       `endpoint-picker/${JSON.stringify(query)}`,
-      (signal) =>
-        devices.views(
-          { ...query, fields: ['key', 'reference', 'association', 'endpoints'] },
-          signal,
-        ),
+      (signal) => devices.views({ ...query, fields }, signal),
       { retryReadConflict: !query.cursor },
     ),
     rows =
       read.value?.items.flatMap((view) =>
         (view.endpoints ?? []).map((endpoint) => ({
           ...endpoint,
-          association: view.reference?.kind === 'association' ? view.reference.id : null,
+          association: view.reference.kind === 'association' ? view.reference.id : null,
         })),
       ) ?? []
   usePendingSelection(action.busy)
@@ -68,8 +65,8 @@ export function EndpointPicker({
         locale={locale}
         query={query}
         onChange={setQuery}
-        fields={['key', 'reference', 'association', 'endpoints']}
-        required="key"
+        fields={fields}
+        required="reference"
         sort={[]}
         maximum={100}
         disabled={disabled || action.busy}

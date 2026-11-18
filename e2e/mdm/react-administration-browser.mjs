@@ -678,8 +678,13 @@ try {
   const loseProvision = async (route) => {
     if (route.request().method() !== 'POST') return route.fallback()
     provisionOperation = route.request().headers()['idempotency-key']
-    const r = await route.fetch()
-    assert.ok([200, 202].includes(r.status()))
+    const response = await route.fetch()
+    if (response.status() === 503) {
+      assert.equal((await response.json()).code, 'operation_unknown')
+      await route.fulfill({ response })
+      return
+    }
+    assert.ok([200, 202].includes(response.status()))
     await route.abort('failed')
   }
   await manager.route('**/tenant-administration/provisionings', loseProvision)

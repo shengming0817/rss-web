@@ -491,11 +491,10 @@ try {
       await button('显示 Agent 查看入口').click()
       await run.directoryFilter(
         p.getByRole('region', { name: 'Agent 查看入口', exact: true }),
-        `key=='endpoint:${final.device}'`,
+        `reference.kind=='endpoint';reference.id=='${final.device}'`,
       )
       await p
-        .locator('.policy-editor tbody tr')
-        .filter({ hasText: final.device })
+        .locator(`.policy-editor [data-row-key="${final.device}"]`)
         .getByRole('button', { name: '使用此终端', exact: true })
         .click()
       await button('复制链接 · 唯一别名').click()

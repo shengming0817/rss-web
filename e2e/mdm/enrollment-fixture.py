@@ -25,7 +25,7 @@ sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
-from runtime_fixture import storage, readiness, installation_sql
+from runtime_fixture import storage, readiness, installation_sql, seed_protocol_pki, windows_protocol
 from windows_fixtures import generate
 from candidate_installation_driver import Browser
 from pki_fixtures import running as pki, trust as public_trust
@@ -67,8 +67,12 @@ def start(binary, initialized, log, expected=200):
             print(json.dumps(dict(phase='host-start',result='failed',exitCodes=[child.poll() for child in children],configurationErrors=errors,stackOverflow='stack overflow' in text,diagnostics=re.findall(r'(?m)^([a-z][a-z0-9_.-]{0,63}): ([A-Za-z0-9_=:(), -]{1,128})$',text),jsonPositions=re.findall(r'configuration JSON rejected at line ([0-9]+), column ([0-9]+)',text),unsafeFiles=[Path(name).name for name in re.findall(r'configuration file unavailable or unsafe: \"([^\"]+)\"',text)],gatewayErrors=re.findall(r'nginx: \[emerg\] ([a-z]+)',text))),flush=True)
             raise RuntimeError('host-exit')
         try:
-            if readiness(environment, initialized['origin']) == expected:
-                print(json.dumps(dict(phase='readiness',status=expected)),flush=True)
+            status = readiness(environment, initialized['origin'])
+            if expected is None and status in (200, 503):
+                print(json.dumps(dict(phase='management-transport',readinessStatus=status,backendReady=status==200)),flush=True)
+                return children
+            if status == expected:
+                print(json.dumps(dict(phase='readiness',status=status)),flush=True)
                 return children
         except (OSError, ssl.SSLError, http.client.HTTPException):
             pass
@@ -130,7 +134,7 @@ try:
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
-    storage(environment, binary, config, TENANTS[0])
+    storage(environment, binary, config)
     private(config_path, config)
     phase = 'actors'
     reader_password = private(environment.root/'reader-password', 'Enrollment-fixture-reader-only-2026!')
@@ -184,8 +188,13 @@ try:
             private(next_root/name, (root/name).read_text())
         providers.enter_context(pki(next_root, provider_env, case=str(WEB)+':enrollment-browser:next', agent=True, agent_origin=initialized['origin']))
         agent = json.loads((root/'agent-pki.json').read_text())
-        config.update(native_protocols=dict(windows=json.loads((root/'windows.json').read_text())),
+        windows = json.loads((root/'windows.json').read_text())
+        config.update(native_protocols=dict(windows=windows_protocol(windows)),
                       agent_pki={key: agent[key] for key in ('mode', 'endpoint', 'lifetime')}, device_pki=json.loads((root/'device-pki.json').read_text())+json.loads((next_root/'device-pki.json').read_text()))
+        phase = 'windows-pki'
+        seed_protocol_pki(environment, windows, config['device_pki'], TENANTS[0], INSTANCE, 'windows')
+        phase = 'agent-pki'
+        agent_trust = seed_protocol_pki(environment, agent, config['device_pki'], TENANTS[0], INSTANCE, 'agent')
         private(config_path, config)
         phase = 'browser'
         start(binary, initialized, log)
@@ -211,8 +220,11 @@ try:
             installer_file.write_bytes(installer_bytes())
         module = importlib.util.spec_from_file_location('enrollment_device_agent',WEB/'e2e/mdm/device-agent.py')
         collector = importlib.util.module_from_spec(module); module.loader.exec_module(collector)
-        agent_fixture = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0])
-        recovery_candidate = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0],activate=False)['originalCandidate']
+        agent_fixture = collector.register(agent['endpoint']['origin'], environment.root/'ca.crt',
+            root/'pki/agent', operator, private, TENANTS[0], expected_pki=agent_trust)
+        recovery_candidate = collector.register(agent['endpoint']['origin'], environment.root/'ca.crt',
+            root/'pki/agent', operator, private, TENANTS[0], expected_pki=agent_trust,
+            activate=False)['originalCandidate']
         # Read the CA's current signed CRL after cold initialization; its cache lifetime is 10m.
         authority = json.loads((next_root/'device-pki.json').read_text())[0]
         candidate_trust = json.loads(public_trust(next_root/'pki/agent', 'agent', agent['endpoint']['origin'], TENANTS[0], authority['provisioner'], authority['kid'], authority['origin']).read_text())
@@ -236,13 +248,12 @@ try:
                 uuid.UUID(request['operation'])
                 if browser_module != 'react-certificates-browser.mjs' or type(request['revision']) is not int or request['revision'] < 1:
                     raise RuntimeError('pki-reload-request')
-                # Read the real desired owner record, load it into the fixture's existing process,
-                # then let the real mTLS participant acknowledge that exact revision.
+                # Restart against the durable owner record before the mTLS participant
+                # acknowledges the exact revision returned by the product.
                 body=environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';SELECT convert_from(body,'UTF8') FROM mdm_pki.trust WHERE tenant_id='{TENANTS[0]}' AND purpose='agent'",'mdm_dev')
                 desired=json.loads(body)
                 if desired['revision'] != request['revision'] or desired['tenant'] != TENANTS[0] or desired['purpose'] != 'agent':
                     raise RuntimeError('pki-reload-binding')
-                private(Path(agent['trust_file']),desired)
                 shutdown([child for child in processes if child is not browser and child.poll() is None])
                 start(binary,initialized,log)
                 response=private(environment.root/'pki-reload-response.tmp',dict(operation=request['operation'],revision=desired['revision']))

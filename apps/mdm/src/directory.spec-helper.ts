@@ -23,9 +23,12 @@ export const directoryFixtures: Readonly<Record<string, DirectoryCapabilities>> 
   },
   endpoints: { maximum: 1000, fields: [field('id'), field('status'), field('channel')] },
   devices: {
-    maximum: 1000,
+    maximum: 100,
     fields: [
-      field('key'),
+      { ...field('reference'), filter: false, sort: false },
+      { ...field('association'), filter: false, sort: false },
+      { ...field('reference.kind'), output: false },
+      { ...field('reference.id', 'Uuid'), output: false },
       field('search'),
       field('status'),
       field('channel'),

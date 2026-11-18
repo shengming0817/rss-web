@@ -936,3 +936,62 @@ it('keeps each device directory query through tab changes and restores endpoint 
   expect(current.get('devices.cursor')).toBe('views-second')
   expect(current.get('endpoints.cursor')).toBe('endpoints-second')
 })
+
+it.each(['column', 'sort'])(
+  'resets an unavailable device view %s and preserves the working query',
+  async (setting) => {
+    const views = vi.fn<DevicesUseCases['views']>(async () => ({ items: [], nextCursor: null })),
+      runtime = {
+        administration: () => ({
+          binding: 'query-session',
+          devices: {
+            views,
+            viewStatistics: async () => ({
+              statistics: { deviceViewCount: 0, endpointCount: 0 },
+              asOf: 1,
+            }),
+          },
+        }),
+      } as unknown as Runtime
+    function Location() {
+      return createElement('output', { 'data-location': true }, useLocation().search)
+    }
+    const filter = "search=icontains='Mac'",
+      params = new URLSearchParams({
+        tab: 'views',
+        'devices.filter': filter,
+        'devices.limit': '20',
+        'devices.cursor': 'views-second',
+        'endpoints.cursor': 'endpoints-second',
+      })
+    params.append('devices.field', setting === 'column' ? 'key' : 'reference')
+    params.append('devices.field', 'association')
+    params.append('devices.sort', '-reference.id')
+    if (setting === 'sort') params.append('devices.sort', 'key')
+
+    await render(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/devices?' + params] },
+        createElement(Location),
+        createElement(Devices, { runtime, locale: 'zh' }),
+      ),
+    )
+    expect(views).not.toHaveBeenCalled()
+    await click('重置失效设置')
+    expect(views).toHaveBeenCalledExactlyOnceWith(
+      {
+        filter,
+        limit: 20,
+        fields: ['reference', 'association'],
+        sort: ['-reference.id'],
+      },
+      expect.any(AbortSignal),
+    )
+    const current = new URLSearchParams(host.querySelector('[data-location]')!.textContent!)
+    expect(current.has('devices.cursor')).toBe(false)
+    expect(current.get('endpoints.cursor')).toBe('endpoints-second')
+    expect(current.getAll('devices.field')).toEqual(['reference', 'association'])
+    expect(current.getAll('devices.sort')).toEqual(['-reference.id'])
+  },
+)

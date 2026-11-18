@@ -74,9 +74,10 @@ export function pkiCollectorFailure(result) {
       ].includes(value.classification)
     )
       diagnostic.classification = value.classification
-    const http = /^collector-http-(trust|acknowledgements|observations)-([1-5][0-9]{2})-(.*)$/.exec(
-      value.classification,
-    )
+    const http =
+      /^collector-http-(trust|acknowledgements|observations)-([1-5][0-9]{2})(?:-([a-z][a-z0-9_]{0,63}))?$/.exec(
+        value.classification,
+      )
     if (http) {
       diagnostic.classification = 'http'
       diagnostic.httpStage = http[1]
