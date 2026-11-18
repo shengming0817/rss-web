@@ -1,12 +1,13 @@
 """Read Agent fixture responses with redacted HTTP failure details."""
 import json
 import re
+from http import HTTPStatus
 
 
 def read_json(response, expected_status, failure_stage):
     payload = response.read()
     if response.status == expected_status:
-        return json.loads(payload)
+        return None if response.status == HTTPStatus.NO_CONTENT else json.loads(payload)
 
     try:
         envelope = json.loads(payload)

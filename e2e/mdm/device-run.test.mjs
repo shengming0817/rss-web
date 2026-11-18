@@ -273,6 +273,25 @@ test('PKI diagnostics preserve timeout, signal and closed HTTP classifications w
     httpStatus: 403,
     httpCode: 'permission_denied',
   })
+  for (const classification of [
+    'collector-http-observations-502',
+    'collector-http-observations-502-unknown_code',
+  ]) {
+    assert.deepEqual(
+      pkiCollectorFailure({
+        status: 1,
+        stdout: JSON.stringify({ result: 'failed', classification }),
+      }),
+      {
+        phase: 'pki-ack',
+        classification: 'http',
+        exitCode: 1,
+        signal: null,
+        httpStage: 'observations',
+        httpStatus: 502,
+      },
+    )
+  }
   assert.equal(
     JSON.stringify(
       pkiCollectorFailure({
