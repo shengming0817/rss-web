@@ -628,7 +628,10 @@ try {
 
   run.step('software-rsql-beyond-first-page-and-version-policy-context')
   const searchName = String.raw`Acme ÉCLAIR O'Reilly \ %_ 企业应用`
-  const catalogResource = await api('GET', resourcePath(resource))
+  const catalogPageSize = 20,
+    catalogPath = `/api/v1/tenants/${f.tenant}/resources`,
+    catalogKind = '(kind==software)',
+    catalogResource = await api('GET', resourcePath(resource))
   await api('POST', resourcePath(resource), {
     operationId: randomUUID(),
     expectedRevision: catalogResource.revision,
@@ -644,7 +647,7 @@ try {
       expectedRevision: catalogVersion.revision,
       input: { action: 'activate', version: 'resource-v1' },
     })
-  for (let index = 0; index < 21; index++)
+  for (let index = 0; index <= catalogPageSize; index++)
     await api('POST', resourcePath('aa-catalog-' + String(index).padStart(2, '0')), {
       operationId: randomUUID(),
       expectedRevision: 0,
@@ -652,58 +655,90 @@ try {
     })
   const firstCatalog = await api(
     'GET',
-    `/api/v1/tenants/${run.fixture.tenant}/resources?filter=kind%3D%3Dsoftware&limit=20`,
+    `${catalogPath}?${new URLSearchParams({ filter: catalogKind, limit: String(catalogPageSize) })}`,
   )
   assert.equal(
     firstCatalog.items.some((row) => row.id === resource),
     false,
   )
   assert.ok(firstCatalog.nextCursor)
-  await run.nav(p, '/software', '软件目录')
-  await tab('组织软件')
-  const continued = p.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return (
-      url.pathname === `/api/v1/tenants/${run.fixture.tenant}/resources` &&
-      url.searchParams.has('cursor')
-    )
-  })
-  await button('下一页').click()
-  const secondPage = await continued
+  async function catalogResponse(matches, action) {
+    const [response] = await Promise.all([
+      p.waitForResponse((r) => {
+        const url = new URL(r.url())
+        return (
+          r.request().method() === 'GET' &&
+          url.origin === origin &&
+          url.pathname === catalogPath &&
+          matches(url.searchParams)
+        )
+      }),
+      action(),
+    ])
+    return response
+  }
+  const firstPage = await catalogResponse(
+    (params) =>
+      params.get('limit') === String(catalogPageSize) &&
+      params.get('filter') === catalogKind &&
+      !params.has('cursor'),
+    () => run.nav(p, `/software?limit=${catalogPageSize}`, '软件目录'),
+  )
+  assert.equal(firstPage.status(), 200)
+  const first = await firstPage.json()
+  assert.equal(first.items.length, catalogPageSize)
+  assert.ok(first.nextCursor)
+  const firstIds = new Set(first.items.map((row) => row.id))
+  assert.equal(firstIds.has(resource), false)
+  const continuedQuery = new URL(firstPage.url()).searchParams
+  continuedQuery.set('cursor', first.nextCursor)
+  const queryMatches = (expected) => {
+    expected.sort()
+    return (actual) => {
+      actual.sort()
+      return actual.toString() === expected.toString()
+    }
+  }
+  run.step('organization-software-next-page')
+  const next = button('下一页')
+  await next.waitFor()
+  assert.ok(await next.isEnabled())
+  const secondPage = await catalogResponse(queryMatches(continuedQuery), () => next.click())
   assert.equal(secondPage.status(), 200)
-  assert.ok((await secondPage.json()).items.length > 0)
+  const second = (await secondPage.json()).items
+  assert.ok(second.some((row) => row.id === resource))
+  assert.ok(second.every((row) => !firstIds.has(row.id)))
   const expired = new URL(p.url())
-  assert.ok(expired.searchParams.get('cursor'))
+  assert.equal(expired.searchParams.get('cursor'), first.nextCursor)
+  assert.equal(expired.searchParams.get('limit'), String(catalogPageSize))
   const disjunction = `id=='${resource}',kind=='script'`
   expired.searchParams.set('filter', disjunction)
-  await run.response(
-    p,
-    'GET',
-    `/api/v1/tenants/${run.fixture.tenant}/resources`,
-    () => p.goto(expired.href),
-    409,
+  const expiredQuery = new URLSearchParams(continuedQuery)
+  expiredQuery.set('filter', `${catalogKind};(${disjunction})`)
+  run.step('organization-software-cursor-invalidated')
+  const invalidated = await catalogResponse(queryMatches(expiredQuery), () => p.goto(expired.href))
+  assert.equal(invalidated.status(), 409)
+  assert.equal((await invalidated.json()).code, 'resource_cursor_invalidated')
+  const restartedQuery = new URLSearchParams(expiredQuery)
+  restartedQuery.delete('cursor')
+  run.step('organization-software-restart-cursor')
+  const restarted = await catalogResponse(queryMatches(restartedQuery), () =>
+    button('保留条件重新开始').click(),
   )
-  const restarted = await run.response(
-    p,
-    'GET',
-    `/api/v1/tenants/${run.fixture.tenant}/resources`,
-    () => button('保留条件重新开始').click(),
-  )
+  assert.equal(restarted.status(), 200)
   assert.deepEqual(
     (await restarted.json()).items.map((row) => row.id),
     [resource],
   )
   assert.equal(new URL(p.url()).searchParams.get('filter'), disjunction)
   assert.equal(new URL(p.url()).searchParams.has('cursor'), false)
+  assert.equal(new URL(p.url()).searchParams.get('limit'), String(catalogPageSize))
   await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/resources`, () =>
     button('清除条件').click(),
   )
   const detailRequests = []
   const captureDetails = (request) => {
-    if (
-      request.method() === 'GET' &&
-      new URL(request.url()).pathname.startsWith(`/api/v1/tenants/${run.fixture.tenant}/resources/`)
-    )
+    if (request.method() === 'GET' && new URL(request.url()).pathname.startsWith(catalogPath + '/'))
       detailRequests.push(new URL(request.url()).pathname)
   }
   p.on('request', captureDetails)
@@ -726,7 +761,7 @@ try {
   await button('查看版本与材料').click()
   await p.getByRole('link', { name: '从此版本新建分配', exact: true }).waitFor()
   assert.deepEqual(
-    detailRequests.filter((path) => path.split('/').length === 5),
+    detailRequests.filter((path) => !path.slice(catalogPath.length + 1).includes('/')),
     [resourcePath(resource)],
   )
   p.off('request', captureDetails)
@@ -744,6 +779,7 @@ try {
   assert.equal(sourceUrl.searchParams.get('resource'), resource)
   assert.equal(sourceUrl.searchParams.get('version'), 'resource-v1')
   assert.equal(sourceUrl.searchParams.get('variant'), JSON.stringify(['windows', 'x86_64', 'main']))
+  assert.equal(sourceUrl.searchParams.get('limit'), String(catalogPageSize))
   await draftReturn.click()
   await p.waitForURL(sourceUrl.href)
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).waitFor()
@@ -756,7 +792,10 @@ try {
   await p.getByRole('button', { name: '查看策略 ' + policyId, exact: true }).waitFor()
   await p.getByRole('link', { name: '返回来源', exact: true }).click()
   await button('清除条件').click()
-  await p.waitForFunction(() => document.querySelectorAll('.software-card').length === 20)
+  await p.waitForFunction(
+    (limit) => document.querySelectorAll('.software-card').length === limit,
+    catalogPageSize,
+  )
   assert.equal(Math.round((await p.locator('aside.sidebar').boundingBox()).width), 218)
   assert.equal(Math.round((await p.locator('header.topbar').boundingBox()).height), 58)
   checks.push('real-resource-rsql-cross-page-and-exact-policy-navigation')
