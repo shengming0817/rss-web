@@ -143,10 +143,11 @@ try {
       rows = Array.isArray(body?.items) ? body.items : [],
       matches = rows.filter(
         (row) =>
-          row.reference?.kind === 'endpoint' &&
+          row?.reference?.kind === 'endpoint' &&
           row.reference.id === endpoint &&
-          row.endpoints?.some(
-            (candidate) => candidate.id === endpoint && candidate.channel === channel,
+          Array.isArray(row.endpoints) &&
+          row.endpoints.some(
+            (candidate) => candidate?.id === endpoint && candidate.channel === channel,
           ),
       )
     console.log(
@@ -208,16 +209,26 @@ try {
   )
   assert.equal(policy.definition.scope.limitations, null)
   assert.equal(policy.state, 'disabled')
+  run.step('owned-scope-published-members')
   const published = await settled(policy.id)
   assert.deepEqual(published.definition, policy.definition.scope)
-  const members = await api(
-    'GET',
-    `${path}/scope/results/${published.resolution}/members?channel=mdm&limit=100`,
-  )
-  assert.equal(members.scope, published.id)
-  assert.equal(members.result, published.resolution)
-  assert.equal(members.channel, 'mdm')
-  assert.equal(members.page.kind, 'members')
+  for (const [channel, id] of [
+    ['mdm', f.mdm],
+    ['agent', f.agent],
+  ]) {
+    const members = await api(
+      'GET',
+      `${path}/scope/results/${published.resolution}/members?channel=${channel}&limit=100`,
+    )
+    assert.equal(members.scope, published.id)
+    assert.equal(members.result, published.resolution)
+    assert.equal(members.channel, channel)
+    assert.equal(members.page.kind, 'members')
+    assert.deepEqual(
+      members.page.items.map((item) => item.object),
+      [{ kind: 'endpoint', id }],
+    )
+  }
   checks.push('real-policy-atomic-config-and-owned-scope-save-bounded-draft-preview')
   run.step('owned-scope-recompute-original-operation')
   await button('读取已保存范围').click()

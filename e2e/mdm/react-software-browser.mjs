@@ -708,6 +708,7 @@ try {
   const second = (await secondPage.json()).items
   assert.ok(second.some((row) => row.id === resource))
   assert.ok(second.every((row) => !firstIds.has(row.id)))
+  await p.locator('.software-card').filter({ hasText: searchName }).waitFor()
   const expired = new URL(p.url())
   assert.equal(expired.searchParams.get('cursor'), first.nextCursor)
   assert.equal(expired.searchParams.get('limit'), String(catalogPageSize))

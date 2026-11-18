@@ -31,7 +31,8 @@ def call(origin, ca, path, body=None, cert=None, key=None, method='POST', header
         response = connection.getresponse()
         raw = response.read()
         data = json.loads(raw) if raw else None
-        stage = body.get('event', {}).get('kind', 'claim') if path.endswith(('/claim', '/events')) else path.rsplit('/', 1)[-1]
+        route = urlsplit(path).path
+        stage = body.get('event', {}).get('kind', 'claim') if route.endswith(('/claim', '/events')) else route.rsplit('/', 1)[-1]
         check(response.status == expected, 'collector-http-' + stage + '-' + str(response.status) + '-' + str((data or {}).get('code', '')))
         return data
     finally:
