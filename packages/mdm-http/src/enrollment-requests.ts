@@ -4,56 +4,61 @@ import { nextCursor, queryParameters } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import type { AgentRequest, WindowsRequest, RequestHistoryPort } from '@rss/mdm-enrollment/requests'
 function agent(value: unknown): AgentRequest {
-  if (!schema.getApiV1AgentRequestsByIdResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantAgentRequestsByIdResponse.validateRoot(value))
     throw new Error('Invalid original Agent request')
   return value
 }
 function windows(value: unknown): WindowsRequest {
   if (
-    !schema.getApiV1DevicesByDeviceWindowsCertificateRequestsByAttemptResponse.validateRoot(value)
+    !schema.getApiV1TenantsByTenantDevicesByDeviceWindowsCertificateRequestsByAttemptResponse.validateRoot(
+      value,
+    )
   )
     throw new Error('Invalid original Windows request')
   return value
 }
-export function createRequestHistoryAdapter(transport: HttpTransport): RequestHistoryPort {
+export function createRequestHistoryAdapter(
+  transport: HttpTransport,
+  tenant: string,
+): RequestHistoryPort {
   return {
     agents: (device, cursor, signal) =>
-      api.getApiV1DevicesByDeviceAgentRequests(
+      api.getApiV1TenantsByTenantDevicesByDeviceAgentRequests(
         transport,
         {
-          pathParams: { device },
+          pathParams: { tenant, device },
           query: queryParameters({ limit: 100, ...(cursor ? { cursor } : {}) }),
           ...(signal ? { signal } : {}),
         },
         (value) => ({ items: value.items.map(agent), nextCursor: nextCursor(value.nextCursor) }),
       ),
     agent: (id, signal) =>
-      api.getApiV1AgentRequestsById(
+      api.getApiV1TenantsByTenantAgentRequestsById(
         transport,
-        { pathParams: { id }, ...(signal ? { signal } : {}) },
+        { pathParams: { tenant, id }, ...(signal ? { signal } : {}) },
         agent,
       ),
     windows: (device, cursor, signal) =>
-      api.getApiV1DevicesByDeviceWindowsCertificateRequests(
+      api.getApiV1TenantsByTenantDevicesByDeviceWindowsCertificateRequests(
         transport,
         {
-          pathParams: { device },
+          pathParams: { tenant, device },
           query: queryParameters({ limit: 100, ...(cursor ? { cursor } : {}) }),
           ...(signal ? { signal } : {}),
         },
         (value) => ({ items: value.items.map(windows), nextCursor: nextCursor(value.nextCursor) }),
       ),
     windowsRequest: (device, attempt, signal) =>
-      api.getApiV1DevicesByDeviceWindowsCertificateRequestsByAttempt(
+      api.getApiV1TenantsByTenantDevicesByDeviceWindowsCertificateRequestsByAttempt(
         transport,
-        { pathParams: { device, attempt }, ...(signal ? { signal } : {}) },
+        { pathParams: { tenant, device, attempt }, ...(signal ? { signal } : {}) },
         windows,
       ),
     windowsRecoveries: (device, attempt, cursor, signal) =>
-      api.getApiV1DevicesByDeviceWindowsCertificateRequestsByAttemptRecoveryOperations(
+      api.getApiV1TenantsByTenantDevicesByDeviceWindowsCertificateRequestsByAttemptRecoveryOperations(
         transport,
         {
-          pathParams: { device, attempt },
+          pathParams: { tenant, device, attempt },
           query: queryParameters({ limit: 100, ...(cursor ? { cursor } : {}) }),
           ...(signal ? { signal } : {}),
         },
@@ -71,10 +76,10 @@ export function createRequestHistoryAdapter(transport: HttpTransport): RequestHi
         }),
       ),
     windowsRecovery: (device, attempt, operation) =>
-      api.getApiV1DevicesByDeviceWindowsCertificateRequestsByAttemptRecoveryOperationsByOperation(
+      api.getApiV1TenantsByTenantDevicesByDeviceWindowsCertificateRequestsByAttemptRecoveryOperationsByOperation(
         transport,
         {
-          pathParams: { device, attempt, operation: operation.operationId },
+          pathParams: { tenant, device, attempt, operation: operation.operationId },
           query: { actor: operation.actor, instance: operation.instance },
         },
         (value) => value,

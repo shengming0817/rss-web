@@ -31,7 +31,10 @@ function definition(value: unknown): PolicyDefinition {
   }
 }
 function policy(value: unknown, id: string): Policy {
-  if (!schema.getApiV1PoliciesByPolicyResponse.validateRoot(value) || value.id !== id)
+  if (
+    !schema.getApiV1TenantsByTenantPoliciesByPolicyResponse.validateRoot(value) ||
+    value.id !== id
+  )
     throw new Error('Wrong policy detail')
   return {
     id: uuid(value.id),
@@ -50,7 +53,7 @@ const fields = {
   versionId: uuid,
   state: (v: unknown) => enumeration(v, ['enabled', 'disabled', 'archived'] as const),
   definition: (value: unknown) => {
-    if (!schema.getApiV1PoliciesResponse.validateDefinition(value))
+    if (!schema.getApiV1TenantsByTenantPoliciesResponse.validateDefinition(value))
       throw new Error('Invalid policy directory definition')
     return value
   },
@@ -75,7 +78,9 @@ const fields = {
       'request_mdm_enrollment',
     ] as const),
 }
-function policyRun(item: api.getApiV1PoliciesByIdRunsContract.Output['items'][number]): PolicyRun {
+function policyRun(
+  item: api.getApiV1TenantsByTenantPoliciesByIdRunsContract.Output['items'][number],
+): PolicyRun {
   return {
     kind: item.kind,
     versionId:
@@ -90,7 +95,10 @@ function policyRun(item: api.getApiV1PoliciesByIdRunsContract.Output['items'][nu
     state:
       item.kind === 'collection' && item.channel === 'mdm'
         ? null
-        : requestInput(item.state, schema.getApiV1PoliciesByIdRunsResponse.validateRunState),
+        : requestInput(
+            item.state,
+            schema.getApiV1TenantsByTenantPoliciesByIdRunsResponse.validateRunState,
+          ),
     effect: item.kind === 'software' || item.kind === 'execution' ? text(item.effect) : null,
     userAction:
       item.kind === 'software' || item.kind === 'execution'
@@ -98,51 +106,64 @@ function policyRun(item: api.getApiV1PoliciesByIdRunsContract.Output['items'][nu
         : null,
   }
 }
-export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
+export function createPoliciesAdapter(transport: HttpTransport, tenant: string): PoliciesPort {
   return {
     list: (query = {}, signal) =>
-      api.getApiV1Policies(transport, { signal, query: queryParameters(query) }, (value) => {
-        if (query.fields && !query.fields.includes('id'))
-          throw new Error('Policy identity required')
-        const page = projectedPage(value, fields, query.fields, ['id'])
-        for (const row of page.items)
-          if (row.toolName !== undefined && row.toolName !== `policy_${row.id.replaceAll('-', '')}`)
-            throw new Error('Wrong policy tool identity')
-        return page
-      }),
-    read: (id, signal) =>
-      api.getApiV1PoliciesByPolicy(
+      api.getApiV1TenantsByTenantPolicies(
         transport,
-        { pathParams: { policy: uuid(id) }, signal },
+        { pathParams: { tenant }, signal, query: queryParameters(query) },
+        (value) => {
+          if (query.fields && !query.fields.includes('id'))
+            throw new Error('Policy identity required')
+          const page = projectedPage(value, fields, query.fields, ['id'])
+          for (const row of page.items)
+            if (
+              row.toolName !== undefined &&
+              row.toolName !== `policy_${row.id.replaceAll('-', '')}`
+            )
+              throw new Error('Wrong policy tool identity')
+          return page
+        },
+      ),
+    read: (id, signal) =>
+      api.getApiV1TenantsByTenantPoliciesByPolicy(
+        transport,
+        { pathParams: { tenant, policy: uuid(id) }, signal },
         (value) => policy(value, id),
       ),
     change: (id, change) =>
-      api.postApiV1PoliciesByPolicy(
+      api.postApiV1TenantsByTenantPoliciesByPolicy(
         transport,
         {
-          pathParams: { policy: uuid(id) },
-          body: requestInput(change, schema.postApiV1PoliciesByPolicyBody.validateRoot),
+          pathParams: { tenant, policy: uuid(id) },
+          body: requestInput(
+            change,
+            schema.postApiV1TenantsByTenantPoliciesByPolicyBody.validateRoot,
+          ),
         },
         (value) => policy(value, id),
       ),
     archive: (id, operationId, expectedRevision) =>
-      api.deleteApiV1PoliciesByPolicy(
+      api.deleteApiV1TenantsByTenantPoliciesByPolicy(
         transport,
         {
-          pathParams: { policy: uuid(id) },
+          pathParams: { tenant, policy: uuid(id) },
           body: requestInput(
             { operationId, expectedRevision },
-            schema.deleteApiV1PoliciesByPolicyBody.validateRoot,
+            schema.deleteApiV1TenantsByTenantPoliciesByPolicyBody.validateRoot,
           ),
         },
         (value) => policy(value, id),
       ),
     rerun: (id, change) =>
-      api.postApiV1PoliciesByPolicyReruns(
+      api.postApiV1TenantsByTenantPoliciesByPolicyReruns(
         transport,
         {
-          pathParams: { policy: uuid(id) },
-          body: requestInput(change, schema.postApiV1PoliciesByPolicyRerunsBody.validateRoot),
+          pathParams: { tenant, policy: uuid(id) },
+          body: requestInput(
+            change,
+            schema.postApiV1TenantsByTenantPoliciesByPolicyRerunsBody.validateRoot,
+          ),
         },
         (value) => {
           if (
@@ -155,15 +176,19 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         },
       ),
     capabilities: () =>
-      api.getApiV1PoliciesCapabilities(transport, {}, (value) => ({
-        defaultSoftwareChannel: value.defaultSoftwareChannel,
-        mdmSoftwareDistributionEnabled: boolean(value.mdmSoftwareDistributionEnabled),
-      })),
+      api.getApiV1TenantsByTenantPoliciesCapabilities(
+        transport,
+        { pathParams: { tenant } },
+        (value) => ({
+          defaultSoftwareChannel: value.defaultSoftwareChannel,
+          mdmSoftwareDistributionEnabled: boolean(value.mdmSoftwareDistributionEnabled),
+        }),
+      ),
     preview: (id, expectedRevision, input, scopeResult, query, signal) =>
-      api.postApiV1PoliciesByPolicyPreviews(
+      api.postApiV1TenantsByTenantPoliciesByPolicyPreviews(
         transport,
         {
-          pathParams: { policy: uuid(id) },
+          pathParams: { tenant, policy: uuid(id) },
           signal,
           body: requestInput(
             {
@@ -171,7 +196,7 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
               definition: input,
               ...(scopeResult === null ? {} : { scopeResult: uuid(scopeResult) }),
             },
-            schema.postApiV1PoliciesByPolicyPreviewsBody.validateRoot,
+            schema.postApiV1TenantsByTenantPoliciesByPolicyPreviewsBody.validateRoot,
           ),
           query: windowQuery(query),
         },
@@ -211,9 +236,9 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         },
       ),
     assignments: (id, query, signal) =>
-      api.getApiV1PoliciesByPolicyAssignments(
+      api.getApiV1TenantsByTenantPoliciesByPolicyAssignments(
         transport,
-        { signal, pathParams: { policy: uuid(id) }, query: windowQuery(query) },
+        { signal, pathParams: { tenant, policy: uuid(id) }, query: windowQuery(query) },
         (value) => {
           safeNumbers(value)
           return {
@@ -247,9 +272,9 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         },
       ),
     runs: (id, query, signal) =>
-      api.getApiV1PoliciesByIdRuns(
+      api.getApiV1TenantsByTenantPoliciesByIdRuns(
         transport,
-        { signal, pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        { signal, pathParams: { tenant, id: uuid(id) }, query: windowQuery(query) },
         (value) => {
           safeNumbers(value)
           return {
@@ -259,9 +284,9 @@ export function createPoliciesAdapter(transport: HttpTransport): PoliciesPort {
         },
       ),
     rollout: (id) =>
-      api.getApiV1PoliciesByIdSoftwareRollout(
+      api.getApiV1TenantsByTenantPoliciesByIdSoftwareRollout(
         transport,
-        { pathParams: { id: uuid(id) } },
+        { pathParams: { tenant, id: uuid(id) } },
         (value) => {
           if (value.policyId !== id) throw new Error('Wrong rollout policy')
           safeNumbers(value)

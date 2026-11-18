@@ -13,19 +13,21 @@ import {
 } from '@rss/mdm-user-profiles'
 import { uuid, text, count, positive, nullable, boolean, enumeration } from './decode'
 function source(value: unknown): ProfileSource {
-  if (!schema.getApiV1UserProfilesMeResponse.validateProfileSource(value))
+  if (!schema.getApiV1TenantsByTenantUserProfilesMeResponse.validateProfileSource(value))
     throw new Error('Invalid profile source')
   if (value.kind === 'idp') uuid(value.provider)
   return value
 }
 function definitionValue(value: unknown): DefinitionValue {
-  if (!schema.getApiV1UserAttributeDefinitionsResponse.validateDefinitionValue(value))
+  if (
+    !schema.getApiV1TenantsByTenantUserAttributeDefinitionsResponse.validateDefinitionValue(value)
+  )
     throw new Error('Invalid definition contract')
   source(value.source)
   return value
 }
 function definition(value: unknown): Definition {
-  if (!schema.getApiV1UserAttributeDefinitionsByIdResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantUserAttributeDefinitionsByIdResponse.validateRoot(value))
     throw new Error('Invalid definition contract')
   uuid(value.fieldId)
   positive(value.revision)
@@ -47,7 +49,7 @@ function json(value: unknown): Json {
   throw new Error('Invalid profile JSON')
 }
 function profile(value: unknown): Profile {
-  if (!schema.getApiV1UserProfilesMeResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantUserProfilesMeResponse.validateRoot(value))
     throw new Error('Invalid profile contract')
   uuid(value.principalId)
   const c = value.completeness
@@ -88,37 +90,45 @@ const definitionFields = {
   visibility: (v: unknown) => enumeration(v, ['self', 'profiles_read', 'both'] as const),
   displayUse: (v: unknown) => enumeration(v, ['profile', 'summary', 'hidden'] as const),
 }
-export function createProfilesAdapter(transport: HttpTransport): ProfilesPort {
+export function createProfilesAdapter(transport: HttpTransport, tenant: string): ProfilesPort {
   return {
     definitions: (query = {}) =>
-      api.getApiV1UserAttributeDefinitions(transport, { query: queryParameters(query) }, (v) => {
-        const items = v.items.map((item) => projectedRow(item, definitionFields, query.fields))
-        if (!query.fields || query.fields.includes('fieldId' as never)) {
-          const ids = items.map((item) => Reflect.get(item, 'fieldId'))
-          if (new Set(ids).size !== ids.length) throw new Error('Duplicate field definition')
-        }
-        return {
-          items,
-          nextCursor: nextCursor(v.nextCursor),
-          sources: v.sources.map((s) => ({
-            source: source(s.source),
-            providerConfigVersion: nullable(s.providerConfigVersion, positive),
-            extensionsRoot: nullable(s.extensionsRoot, text),
-            maxAgeSeconds: positive(s.maxAgeSeconds),
-          })),
-        }
-      }),
+      api.getApiV1TenantsByTenantUserAttributeDefinitions(
+        transport,
+        { pathParams: { tenant }, query: queryParameters(query) },
+        (v) => {
+          const items = v.items.map((item) => projectedRow(item, definitionFields, query.fields))
+          if (!query.fields || query.fields.includes('fieldId' as never)) {
+            const ids = items.map((item) => Reflect.get(item, 'fieldId'))
+            if (new Set(ids).size !== ids.length) throw new Error('Duplicate field definition')
+          }
+          return {
+            items,
+            nextCursor: nextCursor(v.nextCursor),
+            sources: v.sources.map((s) => ({
+              source: source(s.source),
+              providerConfigVersion: nullable(s.providerConfigVersion, positive),
+              extensionsRoot: nullable(s.extensionsRoot, text),
+              maxAgeSeconds: positive(s.maxAgeSeconds),
+            })),
+          }
+        },
+      ),
     definition: (id) =>
-      api.getApiV1UserAttributeDefinitionsById(transport, { pathParams: { id: uuid(id) } }, (v) => {
-        const result = definition(v)
-        if (result.fieldId !== id) throw new Error('Wrong field definition')
-        return result
-      }),
+      api.getApiV1TenantsByTenantUserAttributeDefinitionsById(
+        transport,
+        { pathParams: { tenant, id: uuid(id) } },
+        (v) => {
+          const result = definition(v)
+          if (result.fieldId !== id) throw new Error('Wrong field definition')
+          return result
+        },
+      ),
     save: (change) =>
-      api.putApiV1UserAttributeDefinitionsById(
+      api.putApiV1TenantsByTenantUserAttributeDefinitionsById(
         transport,
         {
-          pathParams: { id: uuid(change.fieldId) },
+          pathParams: { tenant, id: uuid(change.fieldId) },
           body: {
             operationId: uuid(change.operationId),
             expectedRevision: change.expectedRevision,
@@ -138,20 +148,28 @@ export function createProfilesAdapter(transport: HttpTransport): ProfilesPort {
         },
       ),
     operation: (id) =>
-      api.getApiV1UserAttributeOperationsById(transport, { pathParams: { id: uuid(id) } }, (v) => {
-        if (v.operationId !== id) throw new Error('Wrong field operation')
-        return { operationId: id, definition: definition(v.definition) }
-      }),
-    self: (view, preview) =>
-      api.getApiV1UserProfilesMe(transport, { query: { view, preview } }, (v) => {
-        const result = profile(v)
-        if (result.view !== view) throw new Error('Wrong profile view')
-        return result
-      }),
-    other: (principal, preview) =>
-      api.getApiV1UserProfilesById(
+      api.getApiV1TenantsByTenantUserAttributeOperationsById(
         transport,
-        { pathParams: { id: uuid(principal) }, query: { view: 'latest', preview } },
+        { pathParams: { tenant, id: uuid(id) } },
+        (v) => {
+          if (v.operationId !== id) throw new Error('Wrong field operation')
+          return { operationId: id, definition: definition(v.definition) }
+        },
+      ),
+    self: (view, preview) =>
+      api.getApiV1TenantsByTenantUserProfilesMe(
+        transport,
+        { pathParams: { tenant }, query: { view, preview } },
+        (v) => {
+          const result = profile(v)
+          if (result.view !== view) throw new Error('Wrong profile view')
+          return result
+        },
+      ),
+    other: (principal, preview) =>
+      api.getApiV1TenantsByTenantUserProfilesById(
+        transport,
+        { pathParams: { tenant, id: uuid(principal) }, query: { view: 'latest', preview } },
         (v) => {
           const result = profile(v)
           if (result.principalId !== principal || result.view !== 'latest')

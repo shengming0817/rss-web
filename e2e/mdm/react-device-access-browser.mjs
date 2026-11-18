@@ -12,7 +12,8 @@ try {
   const { fixture: f, origin, checks } = run,
     p = await run.page()
   const button = (name) => p.getByRole('button', { name, exact: true }).filter({ visible: true })
-  const path = (value) => origin + value
+  const base = `/tenants/${f.tenant}`
+  const path = (value) => origin + base + value
   run.step('independent-login')
   await p.goto(path('/login'))
   await p.locator('#da-login').fill(f.login)
@@ -22,7 +23,9 @@ try {
   checks.push('independent-da-cookie-session-and-host-config')
   run.step('computer-directory-and-detail')
   const directory = p.waitForResponse(
-    (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/v1/device-views',
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === '/api/v1' + base + '/device-views',
   )
   await p.goto(path('/computers'))
   assert.equal((await directory).status(), 200)
@@ -48,15 +51,70 @@ try {
       automaticPresenceSimulation: true,
     },
   })
+  run.step('same-session-unknown-write')
+  const completion = Promise.withResolvers()
+  await p.route(
+    '**/webauthn/register/finish',
+    async (route) => {
+      try {
+        const result = await route.fetch({ maxRetries: 0 })
+        const status = result.status()
+        await result.dispose()
+        await route.abort('failed')
+        completion.resolve(status)
+      } catch {
+        await route.abort('failed').catch(() => undefined)
+        completion.resolve(undefined)
+      }
+    },
+    { times: 1 },
+  )
   await button('注册 WebAuthn 凭据').click()
   await p.getByLabel('凭据名称', { exact: true }).fill('Browser DA credential')
-  const registered = p.waitForResponse(
-    (r) =>
-      r.request().method() === 'POST' &&
-      new URL(r.url()).pathname.endsWith('/webauthn/register/finish'),
-  )
   await button('明确注册').click()
-  assert.equal((await registered).status(), 200)
+  const original = p
+    .getByRole('dialog')
+    .getByRole('status')
+    .filter({ hasText: /原操作.*unknown/ })
+  await original.waitFor()
+  assert.equal(await completion.promise, 200)
+  const operationId = await original.locator('code').textContent()
+  assert.match(operationId, /^[a-f0-9-]{36}$/)
+  const revalidated = p.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === '/api/v1/identity' + base + '/session',
+  )
+  await p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  assert.equal((await revalidated).status(), 200)
+  await original.waitFor()
+  assert.equal(await original.locator('code').textContent(), operationId)
+  assert.equal(await button('明确注册').isDisabled(), true)
+  checks.push('same-session-revalidation-retains-unknown-write')
+  await p.evaluate(() =>
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })),
+  )
+  await original.waitFor({ state: 'hidden' })
+  const restored = p.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === '/api/v1/identity' + base + '/session',
+  )
+  await p.evaluate(() =>
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })),
+  )
+  assert.equal((await restored).status(), 200)
+  const restoredRecord = p
+    .locator('.da-surface')
+    .getByRole('status')
+    .filter({
+      hasText: /原操作.*unknown/,
+    })
+  await restoredRecord.waitFor()
+  assert.equal(await restoredRecord.locator('code').textContent(), operationId)
+  assert.equal(await button('注册 WebAuthn 凭据').isDisabled(), true)
+  checks.push('page-cache-restoration-retains-unknown-write')
+  await button('刷新凭据目录').click()
   await p.getByText('Browser DA credential', { exact: true }).waitFor()
   await p
     .getByRole('row')
@@ -75,7 +133,7 @@ try {
   const enterprise = p.waitForResponse(
     (r) =>
       r.request().method() === 'GET' &&
-      new URL(r.url()).pathname === '/api/v1/device-access/enterprise/configuration',
+      new URL(r.url()).pathname === '/api/v1' + base + '/device-access/enterprise/configuration',
   )
   await p.goto(path('/applications'))
   const response = await enterprise
@@ -83,7 +141,7 @@ try {
     blocked.push({ area: 'da-enterprise-success', status: 403, issue: 3138 })
   else assert.equal(response.status(), 200)
   const binding = await p.request.get(
-    path(`/api/v1/devices/${f.executionAccess.device}/device-access?limit=1`),
+    `${origin}/api/v1${base}/devices/${f.executionAccess.device}/device-access?limit=1`,
   )
   if (binding.status() === 403)
     blocked.push({ area: 'da-binding-and-material-success', status: 403, issue: 3138 })

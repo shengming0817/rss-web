@@ -75,7 +75,7 @@ it('uses generated operations and admits script observations with all exact coor
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       method: 'POST',
-      path: '/api/v1/telemetry/history',
+      path: '/api/v1/tenants/{tenant}/telemetry/history',
       body: { ...query, startMicros: '0', endMicros: '100' },
     }),
   )
@@ -192,8 +192,8 @@ it('reads fixed configuration bindings and registration without substituting act
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       method: 'GET',
-      path: '/api/v1/devices/{device}/telemetry-configurations',
-      pathParams: { device: '48ade991-ac14-5214-92fe-7084429906bf' },
+      path: '/api/v1/tenants/{tenant}/devices/{device}/telemetry-configurations',
+      pathParams: { tenant, device: '48ade991-ac14-5214-92fe-7084429906bf' },
     }),
   )
 })

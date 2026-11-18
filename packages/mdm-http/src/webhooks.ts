@@ -19,7 +19,7 @@ import { boolean, count, enumeration, list, nullable, positive, text, uuid } fro
 import { distinct, integer, requestInput } from './inventory-values'
 
 function settings(value: unknown): Settings {
-  if (!schema.getApiV1WebhooksSubscriptionsResponse.validateSettings(value))
+  if (!schema.getApiV1TenantsByTenantWebhooksSubscriptionsResponse.validateSettings(value))
     throw new Error('Invalid webhook settings')
   const selection = value.selection
   const result: Settings = {
@@ -45,7 +45,7 @@ const subscriptionFields = {
   settings,
 }
 function subscription(value: unknown, id: string): Subscription {
-  if (!schema.getApiV1WebhooksSubscriptionsByIdResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantWebhooksSubscriptionsByIdResponse.validateRoot(value))
     throw new Error('Invalid subscription detail')
   const result = projectedRow(value, subscriptionFields)
   if (result.id !== id) throw new Error('Wrong subscription detail')
@@ -69,7 +69,7 @@ const deliveryFields = {
   failureReason: (value: unknown) => nullable(value, text),
 }
 function delivery(value: unknown, id: string): Delivery {
-  if (!schema.getApiV1WebhooksDeliveriesByIdResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantWebhooksDeliveriesByIdResponse.validateRoot(value))
     throw new Error('Invalid delivery detail')
   const page = projectedPage(value, deliveryFields, undefined, ['id'])
   if (page.items.length !== 1 || page.items[0]!.id !== id || page.nextCursor !== null)
@@ -77,7 +77,7 @@ function delivery(value: unknown, id: string): Delivery {
   return page.items[0]!
 }
 function material(value: unknown): Material {
-  if (!schema.postApiV1WebhooksMaterialsResponse.validateRoot(value))
+  if (!schema.postApiV1TenantsByTenantWebhooksMaterialsResponse.validateRoot(value))
     throw new Error('Invalid public signing material')
   return {
     operationId: uuid(value.operationId),
@@ -96,7 +96,7 @@ function material(value: unknown): Material {
   }
 }
 function head(value: unknown): MaterialHead {
-  if (!schema.getApiV1WebhooksMaterialsResponse.validateHead(value))
+  if (!schema.getApiV1TenantsByTenantWebhooksMaterialsResponse.validateHead(value))
     throw new Error('Invalid signing material head')
   return {
     reference: text(value.reference),
@@ -106,7 +106,7 @@ function head(value: unknown): MaterialHead {
   }
 }
 function receipt(value: unknown): MaterialReceipt {
-  if (!schema.postApiV1WebhooksMaterialsTransitionsResponse.validateRoot(value))
+  if (!schema.postApiV1TenantsByTenantWebhooksMaterialsTransitionsResponse.validateRoot(value))
     throw new Error('Invalid material transition receipt')
   return {
     operationId: uuid(value.operationId),
@@ -120,84 +120,102 @@ function receipt(value: unknown): MaterialReceipt {
 }
 function original(value: unknown, id: string): MaterialOperation {
   if (
-    !schema.getApiV1WebhooksMaterialsOperationsByIdResponse.validateRoot(value) ||
+    !schema.getApiV1TenantsByTenantWebhooksMaterialsOperationsByIdResponse.validateRoot(value) ||
     value.operationId !== id
   )
     throw new Error('Wrong material operation')
   return 'configurationSha256' in value ? material(value) : receipt(value)
 }
 /** All wire and HTTP semantics stay here; business pages use the one injected session binding. */
-export function createWebhooksAdapter(transport: HttpTransport): WebhooksPort {
+export function createWebhooksAdapter(transport: HttpTransport, tenant: string): WebhooksPort {
   return {
     subscriptions: (query) =>
-      api.getApiV1WebhooksSubscriptions(transport, { query: queryParameters(query) }, (value) =>
-        projectedPage(value, subscriptionFields, query.fields, ['id']),
+      api.getApiV1TenantsByTenantWebhooksSubscriptions(
+        transport,
+        { pathParams: { tenant }, query: queryParameters(query) },
+        (value) => projectedPage(value, subscriptionFields, query.fields, ['id']),
       ),
     subscription: (id) =>
-      api.getApiV1WebhooksSubscriptionsById(transport, { pathParams: { id } }, (value) =>
-        subscription(value, id),
+      api.getApiV1TenantsByTenantWebhooksSubscriptionsById(
+        transport,
+        { pathParams: { tenant, id } },
+        (value) => subscription(value, id),
       ),
     change: (id, change) =>
-      api.putApiV1WebhooksSubscriptionsById(
+      api.putApiV1TenantsByTenantWebhooksSubscriptionsById(
         transport,
         {
-          pathParams: { id },
+          pathParams: { tenant, id },
           body: requestInput(
             {
               operationId: change.operationId,
               expectedRevision: change.expectedRevision,
               change: change.input,
             },
-            schema.putApiV1WebhooksSubscriptionsByIdBody.validateRoot,
+            schema.putApiV1TenantsByTenantWebhooksSubscriptionsByIdBody.validateRoot,
           ),
         },
         (value) => subscription(value, id),
       ),
     eventTypes: () =>
-      api.getApiV1WebhooksEventTypes(transport, {}, (value) => {
-        if (!schema.getApiV1WebhooksEventTypesResponse.validateRoot(value))
-          throw new Error('Invalid webhook event catalog')
-        const items = value.items.map((event) => enumeration(event, eventTypes))
-        distinct(items, (item) => item)
-        return { version: 1, items }
-      }),
+      api.getApiV1TenantsByTenantWebhooksEventTypes(
+        transport,
+        { pathParams: { tenant } },
+        (value) => {
+          if (!schema.getApiV1TenantsByTenantWebhooksEventTypesResponse.validateRoot(value))
+            throw new Error('Invalid webhook event catalog')
+          const items = value.items.map((event) => enumeration(event, eventTypes))
+          distinct(items, (item) => item)
+          return { version: 1, items }
+        },
+      ),
     test: (id, operationId, device) =>
-      api.postApiV1WebhooksSubscriptionsByIdTest(
+      api.postApiV1TenantsByTenantWebhooksSubscriptionsByIdTest(
         transport,
         {
-          pathParams: { id },
+          pathParams: { tenant, id },
           body: requestInput(
             { operationId, deviceId: device },
-            schema.postApiV1WebhooksSubscriptionsByIdTestBody.validateRoot,
+            schema.postApiV1TenantsByTenantWebhooksSubscriptionsByIdTestBody.validateRoot,
           ),
         },
         (value) => {
-          if (!schema.postApiV1WebhooksSubscriptionsByIdTestResponse.validateRoot(value))
+          if (
+            !schema.postApiV1TenantsByTenantWebhooksSubscriptionsByIdTestResponse.validateRoot(
+              value,
+            )
+          )
             throw new Error('Invalid queued test receipt')
           return { id: uuid(value.id), eventId: uuid(value.eventId) }
         },
       ),
     deliveries: (query) =>
-      api.getApiV1WebhooksDeliveries(transport, { query: queryParameters(query) }, (value) =>
-        projectedPage(value, deliveryFields, query.fields, ['id']),
+      api.getApiV1TenantsByTenantWebhooksDeliveries(
+        transport,
+        { pathParams: { tenant }, query: queryParameters(query) },
+        (value) => projectedPage(value, deliveryFields, query.fields, ['id']),
       ),
     delivery: (id) =>
-      api.getApiV1WebhooksDeliveriesById(transport, { pathParams: { id } }, (value) =>
-        delivery(value, id),
+      api.getApiV1TenantsByTenantWebhooksDeliveriesById(
+        transport,
+        { pathParams: { tenant, id } },
+        (value) => delivery(value, id),
       ),
     replay: (id, operationId) =>
-      api.postApiV1WebhooksDeliveriesByIdReplay(
+      api.postApiV1TenantsByTenantWebhooksDeliveriesByIdReplay(
         transport,
         {
-          pathParams: { id },
+          pathParams: { tenant, id },
           body: requestInput(
             { operationId },
-            schema.postApiV1WebhooksDeliveriesByIdReplayBody.validateRoot,
+            schema.postApiV1TenantsByTenantWebhooksDeliveriesByIdReplayBody.validateRoot,
           ),
         },
         (value) => {
           if (
-            !schema.postApiV1WebhooksDeliveriesByIdReplayResponse.validateRoot(value) ||
+            !schema.postApiV1TenantsByTenantWebhooksDeliveriesByIdReplayResponse.validateRoot(
+              value,
+            ) ||
             value.sourceDelivery !== id
           )
             throw new Error('Wrong replay receipt')
@@ -209,18 +227,20 @@ export function createWebhooksAdapter(transport: HttpTransport): WebhooksPort {
         },
       ),
     redrive: (id, operationId, expectedVersion) =>
-      api.postApiV1WebhooksDeliveriesByIdRedrive(
+      api.postApiV1TenantsByTenantWebhooksDeliveriesByIdRedrive(
         transport,
         {
-          pathParams: { id },
+          pathParams: { tenant, id },
           body: requestInput(
             { operationId, expectedVersion },
-            schema.postApiV1WebhooksDeliveriesByIdRedriveBody.validateRoot,
+            schema.postApiV1TenantsByTenantWebhooksDeliveriesByIdRedriveBody.validateRoot,
           ),
         },
         (value) => {
           if (
-            !schema.postApiV1WebhooksDeliveriesByIdRedriveResponse.validateRoot(value) ||
+            !schema.postApiV1TenantsByTenantWebhooksDeliveriesByIdRedriveResponse.validateRoot(
+              value,
+            ) ||
             value.id !== id ||
             value.operationId !== operationId ||
             value.status !== 'redriven'
@@ -235,8 +255,8 @@ export function createWebhooksAdapter(transport: HttpTransport): WebhooksPort {
         },
       ),
     health: () =>
-      api.getApiV1WebhooksHealth(transport, {}, (value) => {
-        if (!schema.getApiV1WebhooksHealthResponse.validateRoot(value))
+      api.getApiV1TenantsByTenantWebhooksHealth(transport, { pathParams: { tenant } }, (value) => {
+        if (!schema.getApiV1TenantsByTenantWebhooksHealthResponse.validateRoot(value))
           throw new Error('Invalid webhook health')
         return {
           outbox: distinct(
@@ -250,27 +270,37 @@ export function createWebhooksAdapter(transport: HttpTransport): WebhooksPort {
         }
       }),
     materials: () =>
-      api.getApiV1WebhooksMaterials(transport, {}, (value) => {
-        if (!schema.getApiV1WebhooksMaterialsResponse.validateRoot(value))
-          throw new Error('Invalid material directory')
-        return {
-          configurationSha256: fingerprint(text(value.configurationSha256)),
-          heads: distinct(list(value.keys.heads, head, 128), (row) => row.reference),
-          materials: distinct(list(value.keys.materials, material, 4096), (row) =>
-            JSON.stringify([row.reference, row.revision]),
-          ),
-        }
-      }),
+      api.getApiV1TenantsByTenantWebhooksMaterials(
+        transport,
+        { pathParams: { tenant } },
+        (value) => {
+          if (!schema.getApiV1TenantsByTenantWebhooksMaterialsResponse.validateRoot(value))
+            throw new Error('Invalid material directory')
+          return {
+            configurationSha256: fingerprint(text(value.configurationSha256)),
+            heads: distinct(list(value.keys.heads, head, 128), (row) => row.reference),
+            materials: distinct(list(value.keys.materials, material, 4096), (row) =>
+              JSON.stringify([row.reference, row.revision]),
+            ),
+          }
+        },
+      ),
     materialOperation: (id) =>
-      api.getApiV1WebhooksMaterialsOperationsById(transport, { pathParams: { id } }, (value) =>
-        original(value, id),
+      api.getApiV1TenantsByTenantWebhooksMaterialsOperationsById(
+        transport,
+        { pathParams: { tenant, id } },
+        (value) => original(value, id),
       ),
     prepare: (id, input) =>
-      api.postApiV1WebhooksMaterials(
+      api.postApiV1TenantsByTenantWebhooksMaterials(
         transport,
         {
+          pathParams: { tenant },
           headers: { 'Idempotency-Key': id },
-          body: requestInput(input, schema.postApiV1WebhooksMaterialsBody.validateRoot),
+          body: requestInput(
+            input,
+            schema.postApiV1TenantsByTenantWebhooksMaterialsBody.validateRoot,
+          ),
         },
         (value) => {
           const result = material(value)
@@ -279,11 +309,15 @@ export function createWebhooksAdapter(transport: HttpTransport): WebhooksPort {
         },
       ),
     transition: (id, input) =>
-      api.postApiV1WebhooksMaterialsTransitions(
+      api.postApiV1TenantsByTenantWebhooksMaterialsTransitions(
         transport,
         {
+          pathParams: { tenant },
           headers: { 'Idempotency-Key': id },
-          body: requestInput(input, schema.postApiV1WebhooksMaterialsTransitionsBody.validateRoot),
+          body: requestInput(
+            input,
+            schema.postApiV1TenantsByTenantWebhooksMaterialsTransitionsBody.validateRoot,
+          ),
         },
         (value) => {
           const result = receipt(value)

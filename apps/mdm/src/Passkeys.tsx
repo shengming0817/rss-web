@@ -40,6 +40,15 @@ export function Passkeys({
   }
   useEffect(() => {
     active.current = true
+    const cancelPrompt = () => {
+      prompt.current?.abort()
+      setAuthorized(null)
+    }
+    const visibility = () => {
+      if (document.hidden) cancelPrompt()
+    }
+    document.addEventListener('visibilitychange', visibility)
+    window.addEventListener('pagehide', cancelPrompt)
     void run(async () => {
       await read()
       if (runtime.oidcEnabled) await runtime.owner.loadSecurity()
@@ -48,6 +57,8 @@ export function Passkeys({
       active.current = false
       prompt.current?.abort()
       form.resetFields()
+      document.removeEventListener('visibilitychange', visibility)
+      window.removeEventListener('pagehide', cancelPrompt)
     }
   }, [runtime, form])
   function perform(kind: 'register' | 'authorize', label = '') {

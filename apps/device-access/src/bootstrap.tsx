@@ -2,7 +2,7 @@ import { useEffect, useMemo, useSyncExternalStore, type ComponentType } from 're
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { Presentation } from '@rss/core'
-import { createSession, createFlows } from '@rss/auth-core'
+import { createSession, type AuthenticationFlows } from '@rss/auth-core'
 import { createAuthPort, bindSession, type HostConfig } from '@rss/auth-http'
 import type { HttpTransport } from '@rss/api/identity'
 import { createDeviceAccessTransport } from '@rss/api/device-access'
@@ -13,7 +13,6 @@ import {
   type SecurityClient,
 } from '@rss/device-access/client'
 import { DaContext, identityKey, type WriteState } from './context'
-import type { DaHost } from './config'
 import { App } from './App'
 import '@rss/core/styles/tokens.css'
 import 'virtual:rss-theme.css'
@@ -29,38 +28,38 @@ export interface DemoComposition {
 export function createDeviceAccess(
   identity: HttpTransport,
   config: HostConfig,
-  host: DaHost,
+  tenant: string,
+  flows: AuthenticationFlows,
   demo?: DemoComposition,
 ) {
-  if (config.canonicalOrigin !== host.canonicalOrigin) throw new Error('Mismatched hosts')
   const session = createSession(createAuthPort(identity), { oidcEnabled: config.oidcEnabled }),
-    flows = createFlows(sessionStorage),
     writes = new Map<string, WriteState>()
+  const base = demo ? '/' : `/tenants/${tenant}`
   let previous: string | null = null
   const unsubscribe = session.subscribe(() => {
     const next = identityKey(session)
-    if (next && next !== previous) {
+    if (next !== previous) {
       writes.clear()
       previous = next
     }
   })
   function Composition() {
     const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot)
-    const scope = identityKey(session)
+    const scope = snapshot.tenant === tenant ? identityKey(session) : null
     const runtime = useMemo(() => {
       if (!scope) return null
       const clients = demo?.clients(session)
       return {
         session,
-        host,
+        tenant,
         source: demo ? ('demo' as const) : ('service' as const),
         controls: demo?.controls ?? null,
         writes,
         flows,
         client:
-          clients?.client ?? createLiveClient(bindSession(createDeviceAccessTransport(), session)),
-        security:
-          clients?.security ?? createSecurityClient(bindSession(identity, session), host.tenant),
+          clients?.client ??
+          createLiveClient(bindSession(createDeviceAccessTransport(), session), tenant),
+        security: clients?.security ?? createSecurityClient(bindSession(identity, session), tenant),
       }
     }, [scope])
     useEffect(
@@ -71,12 +70,12 @@ export function createDeviceAccess(
     )
     return (
       <Presentation>
-        <BrowserRouter>
+        <BrowserRouter basename={base}>
           <DaContext.Provider value={runtime}>
             <App
               session={session}
               flows={flows}
-              host={host}
+              tenant={tenant}
               oidc={config.oidcEnabled}
               controls={demo?.controls ?? null}
               {...(snapshot.status === 'authenticated' ? {} : { status: snapshot.status })}
@@ -88,11 +87,20 @@ export function createDeviceAccess(
   }
   return {
     session,
-    mount: () => {
+    mount: async (resume?: 'sso' | 'step-up') => {
+      if (resume) {
+        await session.check(tenant).catch(() => undefined)
+        const state = session.getSnapshot()
+        if (state.status !== 'authenticated' || state.tenant !== tenant) {
+          unsubscribe()
+          session.dispose()
+          throw new Error('Session not confirmed')
+        }
+        window.history.replaceState(null, '', resume === 'sso' ? base : base + '/security')
+      }
       const root = createRoot(document.getElementById('app')!)
       root.render(<Composition />)
-      if (window.location.pathname !== '/auth/resume')
-        void session.check(host.tenant).catch(() => undefined)
+      if (!resume) void session.check(tenant).catch(() => undefined)
       return () => {
         root.unmount()
         unsubscribe()

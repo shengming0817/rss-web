@@ -12,10 +12,10 @@ try {
   const { origin, fixture: f, checks } = run,
     anonymous = await run.page()
   await run.nav(anonymous, '/downloads/agent', 'Agent 安装包')
-  assert.equal(new URL(anonymous.url()).pathname, '/downloads/agent')
+  assert.equal(new URL(anonymous.url()).pathname, `/tenants/${f.tenant}/downloads/agent`)
   const catalogResponse = await anonymous
     .context()
-    .request.get(origin + '/api/v1/agent/enroll/packages')
+    .request.get(origin + `/api/v1/agent/enroll/packages?tenantId=${f.tenant}`)
   assert.equal(catalogResponse.status(), 200)
   const packages = await catalogResponse.json()
   assert.ok(packages.length > 0)
@@ -75,7 +75,7 @@ try {
   await admin.getByRole('tab', { name: '通道与配额', exact: true }).click()
   await admin.getByRole('tab', { name: '默认配额', exact: true }).click()
   await admin.getByLabel('Windows MDM', { exact: true }).fill('0')
-  const quotaPath = '/api/v1/registration-quotas/defaults'
+  const quotaPath = `/api/v1/tenants/${run.fixture.tenant}/registration-quotas/defaults`
   await run.response(admin, 'PUT', quotaPath, () =>
     admin.getByRole('button', { name: '保存注册配额', exact: true }).click(),
   )
@@ -86,7 +86,7 @@ try {
   await admin.getByLabel('Apple 服务器 UUID', { exact: true }).fill(randomUUID())
   await admin.getByLabel('受管账户签名密钥别名', { exact: true }).fill('   ')
   const organizationId = (await admin.locator('section.device-editor h2').textContent()).trim(),
-    accountOrganizationPath = `/api/v1/apple/organizations/${organizationId}/account-enrollment`,
+    accountOrganizationPath = `/api/v1/tenants/${run.fixture.tenant}/apple/organizations/${organizationId}/account-enrollment`,
     organizationWrites = run.count(admin, 'PUT', accountOrganizationPath)
   await admin.getByRole('button', { name: '保存 Apple 组织绑定', exact: true }).click()
   await admin.getByText('请求未完成，请检查输入、权限或当前状态。', { exact: true }).waitFor()
@@ -107,7 +107,7 @@ try {
   const rejected = await run.response(
     employee,
     'POST',
-    '/api/v1/self-enrollments',
+    `/api/v1/tenants/${run.fixture.tenant}/self-enrollments`,
     () => employee.getByRole('button', { name: '提交原生注册申请', exact: true }).click(),
     429,
   )
@@ -122,7 +122,7 @@ try {
   })
   await employee.getByRole('button', { name: '重新读取准入与配额', exact: true }).click()
   await prepareNative()
-  const channelsPath = '/api/v1/registration-channels',
+  const channelsPath = `/api/v1/tenants/${run.fixture.tenant}/registration-channels`,
     admissionPath = channelsPath + '/windows_mdm/admission',
     channel = (await api('GET', channelsPath)).channels.find((c) => c.channel === 'windows_mdm')
   const paused = await api('PUT', admissionPath, {
@@ -133,7 +133,7 @@ try {
   const stale = await run.response(
     employee,
     'POST',
-    '/api/v1/self-enrollments',
+    `/api/v1/tenants/${run.fixture.tenant}/self-enrollments`,
     () => employee.getByRole('button', { name: '提交原生注册申请', exact: true }).click(),
     409,
   )
@@ -143,11 +143,14 @@ try {
     await employee.getByRole('button', { name: '准备一次性注册密码', exact: true }).isDisabled(),
     true,
   )
-  const established = await api('GET', `/api/v1/devices/${f.existingDevice}/registration`)
+  const established = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.existingDevice}/registration`,
+  )
   assert.equal(established.status, 'active')
   await anonymous.reload()
   await anonymous.getByRole('heading', { name: 'Agent 安装包', exact: true }).waitFor()
-  assert.equal(new URL(anonymous.url()).pathname, '/downloads/agent')
+  assert.equal(new URL(anonymous.url()).pathname, `/tenants/${f.tenant}/downloads/agent`)
   checks.push('real-stale-admission-rejected-maintenance-and-public-downloads-continue')
   await api('PUT', admissionPath, {
     operationId: randomUUID(),
@@ -157,8 +160,11 @@ try {
   await employee.getByRole('button', { name: '重新读取准入与配额', exact: true }).click()
   await prepareNative()
   const enrolled = await (
-    await run.response(employee, 'POST', '/api/v1/self-enrollments', () =>
-      employee.getByRole('button', { name: '提交原生注册申请', exact: true }).click(),
+    await run.response(
+      employee,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/self-enrollments`,
+      () => employee.getByRole('button', { name: '提交原生注册申请', exact: true }).click(),
     )
   ).json()
   await employee
@@ -167,7 +173,7 @@ try {
   assert.match(enrolled.enrollmentId, /^[a-f0-9-]{36}$/)
   assert.equal(await employee.getByLabel('本次原生注册密码', { exact: true }).count(), 0)
   checks.push('native-instructions-and-progress-do-not-imply-device-enrollment')
-  const cancellationPath = `/api/v1/enrollments/${enrolled.enrollmentId}/cancel`
+  const cancellationPath = `/api/v1/tenants/${run.fixture.tenant}/enrollments/${enrolled.enrollmentId}/cancel`
   let originalCancellation, replayCancellation
   await employee.route(origin + cancellationPath, async (route) => {
     const operationId = route.request().headers()['idempotency-key']
@@ -185,8 +191,11 @@ try {
   await employee.getByRole('button', { name: '取消原注册申请', exact: true }).click()
   await employee.getByRole('button', { name: '显式重提原维护请求', exact: true }).waitFor()
   assert.equal(await employee.getByLabel('注册申请标识', { exact: true }).isDisabled(), true)
-  await run.response(employee, 'GET', `/api/v1/enrollments/${enrolled.enrollmentId}`, () =>
-    employee.getByRole('button', { name: '读取原生注册进度', exact: true }).click(),
+  await run.response(
+    employee,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/enrollments/${enrolled.enrollmentId}`,
+    () => employee.getByRole('button', { name: '读取原生注册进度', exact: true }).click(),
   )
   assert.equal(run.count(employee, 'POST', cancellationPath), 1)
   assert.equal(await employee.getByLabel('注册申请标识', { exact: true }).isDisabled(), true)
@@ -211,8 +220,11 @@ try {
   await admin.getByRole('tab', { name: '配置签名', exact: true }).click()
   const material = admin.getByRole('tabpanel', { name: '配置签名', exact: true })
   const keyReceipt = await (
-    await run.response(admin, 'POST', '/api/v1/apple/materials/profile/keys', () =>
-      material.getByRole('button', { name: '明确提交材料操作', exact: true }).click(),
+    await run.response(
+      admin,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/apple/materials/profile/keys`,
+      () => material.getByRole('button', { name: '明确提交材料操作', exact: true }).click(),
     )
   ).json()
   await material.getByLabel('原 Apple 材料操作标识', { exact: true }).fill(keyReceipt.operationId)
@@ -220,7 +232,7 @@ try {
   await material.getByText('Apple 材料回执', { exact: true }).waitFor()
   checks.push('apple-generated-key-and-original-receipt-through-real-owner')
   await admin.getByRole('tab', { name: 'Agent 连接', exact: true }).click()
-  const connectionPath = '/api/v1/agent-connections'
+  const connectionPath = `/api/v1/tenants/${run.fixture.tenant}/agent-connections`
   await admin.getByLabel('首选 HTTPS origin', { exact: true }).fill(origin)
   await admin.getByLabel('允许的 HTTPS origins（1–8 个，每行一个）', { exact: true }).fill(origin)
   let savedOperation
@@ -233,14 +245,17 @@ try {
   })
   await admin.getByRole('button', { name: '仅保存连接草稿', exact: true }).click()
   await admin.getByRole('button', { name: '查询本次原连接操作', exact: true }).waitFor()
-  await run.response(admin, 'GET', '/api/v1/authorization', () =>
+  await run.response(admin, 'GET', `/api/v1/tenants/${run.fixture.tenant}/authorization`, () =>
     admin.getByRole('button', { name: '重新读取当前入口权限', exact: true }).click(),
   )
   await admin.getByRole('button', { name: '查询本次原连接操作', exact: true }).waitFor()
   await admin.getByText(savedOperation, { exact: true }).waitFor()
   assert.equal(run.count(admin, 'PUT', connectionPath), 1)
-  await run.response(admin, 'GET', `/api/v1/agent-connection-operations/${savedOperation}`, () =>
-    admin.getByRole('button', { name: '查询本次原连接操作', exact: true }).click(),
+  await run.response(
+    admin,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/agent-connection-operations/${savedOperation}`,
+    () => admin.getByRole('button', { name: '查询本次原连接操作', exact: true }).click(),
   )
   await admin.getByRole('button', { name: '原连接操作已确认，读取最新版本', exact: true }).click()
   await admin.unroute(origin + connectionPath)

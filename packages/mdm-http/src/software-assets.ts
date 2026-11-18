@@ -1,5 +1,5 @@
 import * as api from '@rss/api/mdm-operations'
-import { postApiV1SoftwareAssetQueriesBody } from '@rss/api/mdm-schemas'
+import { postApiV1TenantsByTenantSoftwareAssetQueriesBody } from '@rss/api/mdm-schemas'
 import type { HttpTransport } from '@rss/api/mdm'
 import type {
   SoftwareAssetsPort,
@@ -11,7 +11,7 @@ import type {
 import { count, uuid } from './decode'
 import { distinct, requestInput, windowQuery } from './inventory-values'
 
-type Envelope = api.getApiV1SoftwareAssetQueriesByIdContract.Output
+type Envelope = api.getApiV1TenantsByTenantSoftwareAssetQueriesByIdContract.Output
 type Response = Extract<Envelope['asset'], { kind: 'software' }>['response']
 type ResponseOf<K extends Response['kind']> = Extract<Response, { kind: K }>
 
@@ -71,7 +71,10 @@ export function createSoftwareAssetsAdapter(
     if (value.tenantId !== tenant || value.asset.kind !== 'accepted')
       throw new Error('Wrong software query acceptance')
     const receipt = value.asset
-    if (receipt.statusUrl !== api.getApiV1SoftwareAssetQueriesById.url({ id: uuid(receipt.task) }))
+    if (
+      receipt.statusUrl !==
+      api.getApiV1TenantsByTenantSoftwareAssetQueriesById.url({ tenant, id: uuid(receipt.task) })
+    )
       throw new Error('Wrong software asset status location')
     return receipt
   }
@@ -85,90 +88,110 @@ export function createSoftwareAssetsAdapter(
   })
   return {
     standards: (page, signal) =>
-      api.getApiV1StandardSoftware(transport, { query: query(page), signal }, (value) =>
-        records<StandardSoftware>(response(value, 'standards')),
+      api.getApiV1TenantsByTenantStandardSoftware(
+        transport,
+        { pathParams: { tenant }, query: query(page), signal },
+        (value) => records<StandardSoftware>(response(value, 'standards')),
       ),
     standard: (id, signal) =>
-      api.getApiV1StandardSoftwareById(transport, { pathParams: { id }, signal }, (value) =>
-        record<StandardSoftware>(response(value, 'standard').record, id),
+      api.getApiV1TenantsByTenantStandardSoftwareById(
+        transport,
+        { pathParams: { tenant, id }, signal },
+        (value) => record<StandardSoftware>(response(value, 'standard').record, id),
       ),
     mappings: (page, signal) =>
-      api.getApiV1SoftwareMappings(transport, { query: query(page), signal }, (value) =>
-        records<SoftwareMapping>(response(value, 'mappings')),
+      api.getApiV1TenantsByTenantSoftwareMappings(
+        transport,
+        { pathParams: { tenant }, query: query(page), signal },
+        (value) => records<SoftwareMapping>(response(value, 'mappings')),
       ),
     mapping: (id, signal) =>
-      api.getApiV1SoftwareMappingsById(transport, { pathParams: { id }, signal }, (value) =>
-        record<SoftwareMapping>(response(value, 'mapping').record, id),
+      api.getApiV1TenantsByTenantSoftwareMappingsById(
+        transport,
+        { pathParams: { tenant, id }, signal },
+        (value) => record<SoftwareMapping>(response(value, 'mapping').record, id),
       ),
     mutate(intent) {
       switch (intent.kind) {
         case 'query':
-          return api.postApiV1SoftwareAssetQueries(
+          return api.postApiV1TenantsByTenantSoftwareAssetQueries(
             transport,
             {
-              body: requestInput(intent.operation, postApiV1SoftwareAssetQueriesBody.validateRoot),
+              pathParams: { tenant },
+              body: requestInput(
+                intent.operation,
+                postApiV1TenantsByTenantSoftwareAssetQueriesBody.validateRoot,
+              ),
             },
             accepted,
           )
         case 'release':
-          return api.postApiV1SoftwareAssetQueriesByIdRelease(
+          return api.postApiV1TenantsByTenantSoftwareAssetQueriesByIdRelease(
             transport,
-            { pathParams: { id: intent.id }, body: intent.operation },
+            { pathParams: { tenant, id: intent.id }, body: intent.operation },
             mutation,
           )
         case 'standard':
-          return api.putApiV1StandardSoftwareById(
+          return api.putApiV1TenantsByTenantStandardSoftwareById(
             transport,
-            { pathParams: { id: intent.id }, body: intent.operation },
+            { pathParams: { tenant, id: intent.id }, body: intent.operation },
             mutation,
           )
         case 'mapping':
-          return api.putApiV1SoftwareMappingsById(
+          return api.putApiV1TenantsByTenantSoftwareMappingsById(
             transport,
-            { pathParams: { id: intent.id }, body: intent.operation },
+            { pathParams: { tenant, id: intent.id }, body: intent.operation },
             mutation,
           )
       }
     },
     receipt: (id) =>
-      api.getApiV1SoftwareAssetOperationsById(transport, { pathParams: { id } }, (value) => {
-        const result = response(value, 'receipt')
-        if (result.operation !== id) throw new Error('Wrong software asset operation')
-        return result.receipt
-      }),
-    status: (id, signal) =>
-      api.getApiV1SoftwareAssetQueriesById(transport, { pathParams: { id }, signal }, (value) => {
-        const { coordinates, ...status } = response(value, 'status')
-        return {
-          ...status,
-          coordinate: JSON.stringify(coordinates),
-          context: coordinates.context,
-          asOf: coordinates.asOf,
-        }
-      }),
-    buckets: (id, page, signal) =>
-      api.getApiV1SoftwareAssetQueriesByIdSoftware(
+      api.getApiV1TenantsByTenantSoftwareAssetOperationsById(
         transport,
-        { pathParams: { id }, query: query(page), signal },
+        { pathParams: { tenant, id } },
+        (value) => {
+          const result = response(value, 'receipt')
+          if (result.operation !== id) throw new Error('Wrong software asset operation')
+          return result.receipt
+        },
+      ),
+    status: (id, signal) =>
+      api.getApiV1TenantsByTenantSoftwareAssetQueriesById(
+        transport,
+        { pathParams: { tenant, id }, signal },
+        (value) => {
+          const { coordinates, ...status } = response(value, 'status')
+          return {
+            ...status,
+            coordinate: JSON.stringify(coordinates),
+            context: coordinates.context,
+            asOf: coordinates.asOf,
+          }
+        },
+      ),
+    buckets: (id, page, signal) =>
+      api.getApiV1TenantsByTenantSoftwareAssetQueriesByIdSoftware(
+        transport,
+        { pathParams: { tenant, id }, query: query(page), signal },
         (value) => fixedPage(response(value, 'buckets')),
       ),
     breakdowns: (id, bucket, dimension, page, signal) =>
-      api.getApiV1SoftwareAssetQueriesByIdSoftwareByBucketBreakdownsByDimension(
+      api.getApiV1TenantsByTenantSoftwareAssetQueriesByIdSoftwareByBucketBreakdownsByDimension(
         transport,
-        { pathParams: { id, bucket, dimension }, query: query(page), signal },
+        { pathParams: { tenant, id, bucket, dimension }, query: query(page), signal },
         (value) => fixedPage(response(value, 'breakdowns')),
       ),
     devices: (id, bucket, page, signal) =>
-      api.getApiV1SoftwareAssetQueriesByIdSoftwareByBucketDevices(
+      api.getApiV1TenantsByTenantSoftwareAssetQueriesByIdSoftwareByBucketDevices(
         transport,
-        { pathParams: { id, bucket }, query: query(page), signal },
+        { pathParams: { tenant, id, bucket }, query: query(page), signal },
         (value) => fixedPage(response(value, 'devices')),
       ),
     evidence: (id, bucket, object, page, signal) =>
-      api.getApiV1SoftwareAssetQueriesByIdSoftwareByBucketDevicesByObjectKindByObjectIdEvidence(
+      api.getApiV1TenantsByTenantSoftwareAssetQueriesByIdSoftwareByBucketDevicesByObjectKindByObjectIdEvidence(
         transport,
         {
-          pathParams: { id, bucket, object_kind: object.kind, object_id: object.id },
+          pathParams: { tenant, id, bucket, object_kind: object.kind, object_id: object.id },
           query: query(page),
           signal,
         },
@@ -189,9 +212,9 @@ export function createSoftwareAssetsAdapter(
         },
       ),
     coverage: (id, page, signal) =>
-      api.getApiV1SoftwareAssetQueriesByIdCoverage(
+      api.getApiV1TenantsByTenantSoftwareAssetQueriesByIdCoverage(
         transport,
-        { pathParams: { id }, query: query(page), signal },
+        { pathParams: { tenant, id }, query: query(page), signal },
         (value) => fixedPage(response(value, 'coverage')),
       ),
   }

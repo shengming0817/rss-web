@@ -64,7 +64,7 @@ function fixture(reply: unknown) {
     transport = { request } as unknown as HttpTransport
   return {
     request,
-    audit: createAudit(createAuditAdapter(transport)),
+    audit: createAudit(createAuditAdapter(transport, '11111111-1111-4111-8111-111111111111')),
     lookup: createAuditPolicyLookup(createAuditPolicyLookupAdapter(transport, id, id)),
   }
 }
@@ -78,13 +78,16 @@ it('uses distinct audit and path-bound timeline window operations with safe fact
   })
   expect(f.request.mock.lastCall![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/audit-events',
+    path: '/api/v1/tenants/{tenant}/audit-events',
     query,
   })
   await f.audit.timeline('7f408d60-f79e-504d-8fdc-35d425b1946a', query)
   expect(f.request.mock.lastCall![0]).toMatchObject({
-    path: '/api/v1/devices/{device}/timeline',
-    pathParams: { device: '7f408d60-f79e-504d-8fdc-35d425b1946a' },
+    path: '/api/v1/tenants/{tenant}/devices/{device}/timeline',
+    pathParams: {
+      tenant: '11111111-1111-4111-8111-111111111111',
+      device: '7f408d60-f79e-504d-8fdc-35d425b1946a',
+    },
   })
   await expect(
     fixture({
@@ -126,6 +129,7 @@ it('admits paired activity facts and preserves snapshot coverage without inventi
       .execution,
   ).toBe('received')
   expect(detail.request.mock.lastCall![0].pathParams).toEqual({
+    tenant: '11111111-1111-4111-8111-111111111111',
     device: '7f408d60-f79e-504d-8fdc-35d425b1946a',
     id: activity.id,
   })
@@ -191,7 +195,7 @@ it('projects exact current capability identity without leaking definitions or tr
   })
   expect(f.request.mock.lastCall![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/policies/resolve',
+    path: '/api/v1/tenants/{tenant}/policies/resolve',
     body: { kind: 'alias', alias: 'support' },
   })
   await expect(

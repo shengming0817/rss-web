@@ -75,7 +75,7 @@ it('uses independent detail and exact version history without equating revision 
   const f = fixture({ items: [version()], nextCursor: null })
   expect((await f.core.history(entryId)).items[0]!.version).toBe(3)
   expect(f.request).toHaveBeenCalledWith(
-    expect.objectContaining({ pathParams: { entry: entryId }, query: { limit: 100 } }),
+    expect.objectContaining({ pathParams: { tenant, entry: entryId }, query: { limit: 100 } }),
   )
   await expect(fixture({ ...entry(), id: tenant }).core.entry(entryId)).rejects.toBeDefined()
 })
@@ -144,7 +144,7 @@ it('supports all generation profile fields, metadata CAS, lifecycle CAS and sett
   await meta.core.metadata({ operationId, entryId, expectedRevision: 5, metadata: metadata() })
   expect(meta.request.mock.calls[0]![0]).toMatchObject({
     method: 'PUT',
-    path: '/api/v1/certificate-archive/entries/{entry}/metadata',
+    path: '/api/v1/tenants/{tenant}/certificate-archive/entries/{entry}/metadata',
     body: { expectedRevision: 5, metadata: metadata() },
   })
   await fixture(receipt('manage', entryId, null, 6)).core.manage({
@@ -202,7 +202,7 @@ it('keeps initialize, unlock, lock and password change as distinct formal operat
   const initialize = fixture(receipt('initialize'))
   await initialize.core.initialize(operationId, 'synthetic-master-password')
   expect(initialize.request.mock.calls[0]![0]).toMatchObject({
-    path: '/api/v1/certificate-archive/vault/initialize',
+    path: '/api/v1/tenants/{tenant}/certificate-archive/vault/initialize',
     body: { password: 'synthetic-master-password' },
   })
   const unlock = fixture({ initialized: true, generation: 1, unlockedUntil: 1800000000 })

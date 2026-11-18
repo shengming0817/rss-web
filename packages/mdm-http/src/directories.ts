@@ -3,18 +3,18 @@ import type { DirectoryCapabilities } from '@rss/mdm-devices'
 
 // ref: rss-mdm crates/query/src/directory/field.rs@11559e24b3a82997465d9e36c5611f0f570f60c7
 const operations = {
-  resources: api.getApiV1Resources,
-  devices: api.getApiV1DeviceViews,
-  endpoints: api.getApiV1Devices,
-  groups: api.getApiV1Groups,
-  policies: api.getApiV1Policies,
-  certificates: api.getApiV1CertificateArchiveEntries,
-  webhooks: api.getApiV1WebhooksSubscriptions,
-  ade: api.getApiV1AppleOrganizationsByIdAdeProfiles,
-  compliance: api.getApiV1ComplianceRules,
-  savedQueries: api.getApiV1SavedQueries,
-  userGroups: api.getApiV1AuthorizationUserGroups,
-  apiKeys: api.getApiV1ApiKeys,
+  resources: api.getApiV1TenantsByTenantResources,
+  devices: api.getApiV1TenantsByTenantDeviceViews,
+  endpoints: api.getApiV1TenantsByTenantDevices,
+  groups: api.getApiV1TenantsByTenantGroups,
+  policies: api.getApiV1TenantsByTenantPolicies,
+  certificates: api.getApiV1TenantsByTenantCertificateArchiveEntries,
+  webhooks: api.getApiV1TenantsByTenantWebhooksSubscriptions,
+  ade: api.getApiV1TenantsByTenantAppleOrganizationsByIdAdeProfiles,
+  compliance: api.getApiV1TenantsByTenantComplianceRules,
+  savedQueries: api.getApiV1TenantsByTenantSavedQueries,
+  userGroups: api.getApiV1TenantsByTenantAuthorizationUserGroups,
+  apiKeys: api.getApiV1TenantsByTenantApiKeys,
 }
 export type DirectoryName = keyof typeof operations
 export const directoryCapabilities = Object.freeze(

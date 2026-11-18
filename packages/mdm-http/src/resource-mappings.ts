@@ -62,8 +62,9 @@ const sameHash = (left: readonly number[], right: readonly number[]) =>
 export function createResourceMappingsAdapter(
   transport: HttpTransport,
   content: Pick<ReturnType<typeof createContent>, 'downloadBytes'>,
+  tenant: string,
 ): MappingPort {
-  const resources = createResourcesAdapter(transport),
+  const resources = createResourcesAdapter(transport, tenant),
     read = async (id: string) => mappingResource(await resources.read(resourceId(id)))
   const script = (
     source: Resource,

@@ -76,7 +76,7 @@ try:
         unused = None
         from runtime_fixture import storage
         storage(environment,binary,config,TENANTS[0])
-        management=environment.sql('SELECT management_tenant_id FROM public.mdm_installation','mdm_dev').strip()
+        management=config['identity']['management_tenant']
         operator=environment.root/'host/operator'
         def command(verb,value):
             path=private(environment.root/(verb+'-'+uuid.uuid4().hex+'.json'),value)

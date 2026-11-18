@@ -7,7 +7,11 @@ import { count, positive, text, uuid } from './decode'
 import { requestInput } from './inventory-values'
 
 function batch(value: unknown): EventBatch {
-  if (!schema.getApiV1DevicesByDevicePolicyEventBatchesByBatchResponse.validateRoot(value))
+  if (
+    !schema.getApiV1TenantsByTenantDevicesByDevicePolicyEventBatchesByBatchResponse.validateRoot(
+      value,
+    )
+  )
     throw new Error('Invalid event batch')
   if (value.operationId !== value.request.operationId || value.event !== value.request.event)
     throw new Error('Wrong batch request binding')
@@ -35,7 +39,8 @@ function batch(value: unknown): EventBatch {
   }
 }
 function progress(value: unknown): EventProgress {
-  const validators = schema.getApiV1DevicesByDevicePolicyEventBatchesByBatchMembersResponse
+  const validators =
+    schema.getApiV1TenantsByTenantDevicesByDevicePolicyEventBatchesByBatchMembersResponse
   if (!validators.validateEventOperationProgress(value) || value.allowedActions.length)
     throw new Error('Invalid event progress')
   const id = uuid(value.reference.id)
@@ -77,7 +82,8 @@ function progress(value: unknown): EventProgress {
   throw new Error('Unsupported native event progress')
 }
 function member(value: unknown): EventMember {
-  const validators = schema.getApiV1DevicesByDevicePolicyEventBatchesByBatchMembersResponse
+  const validators =
+    schema.getApiV1TenantsByTenantDevicesByDevicePolicyEventBatchesByBatchMembersResponse
   if (
     !validators.validateProjection_Member(value) ||
     !value.id ||
@@ -111,13 +117,16 @@ function member(value: unknown): EventMember {
     operations,
   }
 }
-export function createPolicyEventsAdapter(transport: HttpTransport): PolicyEventsPort {
+export function createPolicyEventsAdapter(
+  transport: HttpTransport,
+  tenant: string,
+): PolicyEventsPort {
   return {
     lookupOriginal: (device, operationId) =>
-      api.getApiV1DevicesByDevicePolicyEventBatches(
+      api.getApiV1TenantsByTenantDevicesByDevicePolicyEventBatches(
         transport,
         {
-          pathParams: { device: text(device) },
+          pathParams: { tenant, device: text(device) },
           query: queryParameters({
             filter: comparison('operationId', '==', uuid(operationId)),
             limit: 2,
@@ -126,11 +135,14 @@ export function createPolicyEventsAdapter(transport: HttpTransport): PolicyEvent
         (value) => ({ items: value.items.map(batch), nextCursor: nextCursor(value.nextCursor) }),
       ),
     submit: (device, request) =>
-      api.postApiV1DevicesByDevicePolicyEvents(
+      api.postApiV1TenantsByTenantDevicesByDevicePolicyEvents(
         transport,
         {
-          pathParams: { device: text(device) },
-          body: requestInput(request, schema.postApiV1DevicesByDevicePolicyEventsBody.validateRoot),
+          pathParams: { tenant, device: text(device) },
+          body: requestInput(
+            request,
+            schema.postApiV1TenantsByTenantDevicesByDevicePolicyEventsBody.validateRoot,
+          ),
         },
         (value) => {
           if (value.operationId !== request.operationId) throw new Error('Wrong event receipt')
@@ -142,19 +154,19 @@ export function createPolicyEventsAdapter(transport: HttpTransport): PolicyEvent
         },
       ),
     batches: (device, query = {}, signal) =>
-      api.getApiV1DevicesByDevicePolicyEventBatches(
+      api.getApiV1TenantsByTenantDevicesByDevicePolicyEventBatches(
         transport,
         {
           signal,
-          pathParams: { device: text(device) },
+          pathParams: { tenant, device: text(device) },
           query: queryParameters(query),
         },
         (value) => ({ items: value.items.map(batch), nextCursor: nextCursor(value.nextCursor) }),
       ),
     batch: (device, id, signal) =>
-      api.getApiV1DevicesByDevicePolicyEventBatchesByBatch(
+      api.getApiV1TenantsByTenantDevicesByDevicePolicyEventBatchesByBatch(
         transport,
-        { signal, pathParams: { device: text(device), batch: uuid(id) } },
+        { signal, pathParams: { tenant, device: text(device), batch: uuid(id) } },
         (value) => {
           const result = batch(value)
           if (result.id !== id) throw new Error('Wrong batch identity')
@@ -162,11 +174,11 @@ export function createPolicyEventsAdapter(transport: HttpTransport): PolicyEvent
         },
       ),
     members: (device, id, query = {}, signal) =>
-      api.getApiV1DevicesByDevicePolicyEventBatchesByBatchMembers(
+      api.getApiV1TenantsByTenantDevicesByDevicePolicyEventBatchesByBatchMembers(
         transport,
         {
           signal,
-          pathParams: { device: text(device), batch: uuid(id) },
+          pathParams: { tenant, device: text(device), batch: uuid(id) },
           query: queryParameters(query),
         },
         (value) => ({ items: value.items.map(member), nextCursor: nextCursor(value.nextCursor) }),

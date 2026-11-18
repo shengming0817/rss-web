@@ -37,7 +37,7 @@ it('reads exact policy identity and keeps configuration and immutable execution 
       definition,
       scopes: [],
     },
-    client = createPoliciesAdapter(fixture(value).transport)
+    client = createPoliciesAdapter(fixture(value).transport, '11111111-1111-4111-8111-111111111111')
   expect(await client.read(id)).toEqual(value)
   await expect(client.read(operationId)).rejects.toThrow('detail')
 })
@@ -48,7 +48,7 @@ it('binds preview paging to the original scope result and action without accepti
       items: [],
       nextCursor: 'next',
     }),
-    client = createPoliciesAdapter(f.transport)
+    client = createPoliciesAdapter(f.transport, '11111111-1111-4111-8111-111111111111')
   expect(
     (await client.preview(id, 8, definition, versionId, { cursor: 'previous', limit: 1 }))
       .nextCursor,
@@ -88,10 +88,10 @@ it('rejects a batch whose returned request belongs to another event identity', a
     },
   }
   expect(
-    await createPolicyEventsAdapter(fixture(value).transport).batch(
-      'fd753049-737f-5652-b607-203b78eb5309',
-      id,
-    ),
+    await createPolicyEventsAdapter(
+      fixture(value).transport,
+      '11111111-1111-4111-8111-111111111111',
+    ).batch('fd753049-737f-5652-b607-203b78eb5309', id),
   ).toEqual({
     ...value,
     request: { operationId, event: 'shared.event', source: { kind: 'human' } },
@@ -99,6 +99,7 @@ it('rejects a batch whose returned request belongs to another event identity', a
   await expect(
     createPolicyEventsAdapter(
       fixture({ ...value, request: { ...value.request, operationId: versionId } }).transport,
+      '11111111-1111-4111-8111-111111111111',
     ).batch('fd753049-737f-5652-b607-203b78eb5309', id),
   ).rejects.toThrow('binding')
 })
@@ -119,7 +120,10 @@ it('keeps member acceptance separate from native effect and rejects mismatched o
         },
       ],
     },
-    client = createPolicyEventsAdapter(fixture({ items: [member], nextCursor: null }).transport)
+    client = createPolicyEventsAdapter(
+      fixture({ items: [member], nextCursor: null }).transport,
+      '11111111-1111-4111-8111-111111111111',
+    )
   const result = await client.members('fd753049-737f-5652-b607-203b78eb5309', id, {})
   expect(result.items[0]?.state).toBe('accepted')
   expect(result.items[0]?.operations[0]?.state).toBe('queued')
@@ -128,11 +132,10 @@ it('keeps member acceptance separate from native effect and rejects mismatched o
     operations: [{ ...member.operations[0], reference: { kind: 'native', id: operationId } }],
   }
   await expect(
-    createPolicyEventsAdapter(fixture({ items: [wrong], nextCursor: null }).transport).members(
-      'fd753049-737f-5652-b607-203b78eb5309',
-      id,
-      {},
-    ),
+    createPolicyEventsAdapter(
+      fixture({ items: [wrong], nextCursor: null }).transport,
+      '11111111-1111-4111-8111-111111111111',
+    ).members('fd753049-737f-5652-b607-203b78eb5309', id, {}),
   ).rejects.toThrow('references')
 })
 it('preserves native collection delivery and intake without fabricating agent execution or effect', async () => {
@@ -158,6 +161,7 @@ it('preserves native collection delivery and intake without fabricating agent ex
     },
     result = await createPoliciesAdapter(
       fixture({ items: [run], nextCursor: null }).transport,
+      '11111111-1111-4111-8111-111111111111',
     ).runs(id, {})
   expect(result.items[0]).toMatchObject({
     kind: 'collection',
@@ -191,6 +195,7 @@ it('consumes access run state without inventing a software effect', async () => 
     },
     result = await createPoliciesAdapter(
       fixture({ items: [run], nextCursor: null }).transport,
+      '11111111-1111-4111-8111-111111111111',
     ).runs(id, {})
   expect(result.items[0]).toMatchObject({
     kind: 'access',
@@ -221,6 +226,7 @@ it('keeps recurring eligibility, current trigger knowledge and restricted execut
       items: [recurring, { ...base, execution: { kind: 'restricted' } }],
       nextCursor: null,
     }).transport,
+    '11111111-1111-4111-8111-111111111111',
   ).assignments(id, {})
   expect(page.items[0]?.execution).toEqual(recurring.execution)
   expect(page.items[0]?.taskAdmission?.nextAllowedStartAt).toBe(1700000000)
@@ -236,6 +242,7 @@ it('keeps recurring eligibility, current trigger knowledge and restricted execut
       ],
       nextCursor: null,
     }).transport,
+    '11111111-1111-4111-8111-111111111111',
   ).assignments(id, {})
   expect(absent.items[0]?.execution).toEqual({
     kind: 'recurring',
@@ -247,6 +254,10 @@ it('keeps recurring eligibility, current trigger knowledge and restricted execut
 it('carries the assignment read cancellation signal to the sole HTTP executor', async () => {
   const f = fixture({ items: [], nextCursor: null }),
     controller = new AbortController()
-  await createPoliciesAdapter(f.transport).assignments(id, { limit: 20 }, controller.signal)
+  await createPoliciesAdapter(f.transport, '11111111-1111-4111-8111-111111111111').assignments(
+    id,
+    { limit: 20 },
+    controller.signal,
+  )
   expect(f.request.mock.calls[0]![0].signal).toBe(controller.signal)
 })

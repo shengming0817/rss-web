@@ -23,7 +23,7 @@ import { base64url, count, enumeration, positive, text, uuid } from './decode'
 import { attachment } from './download'
 
 function storageReceipt(value: unknown): StorageReceipt {
-  if (!schema.postApiV1StorageConnectionsResponse.validateRoot(value))
+  if (!schema.postApiV1TenantsByTenantStorageConnectionsResponse.validateRoot(value))
     throw new Error('Invalid storage receipt')
   uuid(value.operationId)
   positive(value.revision)
@@ -33,20 +33,21 @@ function storageReceipt(value: unknown): StorageReceipt {
   }
 }
 function mailReceipt(value: unknown): MailReceipt {
-  if (!schema.postApiV1SmtpResponse.validateRoot(value)) throw new Error('Invalid mail receipt')
+  if (!schema.postApiV1TenantsByTenantSmtpResponse.validateRoot(value))
+    throw new Error('Invalid mail receipt')
   uuid(value.operationId)
   positive(value.revision)
   return value
 }
 function wnsReceipt(value: unknown): WnsReceipt {
-  if (!schema.getApiV1WindowsWnsResponse.validateReceipt(value))
+  if (!schema.getApiV1TenantsByTenantWindowsWnsResponse.validateReceipt(value))
     throw new Error('Invalid Windows push receipt')
   uuid(value.operationId)
   positive(value.revision)
   return value
 }
 function wnsOperation(value: unknown, operationId: string): WnsOperation {
-  if (!schema.postApiV1WindowsWnsResponse.validateRoot(value))
+  if (!schema.postApiV1TenantsByTenantWindowsWnsResponse.validateRoot(value))
     throw new Error('Invalid Windows push operation')
   if (value.receipt.operationId !== operationId) throw new Error('Wrong Windows push operation')
   if (value.kind === 'material') wnsReceipt(value.receipt)
@@ -57,7 +58,7 @@ function wnsOperation(value: unknown, operationId: string): WnsOperation {
   return value
 }
 function migration(value: unknown, operationId?: string): Migration {
-  if (!schema.getApiV1StorageMigrationsOperationsByIdResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantStorageMigrationsOperationsByIdResponse.validateRoot(value))
     throw new Error('Invalid storage migration')
   uuid(value.operationId)
   uuid(value.sourceGeneration)
@@ -75,7 +76,11 @@ function migration(value: unknown, operationId?: string): Migration {
   return value
 }
 function appleMaterial(value: unknown): AppleMaterial {
-  if (!schema.getApiV1AppleMaterialsByPurposeVersionsResponse.validatePublicVersion(value))
+  if (
+    !schema.getApiV1TenantsByTenantAppleMaterialsByPurposeVersionsResponse.validatePublicVersion(
+      value,
+    )
+  )
     throw new Error('Invalid Apple material')
   positive(value.revision)
   uuid(value.keyId)
@@ -87,7 +92,7 @@ function appleMaterial(value: unknown): AppleMaterial {
   return value
 }
 function appleDirectory(value: unknown): AppleDirectory {
-  if (!schema.getApiV1AppleMaterialsByPurposeResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantAppleMaterialsByPurposeResponse.validateRoot(value))
     throw new Error('Invalid Apple material directory')
   if (value.runtimeObservation !== 'separate')
     throw new Error('Invalid runtime observation boundary')
@@ -95,7 +100,7 @@ function appleDirectory(value: unknown): AppleDirectory {
   return value
 }
 function appleReceipt(value: unknown, operationId: string): AppleReceipt {
-  if (!schema.getApiV1AppleMaterialOperationsByOperationResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantAppleMaterialOperationsByOperationResponse.validateRoot(value))
     throw new Error('Invalid Apple operation')
   if (value.operationId !== operationId) throw new Error('Wrong Apple material operation')
   positive(value.revision)
@@ -106,7 +111,7 @@ function connectionConfiguration(
   tenant: string,
   service: string,
 ): ConnectionConfiguration {
-  if (!schema.getApiV1AgentConnectionsResponse.validateConfiguration(value))
+  if (!schema.getApiV1TenantsByTenantAgentConnectionsResponse.validateConfiguration(value))
     throw new Error('Invalid Agent connection configuration')
   if (value.wireVersion !== 1 || value.tenantId !== tenant || value.serviceId !== service)
     throw new Error('Wrong Agent connection binding')
@@ -125,14 +130,14 @@ function connectionConfiguration(
   return value
 }
 function signedConnections(value: unknown, tenant: string, service: string): SignedConnections {
-  if (!schema.postApiV1AgentConnectionsPublishResponse.validateRoot(value))
+  if (!schema.postApiV1TenantsByTenantAgentConnectionsPublishResponse.validateRoot(value))
     throw new Error('Invalid signed connection contract')
   connectionConfiguration(value.configuration, tenant, service)
   base64url(value.signature, 64)
   return value
 }
 function agentDirectory(value: unknown, tenant: string, service: string): AgentDirectory {
-  if (!schema.getApiV1AgentConnectionsResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantAgentConnectionsResponse.validateRoot(value))
     throw new Error('Invalid Agent connection directory')
   if (value.serviceId !== service) throw new Error('Wrong connection service')
   if (value.draft) connectionConfiguration(value.draft.configuration, tenant, service)
@@ -159,7 +164,11 @@ function agentDirectory(value: unknown, tenant: string, service: string): AgentD
   return value
 }
 function connectionObservation(value: unknown): ConnectionObservation | null {
-  if (!schema.getApiV1AgentConnectionsDevicesByDeviceObservationResponse.validateRoot(value))
+  if (
+    !schema.getApiV1TenantsByTenantAgentConnectionsDevicesByDeviceObservationResponse.validateRoot(
+      value,
+    )
+  )
     throw new Error('Invalid connection observation')
   if (value === null) return null
   if ((value.acknowledgement === null) !== (value.receivedAt === null))
@@ -190,24 +199,28 @@ export function createConnectionsAdapters(
   return {
     storage: {
       read: () =>
-        api.getApiV1StorageConnections(transport, {}, (value) => {
-          return {
-            ...value,
-            current: value.current === null ? null : storageReceipt(value.current),
-            latest: value.latest === null ? null : storageReceipt(value.latest),
-            applied: value.applied === null ? null : storageReceipt(value.applied),
-          }
-        }),
-      history: (query) =>
-        api.getApiV1StorageConnectionsVersions(
+        api.getApiV1TenantsByTenantStorageConnections(
           transport,
-          { query: windowParameters(query) },
+          { pathParams: { tenant } },
+          (value) => {
+            return {
+              ...value,
+              current: value.current === null ? null : storageReceipt(value.current),
+              latest: value.latest === null ? null : storageReceipt(value.latest),
+              applied: value.applied === null ? null : storageReceipt(value.applied),
+            }
+          },
+        ),
+      history: (query) =>
+        api.getApiV1TenantsByTenantStorageConnectionsVersions(
+          transport,
+          { pathParams: { tenant }, query: windowParameters(query) },
           (value) => windowPage(value, storageReceipt),
         ),
       operation: (id) =>
-        api.getApiV1StorageConnectionsOperationsById(
+        api.getApiV1TenantsByTenantStorageConnectionsOperationsById(
           transport,
-          { pathParams: { id: uuid(id) } },
+          { pathParams: { tenant, id: uuid(id) } },
           (value) => {
             const result = storageReceipt(value)
             if (result.operationId !== id) throw new Error('Wrong storage operation')
@@ -215,25 +228,31 @@ export function createConnectionsAdapters(
           },
         ),
       save: (intent, source) =>
-        api.postApiV1StorageConnections(
+        api.postApiV1TenantsByTenantStorageConnections(
           transport,
           {
+            pathParams: { tenant },
             headers: { 'Idempotency-Key': uuid(intent.operationId) },
             body: { expectedRevision: intent.expectedRevision, profile: intent.profile, source },
           },
           storageReceipt,
         ),
       migrations: () =>
-        api.getApiV1StorageMigrations(transport, {}, (value) => {
-          uuid(value.activeGeneration)
-          if (value.operation) migration(value.operation)
-          value.history.forEach((entry) => migration(entry))
-          return value
-        }),
+        api.getApiV1TenantsByTenantStorageMigrations(
+          transport,
+          { pathParams: { tenant } },
+          (value) => {
+            uuid(value.activeGeneration)
+            if (value.operation) migration(value.operation)
+            value.history.forEach((entry) => migration(entry))
+            return value
+          },
+        ),
       requestMigration: (intent) =>
-        api.postApiV1StorageMigrations(
+        api.postApiV1TenantsByTenantStorageMigrations(
           transport,
           {
+            pathParams: { tenant },
             headers: { 'Idempotency-Key': uuid(intent.operationId) },
             body: {
               expectedStorageRevision: intent.expectedStorageRevision,
@@ -243,38 +262,45 @@ export function createConnectionsAdapters(
           (value) => migration(value, intent.operationId),
         ),
       migration: (id) =>
-        api.getApiV1StorageMigrationsOperationsById(
+        api.getApiV1TenantsByTenantStorageMigrationsOperationsById(
           transport,
-          { pathParams: { id: uuid(id) } },
+          { pathParams: { tenant, id: uuid(id) } },
           (value) => migration(value, id),
         ),
       cancelMigration: (id) =>
-        api.postApiV1StorageMigrationsOperationsByIdCancel(
+        api.postApiV1TenantsByTenantStorageMigrationsOperationsByIdCancel(
           transport,
-          { pathParams: { id: uuid(id) } },
+          { pathParams: { tenant, id: uuid(id) } },
           (value) => migration(value, id),
         ),
     },
     mail: {
       read: () =>
-        api.getApiV1Smtp(transport, {}, (value) => {
+        api.getApiV1TenantsByTenantSmtp(transport, { pathParams: { tenant } }, (value) => {
           for (const receipt of [value.current, value.latest]) if (receipt) mailReceipt(receipt)
           return value
         }),
       history: (query) =>
-        api.getApiV1SmtpVersions(transport, { query: windowParameters(query) }, (value) =>
-          windowPage(value, mailReceipt),
+        api.getApiV1TenantsByTenantSmtpVersions(
+          transport,
+          { pathParams: { tenant }, query: windowParameters(query) },
+          (value) => windowPage(value, mailReceipt),
         ),
       operation: (id) =>
-        api.getApiV1SmtpOperationsById(transport, { pathParams: { id: uuid(id) } }, (value) => {
-          const result = mailReceipt(value)
-          if (result.operationId !== id) throw new Error('Wrong mail operation')
-          return result
-        }),
+        api.getApiV1TenantsByTenantSmtpOperationsById(
+          transport,
+          { pathParams: { tenant, id: uuid(id) } },
+          (value) => {
+            const result = mailReceipt(value)
+            if (result.operationId !== id) throw new Error('Wrong mail operation')
+            return result
+          },
+        ),
       save: (intent, password) =>
-        api.postApiV1Smtp(
+        api.postApiV1TenantsByTenantSmtp(
           transport,
           {
+            pathParams: { tenant },
             headers: { 'Idempotency-Key': uuid(intent.operationId) },
             body: {
               expectedRevision: intent.expectedRevision,
@@ -290,23 +316,28 @@ export function createConnectionsAdapters(
     },
     wns: {
       read: () =>
-        api.getApiV1WindowsWns(transport, {}, (value) => {
+        api.getApiV1TenantsByTenantWindowsWns(transport, { pathParams: { tenant } }, (value) => {
           for (const receipt of [value.current, value.latest, value.applied])
             if (receipt) wnsReceipt(receipt)
           return value
         }),
       history: (query) =>
-        api.getApiV1WindowsWnsVersions(transport, { query: windowParameters(query) }, (value) =>
-          windowPage(value, wnsReceipt),
+        api.getApiV1TenantsByTenantWindowsWnsVersions(
+          transport,
+          { pathParams: { tenant }, query: windowParameters(query) },
+          (value) => windowPage(value, wnsReceipt),
         ),
       operation: (id) =>
-        api.getApiV1WindowsWnsOperationsById(transport, { pathParams: { id: uuid(id) } }, (value) =>
-          wnsOperation(value, id),
+        api.getApiV1TenantsByTenantWindowsWnsOperationsById(
+          transport,
+          { pathParams: { tenant, id: uuid(id) } },
+          (value) => wnsOperation(value, id),
         ),
       save: (intent, clientSecret) =>
-        api.postApiV1WindowsWns(
+        api.postApiV1TenantsByTenantWindowsWns(
           transport,
           {
+            pathParams: { tenant },
             headers: { 'Idempotency-Key': uuid(intent.operationId) },
             body: {
               expectedRevision: intent.expectedRevision,
@@ -318,9 +349,10 @@ export function createConnectionsAdapters(
           (value) => wnsOperation(value, intent.operationId),
         ),
       revoke: (id, expectedRevision, materialRevision) =>
-        api.postApiV1WindowsWnsRevoke(
+        api.postApiV1TenantsByTenantWindowsWnsRevoke(
           transport,
           {
+            pathParams: { tenant },
             headers: { 'Idempotency-Key': uuid(id) },
             body: { expectedRevision, materialRevision },
           },
@@ -329,17 +361,21 @@ export function createConnectionsAdapters(
     },
     apple: {
       read: (purpose) =>
-        api.getApiV1AppleMaterialsByPurpose(transport, { pathParams: { purpose } }, appleDirectory),
-      history: (purpose, query) =>
-        api.getApiV1AppleMaterialsByPurposeVersions(
+        api.getApiV1TenantsByTenantAppleMaterialsByPurpose(
           transport,
-          { pathParams: { purpose }, query: windowParameters(query) },
+          { pathParams: { tenant, purpose } },
+          appleDirectory,
+        ),
+      history: (purpose, query) =>
+        api.getApiV1TenantsByTenantAppleMaterialsByPurposeVersions(
+          transport,
+          { pathParams: { tenant, purpose }, query: windowParameters(query) },
           (value) => windowPage(value, appleMaterial),
         ),
       operation: (id) =>
-        api.getApiV1AppleMaterialOperationsByOperation(
+        api.getApiV1TenantsByTenantAppleMaterialOperationsByOperation(
           transport,
-          { pathParams: { operation: uuid(id) } },
+          { pathParams: { tenant, operation: uuid(id) } },
           (value) => appleReceipt(value, id),
         ),
       submit: (purpose, id, command, privateKeyPem) => {
@@ -348,10 +384,10 @@ export function createConnectionsAdapters(
           expectedRevision = command.expectedRevision
         switch (command.kind) {
           case 'key':
-            return api.postApiV1AppleMaterialsByPurposeKeys(
+            return api.postApiV1TenantsByTenantAppleMaterialsByPurposeKeys(
               transport,
               {
-                pathParams,
+                pathParams: { tenant, ...pathParams },
                 headers,
                 body: {
                   expectedRevision,
@@ -364,10 +400,10 @@ export function createConnectionsAdapters(
               (value) => appleReceipt(value, id),
             )
           case 'certificate':
-            return api.postApiV1AppleMaterialsByPurposeCertificates(
+            return api.postApiV1TenantsByTenantAppleMaterialsByPurposeCertificates(
               transport,
               {
-                pathParams,
+                pathParams: { tenant, ...pathParams },
                 headers,
                 body: {
                   expectedRevision,
@@ -378,10 +414,10 @@ export function createConnectionsAdapters(
               (value) => appleReceipt(value, id),
             )
           case 'apply':
-            return api.postApiV1AppleMaterialsByPurposeApply(
+            return api.postApiV1TenantsByTenantAppleMaterialsByPurposeApply(
               transport,
               {
-                pathParams,
+                pathParams: { tenant, ...pathParams },
                 headers,
                 body: {
                   expectedRevision,
@@ -392,10 +428,10 @@ export function createConnectionsAdapters(
               (value) => appleReceipt(value, id),
             )
           case 'revoke':
-            return api.postApiV1AppleMaterialsByPurposeRevoke(
+            return api.postApiV1TenantsByTenantAppleMaterialsByPurposeRevoke(
               transport,
               {
-                pathParams,
+                pathParams: { tenant, ...pathParams },
                 headers,
                 body: { expectedRevision, materialRevision: command.materialRevision },
               },
@@ -406,27 +442,29 @@ export function createConnectionsAdapters(
     },
     agent: {
       read: () =>
-        api.getApiV1AgentConnections(transport, {}, (value) =>
-          agentDirectory(value, tenant, service),
+        api.getApiV1TenantsByTenantAgentConnections(
+          transport,
+          { pathParams: { tenant } },
+          (value) => agentDirectory(value, tenant, service),
         ),
       save: (intent) =>
-        api.putApiV1AgentConnections(
+        api.putApiV1TenantsByTenantAgentConnections(
           transport,
-          { body: { ...intent, origins: [...intent.origins] } },
+          { pathParams: { tenant }, body: { ...intent, origins: [...intent.origins] } },
           (value) => ({
             configuration: connectionConfiguration(value.configuration, tenant, service),
           }),
         ),
       publish: (id, expectedRevision) =>
-        api.postApiV1AgentConnectionsPublish(
+        api.postApiV1TenantsByTenantAgentConnectionsPublish(
           transport,
-          { body: { operationId: uuid(id), expectedRevision } },
+          { pathParams: { tenant }, body: { operationId: uuid(id), expectedRevision } },
           (value) => signedConnections(value, tenant, service),
         ),
       operation: (id) =>
-        api.getApiV1AgentConnectionOperationsById(
+        api.getApiV1TenantsByTenantAgentConnectionOperationsById(
           transport,
-          { pathParams: { id: uuid(id) } },
+          { pathParams: { tenant, id: uuid(id) } },
           (value): AgentOperation | null => {
             if (value === null) return null
             return value.action === 'saved'
@@ -447,24 +485,29 @@ export function createConnectionsAdapters(
           },
         ),
       download: () =>
-        api.getApiV1AgentConnectionsConfiguration(transport, {}, (value) => {
-          const file = attachment(value, 'application/json', 'rss-agent-connections.json', 65536)
-          try {
-            const document = signedConnections(
-              JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
-              tenant,
-              service,
-            )
-            return { file, document }
-          } catch (error) {
-            new Uint8Array(file.bytes).fill(0)
-            throw error
-          }
-        }),
+        api.getApiV1TenantsByTenantAgentConnectionsConfiguration(
+          transport,
+          { pathParams: { tenant } },
+          (value) => {
+            const file = attachment(value, 'application/json', 'rss-agent-connections.json', 65536)
+            try {
+              const document = signedConnections(
+                JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)),
+                tenant,
+                service,
+              )
+              return { file, document }
+            } catch (error) {
+              new Uint8Array(file.bytes).fill(0)
+              throw error
+            }
+          },
+        ),
       devices: (revision, after) =>
-        api.getApiV1AgentConnectionsDevices(
+        api.getApiV1TenantsByTenantAgentConnectionsDevices(
           transport,
           {
+            pathParams: { tenant },
             query: {
               revision: positive(revision),
               ...(after === undefined ? {} : { after: uuid(after) }),
@@ -482,15 +525,15 @@ export function createConnectionsAdapters(
           },
         ),
       observation: (device) =>
-        api.getApiV1AgentConnectionsDevicesByDeviceObservation(
+        api.getApiV1TenantsByTenantAgentConnectionsDevicesByDeviceObservation(
           transport,
-          { pathParams: { device } },
+          { pathParams: { tenant, device } },
           connectionObservation,
         ),
     },
     evidence: {
       catalog: () =>
-        api.getApiV1SettingsCatalog(transport, {}, (value) =>
+        api.getApiV1TenantsByTenantSettingsCatalog(transport, { pathParams: { tenant } }, (value) =>
           value.items
             .filter((item) =>
               [
@@ -517,16 +560,19 @@ export function createConnectionsAdapters(
             })),
         ),
       loaded: () =>
-        api.getApiV1RuntimeDiagnostics(transport, {}, (value) =>
-          value.channels
-            .filter((channel) => channel.name !== 'signing')
-            .map((channel) => ({
-              name: channel.name,
-              state: channel.state,
-              mounted: channel.mounted,
-              loadedMaterials: { ...channel.loadedMaterials },
-              reasons: [...channel.reasons],
-            })),
+        api.getApiV1TenantsByTenantRuntimeDiagnostics(
+          transport,
+          { pathParams: { tenant } },
+          (value) =>
+            value.channels
+              .filter((channel) => channel.name !== 'signing')
+              .map((channel) => ({
+                name: channel.name,
+                state: channel.state,
+                mounted: channel.mounted,
+                loadedMaterials: { ...channel.loadedMaterials },
+                reasons: [...channel.reasons],
+              })),
         ),
     },
   }

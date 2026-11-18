@@ -42,8 +42,6 @@ it('binds tenant update idempotency to the resource locator, original operation,
   const result = {
     tenantId: tenant,
     management: false,
-    initialEpoch: 1,
-    currentEpoch: 1,
     name: 'New',
     notes: null,
     revision: 5,
@@ -78,9 +76,9 @@ it('binds tenant update idempotency to the resource locator, original operation,
 })
 it('rejects a wrong field detail and wrong principal/view profile instead of leaking a previous selection', async () => {
   const detail = fixture({ fieldId: id, revision: 2, collectedAfterMicros: 0, value: null })
-  await expect(createProfilesAdapter(detail.transport).definition(principal)).rejects.toThrow(
-    'Wrong field',
-  )
+  await expect(
+    createProfilesAdapter(detail.transport, tenant).definition(principal),
+  ).rejects.toThrow('Wrong field')
   const profile = fixture({
     principalId: principal,
     view: 'current',
@@ -88,9 +86,9 @@ it('rejects a wrong field detail and wrong principal/view profile instead of lea
     fields: [],
     completeness: { complete: 0, required: 0, missing: 0 },
   })
-  await expect(createProfilesAdapter(profile.transport).other(principal, false)).rejects.toThrow(
-    'Wrong profile',
-  )
+  await expect(
+    createProfilesAdapter(profile.transport, tenant).other(principal, false),
+  ).rejects.toThrow('Wrong profile')
 })
 it('never recovers a key secret from a replay with null secret, and rejects unsolicited secret disclosure', async () => {
   const replay = fixture({ receipt: { id, revision: 1, deleted: false }, secret: null })

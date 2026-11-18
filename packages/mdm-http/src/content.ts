@@ -15,7 +15,7 @@ import { boolean, count, enumeration, nullable, text, uuid } from './decode'
 import { resourceDigest } from './resource-values'
 
 function uploadSession(value: unknown, resource: string, upload: string): UploadSession {
-  if (!schema.getApiV1ResourcesByIdUploadsByUploadResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantResourcesByIdUploadsByUploadResponse.validateRoot(value))
     throw new Error('Invalid upload session')
   const binding = value.binding
   if (binding.purpose.kind === 'software') {
@@ -131,7 +131,7 @@ function downloadChunk(
   }
 }
 /** The sole content adapter uses the application's session-bound executor. */
-export function createContentAdapter(transport: HttpTransport): ContentPort {
+export function createContentAdapter(transport: HttpTransport, tenant: string): ContentPort {
   function originalResource(
     value: unknown,
     resource: string,
@@ -143,10 +143,10 @@ export function createContentAdapter(transport: HttpTransport): ContentPort {
   }
   return {
     begin: (intent, signal) =>
-      api.postApiV1ResourcesByIdUploadsByUpload(
+      api.postApiV1TenantsByTenantResourcesByIdUploadsByUpload(
         transport,
         {
-          pathParams: { id: intent.target.resource, upload: intent.id },
+          pathParams: { tenant, id: intent.target.resource, upload: intent.id },
           query: {
             version: intent.target.version,
             variant: intent.target.variant,
@@ -159,16 +159,16 @@ export function createContentAdapter(transport: HttpTransport): ContentPort {
         (value) => originalResource(value, intent.target.resource, intent.id),
       ),
     read: (resource, upload, signal) =>
-      api.getApiV1ResourcesByIdUploadsByUpload(
+      api.getApiV1TenantsByTenantResourcesByIdUploadsByUpload(
         transport,
-        { pathParams: { id: resource, upload }, ...(signal ? { signal } : {}) },
+        { pathParams: { tenant, id: resource, upload }, ...(signal ? { signal } : {}) },
         (value) => uploadSession(value, resource, upload),
       ),
     append: (intent, offset, bytes, signal) =>
-      api.patchApiV1ResourcesByIdUploadsByUpload(
+      api.patchApiV1TenantsByTenantResourcesByIdUploadsByUpload(
         transport,
         {
-          pathParams: { id: intent.target.resource, upload: intent.id },
+          pathParams: { tenant, id: intent.target.resource, upload: intent.id },
           query: { offset },
           body: bytes,
           timeoutMs: MDM_CONTENT_TIMEOUT_MS,
@@ -177,15 +177,15 @@ export function createContentAdapter(transport: HttpTransport): ContentPort {
         (value) => uploadSession(value, intent.target.resource, intent.id),
       ),
     complete: (intent, signal) =>
-      api.postApiV1ResourcesByIdUploadsByUploadComplete(transport, {
-        pathParams: { id: intent.target.resource, upload: intent.id },
+      api.postApiV1TenantsByTenantResourcesByIdUploadsByUploadComplete(transport, {
+        pathParams: { tenant, id: intent.target.resource, upload: intent.id },
         timeoutMs: MDM_CONTENT_TIMEOUT_MS,
         ...(signal ? { signal } : {}),
       }),
     receipt: (resource, operation) =>
-      api.getApiV1ResourcesByIdContentOperationsByOperation(
+      api.getApiV1TenantsByTenantResourcesByIdContentOperationsByOperation(
         transport,
-        { pathParams: { id: resource, operation } },
+        { pathParams: { tenant, id: resource, operation } },
         (value) => {
           if (
             value.resource !== resource ||
@@ -223,7 +223,7 @@ export function createContentAdapter(transport: HttpTransport): ContentPort {
           architecture: request.target.architecture,
         },
         input = {
-          pathParams: { id: request.target.resource, version: request.target.version },
+          pathParams: { tenant, id: request.target.resource, version: request.target.version },
           headers,
           timeoutMs: MDM_CONTENT_TIMEOUT_MS,
           ...(signal ? { signal } : {}),
@@ -236,10 +236,17 @@ export function createContentAdapter(transport: HttpTransport): ContentPort {
             request.target.artifact.sha256,
           )
       return request.kind === 'script'
-        ? api.getApiV1ResourcesByIdVersionsByVersionScript(transport, { ...input, query }, decode)
-        : api.getApiV1SoftwareResourcesByIdVersionsByVersionContent(
+        ? api.getApiV1TenantsByTenantResourcesByIdVersionsByVersionScript(
             transport,
-            { ...input, query: { ...query, artifact: request.target.artifact.reference } },
+            { ...input, query },
+            decode,
+          )
+        : api.getApiV1TenantsByTenantSoftwareResourcesByIdVersionsByVersionContent(
+            transport,
+            {
+              ...input,
+              query: { ...query, artifact: request.target.artifact.reference },
+            },
             decode,
           )
     },

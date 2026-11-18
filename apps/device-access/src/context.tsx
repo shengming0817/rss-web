@@ -2,7 +2,6 @@ import { createContext, useContext, useSyncExternalStore, type ComponentType } f
 import type { SessionOwner, AuthenticationFlows } from '@rss/auth-core'
 import type { DeviceAccessClient, SecurityClient } from '@rss/device-access/client'
 import type { Source } from '@rss/device-access/model'
-import type { DaHost } from './config'
 export interface WriteState {
   id: string
   state: 'idle' | 'busy' | 'unknown' | 'accepted'
@@ -15,7 +14,7 @@ export interface DaRuntime {
   flows: AuthenticationFlows
   client: DeviceAccessClient
   security: SecurityClient
-  host: DaHost
+  tenant: string
   source: Source
   controls: ComponentType | null
   writes: Map<string, WriteState>

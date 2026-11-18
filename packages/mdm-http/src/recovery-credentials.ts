@@ -18,14 +18,18 @@ import { boolean, enumeration, nullable, positive, text, uuid } from './decode'
 import { integer, requestInput } from './inventory-values'
 
 function subject(value: unknown): Subject {
-  if (!schema.getApiV1DevicesByDeviceRecoveryCredentialsResponse.validateSubject(value))
+  if (
+    !schema.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsResponse.validateSubject(value)
+  )
     throw new Error('Invalid recovery credential subject')
   const result = structuredClone(value)
   validateSubject(result)
   return result
 }
 function binding(value: unknown): Material['binding'] {
-  if (!schema.getApiV1DevicesByDeviceRecoveryCredentialsResponse.validateBinding(value))
+  if (
+    !schema.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsResponse.validateBinding(value)
+  )
     throw new Error('Invalid recovery credential binding')
   return {
     device: text(value.device),
@@ -34,7 +38,7 @@ function binding(value: unknown): Material['binding'] {
 }
 function material(value: unknown, target: string | MaterialRef): Material {
   if (
-    !schema.postApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionRevokeResponse.validateRoot(
+    !schema.postApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsByIdVersionsByVersionRevokeResponse.validateRoot(
       value,
     )
   )
@@ -61,7 +65,11 @@ function fields(device: string) {
     version: positive,
     current: boolean,
     validity: (value: unknown) => {
-      if (!schema.getApiV1DevicesByDeviceRecoveryCredentialsResponse.validateValidity(value))
+      if (
+        !schema.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsResponse.validateValidity(
+          value,
+        )
+      )
         throw new Error('Invalid credential validity')
       return value
     },
@@ -78,7 +86,7 @@ function fields(device: string) {
 }
 function configuration(value: unknown): FileVaultConfiguration {
   if (
-    !schema.getApiV1DevicesByDeviceRecoveryCredentialsFilevaultConfigurationResponse.validateRoot(
+    !schema.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsFilevaultConfigurationResponse.validateRoot(
       value,
     )
   )
@@ -95,7 +103,7 @@ function configuration(value: unknown): FileVaultConfiguration {
 }
 function disclosure(value: unknown, target: MaterialRef): Disclosure {
   if (
-    !schema.getApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionSecretResponse.validateRoot(
+    !schema.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsByIdVersionsByVersionSecretResponse.validateRoot(
       value,
     )
   )
@@ -115,7 +123,7 @@ const path = (target: MaterialRef) => ({
 })
 function operation(value: unknown, id: string): CredentialOperation {
   if (
-    !schema.getApiV1DevicesByDeviceOperationsByIdResponse.validateRoot(value) ||
+    !schema.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse.validateRoot(value) ||
     value.owner !== 'recovery' ||
     value.operationId !== id ||
     value.commandId !== id ||
@@ -168,12 +176,13 @@ function operation(value: unknown, id: string): CredentialOperation {
 }
 export function createRecoveryCredentialsAdapter(
   transport: HttpTransport,
+  tenant: string,
 ): RecoveryCredentialsPort {
   return {
     list: (device, query, signal) =>
-      api.getApiV1DevicesByDeviceRecoveryCredentials(
+      api.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentials(
         transport,
-        { signal, pathParams: { device }, query: queryParameters(query) },
+        { signal, pathParams: { tenant, device }, query: queryParameters(query) },
         (value) => {
           const page = projectedPage(value, fields(device), query.fields, ['id', 'version'])
           if (page.items.length > 100) throw new Error('Recovery material page exceeds budget')
@@ -181,11 +190,11 @@ export function createRecoveryCredentialsAdapter(
         },
       ),
     material: (target, signal) =>
-      api.getApiV1DevicesByDeviceRecoveryCredentials(
+      api.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentials(
         transport,
         {
           signal,
-          pathParams: { device: target.device },
+          pathParams: { tenant, device: target.device },
           query: queryParameters({
             filter: allOf(
               comparison('id', '==', target.id),
@@ -202,18 +211,18 @@ export function createRecoveryCredentialsAdapter(
         },
       ),
     configuration: (device) =>
-      api.getApiV1DevicesByDeviceRecoveryCredentialsFilevaultConfiguration(
+      api.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsFilevaultConfiguration(
         transport,
         {
-          pathParams: { device },
+          pathParams: { tenant, device },
         },
         configuration,
       ),
     configure: (device, input) =>
-      api.postApiV1DevicesByDeviceRecoveryCredentialsFilevaultConfiguration(
+      api.postApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsFilevaultConfiguration(
         transport,
         {
-          pathParams: { device },
+          pathParams: { tenant, device },
           body: {
             operationId: input.operationId,
             expectedRevision: input.expectedRevision,
@@ -224,24 +233,28 @@ export function createRecoveryCredentialsAdapter(
         configuration,
       ),
     link: (device, operationId, otherDevice) =>
-      api.postApiV1DevicesByDeviceRecoveryCredentialsFilevaultLink(
+      api.postApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsFilevaultLink(
         transport,
-        { pathParams: { device }, body: { operationId, otherDevice } },
+        { pathParams: { tenant, device }, body: { operationId, otherDevice } },
         configuration,
       ),
     reveal: (target, signal) =>
-      api.getApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionSecret(
+      api.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsByIdVersionsByVersionSecret(
         transport,
-        { pathParams: path(target), signal },
+        { pathParams: { tenant, ...path(target) }, signal },
         (value) => disclosure(value, target),
       ),
     beginLoginDisclosure: (input, signal) =>
-      api.postApiV1DevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionStepUp(
+      api.postApiV1TenantsByTenantDevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionStepUp(
         transport,
-        { pathParams: path(input.target), body: { operationId: input.operationId }, signal },
+        {
+          pathParams: { tenant, ...path(input.target) },
+          body: { operationId: input.operationId },
+          signal,
+        },
         (value) => {
           if (
-            !schema.postApiV1DevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionStepUpResponse.validateRoot(
+            !schema.postApiV1TenantsByTenantDevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionStepUpResponse.validateRoot(
               value,
             )
           )
@@ -256,22 +269,26 @@ export function createRecoveryCredentialsAdapter(
         },
       ),
     revealLogin: (input, signal) =>
-      api.postApiV1DevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionSecret(
+      api.postApiV1TenantsByTenantDevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionSecret(
         transport,
-        { pathParams: path(input.target), body: { operationId: input.operationId }, signal },
+        {
+          pathParams: { tenant, ...path(input.target) },
+          body: { operationId: input.operationId },
+          signal,
+        },
         (value) => disclosure(value, input.target),
       ),
     revoke: (target) =>
-      api.postApiV1DevicesByDeviceRecoveryCredentialsByIdVersionsByVersionRevoke(
+      api.postApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsByIdVersionsByVersionRevoke(
         transport,
-        { pathParams: path(target) },
+        { pathParams: { tenant, ...path(target) } },
         (value) => material(value, target),
       ),
     create: (input, unlockPassword) =>
-      api.postApiV1DevicesByDeviceRecoveryCredentialsOperations(
+      api.postApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsOperations(
         transport,
         {
-          pathParams: { device: input.device },
+          pathParams: { tenant, device: input.device },
           body: requestInput(
             {
               operationId: input.operationId,
@@ -281,7 +298,8 @@ export function createRecoveryCredentialsAdapter(
                   ? { ...input.action, unlockPassword }
                   : input.action,
             },
-            schema.postApiV1DevicesByDeviceRecoveryCredentialsOperationsBody.validateRoot,
+            schema.postApiV1TenantsByTenantDevicesByDeviceRecoveryCredentialsOperationsBody
+              .validateRoot,
           ),
         },
         (value) => {
@@ -300,9 +318,9 @@ export function createRecoveryCredentialsAdapter(
         },
       ),
     operation: (device, id) =>
-      api.getApiV1DevicesByDeviceOperationsById(
+      api.getApiV1TenantsByTenantDevicesByDeviceOperationsById(
         transport,
-        { pathParams: { device, id } },
+        { pathParams: { tenant, device, id } },
         (value) => operation(value, id),
       ),
   }

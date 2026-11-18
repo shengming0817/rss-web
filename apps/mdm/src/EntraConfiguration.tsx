@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { Alert, Button, Checkbox, Form, Input, Space } from 'antd'
 import type { Runtime } from './runtime'
@@ -129,9 +130,9 @@ export function EntraConfiguration({
       )}
       <Space wrap>
         <Button onClick={read.reload}>{l('读取 Entra 策略', 'Read Entra policy')}</Button>
-        <a href="/security" target="_blank" rel="noopener noreferrer">
+        <Link to="/security" target="_blank" rel="noopener noreferrer">
           {l('在新窗口完成重认证', 'Reauthenticate in a new window')}
-        </a>
+        </Link>
       </Space>
       {pending && (
         <div className="admin-recovery">

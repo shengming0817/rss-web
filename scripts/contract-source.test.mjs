@@ -34,7 +34,7 @@ test('reads the prepared contract without a backend checkout or Git object store
   assert.equal(document.formatVersion, 1)
   assert.ok(
     document.endpoints.some(
-      (e) => e.operationId === 'browser:POST:/api/v1/policies/{policy}/previews',
+      (e) => e.operationId === 'browser:POST:/api/v1/tenants/{tenant}/policies/{policy}/previews',
     ),
   )
 })

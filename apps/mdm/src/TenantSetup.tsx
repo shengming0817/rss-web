@@ -28,6 +28,7 @@ import {
   validateInput,
 } from './AdminUi'
 import { useAdministration } from './useAdministration'
+import { useProtectedDelivery } from './useProtectedDelivery'
 import { setupDestination, setupName } from './setup-presentation'
 import { SetupStatus } from './SetupStatus'
 const empty: Intent = { channels: [], capabilities: {}, completionRequested: false }
@@ -79,13 +80,7 @@ function SetupJourney({
       setBaseRevision(progress.value.saved.revision)
     }
   }, [progress.value, draft])
-  useEffect(() => {
-    const clear = () => {
-      if (document.visibilityState === 'hidden') setPassword('')
-    }
-    document.addEventListener('visibilitychange', clear)
-    return () => document.removeEventListener('visibilitychange', clear)
-  }, [])
+  useProtectedDelivery(() => setPassword(''))
   const has = (operation: string) =>
       !denied &&
       !permissions.busy &&
@@ -351,7 +346,11 @@ function SetupJourney({
                     ].map(
                       (key) =>
                         setupDestination(key) && (
-                          <Link key={key} to={setupDestination(key)!}>
+                          <Link
+                            key={key}
+                            to={setupDestination(key)!}
+                            reloadDocument={setupDestination(key) === '/downloads/agent'}
+                          >
                             {setupName(locale, key)}
                           </Link>
                         ),
@@ -585,7 +584,10 @@ function Evidence({ progress, locale }: { progress: Progress; locale: Locale }) 
               </div>
             ))}
             {setupDestination(s.id) && (
-              <Link to={setupDestination(s.id)!}>
+              <Link
+                to={setupDestination(s.id)!}
+                reloadDocument={setupDestination(s.id) === '/downloads/agent'}
+              >
                 {l('打开所属配置', 'Open configuration owner')} →
               </Link>
             )}

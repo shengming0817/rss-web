@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 import tempfile
+import traceback
 from urllib.parse import urlsplit
 import http.client
 import uuid
@@ -186,7 +187,9 @@ try:
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     storage(environment, binary, config, TENANTS[0])
     if browser_module == 'react-software-browser.mjs':
-        config['publication']['sources'] = [dict(name='internal', credentials={}, target=dict(Winget=dict(base=initialized['origin']+'/api/v1/software/native/sources/internal/', artifacts_base=initialized['origin']+'/api/v1/software/native/sources/internal/artifacts/')))]
+        source_base = initialized['origin'] + '/api/v1/tenants/{tenant}/software/native/sources/internal/'
+        config['publication']['sources'] = [dict(name='internal', credentials={},
+            target=dict(Winget=dict(base=source_base, artifacts_base=source_base+'artifacts/')))]
         import socket, threading, hashlib
         from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
         payload = b'abc'
@@ -253,18 +256,18 @@ try:
     private(environment.root/'product.log','')
     log = (environment.root/'product.log').open('w')
     phase = 'readiness'
-    start(binary, initialized, log, expected=503)
+    start(binary, initialized, log, expected=None)
     phase = 'task-signing'
     operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
     operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
     trust_operation = str(uuid.uuid4())
     trust_request = dict(action='prepare',expectedRevision=0)
-    status, trust = operator.call('POST', '/api/v1/task-signing/trust', trust_request, trust_operation)
+    status, trust = operator.call('POST', operator.business_path('/task-signing/trust'), trust_request, trust_operation)
     if status != 200 or trust['revision'] != 1:
         raise RuntimeError('task-signing')
     if browser_module == 'react-audit-webhooks-browser.mjs':
         # This owner requires a final request fact and explicitly marks the replay.
-        status, replayed = operator.call('POST', '/api/v1/task-signing/trust', trust_request, trust_operation)
+        status, replayed = operator.call('POST', operator.business_path('/task-signing/trust'), trust_request, trust_operation)
         if status != 200 or replayed != trust:
             raise RuntimeError('task-signing-replay')
         console['signerOperation'] = trust_operation
@@ -273,8 +276,7 @@ try:
         child.wait(timeout=10)
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
-    config['task_signing'] = dict(revision=trust['revision'])
-    config['agent_pki'] = agent
+    config['agent_pki'] = {key: agent[key] for key in ('mode', 'endpoint', 'lifetime')}
     if browser_module == 'react-execution-access-browser.mjs':
         # Exercise the real configured Windows channel alongside the bounded synthetic device facts.
         windows = windows_inputs(native)
@@ -295,14 +297,14 @@ try:
     if management_only:
         phase = 'management-seams'
         # These are actual authenticated reads, not substitute health/authority facts.
-        paths = ['/api/v1/authorization', '/api/v1/operations?limit=1']
+        paths = ['/authorization', '/operations?limit=1']
         if browser_module == 'react-devices-browser.mjs':
             # These device management transactions do not consume unrelated platform-template baseline completion.
-            paths += ['/api/v1/devices?limit=1', '/api/v1/device-associations?limit=1']
+            paths += ['/devices?limit=1', '/device-associations?limit=1']
         if audit_journey:
-            paths += ['/api/v1/audit-events?limit=1', '/api/v1/webhooks/subscriptions?limit=1']
+            paths += ['/audit-events?limit=1', '/webhooks/subscriptions?limit=1']
         for path in paths:
-            status, _ = operator.call('GET', path)
+            status, _ = operator.call('GET', operator.business_path(path))
             if status != 200:
                 print(json.dumps(dict(phase=phase, path=path.split('?')[0], status=status)), flush=True)
                 raise RuntimeError('management-seam-unavailable')
@@ -320,14 +322,14 @@ try:
         # The product owner stores immutable array versions and ordinal indexes atomically.
         for device, count in [('4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8',25),('d452e3d0-e318-53fa-84f0-10447d70893a',3),('ce1bacfb-5e6f-54bf-875e-a40f1f598569',25)]:
             time.sleep(.2)  # Keep fixture writes below the unchanged gateway request budget.
-            status, _ = operator.call('PUT', f'/api/v1/devices/{device}/manual-fields/custom.browser_list',
+            status, _ = operator.call('PUT', operator.business_path(f'/devices/{device}/manual-fields/custom.browser_list'),
                 dict(operationId=str(uuid.uuid4()),expectedRevision=0,
                      input=dict(action='set',value=dict(kind='array',value=[dict(kind='integer',value=n) for n in range(count)]))))
             if status != 200:
                 raise RuntimeError('manual-array-seed')
     phase = 'fixture-authority'
     # Keep the real initializer's rule administration, while the one fixture rule owns business grants.
-    status, rules = operator.call('GET', '/api/v1/authorization/rules')
+    status, rules = operator.call('GET', operator.business_path('/authorization/rules'))
     if status != 200:
         raise RuntimeError('initializer-rule-read')
     initializers = [r for r in rules['items'] if r['id'] != rule_id and r.get('value') and r['value']['subject'] == rule['subject']]
@@ -336,7 +338,7 @@ try:
     initial = initializers[0]
     value = dict(initial['value'])
     value['grants'] = [g for g in value['grants'] if g['operation'] in {'authorization_read', 'authorization_write', 'identity_accounts_manage'}]
-    status, _ = operator.call('PUT', '/api/v1/authorization/rules/'+initial['id'], dict(operationId=str(uuid.uuid4()),expectedRevision=initial['revision'],value=value))
+    status, _ = operator.call('PUT', operator.business_path('/authorization/rules/'+initial['id']), dict(operationId=str(uuid.uuid4()),expectedRevision=initial['revision'],value=value))
     if status != 200:
         raise RuntimeError('initializer-rule-scope')
     if browser_module in {'react-devices-browser.mjs', 'react-assets-browser.mjs'}:
@@ -346,7 +348,7 @@ try:
         if status != 200: raise RuntimeError('personnel-profile-read')
         status, _ = operator.call('PUT', profile_path, dict(operationId=str(uuid.uuid4()),expectedRevision=profile['revision'],value=dict(displayName='Device Browser Person',username='person-source-alias',email=None,extensions={},maxAgeSeconds=14400)))
         if status != 200: raise RuntimeError('personnel-profile-write')
-        status, _ = operator.call('PUT', '/api/v1/devices/4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8/registration-user', dict(expectedRevision=0,user=dict(tenantId=TENANTS[0],instanceId=INSTANCE,principalId=ADMIN)), operation=str(uuid.uuid4()))
+        status, _ = operator.call('PUT', operator.business_path('/devices/4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8/registration-user'), dict(expectedRevision=0,user=dict(tenantId=TENANTS[0],instanceId=INSTANCE,principalId=ADMIN)), operation=str(uuid.uuid4()))
         if status != 200: raise RuntimeError('personnel-owner-write')
     if browser_module == 'react-audit-webhooks-browser.mjs':
         phase = 'console-prerequisites'
@@ -359,7 +361,7 @@ try:
         writer_rule = dict(subject=dict(kind='user', user=dict(instanceId=INSTANCE,
             tenantId=TENANTS[0], principalId=writer['principalId'])), grants=[
                 dict(operation=o, scope=dict(kind='tenant')) for o in ['webhook_read','webhook_write']])
-        status, _ = operator.call('PUT', f'/api/v1/authorization/rules/{uuid.uuid4()}',
+        status, _ = operator.call('PUT', operator.business_path(f'/authorization/rules/{uuid.uuid4()}'),
             dict(operationId=str(uuid.uuid4()), expectedRevision=0, value=writer_rule))
         if status != 200: raise RuntimeError('diagnostics-writer-grant')
         writer_password = private(environment.root/'diagnostics-writer-password', password)
@@ -376,11 +378,16 @@ try:
         environment.sql(installation_sql()+f"SELECT public.create_new_tenant('{TENANTS[1]}',1,NULL,NULL) WHERE NOT EXISTS (SELECT 1 FROM public.mdm_tenants WHERE tenant_id='{TENANTS[1]}')", 'mdm_dev')
         foreign_grant = str(uuid.uuid4())
         environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','316fdd38-45b8-529e-b278-8baccd6aa0e2','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','316fdd38-45b8-529e-b278-8baccd6aa0e2','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
-    phase = 'collector-registration'
-    module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
-    collector = importlib.util.module_from_spec(module)
-    module.loader.exec_module(collector)
-    agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module in {'react-setup-browser.mjs', 'react-telemetry-browser.mjs','react-execution-access-browser.mjs'} else None)
+    agent_fixture = None
+    if browser_module not in {
+        'react-device-access-browser.mjs', 'react-devices-browser.mjs',
+        'react-policy-browser.mjs', 'react-software-browser.mjs',
+    }:
+        phase = 'collector-registration'
+        module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
+        collector = importlib.util.module_from_spec(module)
+        module.loader.exec_module(collector)
+        agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module in {'react-setup-browser.mjs', 'react-telemetry-browser.mjs','react-execution-access-browser.mjs'} else None)
     if browser_module == 'react-recovery-browser.mjs':
         phase = 'recovery-prerequisites'
         recovery_fixture.prepare(operator, recovery, environment, private)
@@ -392,14 +399,16 @@ try:
 except BaseException as error:
     if phase == 'readiness' and readiness:
         print(json.dumps(dict(phase=phase, result='failed', **readiness)), flush=True)
-    print(json.dumps(dict(phase=phase,result='failed',classification=type(error).__name__)),flush=True)
+    frames = traceback.extract_tb(error.__traceback__)[-5:]
+    print(json.dumps(dict(phase=phase, result='failed', classification=type(error).__name__,
+        frames=[f'{Path(frame.filename).name}:{frame.lineno}' for frame in frames])), flush=True)
     if phase == 'collector-registration' and isinstance(error, RuntimeError) and re.fullmatch(r'collector-[a-z0-9_-]+', str(error)):
         print(json.dumps(dict(phase=phase, reason=str(error))), flush=True)
     if phase == 'readiness':
         try:
             diagnostic_operator = Browser(initialized['origin'], environment.root/'ca.crt', urlsplit(initialized['origin']).port)
             diagnostic_operator.login(TENANTS[0], 'admin', (environment.root/'account-password').read_text())
-            diagnostic_status, diagnostic_snapshot = diagnostic_operator.call('GET', '/api/v1/runtime/diagnostics')
+            diagnostic_status, diagnostic_snapshot = diagnostic_operator.call('GET', diagnostic_operator.business_path('/runtime/diagnostics'))
             if diagnostic_status == 200:
                 print(json.dumps(dict(phase='readiness-components', components=[{key: component[key] for key in ('name','readiness','health','reasons')} for component in diagnostic_snapshot['components']])), flush=True)
         except Exception:

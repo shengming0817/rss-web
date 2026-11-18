@@ -26,19 +26,20 @@ import {
 import { uuid, text, count, positive, boolean, nullable, record, enumeration } from './decode'
 
 function rule(value: unknown, tenant: string, realm: Realm): Rule {
-  if (!schema.putApiV1AuthorizationRulesByIdBody.validateRule(value))
+  if (!schema.putApiV1TenantsByTenantAuthorizationRulesByIdBody.validateRule(value))
     throw new Error('Invalid rule contract')
   validateRule(value, tenant, realm)
   return value
 }
 function group(value: unknown, tenant: string): UserGroup {
-  if (!schema.putApiV1AuthorizationUserGroupsByIdBody.validateUserGroup(value))
+  if (!schema.putApiV1TenantsByTenantAuthorizationUserGroupsByIdBody.validateUserGroup(value))
     throw new Error('Invalid group contract')
   validateGroup(value, tenant)
   return value
 }
 function user(value: unknown, tenant: string): User {
-  if (!schema.getApiV1ApiKeysResponse.validateUser(value)) throw new Error('Invalid user contract')
+  if (!schema.getApiV1TenantsByTenantApiKeysResponse.validateUser(value))
+    throw new Error('Invalid user contract')
   validateUser(value, tenant)
   return value
 }
@@ -48,7 +49,7 @@ function revision<T>(value: unknown, id: string, project: (v: unknown) => T): Re
   return { id, revision: positive(v['revision']), value: nullable(v['value'], project) }
 }
 function receipt<T>(value: unknown, id: string, change: Change<T>): Receipt {
-  if (!schema.putApiV1AuthorizationRulesByIdResponse.validateRoot(value))
+  if (!schema.putApiV1TenantsByTenantAuthorizationRulesByIdResponse.validateRoot(value))
     throw new Error('Invalid receipt contract')
   if (
     value.id !== id ||
@@ -59,13 +60,13 @@ function receipt<T>(value: unknown, id: string, change: Change<T>): Receipt {
   return value
 }
 function keyMetadata(value: unknown): KeyMetadata {
-  if (!schema.getApiV1ApiKeysResponse.validateKeyMetadata(value))
+  if (!schema.getApiV1TenantsByTenantApiKeysResponse.validateKeyMetadata(value))
     throw new Error('Invalid key contract')
   validateKey(value)
   return value
 }
 function key(value: unknown, tenant: string): ApiKey {
-  if (!schema.getApiV1ApiKeysByIdResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantApiKeysByIdResponse.validateRoot(value))
     throw new Error('Invalid key contract')
   keyMetadata(value.metadata)
   user(value.createdBy, tenant)
@@ -77,7 +78,7 @@ function network(value: unknown): NetworkPolicy {
   return value
 }
 function departments(value: unknown): Departments {
-  if (!schema.getApiV1AuthorizationDepartmentsResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantAuthorizationDepartmentsResponse.validateRoot(value))
     throw new Error('Invalid department contract')
   if (value.status === 'available') {
     const ids = value.snapshot.nodes.map((n) => n.id)
@@ -118,7 +119,9 @@ export function createAuthorizationAdapter(
     memberCount: (v: unknown) => nullable(v, count),
     value: (v: unknown) =>
       nullable(v, (value) => {
-        if (!schema.getApiV1AuthorizationUserGroupsResponse.validateGroupSummary(value))
+        if (
+          !schema.getApiV1TenantsByTenantAuthorizationUserGroupsResponse.validateGroupSummary(value)
+        )
           throw new Error('Invalid group summary')
         return value
       }),
@@ -145,10 +148,8 @@ export function createAuthorizationAdapter(
     expiresAt: (v: unknown) => nullable(v, positive),
   }
   return {
-    effective: () =>
-      (realm === 'management'
-        ? api.getApiV1TenantAdministrationAuthorization
-        : api.getApiV1Authorization)(transport, {}, (value): EffectiveAuthorization => {
+    effective: () => {
+      const project = (value: EffectiveAuthorization) => {
         if (value.tenantId !== tenant || value.principalId !== principal)
           throw new Error('Wrong effective authorization tenant')
         value.grants.forEach((g) => {
@@ -158,61 +159,81 @@ export function createAuthorizationAdapter(
             throw new Error('Invalid observation')
         })
         return value
-      }),
-    rules: (query = {}) =>
-      (realm === 'management'
-        ? api.getApiV1TenantAdministrationAuthorizationRules
-        : api.getApiV1AuthorizationRules)(transport, { query: queryParameters(query) }, (v) =>
-        projectedPage(v, rules, query.fields, ['id']),
-      ),
-    rule: (id) =>
-      (realm === 'management'
-        ? api.getApiV1TenantAdministrationAuthorizationRulesById
-        : api.getApiV1AuthorizationRulesById)(transport, { pathParams: { id: uuid(id) } }, (v) =>
-        revision(v, id, decodeRule),
-      ),
-    changeRule: (id, change) =>
-      (realm === 'management'
-        ? api.putApiV1TenantAdministrationAuthorizationRulesById
-        : api.putApiV1AuthorizationRulesById)(
-        transport,
-        {
-          pathParams: { id: uuid(id) },
-          body: {
-            ...change,
-            value:
-              change.value === null
-                ? null
-                : {
-                    subject: change.value.subject,
-                    grants: change.value.grants.map((g) => ({ ...g })),
-                  },
-          },
-        },
-        (v) => receipt(v, id, change),
-      ),
+      }
+      return realm === 'management'
+        ? api.getApiV1TenantAdministrationAuthorization(transport, {}, project)
+        : api.getApiV1TenantsByTenantAuthorization(transport, { pathParams: { tenant } }, project)
+    },
+    rules: (query = {}) => {
+      const input = { query: queryParameters(query) }
+      const project = (value: api.getApiV1TenantsByTenantAuthorizationRulesContract.Output) =>
+        projectedPage(value, rules, query.fields, ['id'])
+      return realm === 'management'
+        ? api.getApiV1TenantAdministrationAuthorizationRules(transport, input, project)
+        : api.getApiV1TenantsByTenantAuthorizationRules(
+            transport,
+            { ...input, pathParams: { tenant } },
+            project,
+          )
+    },
+    rule: (id) => {
+      const pathParams = { id: uuid(id) }
+      const project = (value: unknown) => revision(value, id, decodeRule)
+      return realm === 'management'
+        ? api.getApiV1TenantAdministrationAuthorizationRulesById(transport, { pathParams }, project)
+        : api.getApiV1TenantsByTenantAuthorizationRulesById(
+            transport,
+            { pathParams: { tenant, ...pathParams } },
+            project,
+          )
+    },
+    changeRule: (id, change) => {
+      const pathParams = { id: uuid(id) }
+      const body = {
+        ...change,
+        value:
+          change.value === null
+            ? null
+            : {
+                subject: change.value.subject,
+                grants: change.value.grants.map((g) => ({ ...g })),
+              },
+      }
+      const project = (value: unknown) => receipt(value, id, change)
+      return realm === 'management'
+        ? api.putApiV1TenantAdministrationAuthorizationRulesById(
+            transport,
+            { pathParams, body },
+            project,
+          )
+        : api.putApiV1TenantsByTenantAuthorizationRulesById(
+            transport,
+            { pathParams: { tenant, ...pathParams }, body },
+            project,
+          )
+    },
     groups: (query = {}) => {
       tenantOnly()
-      return api.getApiV1AuthorizationUserGroups(
+      return api.getApiV1TenantsByTenantAuthorizationUserGroups(
         transport,
-        { query: queryParameters(query) },
+        { pathParams: { tenant }, query: queryParameters(query) },
         (v) => projectedPage(v, groups, query.fields, ['id']),
       )
     },
     group: (id) => {
       tenantOnly()
-      return api.getApiV1AuthorizationUserGroupsById(
+      return api.getApiV1TenantsByTenantAuthorizationUserGroupsById(
         transport,
-        { pathParams: { id: uuid(id) } },
+        { pathParams: { tenant, id: uuid(id) } },
         (v) => revision(v, id, (v) => group(v, tenant)),
       )
     },
     changeGroup: (id, change) => {
       tenantOnly()
-      return api.putApiV1AuthorizationUserGroupsById(
+      return api.putApiV1TenantsByTenantAuthorizationUserGroupsById(
         transport,
         {
-          pathParams: { id: uuid(id) },
+          pathParams: { tenant, id: uuid(id) },
           body: {
             ...change,
             value:
@@ -226,9 +247,9 @@ export function createAuthorizationAdapter(
     },
     members: (id, query = {}) => {
       tenantOnly()
-      return api.getApiV1AuthorizationUserGroupsByIdMembers(
+      return api.getApiV1TenantsByTenantAuthorizationUserGroupsByIdMembers(
         transport,
-        { pathParams: { id: uuid(id) }, query: queryParameters(query) },
+        { pathParams: { tenant, id: uuid(id) }, query: queryParameters(query) },
         (value) => {
           if (value.id !== id || !value.revision) throw new Error('Wrong group member page')
           const items = value.items.map((v) => projectedRow(v, members, query.fields))
@@ -242,26 +263,36 @@ export function createAuthorizationAdapter(
     },
     departments: () => {
       tenantOnly()
-      return api.getApiV1AuthorizationDepartments(transport, {}, departments)
+      return api.getApiV1TenantsByTenantAuthorizationDepartments(
+        transport,
+        { pathParams: { tenant } },
+        departments,
+      )
     },
     keys: (query = {}) => {
       tenantOnly()
-      return api.getApiV1ApiKeys(transport, { query: queryParameters(query) }, (v) =>
-        projectedPage(v, keys, query.fields, ['id']),
+      return api.getApiV1TenantsByTenantApiKeys(
+        transport,
+        { pathParams: { tenant }, query: queryParameters(query) },
+        (v) => projectedPage(v, keys, query.fields, ['id']),
       )
     },
     key: (id) => {
       tenantOnly()
-      return api.getApiV1ApiKeysById(transport, { pathParams: { id: uuid(id) } }, (v) => {
-        const result = key(v, tenant)
-        if (result.id !== id) throw new Error('Wrong API key')
-        return result
-      })
+      return api.getApiV1TenantsByTenantApiKeysById(
+        transport,
+        { pathParams: { tenant, id: uuid(id) } },
+        (v) => {
+          const result = key(v, tenant)
+          if (result.id !== id) throw new Error('Wrong API key')
+          return result
+        },
+      )
     },
     changeKey: (operationId, intent) => {
       tenantOnly()
       const project = (value: unknown) => {
-        if (!schema.postApiV1ApiKeysResponse.validateKeyChangeResult(value))
+        if (!schema.postApiV1TenantsByTenantApiKeysResponse.validateKeyChangeResult(value))
           throw new Error('Invalid key receipt')
         if (
           value.receipt.id !== intent.id ||
@@ -275,26 +306,28 @@ export function createAuthorizationAdapter(
       if (intent.kind === 'create' || intent.kind === 'update') {
         const metadata = { ...intent.metadata, grants: [...intent.metadata.grants] }
         return intent.kind === 'create'
-          ? api.postApiV1ApiKeys(
+          ? api.postApiV1TenantsByTenantApiKeys(
               transport,
-              { body: { id: intent.id, operationId, metadata } },
+              { pathParams: { tenant }, body: { id: intent.id, operationId, metadata } },
               project,
             )
-          : api.putApiV1ApiKeysById(
+          : api.putApiV1TenantsByTenantApiKeysById(
               transport,
               {
-                pathParams: { id: intent.id },
+                pathParams: { tenant, id: intent.id },
                 body: { operationId, expectedRevision: intent.revision, metadata },
               },
               project,
             )
       }
       const parameters = {
-        pathParams: { id: intent.id },
+        pathParams: { tenant, id: intent.id },
         body: { operationId, expectedRevision: intent.revision },
       }
       return (
-        intent.kind === 'rotate' ? api.postApiV1ApiKeysByIdRotate : api.postApiV1ApiKeysByIdRevoke
+        intent.kind === 'rotate'
+          ? api.postApiV1TenantsByTenantApiKeysByIdRotate
+          : api.postApiV1TenantsByTenantApiKeysByIdRevoke
       )(transport, parameters, project)
     },
     network: () => {

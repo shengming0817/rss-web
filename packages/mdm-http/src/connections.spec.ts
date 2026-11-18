@@ -78,8 +78,8 @@ it('addresses migration cancellation by the original operation, with no invented
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       method: 'POST',
-      path: '/api/v1/storage/migrations/operations/{id}/cancel',
-      pathParams: { id: operation },
+      path: '/api/v1/tenants/{tenant}/storage/migrations/operations/{id}/cancel',
+      pathParams: { tenant, id: operation },
     }),
   )
   expect(f.request.mock.calls[0]?.[0]).not.toHaveProperty('body')
@@ -95,8 +95,8 @@ it('keeps Apple version pagination on the formal per-purpose endpoint', async ()
   ).toBe('eA')
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      path: '/api/v1/apple/materials/{purpose}/versions',
-      pathParams: { purpose: 'apns' },
+      path: '/api/v1/tenants/{tenant}/apple/materials/{purpose}/versions',
+      pathParams: { tenant, purpose: 'apns' },
       query: { limit: 2 },
     }),
   )

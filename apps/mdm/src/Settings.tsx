@@ -22,7 +22,7 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
   const links = new Map<string, string>()
   for (const domain of catalog.value?.domains ?? []) {
     const destination = setupDestination(domain.id)
-    if (destination) {
+    if (destination && (!runtime.management || destination !== '/downloads/agent')) {
       const path =
         runtime.management && !destination.startsWith('/platform/')
           ? `${prefix}${destination}`
@@ -55,7 +55,9 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
       />
       <Space wrap>
         {!runtime.management && <Link to="/setup">{l('租户初始化', 'Tenant setup')}</Link>}
-        <Link to={`${prefix}/diagnostics`}>{l('运行诊断', 'Runtime diagnostics')}</Link>
+        {!runtime.management && (
+          <Link to="/diagnostics">{l('运行诊断', 'Runtime diagnostics')}</Link>
+        )}
         <Link to={`${prefix}/security`}>{l('安全与重认证', 'Security and reauthentication')}</Link>
       </Space>
       <ReadState locale={locale} busy={catalog.busy} error={catalog.error} />
@@ -103,17 +105,20 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
                     ]}
                   />
                   {item.reason && <p className="subtitle">{setupName(locale, item.reason)}</p>}
-                  {item.scope !== 'deployment' && setupDestination(item.id) && (
-                    <Link
-                      to={
-                        runtime.management && !setupDestination(item.id)!.startsWith('/platform/')
-                          ? `/platform${setupDestination(item.id)!}`
-                          : setupDestination(item.id)!
-                      }
-                    >
-                      {l('打开配置', 'Open configuration')} →
-                    </Link>
-                  )}
+                  {item.scope !== 'deployment' &&
+                    setupDestination(item.id) &&
+                    (!runtime.management || setupDestination(item.id) !== '/downloads/agent') && (
+                      <Link
+                        reloadDocument={setupDestination(item.id) === '/downloads/agent'}
+                        to={
+                          runtime.management && !setupDestination(item.id)!.startsWith('/platform/')
+                            ? `/platform${setupDestination(item.id)!}`
+                            : setupDestination(item.id)!
+                        }
+                      >
+                        {l('打开配置', 'Open configuration')} →
+                      </Link>
+                    )}
                   {item.scope === 'deployment' && (
                     <p className="subtitle">
                       {l('由部署运维维护。', 'Managed by the deployment operator.')}
@@ -139,7 +144,7 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
             <div className="panel-body">
               <Space wrap>
                 {[...links].map(([path, name]) => (
-                  <Link key={path} to={path}>
+                  <Link key={path} to={path} reloadDocument={path === '/downloads/agent'}>
                     {name}
                   </Link>
                 ))}

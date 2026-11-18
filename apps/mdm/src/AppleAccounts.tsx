@@ -386,7 +386,7 @@ export function AppleAccounts({
         </div>
       )}
       <Space wrap>
-        <a href={runtime.onboarding.appleBridgeUrl()}>
+        <a href={runtime.appleBridgeUrl()}>
           {l('进入正式 Apple 账户认证入口', 'Open the formal Apple account authentication entry')}
         </a>
       </Space>

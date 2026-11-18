@@ -15,7 +15,7 @@ import type { DeviceAccessClient } from '../client'
 import { object, closed, text, count, uuid, nullable, list, same } from '../model/decode'
 import { challenge } from './security'
 import { nativeComputer, nativeMaterial } from './native'
-export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
+export function createLiveClient(transport: HttpTransport, tenant: string): DeviceAccessClient {
   const ready = { available: true, reason: null, source: 'service' as const }
   const missing = (reason: string) => ({ available: false, reason, source: 'service' as const })
   const unavailable = (name: string): never => {
@@ -35,21 +35,27 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       audit: ready,
     },
     computers: (query, signal) =>
-      api.getApiV1DeviceViews(transport, { query: queryParameters(query), signal }, (value) =>
-        computerDirectory(value, query),
+      api.getApiV1TenantsByTenantDeviceViews(
+        transport,
+        { pathParams: { tenant }, query: queryParameters(query), signal },
+        (value) => computerDirectory(value, query),
       ),
     viewComputers: (reference, signal) =>
-      api.getApiV1DeviceViewsByKindById(transport, { pathParams: reference, signal }, (value) => {
-        const row = object(value)
-        const actual = closed(row['reference'], ['kind', 'id'])
-        same(actual['kind'], reference.kind)
-        same(actual['id'], reference.id)
-        return list(row['endpoints'], nativeComputer)
-      }),
-    computer: (device, signal) =>
-      api.getApiV1DeviceViewsByKindById(
+      api.getApiV1TenantsByTenantDeviceViewsByKindById(
         transport,
-        { pathParams: { kind: 'endpoint', id: device }, signal },
+        { pathParams: { tenant, ...reference }, signal },
+        (value) => {
+          const row = object(value)
+          const actual = closed(row['reference'], ['kind', 'id'])
+          same(actual['kind'], reference.kind)
+          same(actual['id'], reference.id)
+          return list(row['endpoints'], nativeComputer)
+        },
+      ),
+    computer: (device, signal) =>
+      api.getApiV1TenantsByTenantDeviceViewsByKindById(
+        transport,
+        { pathParams: { tenant, kind: 'endpoint', id: device }, signal },
         (value) => {
           const v = value,
             r = v['reference']
@@ -61,15 +67,15 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         },
       ),
     bindings: (device, query, signal) =>
-      api.getApiV1DevicesByDeviceDeviceAccess(
+      api.getApiV1TenantsByTenantDevicesByDeviceDeviceAccess(
         transport,
-        { pathParams: { device }, query: queryParameters(query), signal },
+        { pathParams: { tenant, device }, query: queryParameters(query), signal },
         (value) => bindingDirectory(value, device, query),
       ),
     binding: (device, id, signal) =>
-      api.getApiV1DevicesByDeviceDeviceAccessBindingsById(
+      api.getApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsById(
         transport,
-        { pathParams: { device, id: uuid(id) }, signal },
+        { pathParams: { tenant, device, id: uuid(id) }, signal },
         (value) => {
           const row = bindingDetail(value, device)
           same(row.id, id)
@@ -77,9 +83,9 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         },
       ),
     changeBinding: (device, id, input, signal) =>
-      api.putApiV1DevicesByDeviceDeviceAccessBindingsById(
+      api.putApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsById(
         transport,
-        { pathParams: { device, id: uuid(id) }, body: input, signal },
+        { pathParams: { tenant, device, id: uuid(id) }, body: input, signal },
         (v) => {
           const b = bindingDetail(v, device)
           same(b.id, id)
@@ -88,9 +94,9 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         },
       ),
     bindingOperation: (device, id, signal) =>
-      api.getApiV1DevicesByDeviceDeviceAccessOperationsById(
+      api.getApiV1TenantsByTenantDevicesByDeviceDeviceAccessOperationsById(
         transport,
-        { pathParams: { device, id: uuid(id) }, signal },
+        { pathParams: { tenant, device, id: uuid(id) }, signal },
         (v) => bindingDetail(v, device),
       ),
     assignment: async () => unavailable('asset_contract'),
@@ -102,16 +108,16 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
     readConfiguration: async () => unavailable('configuration_projection'),
     scopes: async () => unavailable('configuration_projection'),
     materials: (device, query, signal) =>
-      api.getApiV1DevicesByDeviceRecoveryCredentials(
+      api.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentials(
         transport,
-        { pathParams: { device }, query: queryParameters(query), signal },
+        { pathParams: { tenant, device }, query: queryParameters(query), signal },
         (value) => materialDirectory(value, device, query),
       ),
     material: (device, id, version, signal) =>
-      api.getApiV1DevicesByDeviceRecoveryCredentials(
+      api.getApiV1TenantsByTenantDevicesByDeviceRecoveryCredentials(
         transport,
         {
-          pathParams: { device },
+          pathParams: { tenant, device },
           query: queryParameters({
             filter: allOf(
               comparison('id', '==', uuid(id)),
@@ -130,10 +136,10 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         },
       ),
     materialChallenge: (device, material, operationId, signal) =>
-      api.postApiV1DevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionStepUp(
+      api.postApiV1TenantsByTenantDevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionStepUp(
         transport,
         {
-          pathParams: { device, id: material.id, version: material.version },
+          pathParams: { tenant, device, id: material.id, version: material.version },
           body: { operationId: uuid(operationId) },
           signal,
         },
@@ -141,18 +147,18 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
       ),
     applicationChallenge: async () => unavailable('application_operation_query'),
     bindingChallenge: (device, id, input, signal) =>
-      api.postApiV1DevicesByDeviceDeviceAccessBindingsByIdStepUp(
+      api.postApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsByIdStepUp(
         transport,
-        { pathParams: { device, id }, body: input, signal },
+        { pathParams: { tenant, device, id }, body: input, signal },
         challenge,
       ),
     reveal: async (device, material, operationId, signal) => {
       same(material.device, device)
       if (material.subject.kind !== 'rss_login') return unavailable('material_kind')
-      return api.postApiV1DevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionSecret(
+      return api.postApiV1TenantsByTenantDevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionSecret(
         transport,
         {
-          pathParams: { device, id: material.id, version: material.version },
+          pathParams: { tenant, device, id: material.id, version: material.version },
           body: { operationId: uuid(operationId) },
           signal,
         },
@@ -168,9 +174,9 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
     rotate: async () => unavailable('recovery_rotation'),
     operation: async (device, id, signal) => {
       if (!device) return unavailable('operation_query')
-      return api.getApiV1DevicesByDeviceOperationsById(
+      return api.getApiV1TenantsByTenantDevicesByDeviceOperationsById(
         transport,
-        { pathParams: { device, id: uuid(id) }, signal },
+        { pathParams: { tenant, device, id: uuid(id) }, signal },
         (value): OriginalOperation => {
           const v = value // Operations remain opaque beyond their exact identity and native state.
           same(v['operationId'], id)
@@ -190,24 +196,24 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         ...query,
         filter: allOf("kind=='relying_party'", query.filter),
       }
-      return api.getApiV1DeviceAccessEnterpriseConfiguration(
+      return api.getApiV1TenantsByTenantDeviceAccessEnterpriseConfiguration(
         transport,
-        { query: queryParameters(selection), signal },
+        { pathParams: { tenant }, query: queryParameters(selection), signal },
         (value) => applicationDirectory(value, selection),
       )
     },
     readApplication: (record, signal) =>
-      api.getApiV1DeviceAccessEnterpriseConfigurationById(
+      api.getApiV1TenantsByTenantDeviceAccessEnterpriseConfigurationById(
         transport,
-        { pathParams: { id: record }, signal },
+        { pathParams: { tenant, id: record }, signal },
         (value) => applicationDetail(value, record),
       ),
     application: async () => unavailable('application_operation_query'),
     audit: (device, cursor, signal) => {
       const project = (value: unknown) => {
         if (
-          !wireSchemas.getApiV1AuditEventsResponse.validateRoot(value) &&
-          !wireSchemas.getApiV1DevicesByDeviceTimelineResponse.validateRoot(value)
+          !wireSchemas.getApiV1TenantsByTenantAuditEventsResponse.validateRoot(value) &&
+          !wireSchemas.getApiV1TenantsByTenantDevicesByDeviceTimelineResponse.validateRoot(value)
         )
           throw new Error('Invalid audit response')
         const v = value
@@ -228,18 +234,22 @@ export function createLiveClient(transport: HttpTransport): DeviceAccessClient {
         }
       }
       return device
-        ? api.getApiV1DevicesByDeviceTimeline(
+        ? api.getApiV1TenantsByTenantDevicesByDeviceTimeline(
             transport,
             {
-              pathParams: { device },
+              pathParams: { tenant, device },
               query: { limit: 100, ...(cursor ? { cursor } : {}) },
               signal,
             },
             project,
           )
-        : api.getApiV1AuditEvents(
+        : api.getApiV1TenantsByTenantAuditEvents(
             transport,
-            { query: { limit: 100, ...(cursor ? { cursor } : {}) }, signal },
+            {
+              pathParams: { tenant },
+              query: { limit: 100, ...(cursor ? { cursor } : {}) },
+              signal,
+            },
             project,
           )
     },

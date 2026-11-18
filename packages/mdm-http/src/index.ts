@@ -1,17 +1,6 @@
 import type { SessionOwner } from '@rss/auth-core'
-import {
-  createMdmTransport,
-  type HttpTransport,
-  type NoContentRequest,
-  type RequestOptions,
-} from '@rss/api/mdm'
+import { type HttpTransport, type NoContentRequest, type RequestOptions } from '@rss/api/mdm'
 
-export interface MdmHostConfig {
-  readonly canonicalOrigin: string
-  readonly tenant: string
-  readonly managementTenant: string
-  readonly serviceId: string
-}
 function uuid(value: unknown): string {
   if (
     typeof value !== 'string' ||
@@ -21,42 +10,6 @@ function uuid(value: unknown): string {
     throw new Error('Invalid host identifier')
   return value
 }
-export async function loadMdmHostConfig(
-  transport: HttpTransport,
-  origin: string,
-): Promise<MdmHostConfig> {
-  return transport.request({
-    method: 'GET',
-    path: '/api/v1/mdm-host/config.json',
-    successStatus: 200,
-    decode(value) {
-      if (
-        !value ||
-        typeof value !== 'object' ||
-        Array.isArray(value) ||
-        Object.keys(value).sort().join() !== 'canonicalOrigin,managementTenant,serviceId,tenant'
-      )
-        throw new Error('Invalid MDM host configuration')
-      const v = value as Record<string, unknown>
-      if (
-        v['canonicalOrigin'] !== origin ||
-        new URL(origin).protocol !== 'https:' ||
-        new URL(origin).origin !== origin
-      )
-        throw new Error('Invalid host origin')
-      const tenant = uuid(v['tenant']),
-        managementTenant = uuid(v['managementTenant'])
-      if (tenant === managementTenant) throw new Error('Invalid tenant binding')
-      return Object.freeze({
-        canonicalOrigin: origin,
-        tenant,
-        managementTenant,
-        serviceId: uuid(v['serviceId']),
-      })
-    },
-  })
-}
-export { createMdmTransport }
 export interface SessionBinding {
   readonly realm: 'tenant' | 'management'
   readonly credentialTenant: string
@@ -83,11 +36,15 @@ export function bindSession(
           (options.path === '/api/v1/tenant-administration/tenants/{tenant}' ||
             options.path === '/api/v1/tenant-administration/tenants/{tenant}/administrators')
         const target = options.pathParams?.['tenant']
+        const businessPath = options.path.startsWith('/api/v1/tenants/')
+        const platformPath = options.path.startsWith('/api/v1/tenant-administration/')
         const state = owner.getSnapshot()
         if (
           state.identity?.principalId !== principalId ||
           state.session?.id !== sessionId ||
           credential.tenant !== tenant ||
+          (businessPath && (realm !== 'tenant' || target !== tenant)) ||
+          (platformPath && realm !== 'management') ||
           (target !== undefined && target !== tenant && !registryLocator)
         )
           throw new Error('Mismatched business tenant')

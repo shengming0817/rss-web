@@ -49,10 +49,10 @@ def prepare(operator, facts, environment):
             print(json.dumps(dict(phase='console-prepare', method=method, path=path, status=status, code=(value or {}).get('code', 'invalid'))), flush=True)
             raise RuntimeError('console-prepare-' + str(status) + '-' + str((value or {}).get('code', 'invalid')))
         return value
-    directory = call('GET', '/api/v1/webhooks/materials')
-    call('POST', '/api/v1/webhooks/materials', dict(reference='console', expectedRevision=0, configurationSha256=directory['configurationSha256'], endpoint=facts['webhookOrigin'] + '/confirm', networkReference='console', source=dict(kind='import', secret='whsec_' + facts.pop('signing'))), str(uuid.uuid4()))
+    directory = call('GET', operator.business_path('/webhooks/materials'))
+    call('POST', operator.business_path('/webhooks/materials'), dict(reference='console', expectedRevision=0, configurationSha256=directory['configurationSha256'], endpoint=facts['webhookOrigin'] + '/confirm', networkReference='console', source=dict(kind='import', secret='whsec_' + facts.pop('signing'))), str(uuid.uuid4()))
     # Match the existing backend delivery fixture: receiver qualification is a legal
     # prerequisite, owned by installation.webhook T2, not this console journey.
     from candidate_fixture import TENANTS
     environment.sql(f"SET rss.tenant_id='{TENANTS[0]}'; UPDATE mdm_webhook.key_materials SET confirmed=true,attempted_at=1,confirmed_at=1 WHERE tenant_id='{TENANTS[0]}' AND reference='console' AND revision=1;", 'mdm_dev')
-    call('POST', '/api/v1/webhooks/materials/transitions', dict(reference='console', expectedRevision=1, action=dict(kind='activate', materialRevision=1)), str(uuid.uuid4()))
+    call('POST', operator.business_path('/webhooks/materials/transitions'), dict(reference='console', expectedRevision=1, action=dict(kind='activate', materialRevision=1)), str(uuid.uuid4()))

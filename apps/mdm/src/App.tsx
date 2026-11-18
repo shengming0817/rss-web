@@ -10,6 +10,8 @@ import { ReadEpoch } from './AdminUi'
 import { DirectoryCatalogContext } from './DirectorySearch'
 import { Policies } from './Policies'
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
+import { PageLoading } from './PageLoading'
+import { useProtectedDelivery } from './useProtectedDelivery'
 import type { ReactNode } from 'react'
 import {
   Alert,
@@ -37,7 +39,7 @@ import {
   useLocation,
 } from 'react-router-dom'
 import type { Provider } from '@rss/auth-core'
-import type { Runtime } from './runtime'
+import type { Runtime, Startup } from './runtime'
 import { Authorization } from './Authorization'
 import { Tenants } from './Tenants'
 import { UserProfiles } from './UserProfiles'
@@ -113,7 +115,8 @@ function Login({ runtime, locale }: Ui) {
       form.resetFields()
     }
   }, [runtime, form])
-  if (state.status === 'authenticated') return <Navigate to={runtime.home} replace />
+  if (state.status === 'authenticated' && state.tenant === runtime.tenant)
+    return <Navigate to={runtime.home} replace />
   return (
     <main id="main" className="auth-page" tabIndex={-1}>
       <section className="auth-card" aria-labelledby="login-title">
@@ -203,7 +206,7 @@ function Login({ runtime, locale }: Ui) {
             </Space>
           </>
         )}
-        <a className="tenant-switch" href={runtime.management ? '/login' : '/platform'}>
+        <a className="tenant-switch" href={runtime.management ? '/' : '/platform'}>
           {runtime.management ? t.business : t.management} →
         </a>
       </section>
@@ -247,7 +250,12 @@ const featureRoutes: readonly FeatureRoute[] = [
     render: (ui) => <TenantSetup {...ui} />,
   },
   { path: '/settings', label: 'settings', render: (ui) => <Settings {...ui} /> },
-  { path: '/diagnostics', label: 'diagnostics', render: (ui) => <Diagnostics {...ui} /> },
+  {
+    path: '/diagnostics',
+    label: 'diagnostics',
+    realm: 'tenant',
+    render: (ui) => <Diagnostics {...ui} />,
+  },
   {
     path: '/operation-diagnostics',
     label: 'operationDiagnostics',
@@ -394,6 +402,7 @@ function SessionSecurity({ runtime, locale }: Ui) {
     operation = useOperation(locale)
   const [reauthenticate, setReauthenticate] = useState(false)
   const [form] = Form.useForm<{ password: string }>()
+  useProtectedDelivery(() => form.resetFields(['password']))
   return (
     <>
       <div className="page-heading">
@@ -523,13 +532,13 @@ function Protected({ runtime, locale, children }: Ui & { children: ReactNode }) 
   const state = useSession(runtime),
     t = messages(locale),
     operation = useOperation(locale)
-  if (state.status === 'checking')
-    return (
-      <div className="center-state" role="status">
-        <Spin />
-        <p>{t.checking}</p>
-      </div>
-    )
+  const checking = (
+    <div className="center-state" role="status">
+      <Spin />
+      <p>{t.checking}</p>
+    </div>
+  )
+  if (state.status === 'checking') return checking
   if (state.status === 'unavailable')
     return (
       <Result
@@ -546,8 +555,14 @@ function Protected({ runtime, locale, children }: Ui & { children: ReactNode }) 
         }
       />
     )
-  if (state.status !== 'authenticated') return <Navigate to={runtime.login} replace />
-  return children
+  if (state.status !== 'authenticated' || state.tenant !== runtime.tenant)
+    return <Navigate to={runtime.login} replace />
+  return (
+    <>
+      {state.revalidating && <PageLoading>{checking}</PageLoading>}
+      {children}
+    </>
+  )
 }
 function Navigation({ runtime, locale, close }: Ui & { close: () => void }) {
   const t = messages(locale),
@@ -608,43 +623,24 @@ function Navigation({ runtime, locale, close }: Ui & { close: () => void }) {
 function Shell({
   runtime,
   locale,
-  dark,
-  setDark,
-  setLocale,
-}: Ui & { dark: boolean; setDark: (value: boolean) => void; setLocale: (locale: Locale) => void }) {
+  utility,
+  resumed,
+  stepUp,
+}: Ui & { utility: ReactNode; resumed: boolean; stepUp: boolean }) {
   const [open, setOpen] = useState(false),
-    [ready, setReady] = useState(false),
-    [resumeError, setResumeError] = useState(false),
-    [callbackReason, setCallbackReason] = useState<'cancelled' | 'failed' | 'unavailable' | null>(
-      null,
-    ),
-    [stepUpReturned, setStepUpReturned] = useState(false)
+    [ready, setReady] = useState(resumed),
+    [stepUpReturned, setStepUpReturned] = useState(stepUp)
   const t = messages(locale),
     state = useSession(runtime),
     location = useLocation(),
     operation = useOperation(locale)
   useEffect(() => {
-    if (location.pathname === '/auth/error') {
-      runtime.flows.clear()
-      const reason = new URLSearchParams(location.search).get('reason')
-      setCallbackReason(reason === 'cancelled' || reason === 'unavailable' ? reason : 'failed')
-      setReady(true)
-      return
-    }
-    const resume = location.pathname === '/auth/resume'
-    const pending = resume ? runtime.flows.take() : null
-    if (resume && (!pending || pending.tenant !== runtime.tenant)) {
-      setResumeError(true)
-      setReady(true)
-      return
-    }
-    if (pending?.kind === 'step-up') setStepUpReturned(true)
+    if (resumed) return
     void runtime.owner
       .check(runtime.tenant)
       .catch(() => undefined)
       .finally(() => setReady(true))
-    // Bootstrap runs once per composition. Resume never reads codes or exchanges protocol values.
-  }, [runtime])
+  }, [runtime, resumed])
   useLayoutEffect(() => {
     runtime.owner.leavePage()
     operation.clear()
@@ -661,73 +657,12 @@ function Shell({
       window.removeEventListener('keydown', activity)
     }
   }, [runtime])
-  const utility = (
-    <Space>
-      <Button aria-label={t.theme} onClick={() => setDark(!dark)}>
-        {dark ? '☀' : '☾'}
-      </Button>
-      <Button
-        aria-label={t.language}
-        title={t.language}
-        onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}
-      >
-        <span className="wide-label">{t.language}</span>
-        <span className="compact-label" aria-hidden="true">
-          {locale === 'zh' ? 'EN' : '中'}
-        </span>
-      </Button>
-    </Space>
-  )
-  if (
-    location.pathname === '/downloads/agent' ||
-    location.pathname === '/enrollment/windows/entra/terms'
-  )
-    return (
-      <>
-        <a className="skip" href="#main">
-          {t.skip}
-        </a>
-        <header className="public-utility">
-          <Brand />
-          {utility}
-        </header>
-        <main id="main" className="public-main" tabIndex={-1}>
-          {location.pathname === '/downloads/agent' ? (
-            <PublicDownloads runtime={runtime} locale={locale} />
-          ) : (
-            <EntraTerms runtime={runtime} locale={locale} />
-          )}
-        </main>
-      </>
-    )
   if (!ready)
     return (
       <div className="center-state" role="status">
         <Spin />
         <p>{t.checking}</p>
       </div>
-    )
-  if (callbackReason && location.pathname === '/auth/error')
-    return (
-      <Result
-        status="warning"
-        title={
-          callbackReason === 'cancelled'
-            ? t.callbackCancelled
-            : callbackReason === 'unavailable'
-              ? t.callbackUnavailable
-              : t.callbackFailed
-        }
-        extra={<a href={runtime.login}>{t.login}</a>}
-      />
-    )
-  if (resumeError && location.pathname === '/auth/resume')
-    return (
-      <Result
-        status="warning"
-        title={t.resumeFailed}
-        extra={<a href={runtime.login}>{t.login}</a>}
-      />
     )
   const authPath = location.pathname === '/login' || location.pathname === '/platform/login'
   if (authPath)
@@ -858,19 +793,6 @@ function Shell({
                 />
               ))}
             <Route
-              path="/auth/resume"
-              element={
-                <Navigate
-                  to={
-                    stepUpReturned
-                      ? `${runtime.management ? '/platform' : ''}/security`
-                      : runtime.home
-                  }
-                  replace
-                />
-              }
-            />
-            <Route
               path="*"
               element={
                 <Result
@@ -886,7 +808,7 @@ function Shell({
     </Protected>
   )
 }
-export function App({ runtime }: { runtime: Runtime }) {
+export function App({ startup }: { startup: Startup }) {
   const [locale, setLocale] = useState<Locale>('zh'),
     [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [styleContainer] = useState(() => document.createElement('div'))
@@ -894,6 +816,24 @@ export function App({ runtime }: { runtime: Runtime }) {
     document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'
     document.documentElement.dataset['theme'] = dark ? 'dark' : 'light'
   }, [locale, dark])
+  const t = messages(locale)
+  const utility = (
+    <Space>
+      <Button aria-label={t.theme} onClick={() => setDark(!dark)}>
+        {dark ? '☀' : '☾'}
+      </Button>
+      <Button
+        aria-label={t.language}
+        title={t.language}
+        onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}
+      >
+        <span className="wide-label">{t.language}</span>
+        <span className="compact-label" aria-hidden="true">
+          {locale === 'zh' ? 'EN' : '中'}
+        </span>
+      </Button>
+    </Space>
+  )
   return (
     <StyleProvider container={styleContainer}>
       <ConfigProvider
@@ -901,15 +841,47 @@ export function App({ runtime }: { runtime: Runtime }) {
         button={{ autoInsertSpace: false }}
         theme={mdmTheme(dark)}
       >
-        <BrowserRouter>
-          <Shell
-            runtime={runtime}
-            locale={locale}
-            dark={dark}
-            setDark={setDark}
-            setLocale={setLocale}
+        {startup.kind === 'console' ? (
+          <BrowserRouter basename={startup.base || '/'}>
+            <Shell
+              runtime={startup.runtime}
+              locale={locale}
+              utility={utility}
+              resumed={'resumed' in startup}
+              stepUp={startup.stepUp ?? false}
+            />
+          </BrowserRouter>
+        ) : startup.kind === 'entry' ? (
+          <Result
+            title={t[startup.message]}
+            extra={
+              'login' in startup ? (
+                <a href={startup.login}>{startup.login === '/' ? t.back : t.login}</a>
+              ) : startup.message === 'tenantEntry' ? (
+                <a href="/platform">{t.management}</a>
+              ) : (
+                <a href="/">{t.back}</a>
+              )
+            }
           />
-        </BrowserRouter>
+        ) : (
+          <>
+            <a className="skip" href="#main">
+              {t.skip}
+            </a>
+            <header className="public-utility">
+              <Brand />
+              {utility}
+            </header>
+            <main id="main" className="public-main" tabIndex={-1}>
+              {startup.kind === 'downloads' ? (
+                <PublicDownloads downloads={startup.downloads} locale={locale} />
+              ) : (
+                <EntraTerms terms={startup.terms} locale={locale} />
+              )}
+            </main>
+          </>
+        )}
       </ConfigProvider>
     </StyleProvider>
   )

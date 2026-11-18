@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import process from 'node:process'
-export async function realBrowser(fixtureVariable, journey) {
+export async function realBrowser(fixtureVariable, journey, launch) {
   const fixture = JSON.parse(readFileSync(process.env[fixtureVariable], 'utf8')),
     origin = new URL(fixture.origin).origin,
     passwordFile = fixture.passwordFile ?? fixture.admin.passwordFile
   assert.equal(new URL(origin).protocol, 'https:')
   assert.equal(new URL(origin).hostname, 'localhost')
   assert.equal(statSync(passwordFile).mode & 0o077, 0)
-  const browser = await chromium.launch(),
+  const browser = await chromium.launch(launch),
     contexts = [],
     checks = [],
     errors = [],
@@ -41,18 +41,22 @@ export async function realBrowser(fixtureVariable, journey) {
   process.once('SIGINT', stop)
   process.once('SIGTERM', stop)
   const timer = setTimeout(stop, 760000)
-  async function page() {
-    const context = await browser.newContext({
-      ignoreHTTPSErrors: true,
-      viewport: { width: 1440, height: 960 },
-    })
-    contexts.push(context)
-    await context.route('**/api/v1/**', async (route) => {
-      const wait = Math.max(0, nextRequest - Date.now())
-      nextRequest = Date.now() + wait + 180
-      if (wait) await new Promise((done) => setTimeout(done, wait))
-      await route.continue()
-    })
+  async function page(currentContext) {
+    const context =
+      currentContext ??
+      (await browser.newContext({
+        ignoreHTTPSErrors: true,
+        viewport: { width: 1440, height: 960 },
+      }))
+    if (!currentContext) {
+      contexts.push(context)
+      await context.route('**/api/v1/**', async (route) => {
+        const wait = Math.max(0, nextRequest - Date.now())
+        nextRequest = Date.now() + wait + 180
+        if (wait) await new Promise((done) => setTimeout(done, wait))
+        await route.continue()
+      })
+    }
     const p = await context.newPage()
     p.setDefaultTimeout(20000)
     p.on('response', (r) => {
@@ -90,7 +94,7 @@ export async function realBrowser(fixtureVariable, journey) {
   async function login(p, account = fixture.admin ?? { login: fixture.login, passwordFile }) {
     assert.equal(statSync(account.passwordFile).mode & 0o077, 0)
     phase = 'login-form'
-    await p.goto(origin + '/login')
+    await p.goto(origin + `/tenants/${fixture.tenant}/login`)
     await p.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
     await p.getByLabel('账户', { exact: true }).fill(account.login)
     await p
@@ -102,7 +106,7 @@ export async function realBrowser(fixtureVariable, journey) {
   }
   async function nav(p, path, title) {
     phase = 'navigate:' + path
-    await p.goto(origin + path)
+    await p.goto(origin + `/tenants/${fixture.tenant}` + path)
     await p.getByRole('heading', { name: title, exact: true }).waitFor()
   }
   async function choose(p, control, label) {

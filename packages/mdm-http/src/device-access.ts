@@ -13,7 +13,9 @@ import { requestInput } from './inventory-values'
 import { nullable, positive, uuid, record, text } from './decode'
 function binding(value: unknown, device: string): Binding {
   if (
-    !schema.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateRoot(value) ||
+    !schema.getApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsByIdResponse.validateRoot(
+      value,
+    ) ||
     value.device !== device
   )
     throw new Error('Wrong device binding')
@@ -41,7 +43,11 @@ function challenge(value: { id: string; options: unknown }): AuthorizationChalle
   return { id: uuid(value.id), publicKey: record(record(value.options)['publicKey']) }
 }
 function enterprise(value: unknown, id?: string): EnterpriseDetail {
-  if (!schema.getApiV1DeviceAccessEnterpriseConfigurationByIdResponse.validateRoot(value))
+  if (
+    !schema.getApiV1TenantsByTenantDeviceAccessEnterpriseConfigurationByIdResponse.validateRoot(
+      value,
+    )
+  )
     throw new Error('Invalid enterprise detail')
   let result: EnterpriseDetail
   if (value.kind === 'relying_party')
@@ -81,58 +87,65 @@ function enterprise(value: unknown, id?: string): EnterpriseDetail {
   if (id !== undefined && result.id !== id) throw new Error('Wrong enterprise detail')
   return result
 }
-export function createDeviceAccessAdapter(transport: HttpTransport): DeviceAccessPort {
+export function createDeviceAccessAdapter(
+  transport: HttpTransport,
+  tenant: string,
+): DeviceAccessPort {
   return {
     beginBinding: (device, id, input, signal) =>
-      api.postApiV1DevicesByDeviceDeviceAccessBindingsByIdStepUp(
+      api.postApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsByIdStepUp(
         transport,
         {
-          pathParams: { device, id },
+          pathParams: { tenant, device, id },
           body: requestInput(
             input,
-            schema.postApiV1DevicesByDeviceDeviceAccessBindingsByIdStepUpBody.validateRoot,
+            schema.postApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsByIdStepUpBody
+              .validateRoot,
           ),
           signal,
         },
         challenge,
       ),
     changeBinding: (device, id, input) =>
-      api.putApiV1DevicesByDeviceDeviceAccessBindingsById(
+      api.putApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsById(
         transport,
         {
-          pathParams: { device, id },
+          pathParams: { tenant, device, id },
           body: requestInput(
             input,
-            schema.putApiV1DevicesByDeviceDeviceAccessBindingsByIdBody.validateRoot,
+            schema.putApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsByIdBody.validateRoot,
           ),
         },
         (value) => binding(value, device),
       ),
     enterpriseDetail: (id, signal) =>
-      api.getApiV1DeviceAccessEnterpriseConfigurationById(
+      api.getApiV1TenantsByTenantDeviceAccessEnterpriseConfigurationById(
         transport,
-        { signal, pathParams: { id } },
+        { signal, pathParams: { tenant, id } },
         (value) => enterprise(value, id),
       ),
     beginEnterprise: (input, signal) =>
-      api.postApiV1DeviceAccessEnterpriseConfigurationStepUp(
+      api.postApiV1TenantsByTenantDeviceAccessEnterpriseConfigurationStepUp(
         transport,
         {
+          pathParams: { tenant },
           body: requestInput(
             input,
-            schema.postApiV1DeviceAccessEnterpriseConfigurationStepUpBody.validateRoot,
+            schema.postApiV1TenantsByTenantDeviceAccessEnterpriseConfigurationStepUpBody
+              .validateRoot,
           ),
           signal,
         },
         challenge,
       ),
     changeEnterprise: (input) =>
-      api.postApiV1DeviceAccessEnterpriseConfiguration(
+      api.postApiV1TenantsByTenantDeviceAccessEnterpriseConfiguration(
         transport,
         {
+          pathParams: { tenant },
           body: requestInput(
             input,
-            schema.postApiV1DeviceAccessEnterpriseConfigurationBody.validateRoot,
+            schema.postApiV1TenantsByTenantDeviceAccessEnterpriseConfigurationBody.validateRoot,
           ),
         },
         (value) => {
@@ -146,9 +159,9 @@ export function createDeviceAccessAdapter(transport: HttpTransport): DeviceAcces
         },
       ),
     platformSso: (device) =>
-      api.getApiV1ApplePlatformSsoConfiguration(
+      api.getApiV1TenantsByTenantApplePlatformSsoConfiguration(
         transport,
-        { query: { deviceId: device } },
+        { pathParams: { tenant }, query: { deviceId: device } },
         (value) => ({
           teamId: text(value.configuration.teamId),
           extensionId: text(value.configuration.extensionId),
@@ -165,36 +178,41 @@ export function createDeviceAccessAdapter(transport: HttpTransport): DeviceAcces
         }),
       ),
     bindings: (device, query, signal) =>
-      api.getApiV1DevicesByDeviceDeviceAccess(
+      api.getApiV1TenantsByTenantDevicesByDeviceDeviceAccess(
         transport,
-        { signal, pathParams: { device }, query: queryParameters(query) },
+        { signal, pathParams: { tenant, device }, query: queryParameters(query) },
         (value) => ({
           items: value.items.map((item) => binding(item, device)),
           nextCursor: nextCursor(value.nextCursor),
         }),
       ),
     binding: (device, id, signal) =>
-      api.getApiV1DevicesByDeviceDeviceAccessBindingsById(
+      api.getApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsById(
         transport,
-        { signal, pathParams: { device, id: uuid(id) } },
+        { signal, pathParams: { tenant, device, id: uuid(id) } },
         (value) => binding(value, device),
       ),
     operation: (device, id) =>
-      api.getApiV1DevicesByDeviceDeviceAccessOperationsById(
+      api.getApiV1TenantsByTenantDevicesByDeviceDeviceAccessOperationsById(
         transport,
-        { pathParams: { device, id: uuid(id) } },
+        { pathParams: { tenant, device, id: uuid(id) } },
         (value) => binding(value, device),
       ),
     enterprise: (query, signal) =>
-      api.getApiV1DeviceAccessEnterpriseConfiguration(
+      api.getApiV1TenantsByTenantDeviceAccessEnterpriseConfiguration(
         transport,
         {
+          pathParams: { tenant },
           signal,
           query: queryParameters({ limit: 100, ...query, fields: ['id', 'kind', 'value'] }),
         },
         (value) => ({
           items: value.items.map((item): EnterpriseRecord => {
-            if (!schema.getApiV1DeviceAccessEnterpriseConfigurationByIdResponse.validateRoot(item))
+            if (
+              !schema.getApiV1TenantsByTenantDeviceAccessEnterpriseConfigurationByIdResponse.validateRoot(
+                item,
+              )
+            )
               throw new Error('Incomplete enterprise record')
             if (item.kind === 'relying_party') {
               if (item.id !== `rp:${item.value.id}`) throw new Error('Wrong relying party')

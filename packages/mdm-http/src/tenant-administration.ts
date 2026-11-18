@@ -4,52 +4,27 @@ import { queryParameters, projectedPage } from '@rss/api/mdm-query'
 import type { HttpTransport } from '@rss/api/mdm'
 import {
   confirmOperation,
+  provisioningEntry,
   type TenantAdministrationPort,
   type Tenant,
   type Provisioning,
   type Receipt,
   type ProvisionReceipt,
 } from '@rss/mdm-tenant-administration'
-import { uuid, text, count, positive, boolean, nullable, enumeration } from './decode'
+import { uuid, text, positive, boolean, nullable, enumeration } from './decode'
 function tenant(value: unknown): Tenant {
   if (!schema.getApiV1TenantAdministrationProvisioningsResponse.validateTenant(value))
     throw new Error('Invalid tenant contract')
   uuid(value.tenantId)
   positive(value.revision)
-  positive(value.initialEpoch)
-  positive(value.currentEpoch)
   return value
 }
 function provisioning(value: unknown): Provisioning {
-  if (!schema.getApiV1TenantAdministrationProvisioningsResponse.validateProvisioning(value))
+  if (!schema.getApiV1TenantAdministrationProvisioningsResponse.validateProgress(value))
     throw new Error('Invalid provisioning contract')
-  uuid(value.operationId)
   uuid(value.tenantId)
-  uuid(value.hostId)
-  positive(value.revision)
   if (value.administratorId !== null) uuid(value.administratorId)
-  if (value.origin !== null) {
-    const url = new URL(value.origin)
-    if (url.protocol !== 'https:' || url.origin !== value.origin || url.username || url.password)
-      throw new Error('Invalid tenant origin')
-  }
-  if (value.application) {
-    const app = value.application
-    positive(app.requestedRevision)
-    uuid(app.operationId)
-    if (!/^[0-9a-f]{64}$/.test(app.materialDigest)) throw new Error('Invalid host material digest')
-    if (app.observation) {
-      uuid(app.observation.hostId)
-      uuid(app.observation.processGeneration)
-      positive(app.observation.appliedRevision)
-      count(app.observation.observedAt)
-      if (
-        app.observation.hostId !== value.hostId ||
-        !/^[0-9a-f]{64}$/.test(app.observation.materialDigest)
-      )
-        throw new Error('Wrong host observation')
-    }
-  }
+  provisioningEntry(value)
   return value
 }
 function receipt(value: unknown): Receipt {
@@ -58,7 +33,6 @@ function receipt(value: unknown): Receipt {
   const operationId = uuid(value.operationId)
   if (value.action === 'provision') {
     const result = provisioning(value.result)
-    if (result.operationId !== operationId) throw new Error('Wrong provisioning receipt')
     return { operationId, action: 'provision', result }
   }
   if (value.action === 'administrator_create') {
@@ -83,8 +57,6 @@ function provisionReceipt(value: unknown, operationId: string): ProvisionReceipt
 const tenantFields = {
   tenantId: uuid,
   management: boolean,
-  initialEpoch: positive,
-  currentEpoch: positive,
   name: (v: unknown) => nullable(v, text),
   notes: (v: unknown) => nullable(v, text),
   revision: positive,

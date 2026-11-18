@@ -26,13 +26,13 @@ import {
 } from './inventory-values'
 
 function objectRef(value: unknown): DeviceRef {
-  if (!schema.getApiV1GroupsByIdResponse200.validateObjectRef(value))
+  if (!schema.getApiV1TenantsByTenantGroupsByIdResponse200.validateObjectRef(value))
     throw new Error('Invalid group object')
   if (value.kind === 'association') uuid(value.id)
   return { kind: value.kind, id: text(value.id) }
 }
 function groupCriteria(value: unknown): GroupCriteria {
-  if (!schema.getApiV1GroupsByIdResponse200.validateCriteria(value))
+  if (!schema.getApiV1TenantsByTenantGroupsByIdResponse200.validateCriteria(value))
     throw new Error('Invalid group criteria')
   if (value.kind === 'group') return { kind: 'group', groupId: uuid(value.groupId), op: value.op }
   if (value.kind === 'and' || value.kind === 'or')
@@ -46,7 +46,7 @@ function groupCriteria(value: unknown): GroupCriteria {
   }
 }
 function groupCondition(value: unknown): GroupCondition {
-  if (!schema.getApiV1GroupsByIdResponse200.validateCondition(value))
+  if (!schema.getApiV1TenantsByTenantGroupsByIdResponse200.validateCondition(value))
     throw new Error('Invalid group condition')
   return {
     ...conditionContext({ selector: value.selector, quantifier: value.quantifier }),
@@ -54,7 +54,8 @@ function groupCondition(value: unknown): GroupCondition {
   }
 }
 function group(value: unknown): Group {
-  if (!schema.getApiV1GroupsByIdResponse200.validateGroup(value)) throw new Error('Invalid group')
+  if (!schema.getApiV1TenantsByTenantGroupsByIdResponse200.validateGroup(value))
+    throw new Error('Invalid group')
   return {
     ...value,
     id: uuid(value.id),
@@ -66,7 +67,7 @@ function group(value: unknown): Group {
   }
 }
 function read(value: unknown, id: string): GroupRead {
-  if (!schema.getApiV1GroupsByIdResponse200.validateGroupRead(value))
+  if (!schema.getApiV1TenantsByTenantGroupsByIdResponse200.validateGroupRead(value))
     throw new Error('Invalid group detail')
   const row = group(value.group)
   if (row.id !== id) throw new Error('Wrong group detail')
@@ -77,20 +78,21 @@ function read(value: unknown, id: string): GroupRead {
     freshness: value.freshness,
   }
 }
-function accepted(value: unknown, id: string): TaskAccepted {
-  if (!schema.postApiV1GroupsByIdResponse202.validateJobAccepted(value))
+function accepted(value: unknown, id: string, tenant: string): TaskAccepted {
+  if (!schema.postApiV1TenantsByTenantGroupsByIdResponse202.validateJobAccepted(value))
     throw new Error('Invalid group task receipt')
   const kind = enumeration(value.kind, ['group', 'group_preview', 'group_definition'] as const),
     task = uuid(value.task)
   if (
     value.target !== id ||
-    value.statusUrl !== api.getApiV1GroupsByGroupTasksByTask.url({ group: id, task })
+    value.statusUrl !==
+      api.getApiV1TenantsByTenantGroupsByGroupTasksByTask.url({ tenant, group: id, task })
   )
     throw new Error('Wrong group task binding')
   return { task, target: id, kind, statusUrl: value.statusUrl }
 }
 function registration(value: unknown): DeviceMember {
-  if (!schema.getApiV1GroupsByIdResponse200.validatePrimaryRegistration(value))
+  if (!schema.getApiV1TenantsByTenantGroupsByIdResponse200.validatePrimaryRegistration(value))
     throw new Error('Invalid source registration')
   return {
     device: text(value.device),
@@ -98,7 +100,7 @@ function registration(value: unknown): DeviceMember {
   }
 }
 function decision(value: unknown): Decision {
-  if (!schema.getApiV1GroupsByIdResponse200.validateDecisionView(value))
+  if (!schema.getApiV1TenantsByTenantGroupsByIdResponse200.validateDecisionView(value))
     throw new Error('Invalid group decision')
   return {
     ...value,
@@ -122,7 +124,7 @@ function result(
   resultId: string,
   kind: GroupResult['page']['kind'],
 ): GroupResult {
-  if (!schema.getApiV1GroupsByIdResponse200.validateGroupPage(value))
+  if (!schema.getApiV1TenantsByTenantGroupsByIdResponse200.validateGroupPage(value))
     throw new Error('Invalid group result')
   if (value.group !== groupId || value.result !== resultId || value.page.kind !== kind)
     throw new Error('Wrong group result binding')
@@ -180,16 +182,17 @@ const directoryFields = {
   ruleVersion: (value: unknown) => nullable(value, text),
 }
 /** Group authority, dependency admission and computation remain at the formal backend owner. */
-export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
+export function createGroupsAdapter(transport: HttpTransport, tenant: string): GroupsPort {
   return {
     list: (query = {}, signal) => {
       const { referenceableFor, ...directory } = query
       const projection =
         directory.fields ?? (Object.keys(directoryFields) as (keyof typeof directoryFields)[])
       if (!projection.includes('id')) throw new Error('Directory identity required')
-      return api.getApiV1Groups(
+      return api.getApiV1TenantsByTenantGroups(
         transport,
         {
+          pathParams: { tenant },
           signal,
           query: {
             ...queryParameters({ limit: 100, ...directory, fields: projection }),
@@ -204,19 +207,21 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
       )
     },
     read: (id) =>
-      api.getApiV1GroupsById(transport, { pathParams: { id: uuid(id) } }, (value) =>
-        read(value, id),
+      api.getApiV1TenantsByTenantGroupsById(
+        transport,
+        { pathParams: { tenant, id: uuid(id) } },
+        (value) => read(value, id),
       ),
     change: (id, change) =>
-      api.postApiV1GroupsById(
+      api.postApiV1TenantsByTenantGroupsById(
         transport,
         {
-          pathParams: { id: uuid(id) },
-          body: requestInput(change, schema.postApiV1GroupsByIdBody.validateRoot),
+          pathParams: { tenant, id: uuid(id) },
+          body: requestInput(change, schema.postApiV1TenantsByTenantGroupsByIdBody.validateRoot),
         },
         (value) => {
-          if (!schema.postApiV1GroupsByIdResponse200.validateGroupReceipt(value))
-            return accepted(value, id)
+          if (!schema.postApiV1TenantsByTenantGroupsByIdResponse200.validateGroupReceipt(value))
+            return accepted(value, id, tenant)
           if (value.operation !== change.operationId || value.group.id !== id)
             throw new Error('Wrong group change receipt')
           return {
@@ -229,10 +234,14 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
         },
       ),
     preview: (request) =>
-      api.postApiV1GroupsPreviews(
+      api.postApiV1TenantsByTenantGroupsPreviews(
         transport,
         {
-          body: requestInput(request, schema.postApiV1GroupsPreviewsBody.validateRoot),
+          pathParams: { tenant },
+          body: requestInput(
+            request,
+            schema.postApiV1TenantsByTenantGroupsPreviewsBody.validateRoot,
+          ),
         },
         (value) => ({
           items: distinct(value.items.map(objectRef), (item) => `${item.kind}/${item.id}`),
@@ -258,12 +267,12 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
         }),
       ),
     task: (group, task) =>
-      api.getApiV1GroupsByGroupTasksByTask(
+      api.getApiV1TenantsByTenantGroupsByGroupTasksByTask(
         transport,
-        { pathParams: { group: uuid(group), task: uuid(task) } },
+        { pathParams: { tenant, group: uuid(group), task: uuid(task) } },
         (value) => {
           if (
-            !schema.getApiV1GroupsByIdResponse200.validateTaskRead(value) ||
+            !schema.getApiV1TenantsByTenantGroupsByIdResponse200.validateTaskRead(value) ||
             value.task !== task ||
             value.target !== group
           )
@@ -287,18 +296,18 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
         },
       ),
     result: (group, resultId, kind, query = {}) =>
-      api.getApiV1GroupsByGroupResultsByResultByKind(
+      api.getApiV1TenantsByTenantGroupsByGroupResultsByResultByKind(
         transport,
         {
-          pathParams: { group: uuid(group), result: uuid(resultId), kind },
+          pathParams: { tenant, group: uuid(group), result: uuid(resultId), kind },
           query: windowQuery(query),
         },
         (value) => result(value, group, resultId, kind),
       ),
     references: (id, query = {}) =>
-      api.getApiV1GroupsByIdReferences(
+      api.getApiV1TenantsByTenantGroupsByIdReferences(
         transport,
-        { pathParams: { id: uuid(id) }, query: windowQuery(query) },
+        { pathParams: { tenant, id: uuid(id) }, query: windowQuery(query) },
         (value) => ({
           items: value.items.map((item) => ({
             ...item,
@@ -310,10 +319,10 @@ export function createGroupsAdapter(transport: HttpTransport): GroupsPort {
         }),
       ),
     impacts: (group, query = {}) =>
-      api.getApiV1GroupsByIdImpacts(
+      api.getApiV1TenantsByTenantGroupsByIdImpacts(
         transport,
         {
-          pathParams: { id: uuid(group) },
+          pathParams: { tenant, id: uuid(group) },
           query: {
             ...windowQuery(query),
             ...(query.kind === undefined ? {} : { kind: query.kind }),

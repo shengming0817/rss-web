@@ -40,7 +40,7 @@ function unique<T>(values: readonly T[], key: (v: T) => string): void {
   if (new Set(values.map(key)).size !== values.length) throw new Error('Duplicate device identity')
 }
 function member(value: unknown): DeviceMember {
-  if (!schema.getApiV1DeviceViewsResponse.validatePrimaryRegistration(value))
+  if (!schema.getApiV1TenantsByTenantDeviceViewsResponse.validatePrimaryRegistration(value))
     throw new Error('Invalid registration contract')
   return {
     device: identifier(value.device),
@@ -48,25 +48,25 @@ function member(value: unknown): DeviceMember {
   }
 }
 function association(value: unknown): Association {
-  if (!schema.getApiV1DeviceViewsResponse.validateAssociation(value))
+  if (!schema.getApiV1TenantsByTenantDeviceViewsResponse.validateAssociation(value))
     throw new Error('Invalid association contract')
   validateAssociation(value)
   return value
 }
 function reference(value: unknown): DeviceRef {
-  if (!schema.getApiV1DeviceViewsByKindByIdResponse.validateObjectRef(value))
+  if (!schema.getApiV1TenantsByTenantDeviceViewsByKindByIdResponse.validateObjectRef(value))
     throw new Error('Invalid device reference')
   referenceKey(value)
   return value
 }
 function user(value: unknown, tenant: string): User {
-  if (!schema.getApiV1DeviceViewsResponse.validateUser(value))
+  if (!schema.getApiV1TenantsByTenantDeviceViewsResponse.validateUser(value))
     throw new Error('Invalid personnel contract')
   validateUser(value, tenant)
   return value
 }
 function display(value: unknown): PersonDisplay {
-  if (!schema.getApiV1DeviceViewsResponse.validatePersonDisplay(value))
+  if (!schema.getApiV1TenantsByTenantDeviceViewsResponse.validatePersonDisplay(value))
     throw new Error('Invalid display contract')
   for (const profile of value.profiles) {
     if (
@@ -90,7 +90,7 @@ const endpointFields = {
   lastCommunicationReceivedAt: (v: unknown) => (v === null ? null : integer(v)),
   enrollment: (v: unknown): Endpoint['enrollment'] => {
     if (v === null) return null
-    if (!schema.getApiV1DevicesByDeviceResponse.validateEnrollment(v))
+    if (!schema.getApiV1TenantsByTenantDevicesByDeviceResponse.validateEnrollment(v))
       throw new Error('Invalid enrollment contract')
     uuid(v.enrollmentId)
     integer(v.expiresAt)
@@ -100,13 +100,13 @@ const endpointFields = {
 }
 
 function endpoint(value: unknown, id: string): EndpointDetail {
-  if (!schema.getApiV1DevicesByDeviceResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByDeviceResponse.validateRoot(value))
     throw new Error('Invalid endpoint detail')
   if (value.id !== id) throw new Error('Wrong endpoint')
   return { ...value, id: identifier(value.id) }
 }
 function viewEndpoint(value: unknown, tenant: string): ViewEndpoint {
-  if (!schema.getApiV1DeviceViewsByKindByIdResponse.validateEndpoint(value))
+  if (!schema.getApiV1TenantsByTenantDeviceViewsByKindByIdResponse.validateEndpoint(value))
     throw new Error('Invalid view endpoint')
   identifier(value.id)
   const platform = value.platform
@@ -180,7 +180,7 @@ function directory(query: DirectoryQuery, identity: string, maximum: number) {
 export function createDevicesAdapter(transport: HttpTransport, tenant: string): DevicesPort {
   uuid(tenant)
   const personnel = (value: unknown): RegistrationUser => {
-    if (!schema.getApiV1DevicesByDeviceRegistrationUserResponse.validateRoot(value))
+    if (!schema.getApiV1TenantsByTenantDevicesByDeviceRegistrationUserResponse.validateRoot(value))
       throw new Error('Invalid personnel contract')
     return {
       revision: count(value.revision),
@@ -189,21 +189,21 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
   }
   return {
     endpoints: (query, signal) =>
-      api.getApiV1Devices(
+      api.getApiV1TenantsByTenantDevices(
         transport,
-        { signal, query: directory(query, 'id', 1000) },
+        { pathParams: { tenant }, signal, query: directory(query, 'id', 1000) },
         (value) => projectedPage(value, endpointFields, query.fields, ['id']) as Page<EndpointRow>,
       ),
     endpoint: (id, signal) =>
-      api.getApiV1DevicesByDevice(
+      api.getApiV1TenantsByTenantDevicesByDevice(
         transport,
-        { signal, pathParams: { device: identifier(id) } },
+        { signal, pathParams: { tenant, device: identifier(id) } },
         (value) => endpoint(value, id),
       ),
     endpointStatistics: (filter, signal) =>
-      api.getApiV1DevicesStatistics(
+      api.getApiV1TenantsByTenantDevicesStatistics(
         transport,
-        { signal, query: queryParameters({ filter }) },
+        { pathParams: { tenant }, signal, query: queryParameters({ filter }) },
         (value) => ({
           statistics: {
             total: count(value.statistics.total),
@@ -215,9 +215,9 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
         }),
       ),
     views: (query, signal) =>
-      api.getApiV1DeviceViews(
+      api.getApiV1TenantsByTenantDeviceViews(
         transport,
-        { signal, query: directory(query, 'key', 100) },
+        { pathParams: { tenant }, signal, query: directory(query, 'key', 100) },
         (value) => {
           const page = projectedPage(
             value,
@@ -242,28 +242,32 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
         },
       ),
     view: (ref, signal) =>
-      api.getApiV1DeviceViewsByKindById(transport, { signal, pathParams: { ...ref } }, (value) => {
-        const summary = viewSummary(value, tenant)
-        if (referenceKey(summary.reference) !== referenceKey(ref))
-          throw new Error('Wrong device view')
-        return {
-          ...summary,
-          fields: Object.fromEntries(
-            Object.entries(value.fields).map(([key, field]) => {
-              if (
-                field.field !== key ||
-                field.sources.some((s) => !summary.endpoints.some((e) => e.id === s.endpoint))
-              )
-                throw new Error('Wrong device field binding')
-              return [key, field.state]
-            }),
-          ),
-        } satisfies DeviceView
-      }),
-    viewStatistics: (filter, signal) =>
-      api.getApiV1DeviceViewsStatistics(
+      api.getApiV1TenantsByTenantDeviceViewsByKindById(
         transport,
-        { signal, query: queryParameters({ filter }) },
+        { signal, pathParams: { tenant, ...ref } },
+        (value) => {
+          const summary = viewSummary(value, tenant)
+          if (referenceKey(summary.reference) !== referenceKey(ref))
+            throw new Error('Wrong device view')
+          return {
+            ...summary,
+            fields: Object.fromEntries(
+              Object.entries(value.fields).map(([key, field]) => {
+                if (
+                  field.field !== key ||
+                  field.sources.some((s) => !summary.endpoints.some((e) => e.id === s.endpoint))
+                )
+                  throw new Error('Wrong device field binding')
+                return [key, field.state]
+              }),
+            ),
+          } satisfies DeviceView
+        },
+      ),
+    viewStatistics: (filter, signal) =>
+      api.getApiV1TenantsByTenantDeviceViewsStatistics(
+        transport,
+        { pathParams: { tenant }, signal, query: queryParameters({ filter }) },
         (value) => ({
           statistics: {
             endpointCount: count(value.statistics.endpointCount),
@@ -273,9 +277,9 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
         }),
       ),
     associations: (query, signal) =>
-      api.getApiV1DeviceAssociations(
+      api.getApiV1TenantsByTenantDeviceAssociations(
         transport,
-        { signal, query: directory(query, 'id', 100) },
+        { pathParams: { tenant }, signal, query: directory(query, 'id', 100) },
         (value) => {
           const page = projectedPage(
             value,
@@ -294,9 +298,9 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
         },
       ),
     association: (id, signal) =>
-      api.getApiV1DeviceAssociationsById(
+      api.getApiV1TenantsByTenantDeviceAssociationsById(
         transport,
-        { signal, pathParams: { id: uuid(id) } },
+        { signal, pathParams: { tenant, id: uuid(id) } },
         (value) => {
           const result = association(value)
           if (result.id !== id) throw new Error('Wrong association')
@@ -304,9 +308,9 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
         },
       ),
     changes: (query, signal) =>
-      api.getApiV1DeviceAssociationsChanges(
+      api.getApiV1TenantsByTenantDeviceAssociationsChanges(
         transport,
-        { signal, query: windowParameters(query, 64) },
+        { pathParams: { tenant }, signal, query: windowParameters(query, 64) },
         (value) => ({
           items: value.items.map((c) => ({
             association: association(c.association),
@@ -318,11 +322,11 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
         }),
       ),
     candidates: (device, channel, query, signal) =>
-      api.getApiV1DevicesByDeviceAssociationCandidates(
+      api.getApiV1TenantsByTenantDevicesByDeviceAssociationCandidates(
         transport,
         {
           signal,
-          pathParams: { device: identifier(device) },
+          pathParams: { tenant, device: identifier(device) },
           query: { ...windowParameters(query, 100), channel },
         },
         (value) => {
@@ -333,49 +337,58 @@ export function createDevicesAdapter(transport: HttpTransport, tenant: string): 
           return { items, nextCursor: nextCursor(value.nextCursor) }
         },
       ),
-    confirm: (change) => api.postApiV1DeviceAssociations(transport, { body: change }, association),
-    revoke: (id, change) =>
-      api.postApiV1DeviceAssociationsByIdRevoke(
+    confirm: (change) =>
+      api.postApiV1TenantsByTenantDeviceAssociations(
         transport,
-        { pathParams: { id: uuid(id) }, body: change },
+        { pathParams: { tenant }, body: change },
+        association,
+      ),
+    revoke: (id, change) =>
+      api.postApiV1TenantsByTenantDeviceAssociationsByIdRevoke(
+        transport,
+        { pathParams: { tenant, id: uuid(id) }, body: change },
         association,
       ),
     registrationUser: (device) =>
-      api.getApiV1DevicesByDeviceRegistrationUser(
+      api.getApiV1TenantsByTenantDevicesByDeviceRegistrationUser(
         transport,
-        { pathParams: { device: identifier(device) } },
+        { pathParams: { tenant, device: identifier(device) } },
         personnel,
       ),
     assign: (device, change) =>
-      api.putApiV1DevicesByDeviceRegistrationUser(
+      api.putApiV1TenantsByTenantDevicesByDeviceRegistrationUser(
         transport,
         {
-          pathParams: { device: identifier(device) },
+          pathParams: { tenant, device: identifier(device) },
           headers: { 'Idempotency-Key': uuid(change.operationId) },
           body: { expectedRevision: change.expectedRevision, user: change.user },
         },
         personnel,
       ),
     retirement: (id) =>
-      api.getApiV1DeviceRetirementsById(transport, { pathParams: { id: uuid(id) } }, (value) => {
-        if (value.id !== id) throw new Error('Wrong retirement')
-        referenceKey(value.target.object)
-        value.target.members.forEach(member)
-        for (const channel of value.channels) {
-          identifier(channel.device)
-        }
-        return value satisfies Retirement
-      }),
-    forceRetirement: (id, operationId, reason) =>
-      api.postApiV1DeviceRetirementsByIdForceRevoke(
+      api.getApiV1TenantsByTenantDeviceRetirementsById(
         transport,
-        { pathParams: { id: uuid(id) }, body: { operationId: uuid(operationId), reason } },
+        { pathParams: { tenant, id: uuid(id) } },
+        (value) => {
+          if (value.id !== id) throw new Error('Wrong retirement')
+          referenceKey(value.target.object)
+          value.target.members.forEach(member)
+          for (const channel of value.channels) {
+            identifier(channel.device)
+          }
+          return value satisfies Retirement
+        },
+      ),
+    forceRetirement: (id, operationId, reason) =>
+      api.postApiV1TenantsByTenantDeviceRetirementsByIdForceRevoke(
+        transport,
+        { pathParams: { tenant, id: uuid(id) }, body: { operationId: uuid(operationId), reason } },
         (value) => value,
       ),
     assetState: (ref, operationId, state) =>
-      api.postApiV1DeviceViewsByKindByIdAssetState(
+      api.postApiV1TenantsByTenantDeviceViewsByKindByIdAssetState(
         transport,
-        { pathParams: { ...ref }, body: { operationId: uuid(operationId), state } },
+        { pathParams: { tenant, ...ref }, body: { operationId: uuid(operationId), state } },
         (value) => value,
       ),
   }

@@ -20,8 +20,9 @@ try {
     resource = 'react-software-' + randomUUID(),
     direct = 'react-direct-' + randomUUID(),
     escaped = (id) => encodeURIComponent(id),
-    versionPath = (id) => `/api/v1/software/resources/${escaped(id)}/versions/resource-v1`,
-    resourcePath = (id) => `/api/v1/resources/${escaped(id)}`,
+    versionPath = (id) =>
+      `/api/v1/tenants/${run.fixture.tenant}/software/resources/${escaped(id)}/versions/resource-v1`,
+    resourcePath = (id) => `/api/v1/tenants/${run.fixture.tenant}/resources/${escaped(id)}`,
     contentPath = (id) =>
       versionPath(id) +
       `/content?platform=windows&architecture=x86_64&variant=${id === direct ? 'direct' : 'main'}`,
@@ -130,7 +131,10 @@ try {
   await run.choose(p, label('来源协议'), 'winget_rest')
   await label('WinGet HTTPS 地址').fill(f.upstream + '/rest/')
   await label('WinGet 源标识').fill('browser-rest')
-  const sourceLoss = await loseFirst('**/api/v1/software/sources/browser-rest/revisions/1', 200)
+  const sourceLoss = await loseFirst(
+    `**/api/v1/tenants/${run.fixture.tenant}/software/sources/browser-rest/revisions/1`,
+    200,
+  )
   await button('注册来源精确版本').click()
   await waitUntil(() => sourceLoss.statuses.length === 1)
   await button('显式重提原软件请求').waitFor()
@@ -165,7 +169,10 @@ try {
   ])
     await label(name).fill(value)
   await label('生成原生源导出定义').click()
-  const importLoss = await loseFirst('**/api/v1/software/imports', 200)
+  const importLoss = await loseFirst(
+    `**/api/v1/tenants/${run.fixture.tenant}/software/imports`,
+    200,
+  )
   await button('提交精确软件导入').click()
   await waitUntil(() => importLoss.statuses.length === 1)
   await button('读取原导入资源当前状态').click()
@@ -307,7 +314,10 @@ try {
   assert.equal(await button('提交此精确源发布').isDisabled(), true)
   await label('发布目标标识').fill(f.target)
   await button('读取精确目标当前摘要').click()
-  const publicationLoss = await loseFirst('**/api/v1/software/publications', 202)
+  const publicationLoss = await loseFirst(
+    `**/api/v1/tenants/${run.fixture.tenant}/software/publications`,
+    202,
+  )
   await button('提交此精确源发布').click()
   await waitUntil(() => publicationLoss.statuses.length === 1)
   await button('显式重提原软件请求').click()
@@ -321,7 +331,7 @@ try {
     const result = await run.response(
       p,
       'GET',
-      `/api/v1/software/publications/${publicationId}`,
+      `/api/v1/tenants/${run.fixture.tenant}/software/publications/${publicationId}`,
       () => button('读取精确发布记录').click(),
     )
     return result.json()
@@ -355,7 +365,7 @@ try {
   await label('导入资源标识').fill(direct)
   await label('导入变体键').fill('direct')
   await label('生成原生源导出定义').click()
-  await run.response(p, 'POST', '/api/v1/software/imports', () =>
+  await run.response(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/software/imports`, () =>
     button('提交精确软件导入').click(),
   )
   const directReference = await deliver(direct, false)
@@ -391,7 +401,7 @@ try {
       jitterSeconds: 0,
       window: null,
     }
-  await api('POST', '/api/v1/policies/' + policyId, {
+  await api('POST', `/api/v1/tenants/${run.fixture.tenant}/policies/` + policyId, {
     operationId: randomUUID(),
     expectedRevision: 0,
     input: {
@@ -453,8 +463,11 @@ try {
     }
     await label('发布到自助目录').check()
     await label('确认范围、资源、调度与潜在影响').check()
-    const saved = await run.response(p, 'POST', '/api/v1/policies/' + policyId, () =>
-      button('保存策略定义').click(),
+    const saved = await run.response(
+      p,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/policies/` + policyId,
+      () => button('保存策略定义').click(),
     )
     const current = await saved.json()
     assert.equal(current.definition.selfService.access.kind, kind)
@@ -479,10 +492,10 @@ try {
   await label('批次开放时间 2').fill(String(opensAt + 3600))
   await label('最低核实成功率（%）').fill('90')
   await label('确认范围、资源、调度与潜在影响').check()
-  await run.response(p, 'POST', '/api/v1/policies/' + policyId, () =>
+  await run.response(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/policies/` + policyId, () =>
     button('保存策略定义').click(),
   )
-  const withdrawn = await api('GET', '/api/v1/policies/' + policyId)
+  const withdrawn = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/policies/` + policyId)
   assert.equal(withdrawn.definition.selfService.published, false)
   assert.equal(withdrawn.definition.selfService.allowAi, false)
   assert.equal(withdrawn.definition.selfService.riskLevel, 1)
@@ -587,7 +600,7 @@ try {
 
   run.step('exact-official-blueprint-instantiation')
   await tab('Blueprints')
-  const catalog = await api('GET', '/api/v1/collection-blueprints'),
+  const catalog = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/collection-blueprints`),
     blueprint = catalog.items.find(
       (value) => value.definition.kind === 'native_collection' && value.platform === 'windows',
     )
@@ -637,7 +650,10 @@ try {
       expectedRevision: 0,
       input: { action: 'create', kind: 'software' },
     })
-  const firstCatalog = await api('GET', '/api/v1/resources?filter=kind%3D%3Dsoftware&limit=20')
+  const firstCatalog = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/resources?filter=kind%3D%3Dsoftware&limit=20`,
+  )
   assert.equal(
     firstCatalog.items.some((row) => row.id === resource),
     false,
@@ -647,7 +663,10 @@ try {
   await tab('组织软件')
   const continued = p.waitForResponse((response) => {
     const url = new URL(response.url())
-    return url.pathname === '/api/v1/resources' && url.searchParams.has('cursor')
+    return (
+      url.pathname === `/api/v1/tenants/${run.fixture.tenant}/resources` &&
+      url.searchParams.has('cursor')
+    )
   })
   await button('下一页').click()
   const secondPage = await continued
@@ -657,9 +676,18 @@ try {
   assert.ok(expired.searchParams.get('cursor'))
   const disjunction = `id=='${resource}',kind=='script'`
   expired.searchParams.set('filter', disjunction)
-  await run.response(p, 'GET', '/api/v1/resources', () => p.goto(expired.href), 409)
-  const restarted = await run.response(p, 'GET', '/api/v1/resources', () =>
-    button('保留条件重新开始').click(),
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/resources`,
+    () => p.goto(expired.href),
+    409,
+  )
+  const restarted = await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/resources`,
+    () => button('保留条件重新开始').click(),
   )
   assert.deepEqual(
     (await restarted.json()).items.map((row) => row.id),
@@ -667,12 +695,14 @@ try {
   )
   assert.equal(new URL(p.url()).searchParams.get('filter'), disjunction)
   assert.equal(new URL(p.url()).searchParams.has('cursor'), false)
-  await run.response(p, 'GET', '/api/v1/resources', () => button('清除条件').click())
+  await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/resources`, () =>
+    button('清除条件').click(),
+  )
   const detailRequests = []
   const captureDetails = (request) => {
     if (
       request.method() === 'GET' &&
-      new URL(request.url()).pathname.startsWith('/api/v1/resources/')
+      new URL(request.url()).pathname.startsWith(`/api/v1/tenants/${run.fixture.tenant}/resources/`)
     )
       detailRequests.push(new URL(request.url()).pathname)
   }
@@ -680,8 +710,11 @@ try {
   await label('名称').fill(String.raw`éclair O'Reilly \ %_`)
   await label('分类').fill('业务工具')
   await run.choose(p, label('激活状态'), '是')
-  const softwareDirectory = await run.response(p, 'GET', '/api/v1/resources', () =>
-    button('应用').click(),
+  const softwareDirectory = await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/resources`,
+    () => button('应用').click(),
   )
   const softwareRows = (await softwareDirectory.json()).items
   assert.deepEqual(
@@ -707,7 +740,7 @@ try {
     .waitFor()
   const draftReturn = draftPage.getByRole('button', { name: '返回来源', exact: true })
   const sourceUrl = new URL(new URL(p.url()).searchParams.get('returnTo'), origin)
-  assert.equal(sourceUrl.pathname, '/software')
+  assert.equal(sourceUrl.pathname, `/tenants/${f.tenant}/software`)
   assert.equal(sourceUrl.searchParams.get('resource'), resource)
   assert.equal(sourceUrl.searchParams.get('version'), 'resource-v1')
   assert.equal(sourceUrl.searchParams.get('variant'), JSON.stringify(['windows', 'x86_64', 'main']))
@@ -715,7 +748,9 @@ try {
   await p.waitForURL(sourceUrl.href)
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).waitFor()
   await button('清除条件').click()
-  await run.response(p, 'GET', '/api/v1/resources', () => run.directoryFilter(p, `id=='${direct}'`))
+  await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/resources`, () =>
+    run.directoryFilter(p, `id=='${direct}'`),
+  )
   await button('查看版本与材料').click()
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).click()
   await p.getByRole('button', { name: '查看策略 ' + policyId, exact: true }).waitFor()
@@ -729,7 +764,7 @@ try {
   run.step('snapshot-lossless-unknown-receipt-and-independent-resource-draft')
   await tab('JSON 来源快照')
   const snapshot = 'browser-snapshot-' + randomUUID(),
-    snapshotPath = '/api/v1/software/source-snapshots/' + snapshot,
+    snapshotPath = `/api/v1/tenants/${run.fixture.tenant}/software/source-snapshots/` + snapshot,
     entryJson = String.raw`{"id":"fixture.package","name":"Editor \u4e2d","version":"7.1","number":9007199254740993,"ratio":0.123456789123456789}`,
     json = '[\n\r\n' + Array(22).fill(entryJson).join(',\r\n') + '\r\r\n]',
     preview = label('待导入的 JSON 原文')
@@ -815,14 +850,18 @@ try {
   assert.equal(await p.getByRole('button', { name: previousEntry, exact: true }).count(), 0)
   assert.equal(await label('实际软件版本').inputValue(), version)
   const privateSource = 'browser-snapshot-private',
-    source = await api('POST', '/api/v1/software/sources/' + privateSource + '/revisions/1', {
-      operationId: randomUUID(),
-      expectedRevision: 0,
-      input: {
-        action: 'register',
-        definition: { id: privateSource, revision: '1', protocol: { kind: 'private' } },
+    source = await api(
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/software/sources/` + privateSource + '/revisions/1',
+      {
+        operationId: randomUUID(),
+        expectedRevision: 0,
+        input: {
+          action: 'register',
+          definition: { id: privateSource, revision: '1', protocol: { kind: 'private' } },
+        },
       },
-    })
+    )
   await label('软件来源标识').fill(privateSource)
   await label('软件来源精确版本').fill('1')
   await label('软件来源快照 SHA-256').fill(Buffer.from(source.snapshot.sha256).toString('hex'))
@@ -834,7 +873,9 @@ try {
   await button('声明此完整固定版本').click()
   await waitUntil(() => lostResource.statuses.length === 1)
   await button('显式重提原资源请求').waitFor()
-  await run.response(p, 'GET', '/api/v1/authorization', () => button('读取软件入口权限').click())
+  await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/authorization`, () =>
+    button('读取软件入口权限').click(),
+  )
   await button('显式重提原资源请求').click()
   await waitUntil(() => lostResource.statuses.length === 2)
   assert.deepEqual(lostResource.calls[1], lostResource.calls[0])
@@ -937,10 +978,10 @@ try {
   checks.push('canonical-resource-software-card-desktop-mobile-dark-design')
   checks.push('software-catalog-bilingual-keyboard')
 
-  const authority = (await api('GET', '/api/v1/authorization/rules')).items.find(
-    (row) => row.id === f.ruleId,
-  )
-  await api('PUT', '/api/v1/authorization/rules/' + f.ruleId, {
+  const authority = (
+    await api('GET', `/api/v1/tenants/${run.fixture.tenant}/authorization/rules`)
+  ).items.find((row) => row.id === f.ruleId)
+  await api('PUT', `/api/v1/tenants/${run.fixture.tenant}/authorization/rules/` + f.ruleId, {
     operationId: randomUUID(),
     expectedRevision: authority.revision,
     value: {

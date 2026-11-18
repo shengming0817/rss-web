@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { usePendingSelection } from './SelectionGuard'
 import { useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Modal, Select, Space } from 'antd'
@@ -287,9 +288,9 @@ export function AssociationEditor({
                 </Button>
               )}
               {outcome === 'unknown' && (
-                <a href="/devices?tab=associations" target="_blank" rel="noopener noreferrer">
+                <Link to="/devices?tab=associations" target="_blank" rel="noopener noreferrer">
                   {l('在新窗口比较当前关系', 'Compare current associations in a new window')}
-                </a>
+                </Link>
               )}
             </Space>
           </div>

@@ -53,7 +53,10 @@ function fixture(read: (options: RequestOptions<unknown>) => unknown | Promise<u
   const request = vi.fn(async (options: RequestOptions<unknown>) =>
     options.decode(await read(options)),
   )
-  const adapter = createContentAdapter({ request } as unknown as HttpTransport)
+  const adapter = createContentAdapter(
+    { request } as unknown as HttpTransport,
+    '11111111-1111-4111-8111-111111111111',
+  )
   return { adapter, content: createContent(adapter), request }
 }
 function binary(overrides: Partial<BinaryResponse> = {}): BinaryResponse {
@@ -74,8 +77,8 @@ it('starts an exact artifact reference without inventing a JSON body and sends o
     observed = await f.content.begin(original)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/resources/{id}/uploads/{upload}',
-    pathParams: { id: 'company/app', upload: id },
+    path: '/api/v1/tenants/{tenant}/resources/{id}/uploads/{upload}',
+    pathParams: { tenant: '11111111-1111-4111-8111-111111111111', id: 'company/app', upload: id },
     query: {
       version: 'v2',
       variant: 'main',
@@ -112,7 +115,9 @@ it('requires a fresh explicit read after an offset conflict and permits completi
   expect(storage.complete).toBe(true)
   await f.content.complete(original, storage)
   expect(f.request.mock.calls.map(([options]) => options.method)).toEqual(['PATCH', 'GET', 'POST'])
-  expect(f.request.mock.calls[2]?.[0].path).toBe('/api/v1/resources/{id}/uploads/{upload}/complete')
+  expect(f.request.mock.calls[2]?.[0].path).toBe(
+    '/api/v1/tenants/{tenant}/resources/{id}/uploads/{upload}/complete',
+  )
 })
 it('binds a durable receipt to the original version and never treats storage completion as a receipt', async () => {
   const f = fixture(() => ({
@@ -128,8 +133,12 @@ it('binds a durable receipt to the original version and never treats storage com
   expect(f.request).toHaveBeenCalledTimes(1)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/resources/{id}/content/operations/{operation}',
-    pathParams: { id: 'company/app', operation: id },
+    path: '/api/v1/tenants/{tenant}/resources/{id}/content/operations/{operation}',
+    pathParams: {
+      tenant: '11111111-1111-4111-8111-111111111111',
+      id: 'company/app',
+      operation: id,
+    },
   })
 })
 it('uses the software content route and artifact reference with exact Range/If-Range and supports bounded whole-file 200', async () => {
@@ -138,7 +147,7 @@ it('uses the software content route and artifact reference with exact Range/If-R
   expect((await f.adapter.download(request, { start: 0, end: 2, etag })).bytes.byteLength).toBe(3)
   expect(f.request.mock.calls[0]?.[0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/software/resources/{id}/versions/{version}/content',
+    path: '/api/v1/tenants/{tenant}/software/resources/{id}/versions/{version}/content',
     query: {
       variant: 'main',
       platform: 'windows',
@@ -155,7 +164,7 @@ it('uses the software content route and artifact reference with exact Range/If-R
   const script = fixture(() => binary())
   await script.adapter.download({ ...request, kind: 'script' }, { start: 0, end: 2 })
   expect(script.request.mock.calls[0]?.[0].path).toBe(
-    '/api/v1/resources/{id}/versions/{version}/script',
+    '/api/v1/tenants/{tenant}/resources/{id}/versions/{version}/script',
   )
   expect(script.request.mock.calls[0]?.[0].query).not.toHaveProperty('artifact')
 })

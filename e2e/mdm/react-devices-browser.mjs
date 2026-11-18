@@ -10,7 +10,7 @@ try {
     p = await run.page()
   diagnosticPage = p
   async function openDevice(kind, id, navigate) {
-    const path = `/api/v1/device-views/${kind}/${id}`,
+    const path = `/api/v1/tenants/${run.fixture.tenant}/device-views/${kind}/${id}`,
       matches = (response) =>
         response.request().method() === 'GET' && new URL(response.url()).pathname === path
     let waiting = p.waitForResponse(matches)
@@ -26,10 +26,12 @@ try {
     assert.equal(result.status(), 200)
   }
   await run.login(p)
-  await run.nav(p, '/devices', '设备')
+  await run.nav(p, '/devices?endpoints.limit=20', '设备')
   run.step('endpoint-directory')
   const endpointResponse = p.waitForResponse(
-    (r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/v1/devices',
+    (r) =>
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === `/api/v1/tenants/${run.fixture.tenant}/devices`,
   )
   await p.getByRole('tab', { name: '终端目录', exact: true }).click()
   const endpointRead = await endpointResponse
@@ -40,7 +42,9 @@ try {
     .getByRole('tabpanel', { name: '终端目录', exact: true })
     .getByRole('button', { name: '下一页', exact: true })
   const following = await (
-    await run.response(p, 'GET', '/api/v1/devices', () => next.click())
+    await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/devices`, () =>
+      next.click(),
+    )
   ).json()
   assert.ok(following.items.length >= 3)
   assert.ok(
@@ -78,10 +82,12 @@ try {
   checks.push('desktop-mobile-drawer-and-dark-design')
   console.log(JSON.stringify({ journey: 'react-devices', screenshots }))
   run.step('association-verification')
-  await openDevice('endpoint', f.mdm, () => p.goto(origin + `/devices/endpoint/${f.mdm}`))
+  await openDevice('endpoint', f.mdm, () =>
+    p.goto(origin + `/tenants/${run.fixture.tenant}` + `/devices/endpoint/${f.mdm}`),
+  )
   await p.getByRole('button', { name: '读取最新设备事实', exact: true }).waitFor()
   await p.getByRole('tab', { name: '终端关联', exact: true }).click()
-  const candidatesPath = `/api/v1/devices/${f.mdm}/association-candidates`
+  const candidatesPath = `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/association-candidates`
   let candidates = await (
     await run.response(p, 'GET', candidatesPath, () =>
       p.getByRole('button', { name: '关联另一通道终端', exact: true }).click(),
@@ -124,7 +130,7 @@ try {
   let first,
     replay,
     commits = 0
-  const confirmPath = '/api/v1/device-associations',
+  const confirmPath = `/api/v1/tenants/${run.fixture.tenant}/device-associations`,
     pattern = origin + confirmPath
   await p.route(pattern, async (route) => {
     if (route.request().method() !== 'POST') return route.continue()
@@ -174,7 +180,7 @@ try {
   checks.push('formal-association-directory-and-full-detail')
   await p.getByRole('dialog').locator('.ant-modal-close').click()
   await openDevice('association', receipt.id, () =>
-    p.goto(origin + `/devices/association/${receipt.id}`),
+    p.goto(origin + `/tenants/${run.fixture.tenant}` + `/devices/association/${receipt.id}`),
   )
   await p.getByRole('button', { name: '读取最新设备事实', exact: true }).waitFor()
   await run.choose(p, p.getByLabel('当前操作终端', { exact: true }), `${f.mdm} · ${f.mdm}`)
@@ -213,8 +219,11 @@ try {
   run.step('personnel-verification-confirmed')
   await p.locator('.user-picker > p.subtitle').filter({ hasText: f.personB.principalId }).waitFor()
   const assigned = await (
-    await run.response(p, 'PUT', `/api/v1/devices/${f.mdm}/registration-user`, () =>
-      p.getByRole('button', { name: '保存人员归属', exact: true }).click(),
+    await run.response(
+      p,
+      'PUT',
+      `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/registration-user`,
+      () => p.getByRole('button', { name: '保存人员归属', exact: true }).click(),
     )
   ).json()
   assert.equal(assigned.user.principalId, f.personB.principalId)
@@ -237,10 +246,13 @@ try {
   const windowsRead = p.waitForResponse(
     (response) =>
       response.request().method() === 'GET' &&
-      new URL(response.url()).pathname === `/api/v1/devices/${f.mdm}/windows-certificate-requests`,
+      new URL(response.url()).pathname ===
+        `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/windows-certificate-requests`,
   )
   await openDevice('endpoint', f.mdm, () =>
-    p.goto(origin + `/devices/endpoint/${f.mdm}?tab=registration`),
+    p.goto(
+      origin + `/tenants/${run.fixture.tenant}` + `/devices/endpoint/${f.mdm}?tab=registration`,
+    ),
   )
   assert.ok(Array.isArray((await (await windowsRead).json()).items))
   run.checks.push('real-device-context-windows-original-request-directory')
@@ -248,10 +260,13 @@ try {
   const ddmRead = p.waitForResponse(
     (response) =>
       response.request().method() === 'GET' &&
-      new URL(response.url()).pathname === `/api/v1/devices/${apple}/ddm`,
+      new URL(response.url()).pathname ===
+        `/api/v1/tenants/${run.fixture.tenant}/devices/${apple}/ddm`,
   )
   await openDevice('endpoint', apple, () =>
-    p.goto(origin + `/devices/endpoint/${apple}?tab=registration`),
+    p.goto(
+      origin + `/tenants/${run.fixture.tenant}` + `/devices/endpoint/${apple}?tab=registration`,
+    ),
   )
   const ddm = await (await ddmRead).json()
   assert.equal(ddm.effect, 'unverified')

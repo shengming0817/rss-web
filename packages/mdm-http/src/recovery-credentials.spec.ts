@@ -64,7 +64,10 @@ function fixture(value: unknown | ((options: RequestOptions<unknown>) => unknown
   const request = vi.fn(async (options: RequestOptions<unknown>) =>
       options.decode(typeof value === 'function' ? value(options) : value),
     ),
-    adapter = createRecoveryCredentialsAdapter({ request } as unknown as HttpTransport)
+    adapter = createRecoveryCredentialsAdapter(
+      { request } as unknown as HttpTransport,
+      '11111111-1111-4111-8111-111111111111',
+    )
   return { request, adapter, core: createRecoveryCredentials(adapter) }
 }
 it('uses composite material identity with projected directories and strict exact detail', async () => {
@@ -112,7 +115,7 @@ it('keeps FileVault selection, collection CAS and custody link on their formal r
   })
   expect(f.request.mock.calls[1]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/devices/{device}/recovery-credentials/filevault/configuration',
+    path: '/api/v1/tenants/{tenant}/devices/{device}/recovery-credentials/filevault/configuration',
     body: {
       operationId,
       expectedRevision: 5,
@@ -122,7 +125,7 @@ it('keeps FileVault selection, collection CAS and custody link on their formal r
   })
   await f.core.link(device, operationId, '99b35d85-275f-534b-b34c-608698cb583a')
   expect(f.request.mock.calls[2]![0]).toMatchObject({
-    path: '/api/v1/devices/{device}/recovery-credentials/filevault/link',
+    path: '/api/v1/tenants/{tenant}/devices/{device}/recovery-credentials/filevault/link',
     body: { operationId, otherDevice: '99b35d85-275f-534b-b34c-608698cb583a' },
   })
   expect(configuration().revision).not.toBe(configuration().materialRevision)
@@ -137,7 +140,7 @@ it('reads ordinary secrets through the exact GET and carries the abort signal', 
   expect((await f.core.reveal(target, controller.signal)).secret).toBe('synthetic-secret')
   expect(f.request.mock.calls[0]![0]).toMatchObject({
     method: 'GET',
-    path: '/api/v1/devices/{device}/recovery-credentials/{id}/versions/{version}/secret',
+    path: '/api/v1/tenants/{tenant}/devices/{device}/recovery-credentials/{id}/versions/{version}/secret',
     pathParams: target,
     signal: controller.signal,
   })
@@ -180,14 +183,14 @@ it('accepts a DA material challenge without an invented expires_at and preserves
   expect(challenge).not.toHaveProperty('expiresAt')
   expect(f.request.mock.calls[0]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/devices/{device}/device-access/materials/{id}/versions/{version}/step-up',
+    path: '/api/v1/tenants/{tenant}/devices/{device}/device-access/materials/{id}/versions/{version}/step-up',
     pathParams: target,
     body: { operationId },
   })
   await f.core.revealLogin(input)
   expect(f.request.mock.calls[1]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/devices/{device}/device-access/materials/{id}/versions/{version}/secret',
+    path: '/api/v1/tenants/{tenant}/devices/{device}/device-access/materials/{id}/versions/{version}/secret',
     body: { operationId },
   })
   expect(
@@ -202,7 +205,7 @@ it('uses material-type-specific revocation without manufacturing an idempotency 
   await f.core.revoke(target)
   expect(f.request.mock.calls[0]![0]).toMatchObject({
     method: 'POST',
-    path: '/api/v1/devices/{device}/recovery-credentials/{id}/versions/{version}/revoke',
+    path: '/api/v1/tenants/{tenant}/devices/{device}/recovery-credentials/{id}/versions/{version}/revoke',
     pathParams: target,
   })
   expect(f.request.mock.calls[0]![0]).not.toHaveProperty('body')

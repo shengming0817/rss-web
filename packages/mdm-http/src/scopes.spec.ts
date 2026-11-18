@@ -6,7 +6,13 @@ const id = '11111111-1111-4111-8111-111111111111',
   result = '22222222-2222-4222-8222-222222222222'
 function fixture(value: unknown) {
   const request = vi.fn(async (options: RequestOptions<unknown>) => options.decode(value))
-  return { client: createScopesAdapter({ request } as unknown as HttpTransport), request }
+  return {
+    client: createScopesAdapter(
+      { request } as unknown as HttpTransport,
+      '11111111-1111-4111-8111-111111111111',
+    ),
+    request,
+  }
 }
 it('does not convert a not-yet-computed scope into an empty membership result', async () => {
   const value = {
@@ -122,8 +128,8 @@ it('sends the complete draft and editing CAS for read-only bounded preview', asy
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       method: 'POST',
-      path: '/api/v1/policies/{policy}/scope/previews',
-      pathParams: { policy: id },
+      path: '/api/v1/tenants/{tenant}/policies/{policy}/scope/previews',
+      pathParams: { tenant: '11111111-1111-4111-8111-111111111111', policy: id },
       body: request,
     }),
   )

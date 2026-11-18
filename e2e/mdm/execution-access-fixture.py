@@ -21,7 +21,7 @@ def configure(environment, config, private):
     pem = subprocess.run(['openssl', 'genpkey', '-algorithm', 'EC', '-pkeyopt', 'ec_paramgen_curve:P-256'], capture_output=True, check=True, timeout=15).stdout
     key = private(root / 'psso-key.pem', pem.decode())
     config['device_access']['platform_sso'] = dict(configuration=dict(teamId='ABCDEFGHIJ', extensionId='com.example.da.extension', applicationId='com.example.da', applicationVersion='1.0', clientId=str(uuid.uuid4())), active_key='browser', signing_keys={'browser': str(key)})
-    return dict(root=str(root), device='fixture-da', policy=str(uuid.uuid4()), version=str(uuid.uuid4()))
+    return dict(root=str(root), device=str(uuid.uuid4()), policy=str(uuid.uuid4()), version=str(uuid.uuid4()))
 
 
 def seed(environment, state, tenant, instance, actor):

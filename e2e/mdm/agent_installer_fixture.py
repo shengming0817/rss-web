@@ -41,7 +41,7 @@ def publish(operator):
             raise RuntimeError('synthetic installer ' + method + ' rejected')
         return value
 
-    started = call('POST', '/api/v1/agent-packages/uploads', dict(operationId=str(uuid.uuid4()),
+    started = call('POST', operator.business_path('/agent-packages/uploads'), dict(operationId=str(uuid.uuid4()),
         filename='d452e3d0-e318-53fa-84f0-10447d70893a.exe', length=len(body), sha256=list(hashlib.sha256(body).digest())))
     href = started['href']
     if not href.startswith('/') or href.startswith('//') or urlsplit(href).netloc:
@@ -60,9 +60,9 @@ def publish(operator):
     finally:
         connection.close()
     call('POST', href + '/complete', expected=201)
-    inspected = call('GET', '/api/v1/agent-packages/uploads/' + started['packageId'])
+    inspected = call('GET', operator.business_path('/agent-packages/uploads/' + started['packageId']))
     if inspected['inspection']['status'] != 'parsed':
         raise RuntimeError('synthetic installer inspection failed')
-    call('POST', '/api/v1/agent-packages/save', dict(operationId=str(uuid.uuid4()), packageId=started['packageId'],
+    call('POST', operator.business_path('/agent-packages/save'), dict(operationId=str(uuid.uuid4()), packageId=started['packageId'],
         version='3065-fixture', target=dict(platform='windows', architecture='x86_64')))
-    return call('POST', '/api/v1/agent-packages', dict(operationId=str(uuid.uuid4()), packageId=started['packageId']))['releaseId']
+    return call('POST', operator.business_path('/agent-packages'), dict(operationId=str(uuid.uuid4()), packageId=started['packageId']))['releaseId']

@@ -26,18 +26,18 @@ export function requestInput<T>(value: unknown, validate: (input: unknown) => in
   return value
 }
 export function scalar(value: unknown): Scalar {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateScalar(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateScalar(value))
     throw new Error('Invalid asset value')
   validateScalar(value)
   return value
 }
 export function state(value: unknown): FieldState {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateState(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateState(value))
     throw new Error('Invalid asset state')
   return value.kind === 'known' ? { kind: 'known', value: scalar(value.value) } : value
 }
 export function scope(value: unknown): CollectionScope {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateCollectionScope(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateCollectionScope(value))
     throw new Error('Invalid asset namespace')
   switch (value.kind) {
     case 'device':
@@ -80,14 +80,14 @@ function localAccount(value: LocalAccount): LocalAccount {
     : { kind: 'macos', uid: value.uid, generated_uid: value.generated_uid }
 }
 export function inventoryListState(value: unknown): ListState {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateListState(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateListState(value))
     throw new Error('Invalid inventory list state')
   return value.kind === 'known'
     ? { kind: 'known', count: count(value.count), digest: value.digest }
     : value
 }
 export function viewListState(value: unknown): ListState {
-  if (!schema.getApiV1DeviceViewsByKindByIdResponse.validateListState(value))
+  if (!schema.getApiV1TenantsByTenantDeviceViewsByKindByIdResponse.validateListState(value))
     throw new Error('Invalid view list state')
   if (value.kind === 'unknown') return { kind: 'unknown', reason: value.value.reason }
   return value.kind === 'known'
@@ -95,7 +95,7 @@ export function viewListState(value: unknown): ListState {
     : value
 }
 export function evidence(value: unknown): Evidence {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateEvidence(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateEvidence(value))
     throw new Error('Invalid evidence coordinates')
   return {
     ...value,
@@ -110,12 +110,12 @@ export function integer(value: unknown): number {
   return value
 }
 export function assetCut(value: unknown): AssetCut {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateAssetCut(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateAssetCut(value))
     throw new Error('Invalid asset cut')
   return { ...value, tenant: uuid(value.tenant), epoch: uuid(value.epoch) }
 }
 function sourceFact(value: unknown): SourceFact {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateSourceFact(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateSourceFact(value))
     throw new Error('Invalid source fact')
   return {
     state: state(value.state),
@@ -127,24 +127,24 @@ function sourceFact(value: unknown): SourceFact {
   }
 }
 export function resolvedField(value: unknown): ResolvedField {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateResolvedField(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateResolvedField(value))
     throw new Error('Invalid resolved field')
   return { field: value.field, state: state(value.state), sources: value.sources.map(sourceFact) }
 }
 export function fieldDefinition(value: unknown): FieldDefinition {
-  if (!schema.getApiV1AssetFieldsByFieldResponse200.validateFieldDefinition(value))
+  if (!schema.getApiV1TenantsByTenantAssetFieldsByFieldResponse200.validateFieldDefinition(value))
     throw new Error('Invalid field definition')
   count(value.version)
   return structuredClone(value)
 }
 export function fieldDescriptor(value: unknown): FieldDescriptor {
-  if (!schema.getApiV1AssetFieldsResponse.validateFieldView(value))
+  if (!schema.getApiV1TenantsByTenantAssetFieldsResponse.validateFieldView(value))
     throw new Error('Invalid field descriptor')
   count(value.version)
   return structuredClone(value)
 }
 export function conditionContext(value: unknown): ConditionContext {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateQueryScope(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateQueryScope(value))
     throw new Error('Invalid condition context')
   const selector = value.selector
   return {
@@ -162,7 +162,7 @@ export function conditionValue(value: unknown): ConditionValue {
   return decoded
 }
 export function criteria(value: unknown): Criteria {
-  if (!schema.getApiV1ComplianceRulesByIdResponse.validateCriteria(value))
+  if (!schema.getApiV1TenantsByTenantComplianceRulesByIdResponse.validateCriteria(value))
     throw new Error('Invalid condition criteria')
   if (value.kind === 'and' || value.kind === 'or')
     return { kind: value.kind, children: value.children.map(criteria) }
@@ -175,7 +175,7 @@ export function criteria(value: unknown): Criteria {
   }
 }
 export function condition(value: unknown): Condition {
-  if (!schema.getApiV1ComplianceRulesByIdResponse.validateInventoryCondition(value))
+  if (!schema.getApiV1TenantsByTenantComplianceRulesByIdResponse.validateInventoryCondition(value))
     throw new Error('Invalid asset condition')
   return {
     ...conditionContext({ selector: value.selector, quantifier: value.quantifier }),
@@ -183,7 +183,7 @@ export function condition(value: unknown): Condition {
   }
 }
 export function qualityRun(value: unknown): QualityRun {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateQualityRun(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateQualityRun(value))
     throw new Error('Invalid collection quality')
   return {
     ...value,
@@ -199,7 +199,7 @@ export function qualityRun(value: unknown): QualityRun {
   }
 }
 export function inventoryView(value: unknown): InventoryView {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateDeviceView(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateDeviceView(value))
     throw new Error('Invalid live inventory')
   const namespace = scope(value.collectionScope),
     namespaceKey = JSON.stringify(namespace),
@@ -242,7 +242,7 @@ export function inventoryView(value: unknown): InventoryView {
   }
 }
 export function summary(value: unknown) {
-  if (!schema.getApiV1DevicesByIdInventoryResponse200.validateSummary(value))
+  if (!schema.getApiV1TenantsByTenantDevicesByIdInventoryResponse200.validateSummary(value))
     throw new Error('Invalid asset summary')
   return { total: count(value.total), matched: count(value.matched), unknown: count(value.unknown) }
 }

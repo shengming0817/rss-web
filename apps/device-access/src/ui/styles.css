@@ -1,3 +1,6 @@
+body:has(> [data-rss-page-loading]) > :not([data-rss-page-loading]) {
+  display: none !important;
+}
 .da-surface {
   min-height: 100vh;
   color: var(--fg);

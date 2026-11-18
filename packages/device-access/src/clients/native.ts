@@ -3,7 +3,7 @@ import type { Application, Binding, Computer, Material, Observation, Platform } 
 import { text, count, uuid, nullable, list, choice, same } from '../model/decode'
 /** Decode only requested/current public facts. No last-known value is promoted to current. */
 export function nativeComputer(value: unknown): Computer {
-  if (!wireSchemas.getApiV1DeviceViewsByKindByIdResponse.validateEndpoint(value))
+  if (!wireSchemas.getApiV1TenantsByTenantDeviceViewsByKindByIdResponse.validateEndpoint(value))
     throw new Error('Invalid MDM contract')
 
   const v = value,
@@ -32,7 +32,7 @@ export function nativeComputer(value: unknown): Computer {
 export function nativeAccountLabel(value: unknown) {
   if (
     value !== null &&
-    !wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateAccessAccount(
+    !wireSchemas.getApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsByIdResponse.validateAccessAccount(
       value,
     )
   )
@@ -57,7 +57,7 @@ export function nativeBindingObservations(value: unknown): Observation[] {
   }
   if (value !== null) {
     if (
-      !wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateAccessEffect(
+      !wireSchemas.getApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsByIdResponse.validateAccessEffect(
         value,
       )
     )
@@ -98,7 +98,11 @@ export function nativeBindingObservations(value: unknown): Observation[] {
   return observations
 }
 export function nativeBinding(value: unknown, device: string): Binding {
-  if (!wireSchemas.getApiV1DevicesByDeviceDeviceAccessBindingsByIdResponse.validateRoot(value))
+  if (
+    !wireSchemas.getApiV1TenantsByTenantDevicesByDeviceDeviceAccessBindingsByIdResponse.validateRoot(
+      value,
+    )
+  )
     throw new Error('Invalid binding')
   const v = value
   same(v['device'], device)
@@ -122,7 +126,7 @@ export function nativeBinding(value: unknown, device: string): Binding {
 }
 export function nativeMaterial(value: unknown, device: string): Material {
   if (
-    !wireSchemas.postApiV1DevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionSecretResponse.validateMaterial(
+    !wireSchemas.postApiV1TenantsByTenantDevicesByDeviceDeviceAccessMaterialsByIdVersionsByVersionSecretResponse.validateMaterial(
       value,
     )
   )
@@ -149,7 +153,11 @@ export function nativeMaterial(value: unknown, device: string): Material {
   }
 }
 export function application(value: unknown): Application {
-  if (!wireSchemas.getApiV1DeviceAccessEnterpriseConfigurationResponse.validateRelyingParty(value))
+  if (
+    !wireSchemas.getApiV1TenantsByTenantDeviceAccessEnterpriseConfigurationResponse.validateRelyingParty(
+      value,
+    )
+  )
     throw new Error('Invalid MDM contract')
 
   const v = value

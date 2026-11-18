@@ -31,7 +31,9 @@ try {
   }
   async function settled(policy) {
     for (let i = 0; i < 90; i++) {
-      const response = await p.request.get(`${origin}/api/v1/policies/${policy}/scope`)
+      const response = await p.request.get(
+        `${origin}/api/v1/tenants/${f.tenant}/policies/${policy}/scope`,
+      )
       if (response.status() === 503) {
         await response.dispose()
         await new Promise((resolve) => setTimeout(resolve, 500))
@@ -48,7 +50,7 @@ try {
   run.step('copy-original-agent-batch')
   const agentEvent = await api(
     'POST',
-    `/api/v1/devices/${f.agent}/policy-events`,
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.agent}/policy-events`,
     { operationId: randomUUID(), event: 'react.policy.entry-copy', source: { kind: 'human' } },
     202,
   )
@@ -68,20 +70,26 @@ try {
   assert.equal(batchUri.pathname, `/v1/batch/${agentEvent.batchId}`)
   assert.equal(batchUri.searchParams.get('device'), f.agent)
   assert.equal(batchUri.searchParams.get('tenant'), f.tenant)
-  const registered = await api('GET', `/api/v1/devices/${f.agent}`)
+  const registered = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.agent}`)
   assert.ok(registered)
   assert.equal(batchUri.searchParams.get('instance'), f.instance)
 
   checks.push('real-batch-copy-for-current-agent-registration')
   await run.nav(p, '/groups', '设备组')
   run.step('group-unsaved-readonly-sample')
-  const beforeGroups = await api('GET', '/api/v1/groups?fields=id&limit=100')
+  const beforeGroups = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/groups?fields=id&limit=100`,
+  )
   await button('新建设备组').click()
   await run.choose(p, label('设备组类型'), '动态设备组')
   await label('条件字段').fill('custom.asset_tag')
   await label('文本值').fill(f.mdm)
-  const sampleResponse = await run.response(p, 'POST', '/api/v1/groups/previews', () =>
-      button('预览当前条件样例（不保存）').click(),
+  const sampleResponse = await run.response(
+      p,
+      'POST',
+      `/api/v1/tenants/${run.fixture.tenant}/groups/previews`,
+      () => button('预览当前条件样例（不保存）').click(),
     ),
     sample = await sampleResponse.json()
   assert.equal(sampleResponse.status(), 200)
@@ -92,7 +100,10 @@ try {
   assert.equal('task' in sample, false)
   assert.equal('editing' in sampleResponse.request().postDataJSON(), false)
   await p.getByText('条件匹配样例', { exact: true }).waitFor()
-  const afterGroups = await api('GET', '/api/v1/groups?fields=id&limit=100')
+  const afterGroups = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/groups?fields=id&limit=100`,
+  )
   assert.deepEqual(afterGroups.items, beforeGroups.items)
   await label('文本值').fill('changed-unsaved-draft')
   assert.equal(await p.getByText('条件匹配样例', { exact: true }).count(), 0)
@@ -122,7 +133,10 @@ try {
     await drawer.getByRole('button', { name: '完成选择', exact: true }).click()
   }
   run.step('owned-scope-draft-preview')
-  const before = await api('GET', '/api/v1/policies?fields=id&limit=100')
+  const before = await api(
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/policies?fields=id&limit=100`,
+  )
   const previewResponse = p.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
@@ -135,7 +149,10 @@ try {
   assert.equal(preview.request().postDataJSON().expectedRevision, 0)
   assert.ok(scopeSample.items.length <= 1000)
   assert.equal(scopeSample.assetCut.tenant, f.tenant)
-  assert.deepEqual((await api('GET', '/api/v1/policies?fields=id&limit=100')).items, before.items)
+  assert.deepEqual(
+    (await api('GET', `/api/v1/tenants/${run.fixture.tenant}/policies?fields=id&limit=100`)).items,
+    before.items,
+  )
   await label('限制范围（交集）').check()
   assert.equal(await p.getByText('本次匹配样例', { exact: false }).count(), 0)
   await label('限制范围（交集）').uncheck()
@@ -143,12 +160,12 @@ try {
   const save = p.waitForResponse(
     (r) =>
       r.request().method() === 'POST' &&
-      /\/api\/v1\/policies\/[^/]+$/.test(new URL(r.url()).pathname),
+      new RegExp(`^/api/v1/tenants/${f.tenant}/policies/[^/]+$`).test(new URL(r.url()).pathname),
   )
   await button('保存策略定义').click()
   const response = await save,
     policy = await response.json(),
-    path = '/api/v1/policies/' + policy.id
+    path = `/api/v1/tenants/${run.fixture.tenant}/policies/` + policy.id
   assert.equal(response.status(), 200)
   assert.deepEqual(
     policy.definition.scope.targets.map((item) => item.id).sort(),

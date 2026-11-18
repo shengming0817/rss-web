@@ -34,7 +34,7 @@ it('admits projected rule rows without requiring a full definition or flattening
       items: [{ id, name: 'Projected', enabled: false, revision: 3 }],
       nextCursor: 'b3BhcXVl',
     }),
-    client = createComplianceAdapter(f.transport)
+    client = createComplianceAdapter(f.transport, '11111111-1111-4111-8111-111111111111')
   expect(
     (await client.list({ fields: ['id', 'name', 'enabled', 'revision'], limit: 1 })).items,
   ).toEqual([{ id, name: 'Projected', enabled: false, revision: 3 }])
@@ -50,7 +50,7 @@ it('admits projected rule rows without requiring a full definition or flattening
 it('decodes flattened history entries while validating strict assessment facts separately', async () => {
   const value = { ...assessment(), task, disposition: 'superseded' },
     f = fixture({ items: [value], nextCursor: 'b3BhcXVl' }),
-    client = createComplianceAdapter(f.transport)
+    client = createComplianceAdapter(f.transport, '11111111-1111-4111-8111-111111111111')
   expect(
     await client.history('0ecbfa6c-9a99-5881-83ed-2059142c94d9', {
       from: 0,
@@ -61,8 +61,11 @@ it('decodes flattened history entries while validating strict assessment facts s
   ).toEqual({ items: [value], nextCursor: 'b3BhcXVl' })
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      path: '/api/v1/devices/{id}/compliance/history',
-      pathParams: { id: '0ecbfa6c-9a99-5881-83ed-2059142c94d9' },
+      path: '/api/v1/tenants/{tenant}/devices/{id}/compliance/history',
+      pathParams: {
+        tenant: '11111111-1111-4111-8111-111111111111',
+        id: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
+      },
       query: { from: 0, until: 100, cursor: 'cHJldmlvdXM', limit: 1 },
     }),
   )
@@ -78,10 +81,14 @@ it('keeps pending current=null and a previous assessment without promoting histo
     },
     f = fixture(value)
   expect(
-    await createComplianceAdapter(f.transport).current('0ecbfa6c-9a99-5881-83ed-2059142c94d9'),
+    await createComplianceAdapter(f.transport, '11111111-1111-4111-8111-111111111111').current(
+      '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
+    ),
   ).toEqual(value)
   await expect(
-    createComplianceAdapter(f.transport).current('5f3fffc1-bd48-5095-890d-011848ab3dd9'),
+    createComplianceAdapter(f.transport, '11111111-1111-4111-8111-111111111111').current(
+      '5f3fffc1-bd48-5095-890d-011848ab3dd9',
+    ),
   ).rejects.toThrow()
 })
 it('allows all applicability observations while retaining the per-field two-source evidence budget', async () => {
@@ -93,8 +100,12 @@ it('allows all applicability observations while retaining the per-field two-sour
     value = { ...assessment(), applicability: { ...assessment().applicability, sources } },
     f = fixture({ items: [{ ...value, task, disposition: 'published' }], nextCursor: null })
   expect(
-    (await createComplianceAdapter(f.transport).history('0ecbfa6c-9a99-5881-83ed-2059142c94d9', {}))
-      .items[0]?.applicability.sources,
+    (
+      await createComplianceAdapter(f.transport, '11111111-1111-4111-8111-111111111111').history(
+        '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
+        {},
+      )
+    ).items[0]?.applicability.sources,
   ).toHaveLength(3)
 })
 it('binds a task to its requested rule without assuming task equals the original operation', async () => {
@@ -113,7 +124,7 @@ it('binds a task to its requested rule without assuming task equals the original
       failure: null,
       diagnostic: null,
     }),
-    client = createComplianceAdapter(f.transport)
+    client = createComplianceAdapter(f.transport, '11111111-1111-4111-8111-111111111111')
   expect((await client.task(id, task)).processed).toBe(0)
   await expect(client.task(other, task)).rejects.toThrow('Wrong compliance task coordinates')
 })

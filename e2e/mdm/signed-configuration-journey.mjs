@@ -22,7 +22,7 @@ export async function signedConfigurationJourney(
   await admin.getByRole('button', { name: '生成管理员安装配置', exact: true }).click()
   const dialog = admin.getByRole('dialog', { name: '交付管理员安装配置', exact: true })
   await dialog.getByRole('checkbox', { name: '通过受保护渠道交付此秘密 JSON', exact: true }).check()
-  const configurationPath = '/api/v1/agent-configurations'
+  const configurationPath = `/api/v1/tenants/${run.fixture.tenant}/agent-configurations`
   const delivered = await run.response(admin, 'POST', configurationPath, () =>
     dialog.getByRole('button', { name: '签发并准备下载 JSON', exact: true }).click(),
   )
@@ -103,8 +103,11 @@ export async function signedConfigurationJourney(
   await dialog.getByRole('button', { name: '签发并准备下载 JSON', exact: true }).click()
   await dialog.getByRole('button', { name: '查询原签发操作', exact: true }).waitFor()
   const lostCount = run.count(admin, 'POST', configurationPath)
-  await run.response(admin, 'GET', `/api/v1/agent-configuration-operations/${lostOperation}`, () =>
-    dialog.getByRole('button', { name: '查询原签发操作', exact: true }).click(),
+  await run.response(
+    admin,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/agent-configuration-operations/${lostOperation}`,
+    () => dialog.getByRole('button', { name: '查询原签发操作', exact: true }).click(),
   )
   await dialog
     .getByText('原配置已找到，秘密文件不能恢复。请在详情确认撤销后，再显式开始新签发。', {

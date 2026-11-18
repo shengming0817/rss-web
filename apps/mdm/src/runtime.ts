@@ -24,11 +24,7 @@ import { createAuthorization } from '@rss/mdm-authorization'
 import { createTenantAdministration } from '@rss/mdm-tenant-administration'
 import { createProfiles } from '@rss/mdm-user-profiles'
 import { createDevices } from '@rss/mdm-devices'
-import {
-  createEnrollment,
-  createAppleEnrollment,
-  createPublicEnrollment,
-} from '@rss/mdm-enrollment'
+import { createEnrollment, createAppleEnrollment } from '@rss/mdm-enrollment'
 import { createConnections } from '@rss/mdm-connections'
 import { createInventory, createSoftwareAssets } from '@rss/mdm-inventory'
 import { createMappings, createResources } from '@rss/mdm-resources'
@@ -59,7 +55,12 @@ import { createPublicationsAdapter } from '@rss/mdm-http/software-publications'
 import { createGroupsAdapter } from '@rss/mdm-http/groups'
 import { createComplianceAdapter } from '@rss/mdm-http/compliance'
 import { createDevicesAdapter } from '@rss/mdm-http/devices'
-import { createEnrollmentAdapter, createPublicEnrollmentAdapter } from '@rss/mdm-http/enrollment'
+import {
+  appleBridgeUrl,
+  createEntraTermsAdapter,
+  createEnrollmentAdapter,
+  createAgentPackageDownloadAdapter,
+} from '@rss/mdm-http/enrollment'
 import { createAppleEnrollmentAdapter } from '@rss/mdm-http/apple-enrollment'
 import { createConnectionsAdapters } from '@rss/mdm-http/connections'
 import { createAuthorizationAdapter } from '@rss/mdm-http/authorization'
@@ -79,21 +80,98 @@ import {
   createOperationAuthorizationPort,
   loadHostConfig,
 } from '@rss/auth-http'
-import { bindSession, createMdmTransport, loadMdmHostConfig } from '@rss/mdm-http'
+import { bindSession } from '@rss/mdm-http'
+import {
+  createMdmTransport,
+  loadMdmHostConfig,
+  mdmTenantFromPath,
+  type MdmHostConfig,
+} from '@rss/api/mdm'
 
-export async function createRuntime(origin: string, pathname: string, storage: Storage) {
+export async function startRuntime(
+  origin: string,
+  pathname: string,
+  storage: Storage,
+  search: string,
+) {
   const identity = createIdentityTransport(),
     mdm = createMdmTransport()
   const [identityHost, host] = await Promise.all([
     loadHostConfig(identity, origin),
     loadMdmHostConfig(mdm, origin),
   ])
-  const management =
-    pathname === '/platform' ||
-    pathname.startsWith('/platform/') ||
-    pathname.startsWith(`/tenants/${host.managementTenant}/`)
-  const tenant = management ? host.managementTenant : host.tenant
-  const oidcEnabled = !management && identityHost.oidcEnabled
+  const flows = createFlows(storage)
+  const management = pathname === '/platform' || pathname.startsWith('/platform/')
+  const callback = pathname === '/auth/resume' || pathname === '/auth/error'
+  const pending = callback ? flows.take() : null
+  const target =
+    pending && identityHost.oidcEnabled && (pending.kind === 'sso' || pending.kind === 'step-up')
+      ? mdmTenantFromPath(`/tenants/${pending.tenant}`, host.managementTenant)
+      : null
+  const tenant = management
+    ? host.managementTenant
+    : callback
+      ? target
+      : mdmTenantFromPath(pathname, host.managementTenant)
+  const login = target ? `/tenants/${target}/login` : '/'
+  if (pathname === '/auth/error') {
+    const reason = new URLSearchParams(search).get('reason')
+    return {
+      kind: 'entry',
+      message:
+        reason === 'cancelled'
+          ? 'callbackCancelled'
+          : reason === 'unavailable'
+            ? 'callbackUnavailable'
+            : 'callbackFailed',
+      login,
+    } as const
+  }
+  if (pathname === '/enrollment/windows/entra/terms')
+    return { kind: 'terms', terms: createEntraTermsAdapter(mdm) } as const
+  if (!tenant) {
+    if (callback) return { kind: 'entry', message: 'resumeFailed', login } as const
+    return { kind: 'entry', message: pathname === '/' ? 'tenantEntry' : 'notFound' } as const
+  }
+  const base = management ? '' : `/tenants/${tenant}`
+  if (!management && pathname === base + '/downloads/agent')
+    return { kind: 'downloads', downloads: createAgentPackageDownloadAdapter(mdm, tenant) } as const
+  const runtime = createRuntime(
+    identity,
+    mdm,
+    host,
+    tenant,
+    management,
+    identityHost.oidcEnabled && !management,
+    flows,
+  )
+  if (callback) {
+    await runtime.owner.check(tenant).catch(() => undefined)
+    const state = runtime.owner.getSnapshot()
+    if (state.status !== 'authenticated' || state.tenant !== tenant) {
+      runtime.owner.dispose()
+      return { kind: 'entry', message: 'resumeFailed', login } as const
+    }
+    const stepUp = pending?.kind === 'step-up'
+    return {
+      kind: 'console',
+      runtime,
+      base,
+      resumed: stepUp ? base + '/security' : base,
+      stepUp,
+    } as const
+  }
+  return { kind: 'console', runtime, base } as const
+}
+function createRuntime(
+  identity: ReturnType<typeof createIdentityTransport>,
+  mdm: ReturnType<typeof createMdmTransport>,
+  host: MdmHostConfig,
+  tenant: string,
+  management: boolean,
+  oidcEnabled: boolean,
+  flows: ReturnType<typeof createFlows>,
+) {
   const owner = createSession(createAuthPort(identity), { oidcEnabled })
   const operationAuthorization = createOperationAuthorization(
     createOperationAuthorizationPort(identity, owner),
@@ -117,7 +195,7 @@ export async function createRuntime(origin: string, pathname: string, storage: S
     tenant,
     management,
     oidcEnabled,
-    onboarding: createPublicEnrollment(createPublicEnrollmentAdapter(mdm, host.tenant)),
+    appleBridgeUrl,
     administration() {
       const state = owner.getSnapshot()
       if (
@@ -141,20 +219,24 @@ export async function createRuntime(origin: string, pathname: string, storage: S
           ? undefined
           : createTenantSetup(createTenantSetupAdapter(transport, tenant), tenant)
       }
-      const content = createContent(createContentAdapter(transport))
+      const content = createContent(createContentAdapter(transport, tenant))
       return Object.freeze({
         tenantSetup: setup,
-        settingsCatalog: createCatalogAdapter(transport, management),
-        diagnostics: createRuntimeDiagnostics(createRuntimeDiagnosticsAdapter(transport)),
+        settingsCatalog: createCatalogAdapter(transport, management, tenant),
+        diagnostics: createRuntimeDiagnostics(createRuntimeDiagnosticsAdapter(transport, tenant)),
         operationDiagnostics: management
           ? {
               management: createOperationDiagnostics(
-                createOperationDiagnosticsAdapter(transport, 'management'),
+                createOperationDiagnosticsAdapter(transport, 'management', tenant),
               ),
             }
           : {
-              mdm: createOperationDiagnostics(createOperationDiagnosticsAdapter(transport, 'mdm')),
-              da: createOperationDiagnostics(createOperationDiagnosticsAdapter(transport, 'da')),
+              mdm: createOperationDiagnostics(
+                createOperationDiagnosticsAdapter(transport, 'mdm', tenant),
+              ),
+              da: createOperationDiagnostics(
+                createOperationDiagnosticsAdapter(transport, 'da', tenant),
+              ),
             },
         telemetry: createTelemetry(createTelemetryAdapter(transport, tenant), tenant),
         binding: `${tenant}/${state.identity.principalId}/${state.session.id}`,
@@ -167,24 +249,29 @@ export async function createRuntime(origin: string, pathname: string, storage: S
           realm,
         ),
         tenants: createTenantAdministration(createTenantAdministrationAdapter(transport)),
-        profiles: createProfiles(createProfilesAdapter(transport), state.identity.principalId),
+        profiles: createProfiles(
+          createProfilesAdapter(transport, tenant),
+          state.identity.principalId,
+        ),
         devices: createDevices(createDevicesAdapter(transport, tenant), tenant),
         inventory: createInventory(createInventoryAdapter(transport, tenant)),
         softwareAssets: createSoftwareAssets(createSoftwareAssetsAdapter(transport, tenant)),
-        resources: createResources(createResourcesAdapter(transport)),
+        resources: createResources(createResourcesAdapter(transport, tenant)),
         content,
-        mappings: createMappings(createResourceMappingsAdapter(transport, content)),
-        agentPackages: createAgentPackages(createAgentPackagesAdapter(transport), tenant),
-        software: createSoftware(createSoftwareAdapter(transport)),
-        softwareSnapshots: createSoftwareSnapshots(createSoftwareSnapshotsAdapter(transport)),
-        publications: createPublications(createPublicationsAdapter(transport)),
+        mappings: createMappings(createResourceMappingsAdapter(transport, content, tenant)),
+        agentPackages: createAgentPackages(createAgentPackagesAdapter(transport, tenant), tenant),
+        software: createSoftware(createSoftwareAdapter(transport, tenant)),
+        softwareSnapshots: createSoftwareSnapshots(
+          createSoftwareSnapshotsAdapter(transport, tenant),
+        ),
+        publications: createPublications(createPublicationsAdapter(transport, tenant)),
         execution: createExecution(createExecutionAdapter(transport, tenant, host.serviceId)),
-        deviceAccess: createDeviceAccess(createDeviceAccessAdapter(transport)),
-        policies: createPolicies(createPoliciesAdapter(transport)),
-        policyEvents: createPolicyEvents(createPolicyEventsAdapter(transport)),
-        scopes: createScopes(createScopesAdapter(transport)),
-        groups: createGroups(createGroupsAdapter(transport)),
-        compliance: createCompliance(createComplianceAdapter(transport)),
+        deviceAccess: createDeviceAccess(createDeviceAccessAdapter(transport, tenant)),
+        policies: createPolicies(createPoliciesAdapter(transport, tenant)),
+        policyEvents: createPolicyEvents(createPolicyEventsAdapter(transport, tenant)),
+        scopes: createScopes(createScopesAdapter(transport, tenant)),
+        groups: createGroups(createGroupsAdapter(transport, tenant)),
+        compliance: createCompliance(createComplianceAdapter(transport, tenant)),
         devicePki: createDevicePki(
           createDevicePkiAdapter(transport, tenant, host.serviceId),
           tenant,
@@ -194,19 +281,21 @@ export async function createRuntime(origin: string, pathname: string, storage: S
           createCertificateArchiveAdapter(transport, tenant),
           tenant,
         ),
-        recoveryCredentials: createRecoveryCredentials(createRecoveryCredentialsAdapter(transport)),
-        audit: createAudit(createAuditAdapter(transport)),
-        webhooks: createWebhooks(createWebhooksAdapter(transport)),
+        recoveryCredentials: createRecoveryCredentials(
+          createRecoveryCredentialsAdapter(transport, tenant),
+        ),
+        audit: createAudit(createAuditAdapter(transport, tenant)),
+        webhooks: createWebhooks(createWebhooksAdapter(transport, tenant)),
         auditPolicyLookup: createAuditPolicyLookup(
           createAuditPolicyLookupAdapter(transport, tenant, host.serviceId),
         ),
-        requestHistory: createRequestHistory(createRequestHistoryAdapter(transport)),
+        requestHistory: createRequestHistory(createRequestHistoryAdapter(transport, tenant)),
         enrollment: createEnrollment(
           createEnrollmentAdapter(transport, mdm, tenant, host.serviceId),
           tenant,
           state.identity.principalId,
         ),
-        appleEnrollment: createAppleEnrollment(createAppleEnrollmentAdapter(transport)),
+        appleEnrollment: createAppleEnrollment(createAppleEnrollmentAdapter(transport, tenant)),
         connections: createConnections(
           createConnectionsAdapters(transport, tenant, host.serviceId),
           tenant,
@@ -215,9 +304,11 @@ export async function createRuntime(origin: string, pathname: string, storage: S
       })
     },
     passkeys,
-    flows: createFlows(storage),
+    flows,
     home: management ? '/platform' : '/',
     login: management ? '/platform/login' : '/login',
   })
 }
-export type Runtime = Awaited<ReturnType<typeof createRuntime>>
+export type Runtime = ReturnType<typeof createRuntime>
+
+export type Startup = Awaited<ReturnType<typeof startRuntime>>

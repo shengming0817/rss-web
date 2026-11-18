@@ -436,7 +436,7 @@ export function NativeEnrollment({
             {read.value.instructions.platform === 'macos_account' && (
               <>
                 <p>{read.value.instructions.managedAccount}</p>
-                <a href={runtime.onboarding.appleBridgeUrl()}>
+                <a href={runtime.appleBridgeUrl()}>
                   {l('进入 Apple 受管账户认证', 'Continue with managed Apple account')}
                 </a>
               </>

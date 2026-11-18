@@ -48,8 +48,8 @@ it('admits formal loaded trust and maps only the declared public material fields
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
       method: 'GET',
-      path: '/api/v1/pki/{purpose}/trust',
-      pathParams: { purpose: 'agent' },
+      path: '/api/v1/tenants/{tenant}/pki/{purpose}/trust',
+      pathParams: { tenant, purpose: 'agent' },
     }),
   )
   for (const value of [
@@ -85,7 +85,7 @@ it('submits exact PKI operations using the generated wire rather than the domain
   })
   expect(activated.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      pathParams: { purpose: 'agent' },
+      pathParams: { tenant, purpose: 'agent' },
       body: { id: operation, expected_revision: 3, action: 'activate' },
     }),
   )
@@ -111,7 +111,7 @@ it('treats CRL 204 as publication only and binds Windows recovery to the frozen 
   await recovery.core.recoverSigning({ operation, attempt: issuance, chain: ['YQ=='] })
   expect(recovery.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      path: '/api/v1/pki/signing/recover',
+      path: '/api/v1/tenants/{tenant}/pki/signing/recover',
       body: { operation, attempt: issuance, chain: ['YQ=='] },
     }),
   )
@@ -169,10 +169,11 @@ it('uses all three original Agent recovery routes with distinct administrator an
   )
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      path: '/api/v1/devices/{id}/registration/recovery',
-      pathParams: { id: '48ade991-ac14-5214-92fe-7084429906bf' },
+      path: '/api/v1/tenants/{tenant}/devices/{id}/registration/recovery',
+      pathParams: { tenant, id: '48ade991-ac14-5214-92fe-7084429906bf' },
       body: {
         wireVersion: 1,
+        tenantId: tenant,
         operationId: operation,
         secret: 'A'.repeat(43),
         platform: 'windows',
@@ -199,7 +200,7 @@ it('uses all three original Agent recovery routes with distinct administrator an
   ).toBe(tenant)
   recovery.request.mockImplementation(async (options: RequestOptions<unknown>) =>
     options.decode(
-      options.path === '/api/v1/agent-issuances/{id}/recovery-operations'
+      options.path === '/api/v1/tenants/{tenant}/agent-issuances/{id}/recovery-operations'
         ? {
             items: [
               { actor: 'original-admin', instance: 'original-instance', operationId: operation },
@@ -215,7 +216,7 @@ it('uses all three original Agent recovery routes with distinct administrator an
   expect(recovery.request).toHaveBeenLastCalledWith(
     expect.objectContaining({
       method: 'GET',
-      pathParams: { id: issuance, operation },
+      pathParams: { tenant, id: issuance, operation },
       query: { actor: 'original-admin', instance: 'original-instance' },
     }),
   )

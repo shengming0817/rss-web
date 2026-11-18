@@ -148,7 +148,8 @@ it('prepares one changed Agent architecture without moving the untouched shared 
     f = fixture(() => original),
     client = createResourceMappingsAdapter(
       f.transport,
-      createContent(createContentAdapter(f.transport)),
+      createContent(createContentAdapter(f.transport, '11111111-1111-4111-8111-111111111111')),
+      '11111111-1111-4111-8111-111111111111',
     ),
     prepared = await client.prepare(draft)
   expect(f.request).toHaveBeenCalledTimes(1)
@@ -176,7 +177,8 @@ it('rejects changes to physical source plans or the observed Resource revision b
   const f = fixture(() => original),
     client = createResourceMappingsAdapter(
       f.transport,
-      createContent(createContentAdapter(f.transport)),
+      createContent(createContentAdapter(f.transport, '11111111-1111-4111-8111-111111111111')),
+      '11111111-1111-4111-8111-111111111111',
     ),
     draft: MappingDraft = {
       resource: resourceId,
@@ -261,10 +263,15 @@ async function originalUpload() {
 it('restores canonical native material without owning or touching an upload session', async () => {
   const { resource, upload } = await originalUpload(),
     f = fixture((options) => {
-      if (options.path !== '/api/v1/resources/{id}') throw new Error('Unexpected transfer protocol')
+      if (options.path !== '/api/v1/tenants/{tenant}/resources/{id}')
+        throw new Error('Unexpected transfer protocol')
       return resource
     }),
-    client = createResourceMappingsAdapter(f.transport, { downloadBytes: vi.fn() })
+    client = createResourceMappingsAdapter(
+      f.transport,
+      { downloadBytes: vi.fn() },
+      '11111111-1111-4111-8111-111111111111',
+    )
   const restored = await client.restore(upload.target)
   expect(new Uint8Array(restored.bytes)).toEqual(new Uint8Array(upload.bytes))
   expect(restored.target).toEqual(upload.target)
@@ -364,7 +371,8 @@ it('retains script source bytes and schemas while changing collection mappings i
     ),
     client = createResourceMappingsAdapter(
       f.transport,
-      createContent(createContentAdapter(f.transport)),
+      createContent(createContentAdapter(f.transport, '11111111-1111-4111-8111-111111111111')),
+      '11111111-1111-4111-8111-111111111111',
     ),
     prepared = await client.prepare({
       resource: resourceId,
@@ -385,8 +393,12 @@ it('retains script source bytes and schemas while changing collection mappings i
   expect(f.request.mock.calls.every(([options]) => options.method === 'GET')).toBe(true)
   expect(f.request).toHaveBeenCalledWith(
     expect.objectContaining({
-      path: '/api/v1/resources/{id}/versions/{version}/script',
-      pathParams: { id: resourceId, version: '1.0' },
+      path: '/api/v1/tenants/{tenant}/resources/{id}/versions/{version}/script',
+      pathParams: {
+        tenant: '11111111-1111-4111-8111-111111111111',
+        id: resourceId,
+        version: '1.0',
+      },
       query: { platform: 'macos', architecture: 'aarch64', variant: 'script' },
     }),
   )

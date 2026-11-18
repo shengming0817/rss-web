@@ -28,14 +28,18 @@ import { boolean, count, enumeration, list, nullable, positive, record, text, uu
 import { distinct, integer, requestInput } from './inventory-values'
 
 function metadata(value: unknown): Metadata {
-  if (!schema.postApiV1CertificateArchiveImportBody.validateCertificateMetadata(value))
+  if (
+    !schema.postApiV1TenantsByTenantCertificateArchiveImportBody.validateCertificateMetadata(value)
+  )
     throw new Error('Invalid archive metadata')
   const result = structuredClone(value) as Metadata
   validateMetadata(result)
   return result
 }
 function certificate(value: unknown): CertificateFacts {
-  if (!schema.getApiV1CertificateArchiveEntriesResponse.validateCertificateFacts(value))
+  if (
+    !schema.getApiV1TenantsByTenantCertificateArchiveEntriesResponse.validateCertificateFacts(value)
+  )
     throw new Error('Invalid certificate facts')
   const result = {
     ...value,
@@ -47,7 +51,7 @@ function certificate(value: unknown): CertificateFacts {
   return result
 }
 function facts(value: unknown): MaterialFacts {
-  if (!schema.getApiV1CertificateArchiveEntriesResponse.validateMaterialFacts(value))
+  if (!schema.getApiV1TenantsByTenantCertificateArchiveEntriesResponse.validateMaterialFacts(value))
     throw new Error('Invalid material facts')
   return {
     name: value.name,
@@ -58,7 +62,7 @@ function facts(value: unknown): MaterialFacts {
   }
 }
 function version(value: unknown): Version {
-  if (!schema.getApiV1CertificateArchiveEntriesResponse.validateVersion(value))
+  if (!schema.getApiV1TenantsByTenantCertificateArchiveEntriesResponse.validateVersion(value))
     throw new Error('Invalid archive version')
   return {
     entryId: uuid(value.entryId),
@@ -84,7 +88,7 @@ const fields = {
   latest: version,
 }
 function entry(value: unknown, id: string): Entry {
-  if (!schema.getApiV1CertificateArchiveEntriesByEntryResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantCertificateArchiveEntriesByEntryResponse.validateRoot(value))
     throw new Error('Invalid archive detail')
   const result = {
     id: uuid(value.id),
@@ -99,7 +103,9 @@ function entry(value: unknown, id: string): Entry {
 }
 function receipt(value: unknown, id: string): Receipt {
   if (
-    !schema.getApiV1CertificateArchiveOperationsByOperationResponse.validateRoot(value) ||
+    !schema.getApiV1TenantsByTenantCertificateArchiveOperationsByOperationResponse.validateRoot(
+      value,
+    ) ||
     value.operationId !== id ||
     !value.action.startsWith('certificate_archive_')
   )
@@ -113,7 +119,7 @@ function receipt(value: unknown, id: string): Receipt {
   }
 }
 function vault(value: unknown): Vault {
-  if (!schema.getApiV1CertificateArchiveVaultResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantCertificateArchiveVaultResponse.validateRoot(value))
     throw new Error('Invalid archive vault state')
   const result = {
     initialized: value.initialized,
@@ -128,7 +134,7 @@ function vault(value: unknown): Vault {
   return result
 }
 function settings(value: unknown): SettingsView {
-  if (!schema.getApiV1CertificateArchiveSettingsResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantCertificateArchiveSettingsResponse.validateRoot(value))
     throw new Error('Invalid archive settings')
   validateSettings(value.value)
   return {
@@ -145,7 +151,7 @@ function base64(bytes: ArrayBuffer): string {
 }
 function exported(value: unknown, input: ExportIntent): readonly ExportFile[] {
   if (
-    !schema.postApiV1CertificateArchiveExportResponse.validateRoot(value) ||
+    !schema.postApiV1TenantsByTenantCertificateArchiveExportResponse.validateRoot(value) ||
     value.entryId !== input.entryId ||
     value.version !== input.version ||
     !value.files.length ||
@@ -191,29 +197,42 @@ export function createCertificateArchiveAdapter(
 ): ArchivePort {
   const headers = (operation: string) => ({ 'Idempotency-Key': uuid(operation) })
   return {
-    vault: () => api.getApiV1CertificateArchiveVault(transport, {}, vault),
-    initialize: (operation, password) =>
-      api.postApiV1CertificateArchiveVaultInitialize(
+    vault: () =>
+      api.getApiV1TenantsByTenantCertificateArchiveVault(
         transport,
-        { headers: headers(operation), body: { password } },
+        { pathParams: { tenant } },
+        vault,
+      ),
+    initialize: (operation, password) =>
+      api.postApiV1TenantsByTenantCertificateArchiveVaultInitialize(
+        transport,
+        { pathParams: { tenant }, headers: headers(operation), body: { password } },
         (value) => receipt(value, operation),
       ),
     unlock: (password) =>
-      api.postApiV1CertificateArchiveVaultUnlock(transport, { body: { password } }, vault),
-    lock: () =>
-      api.postApiV1CertificateArchiveVaultLock(transport, {}, (value) => {
-        if (!value.locked) throw new Error('Archive lock unconfirmed')
-      }),
-    changePassword: (operation, oldPassword, newPassword) =>
-      api.postApiV1CertificateArchiveVaultPassword(
+      api.postApiV1TenantsByTenantCertificateArchiveVaultUnlock(
         transport,
-        { headers: headers(operation), body: { oldPassword, newPassword } },
+        { pathParams: { tenant }, body: { password } },
+        vault,
+      ),
+    lock: () =>
+      api.postApiV1TenantsByTenantCertificateArchiveVaultLock(
+        transport,
+        { pathParams: { tenant } },
+        (value) => {
+          if (!value.locked) throw new Error('Archive lock unconfirmed')
+        },
+      ),
+    changePassword: (operation, oldPassword, newPassword) =>
+      api.postApiV1TenantsByTenantCertificateArchiveVaultPassword(
+        transport,
+        { pathParams: { tenant }, headers: headers(operation), body: { oldPassword, newPassword } },
         (value) => receipt(value, operation),
       ),
     list: (query) =>
-      api.getApiV1CertificateArchiveEntries(
+      api.getApiV1TenantsByTenantCertificateArchiveEntries(
         transport,
-        { query: queryParameters(query) },
+        { pathParams: { tenant }, query: queryParameters(query) },
         (value) => {
           const page = record(value)
           if (
@@ -252,15 +271,15 @@ export function createCertificateArchiveAdapter(
         },
       ),
     entry: (id) =>
-      api.getApiV1CertificateArchiveEntriesByEntry(
+      api.getApiV1TenantsByTenantCertificateArchiveEntriesByEntry(
         transport,
-        { pathParams: { entry: id } },
+        { pathParams: { tenant, entry: id } },
         (value) => entry(value, id),
       ),
     history: (id, query) =>
-      api.getApiV1CertificateArchiveEntriesByEntryVersions(
+      api.getApiV1TenantsByTenantCertificateArchiveEntriesByEntryVersions(
         transport,
-        { pathParams: { entry: id }, query: windowParameters(query) },
+        { pathParams: { tenant, entry: id }, query: windowParameters(query) },
         (value) => {
           const page = windowPage(value, version)
           if (page.items.some((item) => item.entryId !== id))
@@ -269,9 +288,10 @@ export function createCertificateArchiveAdapter(
         },
       ),
     import: (input, materials) =>
-      api.postApiV1CertificateArchiveImport(
+      api.postApiV1TenantsByTenantCertificateArchiveImport(
         transport,
         {
+          pathParams: { tenant },
           headers: headers(input.operationId),
           body: requestInput(
             {
@@ -286,15 +306,16 @@ export function createCertificateArchiveAdapter(
                 password: materials[i]!.password,
               })),
             },
-            schema.postApiV1CertificateArchiveImportBody.validateRoot,
+            schema.postApiV1TenantsByTenantCertificateArchiveImportBody.validateRoot,
           ),
         },
         (value) => receipt(value, input.operationId),
       ),
     generate: (input) =>
-      api.postApiV1CertificateArchiveGenerate(
+      api.postApiV1TenantsByTenantCertificateArchiveGenerate(
         transport,
         {
+          pathParams: { tenant },
           headers: headers(input.operationId),
           body: requestInput(
             {
@@ -310,29 +331,29 @@ export function createCertificateArchiveAdapter(
               issuer: input.issuer,
               scepUrl: input.scepUrl,
             },
-            schema.postApiV1CertificateArchiveGenerateBody.validateRoot,
+            schema.postApiV1TenantsByTenantCertificateArchiveGenerateBody.validateRoot,
           ),
         },
         (value) => receipt(value, input.operationId),
       ),
     metadata: (input) =>
-      api.putApiV1CertificateArchiveEntriesByEntryMetadata(
+      api.putApiV1TenantsByTenantCertificateArchiveEntriesByEntryMetadata(
         transport,
         {
-          pathParams: { entry: input.entryId },
+          pathParams: { tenant, entry: input.entryId },
           headers: headers(input.operationId),
           body: requestInput(
             { expectedRevision: input.expectedRevision, metadata: input.metadata },
-            schema.putApiV1CertificateArchiveEntriesByEntryMetadataBody.validateRoot,
+            schema.putApiV1TenantsByTenantCertificateArchiveEntriesByEntryMetadataBody.validateRoot,
           ),
         },
         (value) => receipt(value, input.operationId),
       ),
     manage: (input) =>
-      api.putApiV1CertificateArchiveEntriesByEntry(
+      api.putApiV1TenantsByTenantCertificateArchiveEntriesByEntry(
         transport,
         {
-          pathParams: { entry: input.entryId },
+          pathParams: { tenant, entry: input.entryId },
           headers: headers(input.operationId),
           body: {
             expectedRevision: input.expectedRevision,
@@ -343,9 +364,10 @@ export function createCertificateArchiveAdapter(
         (value) => receipt(value, input.operationId),
       ),
     export: (input, signal) =>
-      api.postApiV1CertificateArchiveExport(
+      api.postApiV1TenantsByTenantCertificateArchiveExport(
         transport,
         {
+          pathParams: { tenant },
           headers: headers(input.operationId),
           body: { entryId: input.entryId, version: input.version },
           signal,
@@ -353,20 +375,26 @@ export function createCertificateArchiveAdapter(
         (value) => exported(value, input),
       ),
     operation: (operation) =>
-      api.getApiV1CertificateArchiveOperationsByOperation(
+      api.getApiV1TenantsByTenantCertificateArchiveOperationsByOperation(
         transport,
-        { pathParams: { operation } },
+        { pathParams: { tenant, operation } },
         (value) => receipt(value, operation),
       ),
-    settings: () => api.getApiV1CertificateArchiveSettings(transport, {}, settings),
+    settings: () =>
+      api.getApiV1TenantsByTenantCertificateArchiveSettings(
+        transport,
+        { pathParams: { tenant } },
+        settings,
+      ),
     saveSettings: (input) =>
-      api.putApiV1CertificateArchiveSettings(
+      api.putApiV1TenantsByTenantCertificateArchiveSettings(
         transport,
         {
+          pathParams: { tenant },
           headers: headers(input.operationId),
           body: requestInput(
             { expectedRevision: input.expectedRevision, value: input.value },
-            schema.putApiV1CertificateArchiveSettingsBody.validateRoot,
+            schema.putApiV1TenantsByTenantCertificateArchiveSettingsBody.validateRoot,
           ),
         },
         (value) => receipt(value, input.operationId),

@@ -16,8 +16,9 @@ import { auditFact } from './audit'
 import { list, nullable, uuid } from './decode'
 import { integer, requestInput } from './inventory-values'
 
-type WirePage = api.getApiV1OperationDiagnosticsContract.Output
-type WireDetail = api.getApiV1OperationDiagnosticsOperationsByOwnerByOperationIdContract.Output
+type WirePage = api.getApiV1TenantsByTenantOperationDiagnosticsContract.Output
+type WireDetail =
+  api.getApiV1TenantsByTenantOperationDiagnosticsOperationsByOwnerByOperationIdContract.Output
 type WireExecution = Extract<
   WireDetail['executionEvidence'],
   { availability: 'available' }
@@ -25,19 +26,15 @@ type WireExecution = Extract<
 
 const endpoints = {
   mdm: {
-    search: api.getApiV1OperationDiagnostics,
-    request: api.getApiV1OperationDiagnosticsRequestsByRequestId,
-    operation: api.getApiV1OperationDiagnosticsOperationsByOwnerByOperationId,
+    search: api.getApiV1TenantsByTenantOperationDiagnostics,
+    request: api.getApiV1TenantsByTenantOperationDiagnosticsRequestsByRequestId,
+    operation: api.getApiV1TenantsByTenantOperationDiagnosticsOperationsByOwnerByOperationId,
   },
   da: {
-    search: api.getApiV1DeviceAccessOperationDiagnostics,
-    request: api.getApiV1DeviceAccessOperationDiagnosticsRequestsByRequestId,
-    operation: api.getApiV1DeviceAccessOperationDiagnosticsOperationsByOwnerByOperationId,
-  },
-  management: {
-    search: api.getApiV1TenantAdministrationOperationDiagnostics,
-    request: api.getApiV1TenantAdministrationOperationDiagnosticsRequestsByRequestId,
-    operation: api.getApiV1TenantAdministrationOperationDiagnosticsOperationsByOwnerByOperationId,
+    search: api.getApiV1TenantsByTenantDeviceAccessOperationDiagnostics,
+    request: api.getApiV1TenantsByTenantDeviceAccessOperationDiagnosticsRequestsByRequestId,
+    operation:
+      api.getApiV1TenantsByTenantDeviceAccessOperationDiagnosticsOperationsByOwnerByOperationId,
   },
 }
 
@@ -117,7 +114,7 @@ function execution(value: WireExecution): ExecutionEvidence {
     }
   const state = 'state' in value ? value.state : undefined
   const run =
-    schema.getApiV1OperationDiagnosticsOperationsByOwnerByOperationIdResponse.validateRunState(
+    schema.getApiV1TenantsByTenantOperationDiagnosticsOperationsByOwnerByOperationIdResponse.validateRunState(
       state,
     )
       ? state
@@ -165,36 +162,49 @@ function detail(value: WireDetail): OperationDetail {
 export function createOperationDiagnosticsAdapter(
   transport: HttpTransport,
   context: DiagnosticsContext,
+  tenant: string,
 ): DiagnosticsPort {
-  const operations = endpoints[context]
-  const discovery = schema.getApiV1OperationDiagnosticsQuery.validateRoot
-  const lookup = schema.getApiV1OperationDiagnosticsOperationsByOwnerByOperationIdQuery.validateRoot
+  const operations = endpoints[context === 'da' ? 'da' : 'mdm']
+  const discovery = schema.getApiV1TenantsByTenantOperationDiagnosticsQuery.validateRoot
+  const lookup =
+    schema.getApiV1TenantsByTenantOperationDiagnosticsOperationsByOwnerByOperationIdQuery
+      .validateRoot
   return {
-    search: (query, signal) =>
-      operations.search(
-        transport,
-        { query: requestInput({ limit: 100, ...query }, discovery), signal },
-        page,
-      ),
-    request: (requestId, query, signal) =>
-      operations.request(
-        transport,
-        {
-          pathParams: { requestId },
-          query: requestInput({ limit: 100, ...query }, discovery),
-          signal,
-        },
-        page,
-      ),
-    operation: ({ owner, operationId, actor, instance, device, target }, options, signal) =>
-      operations.operation(
-        transport,
-        {
-          pathParams: { owner, operationId },
-          query: requestInput({ actor, instance, device, target, ...options }, lookup),
-          signal,
-        },
-        detail,
-      ),
+    search: (query, signal) => {
+      const input = { query: requestInput({ limit: 100, ...query }, discovery), signal }
+      return context === 'management'
+        ? api.getApiV1TenantAdministrationOperationDiagnostics(transport, input, page)
+        : operations.search(transport, { ...input, pathParams: { tenant } }, page)
+    },
+    request: (requestId, query, signal) => {
+      const input = {
+        query: requestInput({ limit: 100, ...query }, discovery),
+        signal,
+      }
+      return context === 'management'
+        ? api.getApiV1TenantAdministrationOperationDiagnosticsRequestsByRequestId(
+            transport,
+            { ...input, pathParams: { requestId } },
+            page,
+          )
+        : operations.request(transport, { ...input, pathParams: { tenant, requestId } }, page)
+    },
+    operation: ({ owner, operationId, actor, instance, device, target }, options, signal) => {
+      const input = {
+        query: requestInput({ actor, instance, device, target, ...options }, lookup),
+        signal,
+      }
+      return context === 'management'
+        ? api.getApiV1TenantAdministrationOperationDiagnosticsOperationsByOwnerByOperationId(
+            transport,
+            { ...input, pathParams: { owner, operationId } },
+            detail,
+          )
+        : operations.operation(
+            transport,
+            { ...input, pathParams: { tenant, owner, operationId } },
+            detail,
+          )
+    },
   }
 }

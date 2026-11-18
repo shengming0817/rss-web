@@ -94,7 +94,7 @@ try {
     return p
   }
   async function login(p, management = false, login = 'admin', secret = password) {
-    await p.goto(origin + (management ? '/platform/login' : '/login'))
+    await p.goto(origin + (management ? '/platform/login' : `/tenants/${f.tenant}/login`))
     await p.getByRole('heading', { name: '欢迎回来', exact: true }).waitFor()
     await p.getByLabel('账户', { exact: true }).fill(login)
     await p.getByLabel('密码', { exact: true }).fill(secret)
@@ -105,7 +105,11 @@ try {
       .waitFor()
     assert.equal(
       new URL(p.url()).pathname,
-      initialSetup ? '/setup' : management ? '/platform' : '/',
+      initialSetup
+        ? `/tenants/${f.tenant}/setup`
+        : management
+          ? '/platform'
+          : `/tenants/${f.tenant}`,
     )
   }
   const dialog = (p, name) => p.getByRole('dialog', { name, exact: true })
@@ -133,7 +137,7 @@ try {
     return r.json()
   }
   async function nav(p, route, title) {
-    await p.goto(origin + route)
+    await p.goto(origin + (route.startsWith('/platform/') ? route : `/tenants/${f.tenant}` + route))
     await p.getByRole('heading', { name: title, exact: true }).waitFor()
     await p
       .locator('.admin-loading')
@@ -282,7 +286,9 @@ try {
     const response = admin.waitForResponse(
       (r) =>
         r.request().method() === 'PUT' &&
-        new URL(r.url()).pathname.startsWith('/api/v1/user-attribute-definitions/'),
+        new URL(r.url()).pathname.startsWith(
+          `/api/v1/tenants/${f.tenant}/user-attribute-definitions/`,
+        ),
     )
     await e.getByRole('button', { name: '保存用户字段', exact: true }).click()
     const reply = await response
@@ -299,7 +305,7 @@ try {
   d = dialog(admin, '用户字段详情')
   await d.getByLabel('显示名称', { exact: true }).fill('EmployeeLocalUpdated')
   let fieldOperation
-  const fieldPath = '/api/v1/user-attribute-definitions/' + localField.fieldId
+  const fieldPath = `/api/v1/tenants/${f.tenant}/user-attribute-definitions/` + localField.fieldId
   const initialFieldWrites = requestCount(admin, 'PUT', fieldPath)
   const loseField = async (route) => {
     if (route.request().method() !== 'PUT') return route.fallback()
@@ -314,14 +320,18 @@ try {
   const fieldReads = requestCount(
     admin,
     'GET',
-    '/api/v1/user-attribute-operations/' + fieldOperation,
+    `/api/v1/tenants/${f.tenant}/user-attribute-operations/` + fieldOperation,
   )
   await d.getByRole('button', { name: '查询原字段操作', exact: true }).click()
   await d.waitFor({ state: 'hidden' })
   await admin.unroute('**/user-attribute-definitions/' + localField.fieldId, loseField)
   assert.equal(requestCount(admin, 'PUT', fieldPath), initialFieldWrites + 1)
   assert.equal(
-    requestCount(admin, 'GET', '/api/v1/user-attribute-operations/' + fieldOperation),
+    requestCount(
+      admin,
+      'GET',
+      `/api/v1/tenants/${f.tenant}/user-attribute-operations/` + fieldOperation,
+    ),
     fieldReads + 1,
   )
   checks.push('real-field-definition-cas-and-original-query')
@@ -379,14 +389,16 @@ try {
     const response = admin.waitForResponse(
       (r) =>
         r.request().method() === 'PUT' &&
-        new URL(r.url()).pathname.startsWith('/api/v1/authorization/rules/'),
+        new URL(r.url()).pathname.startsWith(`/api/v1/tenants/${f.tenant}/authorization/rules/`),
     )
     await e.getByRole('button', { name: '保存规则', exact: true }).click()
     const r = await response
     assert.equal(r.status(), 200)
     const saved = await r.json()
     const persistedRule = await (
-      await admin.request.get(origin + '/api/v1/authorization/rules/' + saved.id)
+      await admin.request.get(
+        origin + `/api/v1/tenants/${f.tenant}/authorization/rules/` + saved.id,
+      )
     ).json()
     assert.ok(
       persistedRule.value.grants.some(
@@ -478,11 +490,11 @@ try {
   await d.getByLabel('名称', { exact: true }).fill('React program')
   await d.getByRole('button', { name: '添加权限', exact: true }).click()
   await choose(admin, d.getByLabel('权限', { exact: true }), 'inventory_software_write')
-  const key = await result(admin, 'POST', '/api/v1/api-keys', () =>
+  const key = await result(admin, 'POST', `/api/v1/tenants/${f.tenant}/api-keys`, () =>
     d.getByRole('button', { name: '创建 API Key', exact: true }).click(),
   )
   const persistedKey = await (
-    await admin.request.get(origin + '/api/v1/api-keys/' + key.receipt.id)
+    await admin.request.get(origin + `/api/v1/tenants/${f.tenant}/api-keys/` + key.receipt.id)
   ).json()
   assert.ok(
     persistedKey.metadata.grants.some(
@@ -635,7 +647,7 @@ try {
   await admin.getByRole('tab', { name: '字段与来源映射', exact: true }).click()
   await field('EmployeeOIDC', 'string', '/extensions/employeeNumber', true, `IdP · ${provider.id}`)
   const alice = await page()
-  await alice.goto(origin + '/login')
+  await alice.goto(origin + `/tenants/${f.tenant}` + '/login')
   await alice.getByRole('button', { name: f.issuer, exact: false }).click()
   await alice.waitForURL((u) => u.origin === new URL(f.issuer).origin)
   await alice.locator('#username').fill('alice')
@@ -674,9 +686,18 @@ try {
   await d.getByRole('button', { name: '创建并供应租户', exact: true }).click()
   await d.getByRole('button', { name: '查询原供应操作', exact: true }).waitFor()
   const provisionReads = requestCount(manager, 'GET', `${provisionPath}/${provisionOperation}`)
-  await d.getByRole('button', { name: '查询原供应操作', exact: true }).click()
-  await d.getByText('供应尚未完成，不能进入业务租户', { exact: true }).waitFor()
-  assert.equal(await d.getByRole('link', { name: '进入业务租户', exact: false }).count(), 0)
+  const originalProvision = await result(
+    manager,
+    'GET',
+    provisionPath + '/' + provisionOperation,
+    () => d.getByRole('button', { name: '查询原供应操作', exact: true }).click(),
+  )
+  if (originalProvision.result.phase === 'configured')
+    assert.equal(
+      await d.getByRole('link', { name: '进入业务租户', exact: false }).getAttribute('href'),
+      originalProvision.result.entryPath,
+    )
+  else await d.getByText('供应尚未完成，不能进入业务租户', { exact: true }).waitFor()
   await manager.unroute('**/tenant-administration/provisionings', loseProvision)
   assert.equal(requestCount(manager, 'POST', provisionPath), 1)
   assert.equal(

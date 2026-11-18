@@ -8,8 +8,11 @@ try {
   await run.login(page)
   await run.nav(page, '/connections', '连接配置')
   await page.getByRole('tab', { name: 'Agent 连接', exact: true }).click()
-  const published = await run.response(page, 'POST', '/api/v1/agent-connections/publish', () =>
-    page.getByRole('button', { name: /^明确发布已保存草稿/ }).click(),
+  const published = await run.response(
+    page,
+    'POST',
+    `/api/v1/tenants/${run.fixture.tenant}/agent-connections/publish`,
+    () => page.getByRole('button', { name: /^明确发布已保存草稿/ }).click(),
   )
   const value = await published.json()
   assert.equal(value.configuration.serviceId, run.fixture.serviceId)

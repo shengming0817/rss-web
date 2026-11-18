@@ -37,7 +37,8 @@ const responses = [],
   cspViolations = []
 try {
   const fixture = JSON.parse(readFileSync(process.env.MDM_REACT_BROWSER_FIXTURE, 'utf8'))
-  const origin = new URL(fixture.origin)
+  const origin = new URL(fixture.origin),
+    base = `/tenants/${fixture.tenant}`
   assert.equal(origin.protocol, 'https:')
   assert.equal(origin.hostname, 'localhost')
   assert.equal(statSync(fixture.passwordFile).mode & 0o077, 0)
@@ -55,7 +56,14 @@ try {
   })
   page = await context.newPage()
   page.setDefaultTimeout(15_000)
-  page.on('pageerror', (error) => pageErrors.push(error.name))
+  page.on('pageerror', (error) => {
+    const reactCode = /Minified React error #(\d+)/.exec(error.message)?.[1]
+    pageErrors.push(reactCode ? error.name + '#' + reactCode : error.name)
+    if (phase === 'public-static-routes' && !reactCode) {
+      const safeError = /^[a-zA-Z][a-zA-Z ()_.#-]{0,160}$/.test(error.message)
+      if (safeError) console.error(JSON.stringify({ phase, pageError: error.message }))
+    }
+  })
   await page.addInitScript(() => {
     window.addEventListener('securitypolicyviolation', (event) =>
       console.info(
@@ -122,7 +130,7 @@ try {
   })
   phase = 'public-static-routes'
   for (const [path, heading] of [
-    ['/downloads/agent', 'Agent 安装包'],
+    [base + '/downloads/agent', 'Agent 安装包'],
     ['/enrollment/windows/entra/terms', 'Windows 注册条款'],
   ]) {
     await page.goto(origin.origin + path)
@@ -132,7 +140,7 @@ try {
     assert.equal(new URL(page.url()).pathname, path)
   }
   phase = 'login-landing'
-  await page.goto(origin.origin)
+  await page.goto(origin.origin + base)
   await page.getByLabel('账户', { exact: true }).fill(fixture.login)
   await page.getByLabel('密码', { exact: true }).fill('incorrect fixture password')
   phase = 'login-rejection'
@@ -142,7 +150,7 @@ try {
   await page.getByLabel('密码', { exact: true }).fill(readFileSync(fixture.passwordFile, 'utf8'))
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.getByRole('heading', { name: '租户初始化', exact: true }).waitFor()
-  assert.equal(new URL(page.url()).pathname, '/setup')
+  assert.equal(new URL(page.url()).pathname, base + '/setup')
   await page.getByRole('button', { name: '保存意图', exact: true }).waitFor()
   phase = 'design'
   const sidebar = await page.locator('.sidebar').boundingBox(),
@@ -314,7 +322,7 @@ try {
     await route.abort('failed')
   }
   await page.route('**/session/refresh', drop)
-  await page.getByRole('button', { name: 'Refresh session', exact: true }).click()
+  await page.getByRole('button', { name: /^(?:loading )?Refresh session$/ }).click()
   await page.getByText('Session could not be confirmed', { exact: true }).waitFor()
   assert.equal(rotations, 1)
   await page.unroute('**/session/refresh', drop)
@@ -361,7 +369,7 @@ try {
   phase = 'resume'
   await page.goto(`${origin.origin}/auth/resume`)
   await page.getByText('登录流程已过期或不属于当前租户。', { exact: true }).waitFor()
-  await page.getByRole('link', { name: '登录', exact: true }).click()
+  await page.goto(origin.origin + base)
   await page.getByRole('heading', { name: '租户初始化', exact: true }).waitFor()
   phase = 'callback-cancellation'
   await page.evaluate(
@@ -375,7 +383,7 @@ try {
   await page.goto(`${origin.origin}/auth/error?reason=cancelled`)
   await page.getByText('组织认证已取消。', { exact: true }).waitFor()
   assert.equal(await page.evaluate(() => sessionStorage.getItem('rss.authentication-flow')), null)
-  await page.getByRole('link', { name: '登录', exact: true }).click()
+  await page.goto(origin.origin + base)
   await page.getByRole('heading', { name: '租户初始化', exact: true }).waitFor()
   phase = 'management-entry'
   await page.goto(`${origin.origin}/platform/login`)

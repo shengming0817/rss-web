@@ -7,10 +7,11 @@ import type {
   GapPage,
   Numeric,
 } from '@rss/mdm-telemetry'
-type SampleWire = wireSchemas.postApiV1TelemetryHistoryResponse.HistoryRow['sample']
+type SampleWire = wireSchemas.postApiV1TenantsByTenantTelemetryHistoryResponse.HistoryRow['sample']
 type DefinitionWire = SampleWire['series']['definition']
 type MetricWire = DefinitionWire['metric']
-type BucketWire = wireSchemas.postApiV1TelemetryAggregateResponse.Root['buckets'][number]
+type BucketWire =
+  wireSchemas.postApiV1TenantsByTenantTelemetryAggregateResponse.Root['buckets'][number]
 type IntervalWire = BucketWire['window']
 type AggregateWire = BucketWire['value']
 type NumericWire = Extract<AggregateWire, { Number: unknown }>['Number']
@@ -113,9 +114,9 @@ export function observation(
   mode: 'history' | 'latest',
 ): Observation {
   if (mode === 'history') {
-    if (!wireSchemas.postApiV1TelemetryHistoryResponse.validateHistoryRow(value))
+    if (!wireSchemas.postApiV1TenantsByTenantTelemetryHistoryResponse.validateHistoryRow(value))
       throw new Error('Invalid observation')
-  } else if (!wireSchemas.postApiV1TelemetryHistoryResponse.validateLatestRow(value))
+  } else if (!wireSchemas.postApiV1TenantsByTenantTelemetryHistoryResponse.validateLatestRow(value))
     throw new Error('Invalid observation')
 
   const v = value
@@ -159,7 +160,7 @@ export function observation(
 
 export function unavailable(value: unknown, tenant: string) {
   return array(value, (x) => {
-    if (!wireSchemas.postApiV1TelemetryHistoryResponse.validateUnavailable(x))
+    if (!wireSchemas.postApiV1TenantsByTenantTelemetryHistoryResponse.validateUnavailable(x))
       throw new Error('Invalid unavailable interval')
     return {
       selection:
@@ -248,7 +249,7 @@ export function opaque(value: unknown): string | null {
   return value
 }
 export function health(value: unknown): Health {
-  if (!wireSchemas.postApiV1TelemetryHealthResponse.validateRoot(value))
+  if (!wireSchemas.postApiV1TenantsByTenantTelemetryHealthResponse.validateRoot(value))
     throw new Error('Invalid contract value')
 
   const v = value
@@ -285,12 +286,12 @@ export function health(value: unknown): Health {
 }
 export function gapCursor(value: unknown) {
   if (value === null) return null
-  if (!wireSchemas.postApiV1TelemetryGapsQueryResponse.validateCursor(value))
+  if (!wireSchemas.postApiV1TenantsByTenantTelemetryGapsQueryResponse.validateCursor(value))
     throw new Error('Invalid cursor')
   return value
 }
 export function gaps(value: unknown, device: string): GapPage {
-  if (!wireSchemas.postApiV1TelemetryGapsQueryResponse.validateRoot(value))
+  if (!wireSchemas.postApiV1TenantsByTenantTelemetryGapsQueryResponse.validateRoot(value))
     throw new Error('Invalid contract value')
 
   const v = value
