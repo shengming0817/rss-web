@@ -76,38 +76,66 @@ def storage(environment, binary, config):
     config['telemetry'] = [telemetry]
 
 
-def seed_agent_pki(environment, agent, providers, tenant, instance):
-    """Install the disposable Agent CA's public registry prerequisites."""
-    trust = json.loads(Path(agent['trust_file']).read_text())
+def tenant_administration(environment, config):
+    def database(role, password):
+        return dict(config['access_database'], user=role,
+            password_file=str(private(environment.root/(role+'-password'), password)))
+
+    config['tenant_administration'] = dict(
+        registry_database=database('mdm_tenant_registry', 'tenant-registry-fixture'),
+        provisioning_database=database('mdm_identity_provisioning', 'tenant-provisioning-fixture'),
+        fingerprint_key_file=str(private(environment.root/'tenant-operation-key', secrets.token_hex(16))),
+    )
+    # Registry, source and provisioning add 8 + 10 + 2 physical connections.
+    config['background']['database_connection_budget'] += 20
+
+
+def seed_protocol_pki(environment, configuration, providers, tenant, instance, purpose):
+    """Install the disposable protocol CA's public registry prerequisites."""
+    trust = json.loads(Path(configuration['trust_file']).read_text())
     tenant = str(uuid.UUID(tenant))
+    endpoint = {'agent': 'endpoint', 'windows': 'management'}[purpose]
     if (trust['version'], trust['revision'], trust['tenant'], trust['service_id'],
-            trust['origin'], trust['purpose']) != (1, 1, tenant, instance, agent['endpoint']['origin'], 'agent'):
-        raise RuntimeError('fixture-agent-trust-binding')
+            trust['origin'], trust['purpose']) != (1, 1, tenant, instance, configuration[endpoint]['origin'], purpose):
+        raise RuntimeError('fixture-pki-trust-binding')
     issuer, = trust['issuers']
     certificate = base64.b64decode(issuer['certificate'], validate=True)
     digest = hashlib.sha256(certificate).hexdigest()
     if issuer['mode'] != 'active' or issuer['digest'] != digest or not any(
-        entry['purpose'] == 'agent' and entry['issuer'] == digest
+        entry['purpose'] == purpose and entry['issuer'] == digest
         and entry['kid'] == issuer['kid'] and entry['provisioner'] == issuer['provisioner']
         for entry in providers
     ):
-        raise RuntimeError('fixture-agent-issuer-binding')
+        raise RuntimeError('fixture-pki-issuer-binding')
     expiry = subprocess.run(['openssl', 'x509', '-inform', 'DER', '-noout', '-enddate'],
         input=certificate, capture_output=True, check=True, timeout=10).stdout.decode().strip()
     not_after = int(ssl.cert_time_to_seconds(expiry.split('=', 1)[1]))
     # The candidate runtime persists the same public JSON encoding in tenant-scoped rows.
-    trust_body = json.dumps(trust, separators=(',', ':')).encode().hex()
-    issuer_body = json.dumps(issuer, separators=(',', ':')).encode().hex()
-    environment.sql(
-        f"BEGIN; SET LOCAL ROLE mdm_owner; SET LOCAL rss.tenant_id='{tenant}'; "
+    def encoded(value):
+        return "decode('" + json.dumps(value, separators=(',', ':')).encode().hex() + "','hex')"
+
+    statements = [
+        f"BEGIN; SET LOCAL ROLE mdm_owner; SET LOCAL rss.tenant_id='{tenant}';",
         "INSERT INTO mdm_pki.trust(tenant_id,purpose,revision,body) "
-        f"VALUES('{tenant}','agent',1,decode('{trust_body}','hex')); "
+        f"VALUES('{tenant}','{purpose}',1,{encoded(trust)});",
         "INSERT INTO mdm_pki.issuers(tenant_id,purpose,digest,revision,state,chain,provider,not_after) "
-        f"VALUES('{tenant}','agent','{digest}',1,'active',decode('{issuer_body}','hex'),'step_ca',{not_after}); "
-        "COMMIT;",
-        'mdm_dev',
-    )
+        f"VALUES('{tenant}','{purpose}','{digest}',1,'active',{encoded(issuer)},'step_ca',{not_after});",
+    ]
+    if purpose == 'windows':
+        provider = configuration['provider_id'].encode().hex()
+        poll = encoded(configuration['poll'])
+        lifetime = encoded(configuration.get('lifetime', {'mode': 'production'}))
+        statements.append(
+            "INSERT INTO mdm_windows.enrollment_configuration(tenant_id,provider_id,poll,lifetime,entra_callbacks) "
+            f"VALUES('{tenant}',convert_from(decode('{provider}','hex'),'UTF8'),"
+            f"convert_from({poll},'UTF8')::jsonb,convert_from({lifetime},'UTF8')::jsonb,'{{}}');"
+        )
+    environment.sql(' '.join([*statements, 'COMMIT;']), 'mdm_dev')
     return trust
+
+
+def windows_protocol(configuration):
+    return {key: configuration[key] for key in ('enrollment', 'management', 'additional_management', 'protocol_protection')}
 
 
 def signer(environment, origin, tenant, login, password):

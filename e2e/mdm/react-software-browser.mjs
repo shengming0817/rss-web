@@ -688,8 +688,8 @@ try {
   const first = await firstPage.json()
   assert.equal(first.items.length, catalogPageSize)
   assert.ok(first.nextCursor)
-  const firstIds = new Set(first.items.map((row) => row.id))
-  assert.equal(firstIds.has(resource), false)
+  const firstCatalogIds = new Set(first.items.map((row) => row.id))
+  assert.equal(firstCatalogIds.has(resource), false)
   const continuedQuery = new URL(firstPage.url()).searchParams
   continuedQuery.set('cursor', first.nextCursor)
   const queryMatches = (expected) => {
@@ -707,7 +707,7 @@ try {
   assert.equal(secondPage.status(), 200)
   const second = (await secondPage.json()).items
   assert.ok(second.some((row) => row.id === resource))
-  assert.ok(second.every((row) => !firstIds.has(row.id)))
+  assert.ok(second.every((row) => !firstCatalogIds.has(row.id)))
   await p.locator('.software-card').filter({ hasText: searchName }).waitFor()
   const expired = new URL(p.url())
   assert.equal(expired.searchParams.get('cursor'), first.nextCursor)
@@ -753,6 +753,7 @@ try {
     () => button('应用').click(),
   )
   const softwareRows = (await softwareDirectory.json()).items
+  const softwareFilter = new URL(p.url()).searchParams.get('filter')
   assert.deepEqual(
     softwareRows.map((row) => row.id),
     [resource],
@@ -776,13 +777,14 @@ try {
     .waitFor()
   const draftReturn = draftPage.getByRole('button', { name: '返回来源', exact: true })
   const sourceUrl = new URL(new URL(p.url()).searchParams.get('returnTo'), origin)
-  assert.equal(sourceUrl.pathname, `/tenants/${f.tenant}/software`)
+  assert.equal(sourceUrl.pathname, '/software')
   assert.equal(sourceUrl.searchParams.get('resource'), resource)
   assert.equal(sourceUrl.searchParams.get('version'), 'resource-v1')
   assert.equal(sourceUrl.searchParams.get('variant'), JSON.stringify(['windows', 'x86_64', 'main']))
   assert.equal(sourceUrl.searchParams.get('limit'), String(catalogPageSize))
+  assert.equal(sourceUrl.searchParams.get('filter'), softwareFilter)
   await draftReturn.click()
-  await p.waitForURL(sourceUrl.href)
+  await p.waitForURL(origin + `/tenants/${f.tenant}` + sourceUrl.pathname + sourceUrl.search)
   await p.getByRole('link', { name: '查看此版本的分配', exact: true }).waitFor()
   await button('清除条件').click()
   await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/resources`, () =>
@@ -804,9 +806,15 @@ try {
   run.step('snapshot-lossless-unknown-receipt-and-independent-resource-draft')
   await tab('JSON 来源快照')
   const snapshot = 'browser-snapshot-' + randomUUID(),
+    snapshotPageSize = 100,
     snapshotPath = `/api/v1/tenants/${run.fixture.tenant}/software/source-snapshots/` + snapshot,
     entryJson = String.raw`{"id":"fixture.package","name":"Editor \u4e2d","version":"7.1","number":9007199254740993,"ratio":0.123456789123456789}`,
-    json = '[\n\r\n' + Array(22).fill(entryJson).join(',\r\n') + '\r\r\n]',
+    json =
+      '[\n\r\n' +
+      Array(snapshotPageSize + 2)
+        .fill(entryJson)
+        .join(',\r\n') +
+      '\r\r\n]',
     preview = label('待导入的 JSON 原文')
   async function pasteSnapshot(text) {
     await preview.evaluate((element, text) => {
@@ -842,7 +850,8 @@ try {
   const entriesPath = snapshotPath + '/entries'
   const firstEntries = await run.response(p, 'GET', entriesPath, () => button(snapshot).click())
   const firstIds = new Set((await firstEntries.json()).items.map((row) => row.entryId))
-  assert.equal(firstIds.size, 20)
+  assert.equal(new URL(firstEntries.url()).searchParams.get('limit'), String(snapshotPageSize))
+  assert.equal(firstIds.size, snapshotPageSize)
   await button('读取文档原文').click()
   await p.waitForFunction(
     (expected) => document.querySelector('textarea[aria-label="文档原文"]')?.value === expected,
@@ -930,7 +939,11 @@ try {
     'real-json-snapshot-lossless-original-receipt-replacement-and-independent-resource-version',
   )
 
-  const frozenLocator = new URLSearchParams({ resource, version: 'snapshot-copy' })
+  const frozenLocator = new URLSearchParams({
+    resource,
+    version: 'snapshot-copy',
+    limit: String(catalogPageSize),
+  })
   await run.nav(p, '/software?' + frozenLocator, '软件目录')
   await p.getByRole('link', { name: '从此版本新建分配', exact: true }).click()
   const frozenDraft = p.locator('.policy-editor')
@@ -945,7 +958,10 @@ try {
 
   run.step('software-responsive-layout')
   await tab('组织软件')
-  await p.waitForFunction(() => document.querySelectorAll('.software-card').length === 20)
+  await p.waitForFunction(
+    (limit) => document.querySelectorAll('.software-card').length === limit,
+    catalogPageSize,
+  )
   const columns = () =>
     p
       .locator('.software-grid')

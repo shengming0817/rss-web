@@ -1,5 +1,4 @@
 """Owned disposable PG + fixed Keycloak + production MDM HTTPS profile journey."""
-import copy
 import json
 import os
 from pathlib import Path
@@ -74,7 +73,7 @@ try:
         config['identity']['oidc']=dict(group_facts_max_age_seconds=300,state_key_file=keys['state'],active_credential_key='current',credential_keys={'current':keys['credential']},return_targets={'resume':origin+'/auth/resume'},assurance_profiles=[],private_providers=[dict(tenant_id=TENANTS[0],issuer=issuer,client_id='identity-test',cidrs=[host+'/32'])])
         management = None
         unused = None
-        from runtime_fixture import storage
+        from runtime_fixture import storage, tenant_administration
         storage(environment,binary,config)
         management=config['identity']['management_tenant']
         operator=environment.root/'host/operator'
@@ -86,13 +85,7 @@ try:
         command('initialize',value)
         value=json.loads((operator/'authorization.json').read_text());value['user']['tenantId']=management;value['operationId']=str(uuid.uuid4())
         command('initialize-authorization',value)
-        def database(role,password):
-            value=copy.deepcopy(config['access_database']);value['user']=role
-            value['password_file']=str(private(environment.root/(role+'-password'),password))
-            return value
-        config['tenant_administration']=dict(registry_database=database('mdm_tenant_registry','tenant-registry-fixture'),provisioning_database=database('mdm_identity_provisioning','identity-provisioning-fixture'),fingerprint_key_file=str(private(environment.root/'tenant-operation-key','x'*32)))
-        # Registry, source and provisioning add 8 + 10 + 2 physical connections.
-        config['background']['database_connection_budget'] += 20
+        tenant_administration(environment, config)
         unused=str(uuid.uuid4())
         environment.sql(f"SELECT public.create_new_tenant('{unused}',1,'Disposable unused tenant',NULL)",'mdm_dev')
         private(config_path,config)

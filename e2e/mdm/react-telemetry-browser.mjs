@@ -35,7 +35,7 @@ try {
     })
     assert.ok(
       response.status() >= 200 && response.status() < 300,
-      `HTTP ${response.status()} ${path.split('?')[0]}`,
+      `HTTP ${response.status()} ${method} ${path.split('?')[0]}`,
     )
     return response.status() === 201 || response.status() === 204 ? null : response.json()
   }
@@ -283,7 +283,7 @@ try {
     2,
   )
   const policyId = randomUUID()
-  await write('POST', `/api/v1/tenants/${run.fixture.tenant}/policies/${policyId}`, {
+  const policy = await write('POST', `/api/v1/tenants/${run.fixture.tenant}/policies/${policyId}`, {
     action: 'put',
     enabled: true,
     definition: {
@@ -302,7 +302,7 @@ try {
       },
     },
   })
-  const policy = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/policies/${policyId}`)
+  assert.equal(policy.id, policyId)
   for (let attempt = 0; ; attempt++) {
     const scope = await page.request.get(
       `${origin}/api/v1/tenants/${run.fixture.tenant}/policies/${policyId}/scope`,

@@ -30,7 +30,10 @@ from build_run import lease_fds
 from pki_fixtures import running as pki
 from windows_fixtures import generate as windows_inputs
 from candidate_installation_driver import Browser
-from runtime_fixture import storage, installation_sql, readiness as readiness_status, seed_agent_pki
+from runtime_fixture import (
+    storage, installation_sql, readiness as readiness_status, seed_protocol_pki,
+    tenant_administration, windows_protocol,
+)
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
@@ -190,6 +193,8 @@ try:
     config['device_pki'] = json.loads((native/'device-pki.json').read_text())
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     storage(environment, binary, config)
+    if browser_module == 'react-telemetry-browser.mjs':
+        tenant_administration(environment, config)
     if browser_module == 'react-software-browser.mjs':
         source_base = initialized['origin'] + '/api/v1/tenants/{tenant}/software/native/sources/internal/'
         config['publication']['sources'] = [dict(name='internal', credentials={},
@@ -288,12 +293,15 @@ try:
         windows['management']['origin'] = initialized['origin']
         private(native/'windows.json', windows)
         providers.enter_context(pki(native, dict(os.environ), case=str(WEB)+':execution-browser', windows=True))
-        config.setdefault('native_protocols', {})['windows'] = json.loads((native/'windows.json').read_text())
+        windows = json.loads((native/'windows.json').read_text())
+        config.setdefault('native_protocols', {})['windows'] = windows_protocol(windows)
         config['device_pki'] = json.loads((native/'device-pki.json').read_text())
+        phase = 'windows-pki'
+        seed_protocol_pki(environment, windows, config['device_pki'], TENANTS[0], INSTANCE, 'windows')
 
     if uses_collector:
         phase = 'agent-pki'
-        agent_trust = seed_agent_pki(environment, agent, config['device_pki'], TENANTS[0], INSTANCE)
+        agent_trust = seed_protocol_pki(environment, agent, config['device_pki'], TENANTS[0], INSTANCE, 'agent')
 
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
@@ -302,6 +310,17 @@ try:
     audit_journey = browser_module == 'react-audit-webhooks-browser.mjs'
     management_only = audit_journey or browser_module in {'react-execution-access-browser.mjs', 'react-device-access-browser.mjs', 'react-devices-browser.mjs'}
     backend_readiness = start(binary, initialized, log, expected=None if management_only else 200)
+    if browser_module == 'react-telemetry-browser.mjs':
+        phase = 'telemetry-storage-admission'
+        # The tenant baseline worker admits its shared installation after the host becomes reachable.
+        deadline = time.monotonic() + 180
+        while environment.sql(
+            f"SELECT count(*) FROM mdm_telemetry.storage_binding WHERE tenant_id='{TENANTS[0]}' AND pending IS NULL",
+            'mdm_dev',
+        ) != '1':
+            if time.monotonic() >= deadline or any(child.poll() is not None for child in processes[-2:]):
+                raise RuntimeError('telemetry-storage-admission')
+            time.sleep(.5)
     if management_only:
         phase = 'management-seams'
         # These are actual authenticated reads, not substitute health/authority facts.
