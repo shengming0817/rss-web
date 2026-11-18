@@ -71,21 +71,9 @@ try:
         config=json.loads(config_path.read_text())
         keys={name:str(private(environment.root/(name+'-key'),uuid.uuid4().hex+uuid.uuid4().hex)) for name in ['state','credential']}
         config['identity']['oidc']=dict(group_facts_max_age_seconds=300,state_key_file=keys['state'],active_credential_key='current',credential_keys={'current':keys['credential']},return_targets={'resume':origin+'/auth/resume'},assurance_profiles=[],private_providers=[dict(tenant_id=TENANTS[0],issuer=issuer,client_id='identity-test',cidrs=[host+'/32'])])
-        management = None
-        unused = None
         from runtime_fixture import storage, tenant_administration
-        storage(environment,binary,config)
-        management=config['identity']['management_tenant']
-        operator=environment.root/'host/operator'
-        def command(verb,value):
-            path=private(environment.root/(verb+'-'+uuid.uuid4().hex+'.json'),value)
-            result=subprocess.run([str(binary),verb,'--config',str(path)],cwd=BACKEND,capture_output=True,text=True,timeout=75,pass_fds=lease_fds())
-            if result.returncode:raise RuntimeError('fixture-cli-'+verb)
-        value=json.loads((operator/'initialize.json').read_text());value['tenant_id']=management
-        command('initialize',value)
-        value=json.loads((operator/'authorization.json').read_text());value['user']['tenantId']=management;value['operationId']=str(uuid.uuid4())
-        command('initialize-authorization',value)
-        tenant_administration(environment, config)
+        storage(environment, binary, config)
+        management = tenant_administration(environment, binary, config)
         unused=str(uuid.uuid4())
         environment.sql(f"SELECT public.create_new_tenant('{unused}',1,'Disposable unused tenant',NULL)",'mdm_dev')
         private(config_path,config)

@@ -76,18 +76,33 @@ def storage(environment, binary, config):
     config['telemetry'] = [telemetry]
 
 
-def tenant_administration(environment, config):
+def tenant_administration(environment, binary, config):
+    management = config['identity']['management_tenant']
+    operator = environment.root/'host'/'operator'
+    initializer = json.loads((operator/'initialize.json').read_text())
+    initializer['tenant_id'] = management
+    authority = json.loads((operator/'authorization.json').read_text())
+    authority['user']['tenantId'] = management
+    authority['operationId'] = str(uuid.uuid4())
+    for verb, value in [('initialize', initializer), ('initialize-authorization', authority)]:
+        request = private(environment.root/(verb+'-management.json'), value)
+        result = subprocess.run([str(binary), verb, '--config', str(request)],
+            cwd=environment.worktree, capture_output=True, timeout=75, pass_fds=lease_fds())
+        if result.returncode:
+            raise RuntimeError('fixture-cli-'+verb)
+
     def database(role, password):
         return dict(config['access_database'], user=role,
             password_file=str(private(environment.root/(role+'-password'), password)))
 
     config['tenant_administration'] = dict(
         registry_database=database('mdm_tenant_registry', 'tenant-registry-fixture'),
-        provisioning_database=database('mdm_identity_provisioning', 'tenant-provisioning-fixture'),
+        provisioning_database=database('mdm_identity_provisioning', 'identity-provisioning-fixture'),
         fingerprint_key_file=str(private(environment.root/'tenant-operation-key', secrets.token_hex(16))),
     )
     # Registry, source and provisioning add 8 + 10 + 2 physical connections.
     config['background']['database_connection_budget'] += 20
+    return management
 
 
 def seed_protocol_pki(environment, configuration, providers, tenant, instance, purpose):

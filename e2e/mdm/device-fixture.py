@@ -194,7 +194,8 @@ try:
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     storage(environment, binary, config)
     if browser_module == 'react-telemetry-browser.mjs':
-        tenant_administration(environment, config)
+        phase = 'tenant-administration'
+        tenant_administration(environment, binary, config)
     if browser_module == 'react-software-browser.mjs':
         source_base = initialized['origin'] + '/api/v1/tenants/{tenant}/software/native/sources/internal/'
         config['publication']['sources'] = [dict(name='internal', credentials={},
@@ -400,9 +401,10 @@ try:
             dict(login='fixture-person-b', password=secrets.token_urlsafe(32)))
         if status != 201: raise RuntimeError('personnel-candidate-create')
         person_b = dict(principalId=account_b['principalId'], login='fixture-person-b')
-    if browser_module == 'react-assets-browser.mjs':
-        # A real different tenant owns this endpoint; ordinary tenant-scoped UI cannot read it.
+    if browser_module in {'react-assets-browser.mjs', 'react-telemetry-browser.mjs'}:
+        phase = 'foreign-tenant'
         environment.sql(installation_sql()+f"SELECT public.create_new_tenant('{TENANTS[1]}',1,NULL,NULL) WHERE NOT EXISTS (SELECT 1 FROM public.mdm_tenants WHERE tenant_id='{TENANTS[1]}')", 'mdm_dev')
+    if browser_module == 'react-assets-browser.mjs':
         foreign_grant = str(uuid.uuid4())
         environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','316fdd38-45b8-529e-b278-8baccd6aa0e2','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','316fdd38-45b8-529e-b278-8baccd6aa0e2','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
     agent_fixture = None
