@@ -11,6 +11,8 @@ import sys
 import time
 from urllib.parse import urlsplit
 import uuid
+
+sys.dont_write_bytecode = True
 from agent_http import read_json
 
 
