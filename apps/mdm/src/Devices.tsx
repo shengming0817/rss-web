@@ -2,7 +2,7 @@ import { useDirectoryQuery } from './directory-location'
 import { useState } from 'react'
 import { Alert, Button, Card, Collapse, Modal, Tabs } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
-import type { Association, EndpointRow, ViewRow } from '@rss/mdm-devices'
+import { referenceKey, type Association, type EndpointRow, type ViewRow } from '@rss/mdm-devices'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import {
@@ -20,7 +20,7 @@ import { useAdministration } from './useAdministration'
 import { DataTable } from './DataTable'
 import { deviceName, Status, timestamp } from './DevicePresentation'
 
-const viewFields = ['key', 'reference', 'association', 'endpoints'] as const,
+const viewFields = ['reference', 'association', 'endpoints'] as const,
   endpointFields = [
     'id',
     'status',
@@ -82,8 +82,8 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
         query={query}
         onChange={setQuery}
         fields={viewFields}
-        sort={['key']}
-        required="key"
+        sort={['reference.kind', 'reference.id']}
+        required="reference"
         maximum={100}
       />
       <ReadState
@@ -98,23 +98,21 @@ function ViewDirectory({ runtime, locale }: { runtime: Runtime; locale: Locale }
           <DataTable<ViewRow>
             locale={locale}
             dataSource={read.value.items}
-            rowKey="key"
+            rowKey={(row) => referenceKey(row.reference)}
             columns={[
               {
                 title: l('设备', 'Device'),
-                dataIndex: 'key',
-                render: (_, row) => (
-                  <div>
-                    {row.reference ? (
+                render: (_, row) => {
+                  const key = referenceKey(row.reference)
+                  return (
+                    <div>
                       <Link to={devicePath(row.reference.kind, row.reference.id)}>
-                        {deviceName(row.endpoints?.[0]?.displayName, row.key)}
+                        {deviceName(row.endpoints?.[0]?.displayName, key)}
                       </Link>
-                    ) : (
-                      row.key
-                    )}
-                    <div className="subtitle">{row.key}</div>
-                  </div>
-                ),
+                      <div className="subtitle">{key}</div>
+                    </div>
+                  )
+                },
               },
               ...(columns.includes('association')
                 ? [

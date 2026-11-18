@@ -656,7 +656,7 @@ it('shows historical success beside an absent current run and performs one bound
     views = vi.fn(async () => ({
       items: [
         {
-          key: 'endpoint:device-a',
+          reference: { kind: 'endpoint', id: 'device-a' },
           endpoints: [
             {
               id: 'device-a',
@@ -716,7 +716,11 @@ it('shows historical success beside an absent current run and performs one bound
   expect(host.textContent).toContain('未知 / 等待事件')
   expect(views).toHaveBeenCalledOnce()
   expect(views.mock.calls[0]).toEqual([
-    { fields: ['key', 'reference', 'endpoints'], limit: 1, filter: "key=='endpoint:device-a'" },
+    {
+      fields: ['reference', 'endpoints'],
+      limit: 1,
+      filter: "(reference.kind=='endpoint';reference.id=in=('device-a'))",
+    },
     expect.any(AbortSignal),
   ])
   expect(assignments.mock.calls[0]).toEqual([id, { limit: 100 }, expect.any(AbortSignal)])
