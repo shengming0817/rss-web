@@ -38,7 +38,7 @@ def call(origin, ca, path, body=None, cert=None, key=None, method='POST', header
         connection.close()
 
 
-def register(origin, ca, native, operator, private, tenant, capabilities=None, activate=True):
+def register(origin, ca, native, operator, private, tenant, *, expected_pki, capabilities=None, activate=True):
     csr = base64.b64encode((native/'agent.der').read_bytes()).decode()
     secret = secrets.token_urlsafe(32)
     request = call(origin, ca, '/api/v1/agent/enroll/requests', dict(tenantId=tenant, wireVersion=1, operationId=str(uuid.uuid4()), secret=secret, platform='macos', csr=csr))
@@ -57,6 +57,11 @@ def register(origin, ca, native, operator, private, tenant, capabilities=None, a
     activation = call(origin, ca, '/api/v1/agent/enroll/activate', dict(wireVersion=1, issuanceId=candidate['issuanceId'], operationId=str(uuid.uuid4())), cert, key)
     binding = activation['runtime']
     check('inventory.native.v1' in binding['capabilities'], 'collector-binding')
+    pki = call(origin, ca, '/api/v1/agent/enroll/trust?tenantId='+tenant, cert=cert, key=key, method='GET')
+    binding_fields = ('version', 'service_id', 'tenant', 'purpose', 'origin', 'revision')
+    check(all(pki[field] == expected_pki[field] for field in binding_fields), 'collector-pki-binding')
+    check([issuer['digest'] for issuer in pki['issuers'] if issuer['mode'] == 'active']
+          == [expected_pki['issuers'][0]['digest']], 'collector-pki-issuer')
     trust = call(origin, ca, '/api/v1/agent/runtime/task-trust', cert=cert, key=key, method='GET')
     check(trust['version'] == 1 and trust['service_id'] == '33333333-3333-4333-8333-333333333333' and trust['tenant'] == tenant, 'collector-trust-authority')
     installed = private(native/'collector-trust.json', json.dumps(trust))

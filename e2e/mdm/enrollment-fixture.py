@@ -25,7 +25,7 @@ sys.path.insert(0, str(BACKEND / 'hack'))
 from t2_environment import Environment, private
 from candidate_fixture import INSTANCE, TENANTS, ADMIN
 from build_run import lease_fds
-from runtime_fixture import storage, readiness, installation_sql
+from runtime_fixture import storage, readiness, installation_sql, seed_agent_pki
 from windows_fixtures import generate
 from candidate_installation_driver import Browser
 from pki_fixtures import running as pki, trust as public_trust
@@ -130,7 +130,7 @@ try:
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
-    storage(environment, binary, config, TENANTS[0])
+    storage(environment, binary, config)
     private(config_path, config)
     phase = 'actors'
     reader_password = private(environment.root/'reader-password', 'Enrollment-fixture-reader-only-2026!')
@@ -186,6 +186,8 @@ try:
         agent = json.loads((root/'agent-pki.json').read_text())
         config.update(native_protocols=dict(windows=json.loads((root/'windows.json').read_text())),
                       agent_pki={key: agent[key] for key in ('mode', 'endpoint', 'lifetime')}, device_pki=json.loads((root/'device-pki.json').read_text())+json.loads((next_root/'device-pki.json').read_text()))
+        phase = 'agent-pki'
+        agent_trust = seed_agent_pki(environment, agent, config['device_pki'], TENANTS[0], INSTANCE)
         private(config_path, config)
         phase = 'browser'
         start(binary, initialized, log)
@@ -211,8 +213,11 @@ try:
             installer_file.write_bytes(installer_bytes())
         module = importlib.util.spec_from_file_location('enrollment_device_agent',WEB/'e2e/mdm/device-agent.py')
         collector = importlib.util.module_from_spec(module); module.loader.exec_module(collector)
-        agent_fixture = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0])
-        recovery_candidate = collector.register(agent['endpoint']['origin'],environment.root/'ca.crt',root/'pki/agent',operator,private,TENANTS[0],activate=False)['originalCandidate']
+        agent_fixture = collector.register(agent['endpoint']['origin'], environment.root/'ca.crt',
+            root/'pki/agent', operator, private, TENANTS[0], expected_pki=agent_trust)
+        recovery_candidate = collector.register(agent['endpoint']['origin'], environment.root/'ca.crt',
+            root/'pki/agent', operator, private, TENANTS[0], expected_pki=agent_trust,
+            activate=False)['originalCandidate']
         # Read the CA's current signed CRL after cold initialization; its cache lifetime is 10m.
         authority = json.loads((next_root/'device-pki.json').read_text())[0]
         candidate_trust = json.loads(public_trust(next_root/'pki/agent', 'agent', agent['endpoint']['origin'], TENANTS[0], authority['provisioner'], authority['kid'], authority['origin']).read_text())

@@ -1,6 +1,9 @@
 """Prepare real baseline prerequisites; no initialization facts or readiness are forged."""
+import base64
+import hashlib
 import http.client
 import json
+from pathlib import Path
 import secrets
 import ssl
 import subprocess
@@ -33,13 +36,13 @@ def readiness(environment, origin):
         connection.close()
 
 
-def storage(environment, binary, config, tenant):
+def storage(environment, binary, config):
     """Use the existing PG owner and the production telemetry installer, then runtime admission."""
     management = environment.sql(
         'SELECT management_tenant_id FROM public.mdm_installation', 'mdm_dev',
     ).strip()
     config['identity']['management_tenant'] = str(uuid.UUID(management))
-    directory = environment.root/'baseline'/tenant
+    directory = environment.root/'baseline'
     directory.mkdir(parents=True, mode=0o700)
     if not config.get('content'):
         content = directory/'content'
@@ -48,7 +51,7 @@ def storage(environment, binary, config, tenant):
             max_artifact_bytes=32*1024*1024, max_temporary_bytes=64*1024*1024, max_uploads=4,
             transfer_seconds=60, retention_seconds=3600,
             max_bundle_entries=100, max_expansion_ratio=100)
-    name = 'telemetry_' + uuid.UUID(tenant).hex
+    name = 'mdm_telemetry_fixture'
     environment.sql(f'CREATE DATABASE "{name}"')
     database = dict(host='localhost', port=environment.port(), name=name, user='postgres',
         password_file=str(environment.root/'pg'/'pg-password'), ca_file=str(environment.root/'ca.crt'))
@@ -63,7 +66,7 @@ def storage(environment, binary, config, tenant):
         max_series=4096, max_bytes=1048576, replay_micros=86400000000, cursor_micros=60000000))
     day = int(time.time())//86400
     request = private(directory/'prepare.json', dict(operationId=str(uuid.uuid4()),
-        directory=str(directory/'installation'), tenant=tenant, configuration=telemetry,
+        directory=str(directory/'installation'), configuration=telemetry,
         administrator=database, owner='o_'+uuid.uuid4().hex,
         partitions=[dict(startMicros=(day-1)*86400000000, endMicros=(day+2)*86400000000)], clickhouse=None))
     result = subprocess.run([str(binary), 'prepare-telemetry', '--config', str(request)],
@@ -71,6 +74,40 @@ def storage(environment, binary, config, tenant):
     if result.returncode:
         raise RuntimeError('baseline-telemetry-installation')
     config['telemetry'] = [telemetry]
+
+
+def seed_agent_pki(environment, agent, providers, tenant, instance):
+    """Install the disposable Agent CA's public registry prerequisites."""
+    trust = json.loads(Path(agent['trust_file']).read_text())
+    tenant = str(uuid.UUID(tenant))
+    if (trust['version'], trust['revision'], trust['tenant'], trust['service_id'],
+            trust['origin'], trust['purpose']) != (1, 1, tenant, instance, agent['endpoint']['origin'], 'agent'):
+        raise RuntimeError('fixture-agent-trust-binding')
+    issuer, = trust['issuers']
+    certificate = base64.b64decode(issuer['certificate'], validate=True)
+    digest = hashlib.sha256(certificate).hexdigest()
+    if issuer['mode'] != 'active' or issuer['digest'] != digest or not any(
+        entry['purpose'] == 'agent' and entry['issuer'] == digest
+        and entry['kid'] == issuer['kid'] and entry['provisioner'] == issuer['provisioner']
+        for entry in providers
+    ):
+        raise RuntimeError('fixture-agent-issuer-binding')
+    expiry = subprocess.run(['openssl', 'x509', '-inform', 'DER', '-noout', '-enddate'],
+        input=certificate, capture_output=True, check=True, timeout=10).stdout.decode().strip()
+    not_after = int(ssl.cert_time_to_seconds(expiry.split('=', 1)[1]))
+    # The candidate runtime persists the same public JSON encoding in tenant-scoped rows.
+    trust_body = json.dumps(trust, separators=(',', ':')).encode().hex()
+    issuer_body = json.dumps(issuer, separators=(',', ':')).encode().hex()
+    environment.sql(
+        f"BEGIN; SET LOCAL ROLE mdm_owner; SET LOCAL rss.tenant_id='{tenant}'; "
+        "INSERT INTO mdm_pki.trust(tenant_id,purpose,revision,body) "
+        f"VALUES('{tenant}','agent',1,decode('{trust_body}','hex')); "
+        "INSERT INTO mdm_pki.issuers(tenant_id,purpose,digest,revision,state,chain,provider,not_after) "
+        f"VALUES('{tenant}','agent','{digest}',1,'active',decode('{issuer_body}','hex'),'step_ca',{not_after}); "
+        "COMMIT;",
+        'mdm_dev',
+    )
+    return trust
 
 
 def signer(environment, origin, tenant, login, password):

@@ -75,7 +75,7 @@ try:
         management = None
         unused = None
         from runtime_fixture import storage
-        storage(environment,binary,config,TENANTS[0])
+        storage(environment,binary,config)
         management=config['identity']['management_tenant']
         operator=environment.root/'host/operator'
         def command(verb,value):

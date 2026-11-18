@@ -53,7 +53,7 @@ try:
     binary = Path(os.environ['CARGO_TARGET_DIR']) / 'debug/rss-mdm'
     config_path = Path(initialized['configuration'])
     config = json.loads(config_path.read_text())
-    storage(environment, binary, config, TENANTS[0])
+    storage(environment, binary, config)
     private(config_path, config)
     log_path = private(environment.root / 'product.log', '')
     phase = 'host'

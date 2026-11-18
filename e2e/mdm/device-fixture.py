@@ -30,7 +30,7 @@ from build_run import lease_fds
 from pki_fixtures import running as pki
 from windows_fixtures import generate as windows_inputs
 from candidate_installation_driver import Browser
-from runtime_fixture import storage, installation_sql, readiness as readiness_status
+from runtime_fixture import storage, installation_sql, readiness as readiness_status, seed_agent_pki
 
 backend_revision = subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip()
 print(json.dumps(dict(phase='backend-baseline', revision=backend_revision)), flush=True)
@@ -57,6 +57,10 @@ def q(value):
 browser_module = os.environ.get('MDM_DEVICE_BROWSER_MODULE', 'react-devices-browser.mjs')
 if browser_module not in {'react-devices-browser.mjs', 'react-assets-browser.mjs', 'react-software-browser.mjs', 'react-recovery-browser.mjs', 'react-audit-webhooks-browser.mjs', 'react-policy-browser.mjs', 'react-setup-browser.mjs', 'react-telemetry-browser.mjs', 'react-execution-access-browser.mjs', 'react-device-access-browser.mjs'}:
     raise RuntimeError('unsupported browser module')
+uses_collector = browser_module not in {
+    'react-device-access-browser.mjs', 'react-devices-browser.mjs',
+    'react-policy-browser.mjs', 'react-software-browser.mjs',
+}
 
 def seed_authority():
     tenant = TENANTS[0]
@@ -185,7 +189,7 @@ try:
     # Prepare task signing over the product session before enabling Agent runtime.
     config['device_pki'] = json.loads((native/'device-pki.json').read_text())
     binary = Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
-    storage(environment, binary, config, TENANTS[0])
+    storage(environment, binary, config)
     if browser_module == 'react-software-browser.mjs':
         source_base = initialized['origin'] + '/api/v1/tenants/{tenant}/software/native/sources/internal/'
         config['publication']['sources'] = [dict(name='internal', credentials={},
@@ -287,6 +291,10 @@ try:
         config.setdefault('native_protocols', {})['windows'] = json.loads((native/'windows.json').read_text())
         config['device_pki'] = json.loads((native/'device-pki.json').read_text())
 
+    if uses_collector:
+        phase = 'agent-pki'
+        agent_trust = seed_agent_pki(environment, agent, config['device_pki'], TENANTS[0], INSTANCE)
+
     # A deployment-owned entry for the disabled Policy's frozen input, not OS enrollment proof.
     config['enrollment_entries'] = dict(windows=initialized['origin'], macos=None)
     private(config_path, config)
@@ -379,15 +387,14 @@ try:
         foreign_grant = str(uuid.uuid4())
         environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','316fdd38-45b8-529e-b278-8baccd6aa0e2','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','316fdd38-45b8-529e-b278-8baccd6aa0e2','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
     agent_fixture = None
-    if browser_module not in {
-        'react-device-access-browser.mjs', 'react-devices-browser.mjs',
-        'react-policy-browser.mjs', 'react-software-browser.mjs',
-    }:
+    if uses_collector:
         phase = 'collector-registration'
         module = importlib.util.spec_from_file_location('device_agent', WEB/'e2e/mdm/device-agent.py')
         collector = importlib.util.module_from_spec(module)
         module.loader.exec_module(collector)
-        agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent', operator, private, TENANTS[0], capabilities=['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module in {'react-setup-browser.mjs', 'react-telemetry-browser.mjs','react-execution-access-browser.mjs'} else None)
+        capabilities = ['inventory.collect.v1','task.execute.v1','inventory.native.v1','telemetry.collect.v1'] if browser_module in {'react-setup-browser.mjs', 'react-telemetry-browser.mjs','react-execution-access-browser.mjs'} else None
+        agent_fixture = collector.register(agent_origin, environment.root/'ca.crt', native/'pki'/'agent',
+            operator, private, TENANTS[0], expected_pki=agent_trust, capabilities=capabilities)
     if browser_module == 'react-recovery-browser.mjs':
         phase = 'recovery-prerequisites'
         recovery_fixture.prepare(operator, recovery, environment, private)
