@@ -11,6 +11,7 @@ import sys
 import time
 from urllib.parse import urlsplit
 import uuid
+from agent_http import read_json
 
 
 def check(value, reason):
@@ -28,13 +29,9 @@ def call(origin, ca, path, body=None, cert=None, key=None, method='POST', header
     try:
         connection.request(method, path, json.dumps(body) if body is not None else None,
                            {'Content-Type': 'application/json', **(headers or {})})
-        response = connection.getresponse()
-        raw = response.read()
-        data = json.loads(raw) if raw else None
         route = urlsplit(path).path
         stage = body.get('event', {}).get('kind', 'claim') if route.endswith(('/claim', '/events')) else route.rsplit('/', 1)[-1]
-        check(response.status == expected, 'collector-http-' + stage + '-' + str(response.status) + '-' + str((data or {}).get('code', '')))
-        return data
+        return read_json(connection.getresponse(), expected, 'collector-http-' + stage)
     finally:
         connection.close()
 

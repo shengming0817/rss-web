@@ -26,7 +26,27 @@ try {
     assert.equal(result.status(), 200)
   }
   await run.login(p)
-  await run.nav(p, '/devices?endpoints.limit=20', '设备')
+  run.step('unavailable-device-view-settings')
+  const filter = `reference.kind=='endpoint';reference.id=='${f.mdm}'`,
+    savedQuery = new URLSearchParams({
+      'devices.field': 'key',
+      'devices.sort': '-key',
+      'devices.cursor': 'saved-cursor',
+      'devices.filter': filter,
+      'devices.limit': '20',
+      'endpoints.limit': '20',
+    })
+  await run.nav(p, '/devices?' + savedQuery, '设备')
+  const recovered = await run.response(p, 'GET', `/api/v1/tenants/${f.tenant}/device-views`, () =>
+    p.getByRole('button', { name: '重置失效设置', exact: true }).click(),
+  )
+  const recoveredQuery = new URL(recovered.url()).searchParams
+  assert.equal(recoveredQuery.get('filter'), filter)
+  assert.equal(recoveredQuery.get('limit'), '20')
+  assert.equal(recoveredQuery.has('after'), false)
+  assert.deepEqual((await recovered.json()).items, [{ reference: { kind: 'endpoint', id: f.mdm } }])
+  await p.getByRole('link', { name: `endpoint:${f.mdm}`, exact: true }).waitFor()
+  checks.push('real-device-view-reset-keeps-current-filter-and-page-size')
   run.step('endpoint-directory')
   const endpointResponse = p.waitForResponse(
     (r) =>

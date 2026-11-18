@@ -72,6 +72,8 @@ def storage(environment, binary, config):
     result = subprocess.run([str(binary), 'prepare-telemetry', '--config', str(request)],
         cwd=environment.worktree, capture_output=True, timeout=180, pass_fds=lease_fds())
     if result.returncode:
+        print(json.dumps(dict(phase='baseline-telemetry-installation', result='failed',
+            exitCode=result.returncode)), flush=True)
         raise RuntimeError('baseline-telemetry-installation')
     config['telemetry'] = [telemetry]
 

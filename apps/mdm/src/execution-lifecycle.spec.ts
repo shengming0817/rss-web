@@ -7,7 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Runtime } from './runtime'
 import type { ControlIntent, ControlRecovery } from '@rss/mdm-execution'
-import type { EndpointDetail, ViewEndpoint } from '@rss/mdm-devices'
+import type { DeviceRef, EndpointDetail, ViewEndpoint, ViewRow } from '@rss/mdm-devices'
 import { DeviceDetail } from './DeviceDetail'
 import { DeviceControl } from './DeviceControl'
 import { OperationDiagnostics } from './OperationDiagnostics'
@@ -15,6 +15,9 @@ import { DeviceRetirement } from './DeviceRetirement'
 import { ControlRecoveryPanel } from './ControlRecovery'
 import { isUnknown } from './AdminUi'
 import { decodeMdmError } from '@rss/api/mdm'
+import { parseFilter } from '@rss/api/mdm-filter'
+import type { DevicesUseCases } from './EndpointPicker'
+import { useDeviceNames } from './useDeviceNames'
 import { EnterpriseEditor } from './EnterpriseEditor'
 import { BindingEditor } from './BindingEditor'
 import { Policies } from './Policies'
@@ -726,6 +729,57 @@ it('shows historical success beside an absent current run and performs one bound
   expect(assignments.mock.calls[0]).toEqual([id, { limit: 100 }, expect.any(AbortSignal)])
   await act(async () => button('读取分配').click())
   expect(assignments).toHaveBeenCalledTimes(2)
+})
+
+it('looks up 65 endpoint names and a same-ID association in one typed directory read', async () => {
+  const ids = Array.from(
+    { length: 65 },
+    (_, index) => `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`,
+  )
+  const shared = ids[0]!,
+    references: DeviceRef[] = [
+      ...ids.map((id) => ({ kind: 'endpoint' as const, id })),
+      { kind: 'association', id: shared },
+    ],
+    items: ViewRow[] = [references[0]!, references[65]!].map((reference) => ({
+      reference,
+      endpoints: [
+        {
+          id: shared,
+          displayName: { kind: 'known', value: { kind: 'string', value: reference.kind } },
+        } as ViewEndpoint,
+      ],
+    })),
+    views = vi.fn<DevicesUseCases['views']>(async () => ({ items, nextCursor: null })),
+    devices = { views } as unknown as DevicesUseCases
+  function Names() {
+    const { value } = useDeviceNames(devices, references)
+    return h(
+      'output',
+      null,
+      [value?.get(`endpoint:${shared}`), value?.get(`association:${shared}`)].join('/'),
+    )
+  }
+
+  await act(async () => root.render(h(Names)))
+  expect(host.textContent).toBe('endpoint/association')
+  expect(views).toHaveBeenCalledOnce()
+  const query = views.mock.calls[0]![0]!
+  expect(query).toMatchObject({ limit: 66, fields: ['reference', 'endpoints'] })
+  expect(parseFilter(query.filter!)).toEqual({
+    kind: 'or',
+    children: [
+      ['endpoint', ids.slice(0, 64)],
+      ['endpoint', ids.slice(64)],
+      ['association', [shared]],
+    ].map(([kind, values]) => ({
+      kind: 'and',
+      children: [
+        { kind: 'compare', field: 'reference.kind', operator: '==', values: [kind] },
+        { kind: 'compare', field: 'reference.id', operator: '=in=', values },
+      ],
+    })),
+  })
 })
 
 it('accepts only public result return coordinates for the exact device page', () => {

@@ -7,6 +7,7 @@ import sys
 import time
 from urllib.parse import urlsplit
 import uuid
+from agent_http import read_json
 
 
 def exercise(path, policy, version):
@@ -26,11 +27,7 @@ def exercise(path, policy, version):
         try:
             connection.request('GET' if body is None else 'POST', path,
                 None if body is None else json.dumps(body), {'Content-Type': 'application/json'})
-            response = connection.getresponse()
-            result = json.loads(response.read())
-            if response.status != expected:
-                raise RuntimeError(f"agent-http-{stage}-{response.status}-{result.get('code', '')}")
-            return result
+            return read_json(connection.getresponse(), expected, 'agent-http-' + stage)
         finally:
             connection.close()
 
