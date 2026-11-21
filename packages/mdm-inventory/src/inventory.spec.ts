@@ -250,3 +250,42 @@ it('keeps the full server summary and an empty nonterminal page', async () => {
     inventory = createInventory(port({ queryItems: async () => page }))
   expect(await inventory.queryItems(id, { cursor: 'opaque-current', limit: 2 })).toBe(page)
 })
+
+it('freezes valid retention publications and rejects invalid coordinates or duration relationships', async () => {
+  const input = {
+      key: 'telemetry_daily',
+      revision: 1,
+      rawSeconds: 60,
+      summarySeconds: 120,
+      restoreSeconds: 0,
+    },
+    publishRetentionPolicy = vi.fn(async (change: Operation<typeof input>) => change.input),
+    retentionPolicy = vi.fn(async () => null),
+    inventory = createInventory(port({ publishRetentionPolicy, retentionPolicy }))
+  const change = { operationId: id, expectedRevision: 0, input }
+  expect(await inventory.publishRetentionPolicy(change)).toEqual(input)
+  expect(Object.isFrozen(publishRetentionPolicy.mock.calls[0]![0].input)).toBe(true)
+  for (const patch of [
+    { key: 'invalid/key' },
+    { revision: 0 },
+    { revision: 2 },
+    { rawSeconds: 0 },
+    { rawSeconds: 1.5 },
+    { summarySeconds: 59 },
+    { summarySeconds: 0x100000000 },
+    { restoreSeconds: 61 },
+    { restoreSeconds: -1 },
+  ]) {
+    expect(() =>
+      inventory.publishRetentionPolicy({ ...change, input: { ...input, ...patch } }),
+    ).toThrow()
+  }
+  expect(publishRetentionPolicy).toHaveBeenCalledTimes(1)
+  expect(() =>
+    inventory.retentionPolicy({ key: input.key, revision: Number.MAX_SAFE_INTEGER + 1 }),
+  ).toThrow()
+  expect(
+    await inventory.retentionPolicy({ key: input.key, revision: Number.MAX_SAFE_INTEGER }),
+  ).toBeNull()
+  expect(retentionPolicy).toHaveBeenCalledTimes(1)
+})

@@ -1,5 +1,5 @@
 export type * from './model'
-export { operators } from './model'
+export { operators, sameRetentionPolicy } from './model'
 export {
   fieldKey,
   freeze,
@@ -13,6 +13,8 @@ export {
   validateField,
   validateLayout,
   validateQuery,
+  validateRetentionPolicy,
+  validateRetentionReference,
   validateScalar,
   validateValueType,
 } from './authoring'
@@ -27,6 +29,8 @@ import type {
   ManualChange,
   Operation,
   QueryDefinition,
+  RetentionPolicy,
+  RetentionReference,
   SavedQueryRow,
   SavedQueryChange,
 } from './model'
@@ -41,6 +45,8 @@ import {
   validateField,
   validateLayout,
   validateQuery,
+  validateRetentionPolicy,
+  validateRetentionReference,
   validateScalar,
 } from './authoring'
 
@@ -65,6 +71,17 @@ export function createInventory(port: InventoryPort) {
       )
         throw new Error('Wrong field receipt')
       return result
+    },
+    retentionPolicy(reference: RetentionReference, signal?: AbortSignal) {
+      validateRetentionReference(reference)
+      return port.retentionPolicy(freeze(reference), signal)
+    },
+    publishRetentionPolicy(change: Operation<RetentionPolicy>) {
+      operation(change)
+      validateRetentionPolicy(change.input)
+      if (change.input.revision !== change.expectedRevision + 1)
+        throw new Error('Invalid retention publication revision')
+      return port.publishRetentionPolicy(freeze(change))
     },
     layout: () => port.layout(),
     async putLayout(change: Operation<{ readonly groups: readonly DisplayGroup[] }>) {

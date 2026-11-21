@@ -78,10 +78,12 @@ export function Failure({
   locale,
   kind = 'write',
   diagnosticContext,
+  canNavigateDiagnostics,
 }: AdminProps & {
   error: unknown
   kind?: 'read' | 'write'
   diagnosticContext?: DiagnosticsContext | undefined
+  canNavigateDiagnostics?: boolean | undefined
 }) {
   const routed = useInRouterContext()
   if (!error) return null
@@ -181,6 +183,7 @@ export function Failure({
           <DiagnosticReference
             locale={locale}
             context={diagnosticContext}
+            canNavigate={canNavigateDiagnostics ?? true}
             selection={{ mode: 'request', id: requestId }}
           />
         ) : (
@@ -345,11 +348,13 @@ export function ReadState({
   onRetry,
   onRestart,
   diagnosticContext,
+  canNavigateDiagnostics,
 }: AdminProps & {
   busy: boolean
   error?: unknown
   empty?: boolean
   diagnosticContext?: DiagnosticsContext | undefined
+  canNavigateDiagnostics?: boolean | undefined
   onRetry?: (() => void) | undefined
   onRestart?: (() => void) | undefined
 }) {
@@ -365,7 +370,13 @@ export function ReadState({
     const restart = failure === 'cursor' || failure === 'result'
     return (
       <Space orientation="vertical" className="read-failure">
-        <Failure error={error} locale={locale} kind="read" diagnosticContext={diagnosticContext} />
+        <Failure
+          error={error}
+          locale={locale}
+          kind="read"
+          diagnosticContext={diagnosticContext}
+          canNavigateDiagnostics={canNavigateDiagnostics}
+        />
         {restart && onRestart ? (
           <Button onClick={onRestart}>
             {failure === 'result'

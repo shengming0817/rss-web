@@ -322,6 +322,134 @@ try {
     'real-saved-query-committed-loss-permission-tab-retention-explicit-replay-cas-and-cursor',
   )
 
+  run.step('versioned-telemetry-retention')
+  await tab('字段目录')
+  const retentionPath = `/api/v1/tenants/${f.tenant}/asset-retention-policies`,
+    retentionKey = 'browser_asset_history',
+    originalPolicy = {
+      key: retentionKey,
+      revision: 1,
+      rawSeconds: 60,
+      summarySeconds: 120,
+      restoreSeconds: 0,
+    },
+    retentionDialog = p.getByRole('dialog', { name: '遥测保留策略', exact: true }),
+    retentionButton = (name) => retentionDialog.getByRole('button', { name, exact: true })
+  const readPolicy = async (revision) => {
+    await visibleLabel('查询策略键').fill(retentionKey)
+    await visibleLabel('查询策略版本').fill(String(revision))
+    return (
+      await (
+        await run.response(p, 'GET', `${retentionPath}/${retentionKey}/${revision}`, () =>
+          retentionButton('读取精确保留策略').click(),
+        )
+      ).json()
+    ).asset.policy
+  }
+
+  await p.getByRole('button', { name: '管理遥测保留策略', exact: true }).click()
+  await retentionButton('起草首版保留策略').click()
+  await visibleLabel('新策略键').fill(retentionKey)
+  await visibleLabel('原始数据时长（秒）').fill('60')
+  await visibleLabel('汇总时长（秒）').fill('120')
+  await visibleLabel('删除恢复时长（秒）').fill('0')
+  const createdPolicy = await run.response(p, 'POST', retentionPath, () =>
+    retentionButton('发布保留策略').click(),
+  )
+  assert.deepEqual((await createdPolicy.json()).asset.policy, originalPolicy)
+  assert.equal(createdPolicy.request().postDataJSON().expectedRevision, 0)
+  await retentionButton('基于此版本起草新版').click()
+  await visibleLabel('汇总时长（秒）').fill('180')
+
+  let committedPublication
+  await intercept(origin + retentionPath, async (route) => {
+    if (route.request().method() !== 'POST' || committedPublication) return route.continue()
+    const change = route.request().postDataJSON()
+    const actual = await route.fetch({ timeout: 15000, maxRetries: 0 })
+    assert.equal(actual.status(), 200)
+    committedPublication = change
+    await route.abort('failed')
+  })
+  const priorPosts = run.count(p, 'POST', retentionPath)
+  await retentionButton('发布保留策略').click()
+  await retentionButton('读取原发布回执').waitFor()
+  assert.equal(await retentionDialog.getByText('策略发布已确认。', { exact: true }).count(), 0)
+  await waitUntil(() => Boolean(committedPublication))
+  assert.equal(committedPublication.expectedRevision, 1)
+  assert.deepEqual(committedPublication.input, {
+    ...originalPolicy,
+    revision: 2,
+    summarySeconds: 180,
+  })
+  const recovered = await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${f.tenant}/operation-diagnostics/operations/asset/${committedPublication.operationId}`,
+    () => retentionButton('读取原发布回执').click(),
+  )
+  assert.equal((await recovered.json()).originalResult.value.revision, 2)
+  await retentionDialog.getByText('策略发布已确认。', { exact: true }).waitFor()
+  await retentionDialog.getByText(`${retentionKey} · 版本 2`, { exact: true }).waitFor()
+  assert.equal(await retentionButton('读取原发布回执').count(), 0)
+  assert.equal(run.count(p, 'POST', retentionPath), priorPosts + 1)
+  await p.unroute(origin + retentionPath)
+  assert.deepEqual(await readPolicy(1), originalPolicy)
+  await retentionButton('基于此版本起草新版').click()
+  await visibleLabel('汇总时长（秒）').fill('240')
+  await run.response(p, 'POST', retentionPath, () => retentionButton('发布保留策略').click(), 409)
+  await retentionDialog.getByText('内容已变化，请重新读取详情后编辑。', { exact: true }).waitFor()
+  assert.equal(await visibleLabel('汇总时长（秒）').inputValue(), '240')
+  assert.deepEqual(await readPolicy(2), committedPublication.input)
+  await p.keyboard.press('Escape')
+  await retentionDialog.waitFor({ state: 'hidden' })
+
+  const telemetryFieldPath = `/api/v1/tenants/${f.tenant}/asset-fields/custom.react_telemetry`
+  await visibleLabel('新字段键').fill('custom.react_telemetry')
+  await p.getByRole('button', { name: '新建字段', exact: true }).click()
+  await run.choose(p, visibleLabel('值类型').first(), '数值')
+  await run.choose(p, visibleLabel('添加字段来源'), 'agent.script')
+  await p.getByRole('button', { name: '添加来源', exact: true }).click()
+  await p.getByRole('checkbox', { name: '启用时序绑定', exact: true }).check()
+  await visibleLabel('聚合方式').click()
+  await p
+    .locator('.ant-select-dropdown:visible .ant-select-item-option-content')
+    .getByText('min', { exact: true })
+    .click()
+  await p.keyboard.press('Escape')
+  const saveTelemetry = p.getByRole('button', { name: '保存字段新版本', exact: true })
+  assert.equal(await saveTelemetry.isDisabled(), true)
+  const pickRetention = p.getByRole('button', { name: '核对或更换保留策略', exact: true })
+  for (const width of [390, 1440]) {
+    await p.setViewportSize({ width, height: 960 })
+    await pickRetention.evaluate((button) => button.scrollIntoView({ block: 'center' }))
+    const before = await p.evaluate(() => window.scrollY)
+    assert.ok(before > 0, 'the field editor opens the drawer after page scroll')
+    await pickRetention.click()
+    await retentionDialog.waitFor()
+    assert.equal(await p.evaluate(() => window.scrollY), before)
+    assert.equal(
+      await retentionDialog.evaluate((dialog) => {
+        const bounds = dialog.getBoundingClientRect()
+        return bounds.top >= 0 && bounds.bottom <= window.innerHeight + 1
+      }),
+      true,
+    )
+    if (width === 390) {
+      await p.keyboard.press('Escape')
+      await retentionDialog.waitFor({ state: 'hidden' })
+    }
+  }
+  assert.deepEqual(await readPolicy(1), originalPolicy)
+  await retentionButton('应用到字段草稿').click()
+  assert.equal(run.count(p, 'PUT', telemetryFieldPath), 0)
+  await run.response(p, 'PUT', telemetryFieldPath, () => saveTelemetry.click())
+  assert.deepEqual((await api('GET', telemetryFieldPath)).asset.field.timeSeries.retention, {
+    key: retentionKey,
+    revision: 1,
+  })
+  await p.getByRole('button', { name: '字段变更已确认，重新读取', exact: true }).click()
+  checks.push('real-immutable-retention-versions-original-receipt-and-explicit-field-binding')
+
   run.step('field-layout-and-typed-manual-value')
   await tab('字段目录')
   await visibleLabel('新字段键').fill('custom.react_ready')
@@ -357,7 +485,9 @@ try {
     `/api/v1/tenants/${run.fixture.tenant}/asset-fields/custom.react_ready`,
     () => p.getByRole('button', { name: '读取字段与写入版本', exact: true }).click(),
   )
-  assert.equal((await assignableField.json()).asset.field.manual, true)
+  const ordinaryField = (await assignableField.json()).asset.field
+  assert.equal(ordinaryField.manual, true)
+  assert.equal(ordinaryField.timeSeries, null)
   await p.getByText('已读取手工值版本', { exact: false }).waitFor()
   await run.choose(p, visibleLabel('输入值类型'), 'boolean')
   const assigned = await run.response(
@@ -1134,6 +1264,8 @@ try {
     operation({ action: 'delete' }, 1),
     403,
   )
+  await api('GET', `${retentionPath}/${retentionKey}/1`, undefined, 403)
+  await api('POST', retentionPath, operation({ ...originalPolicy, revision: 3 }, 2), 403)
   const latestAuthority = (
     await api('GET', `/api/v1/tenants/${run.fixture.tenant}/authorization/rules`)
   ).items.find((rule) => rule.id === f.ruleId)

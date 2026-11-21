@@ -114,6 +114,24 @@ export type ValueType =
         Record<string, { readonly required: boolean; readonly valueType: ValueType }>
       >
     }
+export interface RetentionReference {
+  readonly key: string
+  readonly revision: number
+}
+export interface RetentionPolicy extends RetentionReference {
+  readonly rawSeconds: number
+  readonly summarySeconds: number
+  readonly restoreSeconds: number
+}
+export function sameRetentionPolicy(left: RetentionPolicy, right: RetentionPolicy): boolean {
+  return (
+    left.key === right.key &&
+    left.revision === right.revision &&
+    left.rawSeconds === right.rawSeconds &&
+    left.summarySeconds === right.summarySeconds &&
+    left.restoreSeconds === right.restoreSeconds
+  )
+}
 export interface TimeSeriesBinding {
   readonly kind: 'gauge' | 'cumulative_counter' | 'delta_counter' | 'state'
   readonly valuePath: readonly string[]
@@ -133,7 +151,7 @@ export interface TimeSeriesBinding {
     | 'transitions'
     | 'coverage'
   )[]
-  readonly retention: { readonly key: string; readonly revision: number }
+  readonly retention: RetentionReference
   readonly maxResources: number
 }
 export interface FieldDefinition {
@@ -462,6 +480,11 @@ export interface InventoryPort {
   field(key: string): Promise<FieldDetail>
   references(key: string, query: WindowQuery): Promise<FieldReferences>
   putField(key: string, change: Operation<FieldChange>): Promise<FieldDetail>
+  retentionPolicy(
+    reference: RetentionReference,
+    signal?: AbortSignal,
+  ): Promise<RetentionPolicy | null>
+  publishRetentionPolicy(change: Operation<RetentionPolicy>): Promise<RetentionPolicy>
   layout(): Promise<FieldLayout>
   putLayout(
     change: Operation<{ readonly groups: readonly DisplayGroup[] }>,

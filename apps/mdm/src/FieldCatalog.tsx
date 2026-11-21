@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { OperationDiagnostics } from '@rss/mdm-audit'
+import { RetentionPolicies, type RetentionPolicyTarget } from './RetentionPolicies'
+import { useSecretVisibility } from './SecretTabs'
 import { Button, Card, Form, Input, Space } from 'antd'
 import type { FieldDescriptor, FieldDetail } from '@rss/mdm-inventory'
 import { fieldKey } from '@rss/mdm-inventory'
@@ -110,11 +113,13 @@ export function FieldCatalog({
   locale,
   canWrite,
   canReadReferences,
+  diagnostics,
 }: {
   inventory: InventoryUseCases
   locale: Locale
   canWrite: boolean
   canReadReferences: boolean
+  diagnostics: OperationDiagnostics
 }) {
   const l = labels(locale),
     action = useAction(),
@@ -123,9 +128,14 @@ export function FieldCatalog({
     [key, setKey] = useState('custom.'),
     [detail, setDetail] = useState<FieldDetail | null>(null),
     [editor, setEditor] = useState(0),
+    [retentionTarget, setRetentionTarget] = useState<RetentionPolicyTarget | null>(null),
+    retentionAllowed = useSecretVisibility() && canWrite,
     read = useRead(`fields/${JSON.stringify(query)}`, () =>
       inventory.fields(directoryQuery(query, columns)),
     )
+  useEffect(() => {
+    if (!retentionAllowed) setRetentionTarget(null)
+  }, [retentionAllowed])
   usePendingSelection(guard.locked || action.busy)
   async function open(field: string) {
     const result = await action.run(() => inventory.field(field))
@@ -148,6 +158,11 @@ export function FieldCatalog({
           />
           <Space wrap>
             <Button onClick={read.reload}>{l('读取字段目录', 'Read field catalog')}</Button>
+            {canWrite && (
+              <Button onClick={() => setRetentionTarget({})}>
+                {l('管理遥测保留策略', 'Manage telemetry retention policies')}
+              </Button>
+            )}
             {canWrite && (
               <Form
                 layout="inline"
@@ -256,6 +271,7 @@ export function FieldCatalog({
               locale={locale}
               inventory={inventory}
               canWrite={canWrite}
+              chooseRetentionPolicy={setRetentionTarget}
               detail={detail}
               done={() => {
                 setDetail(null)
@@ -273,6 +289,14 @@ export function FieldCatalog({
           )}
         </div>
       )}
+      <RetentionPolicies
+        canWrite={retentionAllowed}
+        target={retentionTarget}
+        onClose={() => setRetentionTarget(null)}
+        inventory={inventory}
+        diagnostics={diagnostics}
+        locale={locale}
+      />
     </SelectionGuard.Provider>
   )
 }

@@ -260,3 +260,70 @@ it('reads the formal complete field descriptor as an edit baseline without direc
     }),
   )
 })
+
+it('reads only the requested tenant and immutable retention policy revision', async () => {
+  const policy = {
+    key: 'telemetry',
+    revision: 2,
+    rawSeconds: 60,
+    summarySeconds: 120,
+    restoreSeconds: 0,
+  }
+  const response = fixture(envelope({ kind: 'retention_policy', policy }))
+  const reference = { key: policy.key, revision: policy.revision }
+  const signal = new AbortController().signal
+  expect(
+    await createInventoryAdapter(response.transport, tenant).retentionPolicy(reference, signal),
+  ).toEqual(policy)
+  expect(response.request).toHaveBeenCalledWith(
+    expect.objectContaining({
+      method: 'GET',
+      path: '/api/v1/tenants/{tenant}/asset-retention-policies/{key}/{revision}',
+      pathParams: { tenant, ...reference },
+      signal,
+    }),
+  )
+  const missing = fixture(envelope({ kind: 'retention_policy', policy: null }))
+  expect(
+    await createInventoryAdapter(missing.transport, tenant).retentionPolicy(reference),
+  ).toBeNull()
+  for (const invalid of [
+    envelope({ kind: 'retention_policy', policy }, other),
+    envelope({ kind: 'retention_policy', policy: { ...policy, revision: 1 } }),
+    envelope({ kind: 'retention_policy', policy: { ...policy, key: 'other' } }),
+    envelope({ kind: 'retention_policy', policy: { ...policy, restoreSeconds: 61 } }),
+  ]) {
+    await expect(
+      createInventoryAdapter(fixture(invalid).transport, tenant).retentionPolicy(reference),
+    ).rejects.toThrow()
+  }
+})
+
+it('posts the frozen operation envelope and requires the complete retention publication receipt', async () => {
+  const policy = {
+    key: 'telemetry',
+    revision: 2,
+    rawSeconds: 60,
+    summarySeconds: 120,
+    restoreSeconds: 0,
+  }
+  const change = { operationId: task, expectedRevision: 1, input: policy }
+  const response = fixture(envelope({ kind: 'retention_policy', policy }))
+  expect(
+    await createInventoryAdapter(response.transport, tenant).publishRetentionPolicy(change),
+  ).toEqual(policy)
+  expect(response.request).toHaveBeenCalledWith(
+    expect.objectContaining({
+      method: 'POST',
+      path: '/api/v1/tenants/{tenant}/asset-retention-policies',
+      pathParams: { tenant },
+      body: change,
+    }),
+  )
+  for (const wrong of [null, { ...policy, summarySeconds: 180 }, { ...policy, revision: 3 }]) {
+    const result = fixture(envelope({ kind: 'retention_policy', policy: wrong }))
+    await expect(
+      createInventoryAdapter(result.transport, tenant).publishRetentionPolicy(change),
+    ).rejects.toThrow('Wrong retention policy receipt')
+  }
+})

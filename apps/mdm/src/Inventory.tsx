@@ -13,7 +13,8 @@ import { CollectionMappings } from './CollectionMappings'
 
 export function Inventory({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
-    { inventory, mappings, content, authorization, binding } = useAdministration(runtime),
+    { inventory, mappings, content, authorization, binding, operationDiagnostics } =
+      useAdministration(runtime),
     permissions = useRead(`${binding}/inventory-presentation`, authorization.effective),
     tenant = (operation: string) =>
       permissions.value?.grants.some(
@@ -63,6 +64,7 @@ export function Inventory({ runtime, locale }: { runtime: Runtime; locale: Local
               <FieldCatalog
                 inventory={inventory}
                 locale={locale}
+                diagnostics={operationDiagnostics.mdm!}
                 canWrite={fieldsWrite}
                 canReadReferences={fieldsWrite}
               />
