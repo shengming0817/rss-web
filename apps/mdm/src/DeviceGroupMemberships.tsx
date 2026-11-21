@@ -75,7 +75,12 @@ function EndpointMemberships({
                   {
                     title: l('设备组', 'Device group'),
                     render: (_, row) => (
-                      <Link to={groupDetailPath(row.id)}>
+                      <Link
+                        to={groupDetailPath(row.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={l('在新标签页打开组详情', 'Open group detail in a new tab')}
+                      >
                         {typeof row.presentation['name'] === 'string'
                           ? row.presentation['name']
                           : row.id}

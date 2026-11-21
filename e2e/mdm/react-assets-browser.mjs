@@ -887,13 +887,38 @@ try {
     membershipRegion = (device) => p.getByRole('region', { name: new RegExp(device + '$') })
   await publishEndpointGroup(sharedGroup, sharedName, [f.mdm, f.agent])
   async function openMembershipGroup(region, name, id) {
-    const details = await run.response(p, 'GET', `/api/v1/tenants/${f.tenant}/groups/${id}`, () =>
-      region.getByRole('link', { name, exact: true }).click(),
-    )
-    assert.equal((await details.json()).group.id, id)
-    assert.equal(new URL(p.url()).searchParams.get('group'), id)
-    await visibleLabel('设备组名称').waitFor()
-    assert.equal(await visibleLabel('设备组名称').inputValue(), name)
+    const sourceUrl = p.url(),
+      sourceHistory = await p.evaluate(() => history.length),
+      groupPath = `/api/v1/tenants/${f.tenant}/groups/${id}`,
+      link = region.getByRole('link', { name, exact: true })
+    const [detailPage, details] = await Promise.all([
+      p.waitForEvent('popup'),
+      p.context().waitForEvent('response', {
+        predicate: (response) =>
+          response.request().method() === 'GET' && new URL(response.url()).pathname === groupPath,
+        timeout: 20_000,
+      }),
+      link.click(),
+    ])
+    try {
+      const groupName = detailPage.getByLabel('设备组名称', { exact: true })
+      await groupName.waitFor()
+      assert.equal(await groupName.inputValue(), name)
+      assert.equal(details.request().frame().page(), detailPage)
+      assert.equal(details.status(), 200)
+      assert.equal((await details.json()).group.id, id)
+      const destination = new URL(detailPage.url())
+      assert.equal(destination.pathname, `/tenants/${f.tenant}/groups`)
+      assert.equal(destination.searchParams.get('group'), id)
+      assert.equal(await detailPage.evaluate(() => window.opener), null)
+      assert.equal(await detailPage.goBack(), null)
+      assert.equal(detailPage.url(), destination.href)
+    } finally {
+      await detailPage.close()
+    }
+    assert.equal(p.url(), sourceUrl)
+    assert.equal(await p.evaluate(() => history.length), sourceHistory)
+    await link.waitFor()
   }
   async function checkMembershipRow(region, membership, name, device) {
     assert.ok(membership, 'expected published membership')

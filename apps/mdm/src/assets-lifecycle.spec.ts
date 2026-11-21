@@ -447,6 +447,7 @@ it('hides denied device facts while retaining the original unknown manual write 
       administration: () => ({
         binding: 'bound-session',
         devices: { view: deviceView, endpoint: async () => ({ ...endpoint, capabilities: [] }) },
+        groups: { memberships: async () => membershipPage },
         inventory,
         connections: {},
         authorization: {
@@ -479,6 +480,15 @@ it('hides denied device facts while retaining the original unknown manual write 
   await click('设置手工值')
   expect(assign).toHaveBeenCalledTimes(1)
   const original = assign.mock.calls[0]
+  await toggleMemberships()
+  const groupLink = host.querySelector<HTMLAnchorElement>('a[href^="/groups?group="]')!
+  expect(groupLink.target).toBe('_blank')
+  const openGroup = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
+  await act(async () => {
+    groupLink.dispatchEvent(openGroup)
+  })
+  expect(openGroup.defaultPrevented).toBe(false)
+  expect(button('显式重提原手工值变更').disabled).toBe(false)
   await click('读取最新设备事实')
   expect([...host.querySelectorAll('fieldset[hidden]')].length).toBeGreaterThan(0)
   expect(
