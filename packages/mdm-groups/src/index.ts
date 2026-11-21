@@ -93,10 +93,14 @@ export function validateChange(change: Operation<GroupChange>): void {
 export function createGroups(port: GroupsPort) {
   return Object.freeze({
     list: (query: GroupQuery = {}, signal?: AbortSignal) => port.list(query, signal),
-    async read(id: string) {
-      const result = await port.read(uuid(id))
+    async read(id: string, signal?: AbortSignal) {
+      const result = await port.read(uuid(id), signal)
       if (result.group.id !== id) throw new Error('Wrong group detail')
       return result
+    },
+    memberships(device: string, query: WindowQuery = {}, signal?: AbortSignal) {
+      reference({ kind: 'endpoint', id: device })
+      return port.memberships(device, query, signal)
     },
     async change(id: string, change: Operation<GroupChange>) {
       uuid(id)

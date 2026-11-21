@@ -15,6 +15,8 @@ import type {
   ValueMapping,
 } from '@rss/mdm-resources'
 import type { QueryDefinition } from '@rss/mdm-inventory'
+import type { ViewEndpoint } from '@rss/mdm-devices'
+import type { GroupMemberships } from '@rss/mdm-groups'
 import type { ResourceUploadSession } from '@rss/mdm-content'
 import type { InventoryUseCases } from './FieldEditor'
 import type { GroupsUseCases } from './GroupPicker'
@@ -29,6 +31,8 @@ import { ValueMappingEditor } from './ValueMappingEditor'
 import { decodeMdmError } from '@rss/api/mdm'
 import { Devices } from './Devices'
 import { DeviceDetail } from './DeviceDetail'
+import { DeviceGroupMemberships } from './DeviceGroupMemberships'
+import { GroupsPage } from './Groups'
 import { MappingUpload, type MappingUseCases } from './MappingUpload'
 import { CollectionMappings } from './CollectionMappings'
 import { Compliance } from './Compliance'
@@ -491,6 +495,158 @@ it('hides denied device facts while retaining the original unknown manual write 
   await act(async () => completeRead(view))
   await click('显式重提原手工值变更')
   expect(assign.mock.calls[1]).toEqual(original)
+})
+
+function groupEndpoint(device: string): ViewEndpoint {
+  return {
+    id: device,
+    status: 'active',
+    assetState: 'active',
+    platform: { state: 'unknown', values: [] },
+    channel: null,
+    source: null,
+    registeredAt: null,
+    lastCommunicationReceivedAt: null,
+    enrollment: null,
+  }
+}
+const emptyMemberships: GroupMemberships = { items: [], associationCurrent: true, nextCursor: null }
+const membershipPage: GroupMemberships = {
+  items: [
+    {
+      id,
+      presentation: { name: 'Published membership' },
+      kind: 'dynamic',
+      asOf: 100,
+      evaluation: 'stale',
+      objects: [{ kind: 'association', id: nested }],
+    },
+  ],
+  associationCurrent: false,
+  nextCursor: 'opaque-cursor',
+}
+async function toggleMemberships() {
+  const toggle = [...host.querySelectorAll<HTMLElement>('[role=button]')].find(
+    (node) => node.textContent === '所属组',
+  )
+  if (!toggle) throw new Error('Missing group memberships panel')
+  await act(async () => toggle.click())
+}
+it('keeps membership pages per endpoint, distinguishes stale and empty, and restarts an expired cursor', async () => {
+  const memberships = vi.fn<GroupsUseCases['memberships']>(async (device, query) => {
+    if (device === nested) return emptyMemberships
+    if (query?.cursor) throw decodeMdmError(409, { code: 'operation_conflict' })
+    return membershipPage
+  })
+  await render(
+    createElement(DeviceGroupMemberships, {
+      groups: inject<GroupsUseCases>({ memberships }),
+      endpoints: [groupEndpoint(id), groupEndpoint(nested)],
+      binding: 'tenant/user/session',
+      authorityKey: '1',
+      locale: 'zh',
+    }),
+  )
+  expect(memberships).not.toHaveBeenCalled()
+  await toggleMemberships()
+  expect(host.textContent).toContain('关联依据待更新。')
+  expect(host.textContent).toContain('此页没有已发布的组归属。')
+  const source = host.querySelector(`section[aria-label="${id}"]`)!
+  expect(source.textContent).toContain('动态设备组')
+  expect(source.textContent).toContain('待更新')
+  expect(source.textContent).toContain(new Date(100_000).toLocaleString('zh-CN'))
+  expect(source.textContent).toContain(nested)
+  expect(source.querySelector('a')?.getAttribute('href')).toBe(`/groups?group=${id}`)
+  const advance = [...source.querySelectorAll('button')].find(
+    (node) => node.textContent === '下一页',
+  )!
+  await act(async () => advance.click())
+  expect(source.textContent).toContain('所属组分页上下文已失效。')
+  expect(source.textContent).not.toContain('Published membership')
+  expect(memberships).toHaveBeenLastCalledWith(
+    id,
+    { limit: 100, cursor: 'opaque-cursor' },
+    expect.any(AbortSignal),
+  )
+  const restart = [...source.querySelectorAll('button')].find(
+    (node) => node.textContent === '返回首页',
+  )!
+  await act(async () => restart.click())
+  expect(source.textContent).toContain('Published membership')
+  expect(memberships.mock.calls.map(([device, query]) => [device, query?.cursor])).toEqual([
+    [id, undefined],
+    [nested, undefined],
+    [id, 'opaque-cursor'],
+    [id, undefined],
+  ])
+  await toggleMemberships()
+  expect(host.textContent).not.toContain('Published membership')
+})
+it('drops old membership responses on a binding change and distinguishes denial from a failed request', async () => {
+  let release!: (page: GroupMemberships) => void
+  const memberships = vi
+    .fn<GroupsUseCases['memberships']>()
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve
+        }),
+    )
+    .mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' }))
+    .mockRejectedValueOnce(decodeMdmError(503, { code: 'unavailable' }))
+  const props = {
+    groups: inject<GroupsUseCases>({ memberships }),
+    endpoints: [groupEndpoint(id)],
+    authorityKey: '1',
+    locale: 'zh' as const,
+  }
+  await render(
+    createElement(DeviceGroupMemberships, { ...props, binding: 'tenant-a/user/session-a' }),
+  )
+  await toggleMemberships()
+  const oldSignal = memberships.mock.calls[0]?.[2]
+  await render(
+    createElement(DeviceGroupMemberships, { ...props, binding: 'tenant-b/user/session-b' }),
+  )
+  expect(oldSignal?.aborted).toBe(true)
+  await act(async () => release(membershipPage))
+  expect(host.textContent).toContain('当前账户没有此操作权限。')
+  expect(host.textContent).not.toContain('Published membership')
+  expect(host.textContent).not.toContain('此页没有已发布的组归属。')
+  await toggleMemberships()
+  await toggleMemberships()
+  expect(host.textContent).toContain('无法读取当前数据')
+  expect(host.textContent).not.toContain('当前账户没有此操作权限。')
+})
+it('opens a group directly by URL and restores the group directory query on close', async () => {
+  const read = vi.fn().mockRejectedValue(decodeMdmError(404, { code: 'not_found' })),
+    list = vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+    runtime = {
+      administration: () => ({
+        binding: 'tenant/principal/session',
+        authorization: {
+          effective: async () => ({
+            grants: [{ operation: 'group_read', scope: { kind: 'tenant' } }],
+          }),
+        },
+        groups: { read, list },
+        devices: {},
+      }),
+    } as unknown as Runtime
+  await render(
+    createElement(
+      MemoryRouter,
+      { initialEntries: [`/groups?groups.limit=10&group=${id}`] },
+      createElement(GroupsPage, { runtime, locale: 'zh' }),
+    ),
+  )
+  expect(read).toHaveBeenCalledExactlyOnceWith(id, expect.any(AbortSignal))
+  expect(list).not.toHaveBeenCalled()
+  await click('关闭设备组详情')
+  expect(list).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ limit: 10 }),
+    expect.any(AbortSignal),
+  )
 })
 
 function preparedUpload(): PreparedMaterial {

@@ -30,6 +30,14 @@ export interface GroupRead {
   readonly memberSet: string | null
   readonly freshness: 'current' | 'pending'
 }
+export interface GroupMembership extends Pick<Group, 'id' | 'presentation' | 'kind'> {
+  readonly asOf: number
+  readonly evaluation: 'current' | 'stale'
+  readonly objects: readonly DeviceRef[]
+}
+export interface GroupMemberships extends Page<GroupMembership> {
+  readonly associationCurrent: boolean
+}
 export interface GroupQuery extends DirectoryQuery<keyof Group> {
   readonly referenceableFor?: string
 }
@@ -181,7 +189,8 @@ export interface GroupPreview {
 }
 export interface GroupsPort {
   list(query: GroupQuery, signal?: AbortSignal): Promise<Page<GroupRow>>
-  read(id: string): Promise<GroupRead>
+  read(id: string, signal?: AbortSignal): Promise<GroupRead>
+  memberships(device: string, query: WindowQuery, signal?: AbortSignal): Promise<GroupMemberships>
   change(id: string, change: Operation<GroupChange>): Promise<GroupReceipt | TaskAccepted>
   preview(request: GroupPreviewRequest): Promise<GroupPreview>
   task(group: string, task: string): Promise<GroupTask>

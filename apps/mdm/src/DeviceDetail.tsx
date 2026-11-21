@@ -30,6 +30,7 @@ import { DeviceRetirement } from './DeviceRetirement'
 import { DeviceRegistration } from './DeviceRegistration'
 import { AssetFacts } from './AssetFacts'
 import { DeviceCompliance } from './DeviceCompliance'
+import { DeviceGroupMemberships } from './DeviceGroupMemberships'
 import { AuditWorkspace } from './Audit'
 function AgentObservation({
   runtime,
@@ -369,7 +370,7 @@ function Detail({
   const [params, setParams] = useSearchParams()
   const location = useLocation()
   const l = labels(locale),
-    { devices, inventory, compliance, authorization, binding } = useAdministration(runtime),
+    { devices, inventory, compliance, groups, authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/device-asset-presentation`, authorization.effective),
     has = (operation: string) =>
       permissions.value?.grants.some((grant) => grant.operation === operation) ?? false,
@@ -442,6 +443,15 @@ function Detail({
                   {l('版本', 'Version')} {retained.association.version}
                 </span>
               }
+            />
+          )}
+          {!!view?.endpoints.length && (
+            <DeviceGroupMemberships
+              locale={locale}
+              groups={groups}
+              binding={binding}
+              authorityKey={permissions.key}
+              endpoints={view.endpoints}
             />
           )}
           <div className="device-endpoint-select">

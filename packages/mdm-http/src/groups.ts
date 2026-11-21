@@ -206,11 +206,34 @@ export function createGroupsAdapter(transport: HttpTransport, tenant: string): G
           },
       )
     },
-    read: (id) =>
+    read: (id, signal) =>
       api.getApiV1TenantsByTenantGroupsById(
         transport,
-        { pathParams: { tenant, id: uuid(id) } },
+        { pathParams: { tenant, id: uuid(id) }, signal },
         (value) => read(value, id),
+      ),
+    memberships: (device, query, signal) =>
+      api.getApiV1TenantsByTenantDevicesByDeviceGroups(
+        transport,
+        { pathParams: { tenant, device }, query: windowQuery(query), signal },
+        (value) => ({
+          items: distinct(
+            value.items.map((item) => ({
+              id: uuid(item.id),
+              kind: item.kind,
+              presentation: boundedObject(item.presentation),
+              asOf: integer(item.asOf),
+              evaluation: item.evaluation,
+              objects: distinct(
+                item.objects.map(objectRef),
+                (object) => `${object.kind}/${object.id}`,
+              ),
+            })),
+            (item) => item.id,
+          ),
+          associationCurrent: value.associationCurrent,
+          nextCursor: nextCursor(value.nextCursor),
+        }),
       ),
     change: (id, change) =>
       api.postApiV1TenantsByTenantGroupsById(
