@@ -9,7 +9,7 @@ import type {
   SavedQuery,
   SavedQueryRow,
 } from '@rss/mdm-inventory'
-import { operators } from '@rss/mdm-inventory'
+import { operators, sameRetentionPolicy, validateRetentionPolicy } from '@rss/mdm-inventory'
 import { referenceKey } from '@rss/mdm-devices'
 import { boolean, count, enumeration, list, nullable, text, uuid } from './decode'
 import { viewSummary } from './devices'
@@ -216,6 +216,36 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
             version: count(result.version),
             definition: nullable(result.definition, fieldDefinition),
           }
+        },
+      ),
+    retentionPolicy: ({ key, revision }, signal) =>
+      api.getApiV1TenantsByTenantAssetRetentionPoliciesByKeyByRevision(
+        transport,
+        { pathParams: { tenant, key, revision }, signal },
+        (value) => {
+          const { policy } = asset(value, tenant, 'retention_policy')
+          if (policy === null) return null
+          validateRetentionPolicy(policy)
+          if (policy.key !== key || policy.revision !== revision)
+            throw new Error('Wrong retention policy binding')
+          return policy
+        },
+      ),
+    publishRetentionPolicy: (change) =>
+      api.postApiV1TenantsByTenantAssetRetentionPolicies(
+        transport,
+        {
+          pathParams: { tenant },
+          body: requestInput(
+            change,
+            schema.postApiV1TenantsByTenantAssetRetentionPoliciesBody.validateRoot,
+          ),
+        },
+        (value) => {
+          const { policy } = asset(value, tenant, 'retention_policy')
+          if (!policy || !sameRetentionPolicy(policy, change.input))
+            throw new Error('Wrong retention policy receipt')
+          return policy
         },
       ),
     layout: () =>
