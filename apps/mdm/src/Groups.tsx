@@ -1,5 +1,5 @@
 import { useDirectoryQuery } from './directory-location'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Tag } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Group } from '@rss/mdm-groups'
@@ -14,7 +14,6 @@ import {
   Heading,
   labels,
   ReadState,
-  usePageRead,
   useRead,
 } from './AdminUi'
 import { SelectionGuard, useSelectionGuard } from './SelectionGuard'
@@ -193,9 +192,7 @@ function GroupDetail({
   close,
   ...editor
 }: GroupAccess & { binding: string; id: string; close: () => void }) {
-  const read = usePageRead(`${binding}/group-detail/${id}`, (signal) =>
-    editor.groups.read(id, signal),
-  )
+  const read = useRead(`${binding}/group-detail/${id}`, (signal) => editor.groups.read(id, signal))
   return (
     <>
       <ReadState locale={editor.locale} busy={read.busy} error={read.error} onRetry={read.reload} />
@@ -206,8 +203,10 @@ function GroupDetail({
 export function GroupsPage({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     [params, setParams] = useSearchParams(),
-    id = params.get('group'),
+    requested = params.get('group'),
     guard = useSelectionGuard(),
+    [heldGroup, setHeldGroup] = useState(requested),
+    id = guard.locked ? heldGroup : requested,
     { groups, devices, authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/groups-presentation`, authorization.effective),
     has = (operation: string) =>
@@ -222,6 +221,17 @@ export function GroupsPage({ runtime, locale }: { runtime: Runtime; locale: Loca
       canPreview: has('group_read'),
       canRecompute: has('group_recompute'),
     }
+  useEffect(() => {
+    if (!guard.locked) {
+      setHeldGroup(requested)
+    } else if (requested !== heldGroup) {
+      // Keep the original write owner through history changes within the group workspace.
+      const restored = new URLSearchParams(params)
+      if (heldGroup === null) restored.delete('group')
+      else restored.set('group', heldGroup)
+      setParams(restored, { replace: true })
+    }
+  }, [guard.locked, requested, heldGroup, params, setParams])
   function close() {
     const next = new URLSearchParams(params)
     next.delete('group')

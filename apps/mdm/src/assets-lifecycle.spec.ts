@@ -5,7 +5,7 @@ import { directoryFixtures } from './directory.spec-helper'
 import type { ContentUseCases } from './ContentUpload'
 import { act, createElement, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Form } from 'antd'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
@@ -16,7 +16,7 @@ import type {
 } from '@rss/mdm-resources'
 import type { QueryDefinition } from '@rss/mdm-inventory'
 import type { ViewEndpoint } from '@rss/mdm-devices'
-import type { GroupMemberships } from '@rss/mdm-groups'
+import type { GroupMemberships, GroupRead } from '@rss/mdm-groups'
 import type { ResourceUploadSession } from '@rss/mdm-content'
 import type { InventoryUseCases } from './FieldEditor'
 import type { GroupsUseCases } from './GroupPicker'
@@ -33,6 +33,7 @@ import { Devices } from './Devices'
 import { DeviceDetail } from './DeviceDetail'
 import { DeviceGroupMemberships } from './DeviceGroupMemberships'
 import { GroupsPage } from './Groups'
+import { ReadEpoch } from './AdminUi'
 import { MappingUpload, type MappingUseCases } from './MappingUpload'
 import { CollectionMappings } from './CollectionMappings'
 import { Compliance } from './Compliance'
@@ -561,8 +562,14 @@ it('keeps membership pages per endpoint, distinguishes stale and empty, and rest
     (node) => node.textContent === '下一页',
   )!
   await act(async () => advance.click())
-  expect(source.textContent).toContain('所属组分页上下文已失效。')
+  expect(source.textContent).toContain('读取发生冲突')
   expect(source.textContent).not.toContain('Published membership')
+  expect(memberships).toHaveBeenLastCalledWith(
+    id,
+    { limit: 100, cursor: 'opaque-cursor' },
+    expect.any(AbortSignal),
+  )
+  await click('重新读取')
   expect(memberships).toHaveBeenLastCalledWith(
     id,
     { limit: 100, cursor: 'opaque-cursor' },
@@ -576,6 +583,7 @@ it('keeps membership pages per endpoint, distinguishes stale and empty, and rest
   expect(memberships.mock.calls.map(([device, query]) => [device, query?.cursor])).toEqual([
     [id, undefined],
     [nested, undefined],
+    [id, 'opaque-cursor'],
     [id, 'opaque-cursor'],
     [id, undefined],
   ])
@@ -647,6 +655,78 @@ it('opens a group directly by URL and restores the group directory query on clos
     expect.objectContaining({ limit: 10 }),
     expect.any(AbortSignal),
   )
+})
+
+it('retains the exact unresolved group write across history navigation within the group page', async () => {
+  const baseline: GroupRead = {
+    group: {
+      id,
+      kind: 'static',
+      assetContext: 'endpoint',
+      presentation: { name: 'Retained group' },
+      revision: 3,
+      calculationRevision: 0,
+      memberVersion: 0,
+      memberCount: 0,
+      systemSelector: null,
+      ruleVersion: null,
+      deleted: false,
+    },
+    criteria: null,
+    memberSet: null,
+    freshness: 'current',
+  }
+  const read = vi.fn().mockResolvedValue(baseline),
+    change = vi
+      .fn<GroupsUseCases['change']>()
+      .mockRejectedValue(decodeMdmError(503, { code: 'unavailable' })),
+    list = vi.fn(),
+    empty = async () => ({ items: [], nextCursor: null }),
+    runtime = {
+      administration: () => ({
+        binding: 'tenant/principal/session',
+        authorization: {
+          effective: async () => ({
+            grants: ['group_read', 'group_write'].map((operation) => ({
+              operation,
+              scope: { kind: 'tenant' },
+            })),
+          }),
+        },
+        groups: { read, change, list, references: empty, impacts: empty },
+        devices: {},
+      }),
+    } as unknown as Runtime
+  function Workspace() {
+    const navigate = useNavigate(),
+      location = useLocation()
+    return createElement(
+      ReadEpoch.Provider,
+      { value: location.key },
+      createElement('button', { onClick: () => void navigate(-1) }, '浏览器后退'),
+      createElement('output', {}, location.search),
+      createElement(GroupsPage, { runtime, locale: 'zh' }),
+    )
+  }
+  await render(
+    createElement(
+      MemoryRouter,
+      { initialEntries: ['/groups?groups.limit=10', `/groups?groups.limit=10&group=${id}`] },
+      createElement(Workspace),
+    ),
+  )
+  await fill('设备组名称', 'Unconfirmed edit')
+  await click('保存设备组元数据')
+  expect(change).toHaveBeenCalledTimes(1)
+  const original = change.mock.calls[0]
+  expect(button('关闭设备组详情').disabled).toBe(true)
+  await click('浏览器后退')
+  expect(host.querySelector('output')?.textContent).toContain(`group=${id}`)
+  expect(list).not.toHaveBeenCalled()
+  expect(read).toHaveBeenCalledTimes(1)
+  expect(change).toHaveBeenCalledTimes(1)
+  await click('显式重提原设备组请求')
+  expect(change.mock.calls[1]).toEqual(original)
 })
 
 function preparedUpload(): PreparedMaterial {

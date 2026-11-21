@@ -31,7 +31,7 @@ function EndpointMemberships({
       groups.memberships(endpoint.id, query, signal),
     ),
     error = read.error,
-    expired =
+    pageConflict =
       cursor &&
       error instanceof Error &&
       error.cause === 'wire' &&
@@ -42,22 +42,14 @@ function EndpointMemberships({
   return (
     <section aria-label={title}>
       <Card size="small" title={title}>
-        {expired ? (
-          <Alert
-            type="error"
-            role="alert"
-            title={l('所属组分页上下文已失效。', 'The group membership page context expired.')}
-            action={<Button onClick={first}>{l('返回首页', 'First page')}</Button>}
-          />
-        ) : (
-          <ReadState
-            locale={locale}
-            busy={read.busy}
-            error={error}
-            onRetry={read.reload}
-            onRestart={first}
-          />
-        )}
+        <ReadState
+          locale={locale}
+          busy={read.busy}
+          error={error}
+          onRetry={read.reload}
+          onRestart={first}
+        />
+        {pageConflict && <Button onClick={first}>{l('返回首页', 'First page')}</Button>}
         {read.value && (
           <>
             {!read.value.associationCurrent && (

@@ -104,7 +104,9 @@ export function Failure({
               '原查询结果已不可用，请重新查询。',
               'The original result is unavailable. Run the query again.',
             )
-          : null
+          : code === 'operation_conflict'
+            ? l('读取发生冲突，请重新读取。', 'The read encountered a conflict. Read again.')
+            : null
   const title =
     kind === 'read' && readTitle
       ? readTitle

@@ -979,6 +979,15 @@ try {
   const continuedMembership = await continuedResponse.json()
   assert.equal(continuedMembership.items.length, 1)
   assert.notEqual(continuedMembership.items[0].id, firstMembership.items[0].id)
+  const mdmRegion = membershipRegion(f.mdm)
+  await mdmRegion.locator(`tr[data-row-key="${continuedMembership.items[0].id}"] a`).waitFor()
+  await mdmRegion
+    .locator(`tr[data-row-key="${firstMembership.items[0].id}"]`)
+    .waitFor({ state: 'hidden' })
+  const agentFirst = await agentFirstResponse.json()
+  await membershipRegion(f.agent)
+    .locator(`tr[data-row-key="${agentFirst.items[0].id}"] a`)
+    .waitFor()
   assert.equal(
     await membershipRegion(f.agent)
       .getByRole('button', { name: '返回首页', exact: true })
