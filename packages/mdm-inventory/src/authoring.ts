@@ -6,6 +6,8 @@ import type {
   FieldDefinition,
   Operation,
   QueryDefinition,
+  RetentionPolicy,
+  RetentionReference,
   ValueType,
 } from './model'
 
@@ -132,6 +134,23 @@ export function validateValueType(value: ValueType, depth = 0): void {
     }
   }
 }
+export function validateRetentionReference({ key, revision }: RetentionReference): void {
+  if (!/^[a-z][a-z0-9_]{0,63}$/.test(key) || !Number.isSafeInteger(revision) || revision < 1)
+    throw new Error('Invalid retention policy coordinates')
+}
+export function validateRetentionPolicy(policy: RetentionPolicy): void {
+  validateRetentionReference(policy)
+  const { rawSeconds, summarySeconds, restoreSeconds } = policy
+  if (
+    ![rawSeconds, summarySeconds, restoreSeconds].every(
+      (seconds) => Number.isInteger(seconds) && seconds >= 0 && seconds <= 0xffffffff,
+    ) ||
+    rawSeconds === 0 ||
+    summarySeconds < rawSeconds ||
+    restoreSeconds > rawSeconds
+  )
+    throw new Error('Invalid retention policy durations')
+}
 export function validateField(definition: FieldDefinition, expectedRevision: number): void {
   fieldKey(definition.key)
   if (
@@ -140,6 +159,7 @@ export function validateField(definition: FieldDefinition, expectedRevision: num
   )
     throw new Error('Invalid field write version')
   validateValueType(definition.valueType)
+  if (definition.timeSeries) validateRetentionReference(definition.timeSeries.retention)
   for (const priority of Object.values(definition.sources)) revision(priority)
 }
 export function validateLayout(groups: readonly DisplayGroup[]): void {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Button, Checkbox, Form, Input, InputNumber, Select, Space } from 'antd'
 import {
   freeze,
@@ -11,14 +11,27 @@ import {
 } from '@rss/mdm-inventory'
 import { Failure, isUnknown, labels, useAction } from './AdminUi'
 import { usePendingSelection } from './SelectionGuard'
-import { emptyTimeSeries, TimeSeriesEditor, ValueTypeEditor } from './ValueTypeEditor'
+import {
+  emptyTimeSeries,
+  TimeSeriesEditor,
+  ValueTypeEditor,
+  type TimeSeriesDraft,
+} from './ValueTypeEditor'
+import type { RetentionPolicyTarget } from './RetentionPolicies'
 import type { Locale } from './i18n'
 
 export type InventoryUseCases = ReturnType<typeof createInventory>
 export const newField = (key: string): FieldDetail => ({ field: key, version: 0, definition: null })
-function defaultField(detail: FieldDetail): FieldDefinition {
-  return detail.definition
-    ? { ...structuredClone(detail.definition), version: detail.version + 1 }
+type FieldDraft = Omit<FieldDefinition, 'timeSeries'> & { timeSeries: TimeSeriesDraft | null }
+
+function defaultField(detail: FieldDetail): FieldDraft {
+  const definition = structuredClone(detail.definition)
+  return definition
+    ? {
+        ...definition,
+        version: detail.version + 1,
+        timeSeries: definition.timeSeries ? { ...definition.timeSeries, retention: null } : null,
+      }
     : {
         key: detail.field,
         version: detail.version + 1,
@@ -40,12 +53,14 @@ export function FieldEditor({
   detail,
   locale,
   canWrite,
+  chooseRetentionPolicy,
   done,
 }: {
   inventory: InventoryUseCases
   detail: FieldDetail
   locale: Locale
   canWrite: boolean
+  chooseRetentionPolicy: (target: RetentionPolicyTarget) => void
   done: () => void
 }) {
   const l = labels(locale),
@@ -56,7 +71,16 @@ export function FieldEditor({
     [approved, setApproved] = useState(false),
     [pending, setPending] = useState<Operation<FieldChange> | null>(null),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none'),
-    editable = detail.field.startsWith('custom.')
+    editable = detail.field.startsWith('custom.'),
+    observedPolicy = detail.definition?.timeSeries?.retention
+  useEffect(() => {
+    if (!canWrite)
+      setValue((current) =>
+        current.timeSeries?.retention
+          ? { ...current, timeSeries: { ...current.timeSeries, retention: null } }
+          : current,
+      )
+  }, [canWrite])
   usePendingSelection(
     action.busy || (pending !== null && !['confirmed', 'rejected'].includes(outcome)),
   )
@@ -109,7 +133,18 @@ export function FieldEditor({
       <Form
         layout="vertical"
         disabled={!canWrite || !editable || action.busy || pending !== null}
-        onFinish={() => start({ action: 'put', definition: value })}
+        onFinish={() => {
+          const series = value.timeSeries
+          if (!canWrite || !editable || action.busy || pending || (series && !series.retention))
+            return
+          start({
+            action: 'put',
+            definition: {
+              ...value,
+              timeSeries: series?.retention ? { ...series, retention: series.retention } : null,
+            },
+          })
+        }}
       >
         <ValueTypeEditor
           locale={locale}
@@ -263,10 +298,43 @@ export function FieldEditor({
             locale={locale}
             value={value.timeSeries}
             onChange={(timeSeries) => setValue({ ...value, timeSeries })}
-          />
+          >
+            {observedPolicy && (
+              <p>
+                {l('当前保留策略', 'Current retention policy')} <code>{observedPolicy.key}</code> ·{' '}
+                {observedPolicy.revision}
+              </p>
+            )}
+            {value.timeSeries.retention && (
+              <p>
+                {l('草稿保留策略', 'Draft retention policy')}{' '}
+                <code>{value.timeSeries.retention.key}</code> ·{' '}
+                {value.timeSeries.retention.revision}
+              </p>
+            )}
+            <Button
+              onClick={() =>
+                chooseRetentionPolicy({
+                  reference: value.timeSeries?.retention ?? observedPolicy,
+                  apply: (retention) =>
+                    setValue((current) =>
+                      current.timeSeries
+                        ? { ...current, timeSeries: { ...current.timeSeries, retention } }
+                        : current,
+                    ),
+                })
+              }
+            >
+              {l('核对或更换保留策略', 'Verify or change retention policy')}
+            </Button>
+          </TimeSeriesEditor>
         )}
         {canWrite && editable && (
-          <Button type="primary" htmlType="submit">
+          <Button
+            type="primary"
+            htmlType="submit"
+            disabled={value.timeSeries !== null && value.timeSeries.retention === null}
+          >
             {l('保存字段新版本', 'Save field revision')}
           </Button>
         )}

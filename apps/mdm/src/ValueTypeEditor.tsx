@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button, Checkbox, Form, Input, InputNumber, Select, Space } from 'antd'
 import type { TimeSeriesBinding, ValueType } from '@rss/mdm-inventory'
 import type { Locale } from './i18n'
@@ -233,22 +233,27 @@ export function ValueTypeEditor({
     </div>
   )
 }
-export const emptyTimeSeries = (): TimeSeriesBinding => ({
+export type TimeSeriesDraft = Omit<TimeSeriesBinding, 'retention'> & {
+  retention: TimeSeriesBinding['retention'] | null
+}
+export const emptyTimeSeries = (): TimeSeriesDraft => ({
   kind: 'gauge',
   valuePath: [],
   intervalStartPath: null,
   dimensions: {},
   aggregations: [],
-  retention: { key: '', revision: 1 },
+  retention: null,
   maxResources: 1,
 })
 export function TimeSeriesEditor({
   value,
   onChange,
   locale,
+  children,
 }: {
-  value: TimeSeriesBinding
-  onChange: (value: TimeSeriesBinding) => void
+  value: TimeSeriesDraft
+  onChange: (value: TimeSeriesDraft) => void
+  children: ReactNode
   locale: Locale
 }) {
   const l = labels(locale),
@@ -361,26 +366,7 @@ export function TimeSeriesEditor({
           }
         />
       </Form.Item>
-      <Form.Item label={l('保留策略键', 'Retention policy key')}>
-        <Input
-          aria-label={l('保留策略键', 'Retention policy key')}
-          value={value.retention.key}
-          onChange={(e) =>
-            onChange({ ...value, retention: { ...value.retention, key: e.target.value } })
-          }
-        />
-      </Form.Item>
-      <Form.Item label={l('保留策略版本', 'Retention policy revision')}>
-        <InputNumber
-          aria-label={l('保留策略版本', 'Retention policy revision')}
-          value={value.retention.revision}
-          min={1}
-          precision={0}
-          onChange={(n) => {
-            if (n !== null) onChange({ ...value, retention: { ...value.retention, revision: n } })
-          }}
-        />
-      </Form.Item>
+      {children}
       <Form.Item label={l('最大资源数', 'Maximum resources')}>
         <InputNumber
           aria-label={l('最大资源数', 'Maximum resources')}

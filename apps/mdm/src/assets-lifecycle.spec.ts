@@ -14,7 +14,15 @@ import type {
   PreparedMaterial,
   ValueMapping,
 } from '@rss/mdm-resources'
-import type { QueryDefinition } from '@rss/mdm-inventory'
+import type {
+  FieldDetail,
+  Operation,
+  QueryDefinition,
+  RetentionPolicy,
+  RetentionReference,
+} from '@rss/mdm-inventory'
+import type { OperationDiagnostics } from '@rss/mdm-audit'
+import { FieldCatalog } from './FieldCatalog'
 import type { ResourceUploadSession } from '@rss/mdm-content'
 import type { InventoryUseCases } from './FieldEditor'
 import type { GroupsUseCases } from './GroupPicker'
@@ -995,3 +1003,193 @@ it.each(['column', 'sort'])(
     expect(current.getAll('devices.sort')).toEqual(['-reference.id'])
   },
 )
+
+const retention = {
+  key: 'asset_history',
+  revision: 1,
+  rawSeconds: 60,
+  summarySeconds: 120,
+  restoreSeconds: 0,
+}
+const telemetryField: FieldDetail = {
+  field: 'custom.asset_history',
+  version: 1,
+  definition: {
+    key: 'custom.asset_history',
+    version: 1,
+    valueType: { kind: 'number' },
+    nullable: true,
+    manual: false,
+    sources: { 'agent.script': 0 },
+    platforms: ['macos'],
+    sensitivity: 'standard',
+    unit: null,
+    searchable: false,
+    itemKey: null,
+    timeSeries: {
+      kind: 'gauge',
+      valuePath: [],
+      intervalStartPath: null,
+      dimensions: {},
+      aggregations: ['min'],
+      maxResources: 1,
+      retention: { key: retention.key, revision: retention.revision },
+    },
+  },
+}
+function retentionCatalog(
+  methods: Partial<InventoryUseCases>,
+  diagnostics: Partial<OperationDiagnostics> = {},
+  key = 'tenant-a',
+  canWrite = true,
+) {
+  return createElement(FieldCatalog, {
+    key,
+    locale: 'zh',
+    inventory: inject<InventoryUseCases>({
+      fields: async () => ({ dictionary: '1', items: [], nextCursor: null }),
+      ...methods,
+    }),
+    diagnostics: inject<OperationDiagnostics>(diagnostics),
+    canWrite,
+    canReadReferences: false,
+  })
+}
+async function lookUpRetention(revision: string) {
+  await fill('查询策略键', retention.key)
+  await fill('查询策略版本', revision)
+  await click('读取精确保留策略')
+}
+async function startFirstRetentionDraft() {
+  await click('管理遥测保留策略')
+  await click('起草首版保留策略')
+  await fill('新策略键', retention.key)
+  await fill('原始数据时长（秒）', '60')
+  await fill('汇总时长（秒）', '120')
+  await fill('删除恢复时长（秒）', '0')
+}
+
+it('keeps a lost publication unconfirmed after an exact version read and reconciles the original UUID', async () => {
+  const publish = vi.fn(async (_change: Operation<RetentionPolicy>) => {
+      throw decodeMdmError(503, { code: 'operation_unknown' })
+    }),
+    diagnostics = vi.fn<OperationDiagnostics['operation']>(),
+    methods = { publishRetentionPolicy: publish, retentionPolicy: async () => retention }
+  await render(retentionCatalog(methods, { operation: diagnostics }))
+  await startFirstRetentionDraft()
+  await fill('汇总时长（秒）', '59')
+  await click('发布保留策略')
+  expect(publish).not.toHaveBeenCalled()
+  await fill('汇总时长（秒）', '120')
+  await click('发布保留策略')
+  const change = publish.mock.calls[0]![0]
+  expect(change.input).toEqual(retention)
+  expect(button('发布保留策略').disabled).toBe(true)
+
+  await lookUpRetention('1')
+  expect(host.textContent).toContain('原发布结果待确认')
+  const detail = {
+    operation: { product: 'mdm', owner: 'asset', operationId: change.operationId },
+    auditEvidence: { availability: 'not_requested' },
+    requestEvidence: { availability: 'not_requested' },
+    executionEvidence: { availability: 'no_durable_evidence' },
+    currentResourceUrl: null,
+  } as const
+  diagnostics.mockResolvedValueOnce({
+    ...detail,
+    originalResult: { availability: 'unavailable' },
+  })
+  await click('读取原发布回执')
+  expect(host.textContent).toContain('原发布结果待确认')
+  expect(host.textContent).not.toContain('显式重提原发布请求')
+  diagnostics.mockResolvedValueOnce({
+    ...detail,
+    originalResult: {
+      availability: 'available',
+      value: {
+        operationId: change.operationId,
+        revision: 1,
+        object: null,
+        state: null,
+        accepted: null,
+        enabled: null,
+        recordedAt: null,
+        completedAt: null,
+        executions: [],
+        stages: [],
+      },
+    },
+  })
+  await click('读取原发布回执')
+  expect(diagnostics).toHaveBeenLastCalledWith({ owner: 'asset', operationId: change.operationId })
+  expect(host.textContent).toContain('策略发布已确认')
+  expect(host.textContent).not.toContain('基于此版本起草新版')
+  expect(publish).toHaveBeenCalledTimes(1)
+})
+
+it('requires applying a verified version before saving an existing telemetry field', async () => {
+  const putField = vi.fn(async () => telemetryField),
+    policyRead = vi.fn(async ({ revision }: RetentionReference) =>
+      revision === 2 ? { ...retention, revision } : null,
+    ),
+    methods = {
+      fields: async () => ({
+        dictionary: '1',
+        items: [{ ...telemetryField.definition!, operations: [] }],
+        nextCursor: null,
+      }),
+      field: async () => telemetryField,
+      putField,
+      retentionPolicy: policyRead,
+    }
+  await render(retentionCatalog(methods))
+  await click(telemetryField.field)
+  expect(button('保存字段新版本').disabled).toBe(true)
+  await click('核对或更换保留策略')
+  expect(host.querySelector<HTMLInputElement>('[aria-label="查询策略键"]')?.value).toBe(
+    retention.key,
+  )
+  await click('读取精确保留策略')
+  expect(host.textContent).toContain('该策略版本不存在')
+  expect(button('保存字段新版本').disabled).toBe(true)
+  await fill('查询策略版本', '2')
+  await click('读取精确保留策略')
+  await click('应用到字段草稿')
+  expect(putField).not.toHaveBeenCalled()
+  await click('保存字段新版本')
+  expect(putField).toHaveBeenCalledWith(
+    telemetryField.field,
+    expect.objectContaining({
+      expectedRevision: 1,
+      input: expect.objectContaining({
+        definition: expect.objectContaining({
+          version: 2,
+          timeSeries: expect.objectContaining({ retention: { key: retention.key, revision: 2 } }),
+        }),
+      }),
+    }),
+  )
+})
+
+it('drops late policy results when tenant or permission context changes', async () => {
+  let finish!: (policy: RetentionPolicy) => void
+  const oldRead = vi.fn(
+      (_reference: RetentionReference, _signal?: AbortSignal) =>
+        new Promise<RetentionPolicy>((resolve) => {
+          finish = resolve
+        }),
+    ),
+    newRead = vi.fn(async () => null)
+  await render(retentionCatalog({ retentionPolicy: oldRead }))
+  await click('管理遥测保留策略')
+  await lookUpRetention('1')
+  expect(oldRead).toHaveBeenCalledTimes(1)
+  await render(retentionCatalog({ retentionPolicy: newRead }, {}, 'tenant-b', false))
+  await act(async () => finish(retention))
+  expect(oldRead.mock.calls[0]?.[1]?.aborted).toBe(true)
+  expect(host.textContent).not.toContain('管理遥测保留策略')
+  await render(retentionCatalog({ retentionPolicy: newRead }, {}, 'tenant-b'))
+  await click('管理遥测保留策略')
+  expect(host.querySelector<HTMLInputElement>('[aria-label="查询策略键"]')?.value).toBe('')
+  expect(newRead).not.toHaveBeenCalled()
+})
