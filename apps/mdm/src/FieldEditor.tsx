@@ -287,7 +287,13 @@ export function FieldEditor({
         </fieldset>
         <Checkbox
           checked={value.timeSeries !== null}
-          disabled={observedPolicy !== undefined}
+          disabled={
+            observedPolicy !== undefined ||
+            !canWrite ||
+            !editable ||
+            action.busy ||
+            pending !== null
+          }
           onChange={(e) =>
             setValue({ ...value, timeSeries: e.target.checked ? emptyTimeSeries() : null })
           }
@@ -334,7 +340,11 @@ export function FieldEditor({
           <Button
             type="primary"
             htmlType="submit"
-            disabled={value.timeSeries !== null && value.timeSeries.retention === null}
+            disabled={
+              action.busy ||
+              pending !== null ||
+              (value.timeSeries !== null && value.timeSeries.retention === null)
+            }
           >
             {l('保存字段新版本', 'Save field revision')}
           </Button>

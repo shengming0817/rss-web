@@ -222,7 +222,7 @@ export function RetentionPolicies({
             />
           </Form.Item>
         </div>
-        <Button htmlType="submit" disabled={!current.key || !current.revision}>
+        <Button htmlType="submit" disabled={action.busy || !current.key || !current.revision}>
           {l('读取精确保留策略', 'Read exact retention policy')}
         </Button>
       </Form>
@@ -277,7 +277,7 @@ export function RetentionPolicies({
                 action.busy ||
                 pending !== null ||
                 verified.revision === Number.MAX_SAFE_INTEGER ||
-                (draft?.conflicted &&
+                (draft?.conflicted === true &&
                   draft.key === verified.key &&
                   verified.revision <= previousRevision)
               }
@@ -367,7 +367,11 @@ export function RetentionPolicies({
                 'Raw duration must be positive. Summary duration must be at least as long, and deletion recovery duration may be at most as long.',
               )}
             </p>
-            <Button type="primary" htmlType="submit" disabled={draft.conflicted}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              disabled={action.busy || pending !== null || draft.conflicted}
+            >
               {l('发布保留策略', 'Publish retention policy')}
             </Button>
           </Form>
