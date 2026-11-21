@@ -287,6 +287,7 @@ export function FieldEditor({
         </fieldset>
         <Checkbox
           checked={value.timeSeries !== null}
+          disabled={observedPolicy !== undefined}
           onChange={(e) =>
             setValue({ ...value, timeSeries: e.target.checked ? emptyTimeSeries() : null })
           }

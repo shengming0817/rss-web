@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Button, Drawer, Form, Input, InputNumber, Space } from 'antd'
+import { Alert, Button, Drawer, Form, Input, Space } from 'antd'
 import type { OperationDiagnostics } from '@rss/mdm-audit'
 import {
   freeze,
@@ -9,7 +9,16 @@ import {
   type RetentionPolicy,
   type RetentionReference,
 } from '@rss/mdm-inventory'
-import { Failure, isUnknown, labels, ReadState, useAction, useRead, validateInput } from './AdminUi'
+import {
+  codeOf,
+  Failure,
+  isUnknown,
+  labels,
+  ReadState,
+  useAction,
+  useRead,
+  validateInput,
+} from './AdminUi'
 import type { InventoryUseCases } from './FieldEditor'
 import type { Locale } from './i18n'
 
@@ -18,14 +27,18 @@ export interface RetentionPolicyTarget {
   apply?: (reference: RetentionReference) => void
 }
 
+type DurationName = 'rawSeconds' | 'summarySeconds' | 'restoreSeconds'
 interface Publication {
   key: string
-  expectedRevision: number
-  rawSeconds: number | null
-  summarySeconds: number | null
-  restoreSeconds: number | null
+  base: RetentionPolicy | null
+  edits: Partial<Record<DurationName, string>>
+  conflicted: boolean
 }
-type PendingPublication = { change: Operation<RetentionPolicy>; canResubmit: boolean }
+type PendingPublication = {
+  change: Operation<RetentionPolicy>
+  draft: Publication
+  canResubmit: boolean
+}
 interface Workspace {
   target: RetentionPolicyTarget | null
   key: string
@@ -36,12 +49,13 @@ interface Workspace {
   draft: Publication | null
 }
 
-const emptyPublication: Publication = {
-  key: '',
-  expectedRevision: 0,
-  rawSeconds: null,
-  summarySeconds: null,
-  restoreSeconds: null,
+const emptyPublication: Publication = { key: '', base: null, edits: {}, conflicted: false }
+
+function durationText(draft: Publication, name: DurationName): string {
+  return draft.edits[name] ?? (draft.base ? String(draft.base[name]) : '')
+}
+function decimalInteger(value: string): number {
+  return /^\d+$/.test(value) ? Number(value) : NaN
 }
 
 function workspace(target: RetentionPolicyTarget | null): Workspace {
@@ -84,7 +98,8 @@ export function RetentionPolicies({
       return inventory.retentionPolicy(lookup, signal)
     }),
     verified = lookup ? read.value : current.verifiedReceipt,
-    draft = current.draft
+    draft = current.draft,
+    previousRevision = draft?.base?.revision ?? 0
 
   function changeLookup(key: string, revision: string) {
     setEditing({ ...current, key, revision, lookup: null, verifiedReceipt: null, confirmed: false })
@@ -99,31 +114,39 @@ export function RetentionPolicies({
       confirmed: true,
     })
   }
-  function publish(original?: Operation<RetentionPolicy>) {
-    if (!open || (original ? !pending?.canResubmit : pending !== null || !draft)) return
+  function publish(original?: PendingPublication) {
+    const publication = original?.draft ?? draft
+    if (
+      !open ||
+      !publication ||
+      (original ? !original.canResubmit : pending || publication.conflicted)
+    )
+      return
     void action.run(async () => {
-      let change = original
-      if (!change && draft) {
+      const expectedRevision = publication.base?.revision ?? 0
+      let change = original?.change
+      if (!change) {
         const input = {
-          key: draft.key,
-          revision: draft.expectedRevision + 1,
-          rawSeconds: draft.rawSeconds ?? NaN,
-          summarySeconds: draft.summarySeconds ?? NaN,
-          restoreSeconds: draft.restoreSeconds ?? NaN,
+          key: publication.key,
+          revision: expectedRevision + 1,
+          rawSeconds: decimalInteger(durationText(publication, 'rawSeconds')),
+          summarySeconds: decimalInteger(durationText(publication, 'summarySeconds')),
+          restoreSeconds: decimalInteger(durationText(publication, 'restoreSeconds')),
         }
         validateInput(() => validateRetentionPolicy(input))
-        change = freeze({
-          operationId: crypto.randomUUID(),
-          expectedRevision: draft.expectedRevision,
-          input,
-        })
+        change = freeze({ operationId: crypto.randomUUID(), expectedRevision, input })
       }
-      if (!change) return
       try {
         const policy = await inventory.publishRetentionPolicy(change)
         finish(policy, policy)
       } catch (error) {
-        if (original || isUnknown(error)) setPending({ change, canResubmit: false })
+        if (codeOf(error) === 'operation_conflict') {
+          // A definitive conflict from the same operation passed the server's original receipt check.
+          setPending(null)
+          setEditing({ ...current, draft: { ...publication, conflicted: true } })
+        } else if (original || isUnknown(error)) {
+          setPending({ change, draft: publication, canResubmit: false })
+        }
         throw error
       }
     })
@@ -132,14 +155,14 @@ export function RetentionPolicies({
     if (!open || !pending) return
     void action.run(async () => {
       const { change } = pending
-      setPending({ change, canResubmit: false })
+      setPending({ ...pending, canResubmit: false })
       const result = await diagnostics.operation({
         owner: 'asset',
         operationId: change.operationId,
       })
       const receipt = result.originalResult
       if (receipt.availability === 'not_found') {
-        setPending({ change, canResubmit: true })
+        setPending({ ...pending, canResubmit: true })
         return
       }
       if (
@@ -174,7 +197,7 @@ export function RetentionPolicies({
             ...current,
             lookup: {
               key: current.key,
-              revision: /^\d+$/.test(current.revision) ? Number(current.revision) : NaN,
+              revision: decimalInteger(current.revision),
             },
             verifiedReceipt: null,
           })
@@ -251,16 +274,22 @@ export function RetentionPolicies({
             )}
             <Button
               disabled={
-                action.busy || pending !== null || verified.revision === Number.MAX_SAFE_INTEGER
+                action.busy ||
+                pending !== null ||
+                verified.revision === Number.MAX_SAFE_INTEGER ||
+                (draft?.conflicted &&
+                  draft.key === verified.key &&
+                  verified.revision <= previousRevision)
               }
               onClick={() => {
                 action.clear()
                 setEditing({
                   ...current,
                   draft: {
-                    ...(draft?.expectedRevision && draft.key === verified.key ? draft : verified),
                     key: verified.key,
-                    expectedRevision: verified.revision,
+                    base: verified,
+                    edits: draft?.conflicted && draft.key === verified.key ? draft.edits : {},
+                    conflicted: false,
                   },
                 })
               }}
@@ -286,7 +315,7 @@ export function RetentionPolicies({
             disabled={action.busy || pending !== null}
             onFinish={() => publish()}
           >
-            {draft.expectedRevision === 0 ? (
+            {draft.base === null ? (
               <Form.Item label={l('新策略键', 'New policy key')}>
                 <Input
                   aria-label={l('新策略键', 'New policy key')}
@@ -299,12 +328,11 @@ export function RetentionPolicies({
               </Form.Item>
             ) : (
               <p>
-                <code>{draft.key}</code> · {l('前一版本', 'Previous revision')}{' '}
-                {draft.expectedRevision}
+                <code>{draft.key}</code> · {l('前一版本', 'Previous revision')} {previousRevision}
               </p>
             )}
             <p>
-              {l('待发布版本', 'Revision to publish')} {draft.expectedRevision + 1}
+              {l('待发布版本', 'Revision to publish')} {previousRevision + 1}
             </p>
             <div className="admin-form-grid">
               {(
@@ -318,14 +346,17 @@ export function RetentionPolicies({
                 ] as const
               ).map(([name, label]) => (
                 <Form.Item key={name} label={label}>
-                  <InputNumber
+                  <Input
                     aria-label={label}
-                    min={0}
-                    max={0xffffffff}
-                    value={draft[name]}
-                    onChange={(seconds) =>
-                      setEditing({ ...current, draft: { ...draft, [name]: seconds } })
-                    }
+                    inputMode="numeric"
+                    value={durationText(draft, name)}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      const edits = { ...draft.edits }
+                      if (value === (draft.base ? String(draft.base[name]) : '')) delete edits[name]
+                      else edits[name] = value
+                      setEditing({ ...current, draft: { ...draft, edits } })
+                    }}
                   />
                 </Form.Item>
               ))}
@@ -336,7 +367,7 @@ export function RetentionPolicies({
                 'Raw duration must be positive. Summary duration must be at least as long, and deletion recovery duration may be at most as long.',
               )}
             </p>
-            <Button type="primary" htmlType="submit">
+            <Button type="primary" htmlType="submit" disabled={draft.conflicted}>
               {l('发布保留策略', 'Publish retention policy')}
             </Button>
           </Form>
@@ -354,7 +385,7 @@ export function RetentionPolicies({
                 {l('读取原发布回执', 'Read original publication receipt')}
               </Button>
               {pending.canResubmit && (
-                <Button disabled={action.busy} onClick={() => publish(pending.change)}>
+                <Button disabled={action.busy} onClick={() => publish(pending)}>
                   {l('显式重提原发布请求', 'Resubmit original publication request')}
                 </Button>
               )}
