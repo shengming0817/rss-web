@@ -370,7 +370,11 @@ try {
   await run.choose(p, visibleLabel('添加字段来源'), 'agent.script')
   await p.getByRole('button', { name: '添加来源', exact: true }).click()
   await p.getByRole('checkbox', { name: '启用时序绑定', exact: true }).check()
-  await run.choose(p, visibleLabel('聚合方式'), 'min')
+  await visibleLabel('聚合方式').click()
+  await p
+    .locator('.ant-select-dropdown:visible .ant-select-item-option-content')
+    .getByText('min', { exact: true })
+    .click()
   await p.keyboard.press('Escape')
   const saveTelemetry = p.getByRole('button', { name: '保存字段新版本', exact: true })
   assert.equal(await saveTelemetry.isDisabled(), true)
