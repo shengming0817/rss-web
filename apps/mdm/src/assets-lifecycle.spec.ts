@@ -1153,6 +1153,26 @@ it('keeps a lost publication unconfirmed after an exact version read and reconci
   expect(publish).toHaveBeenCalledTimes(3)
 })
 
+it('keeps the previous success cleared when a new retention publication conflicts', async () => {
+  const publish = vi
+    .fn<(change: Operation<RetentionPolicy>) => Promise<RetentionPolicy>>()
+    .mockImplementationOnce(async ({ input }) => input)
+    .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' }))
+  await render(retentionCatalog({ publishRetentionPolicy: publish }))
+  await startFirstRetentionDraft()
+  await click('发布保留策略')
+  expect(host.textContent).toContain('策略发布已确认')
+
+  await click('基于此版本起草新版')
+  await fill('汇总时长（秒）', '180')
+  await click('发布保留策略')
+  expect(publish).toHaveBeenCalledTimes(2)
+  expect(host.textContent).toContain('内容已变化')
+  expect(host.textContent).not.toContain('策略发布已确认')
+  expect(host.textContent).not.toContain('原发布结果待确认')
+  expect(button('发布保留策略').disabled).toBe(true)
+})
+
 it('requires applying a verified version before saving an existing telemetry field', async () => {
   const putField = vi.fn(async () => telemetryField),
     policyRead = vi.fn(async ({ revision }: RetentionReference) =>

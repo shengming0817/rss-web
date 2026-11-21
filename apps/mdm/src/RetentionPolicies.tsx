@@ -143,13 +143,14 @@ export function RetentionPolicies({
         validateInput(() => validateRetentionPolicy(input))
         change = freeze({ operationId: crypto.randomUUID(), expectedRevision, input })
       }
-      setEditing({ ...current, confirmed: null })
+      const submitting = { ...current, confirmed: null }
+      setEditing(submitting)
       try {
         const policy = await inventory.publishRetentionPolicy(change)
         finish(policy, policy)
       } catch (error) {
         if (!original && codeOf(error) === 'operation_conflict') {
-          setEditing({ ...current, draft: { ...publication, conflicted: true } })
+          setEditing({ ...submitting, draft: { ...publication, conflicted: true } })
         } else if (original || isUnknown(error)) {
           setPending({ change, draft: publication, canResubmit: false })
         }
