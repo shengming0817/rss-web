@@ -9,7 +9,7 @@ import type {
   SavedQuery,
   SavedQueryRow,
 } from '@rss/mdm-inventory'
-import { operators, validateRetentionPolicy } from '@rss/mdm-inventory'
+import { operators, sameRetentionPolicy, validateRetentionPolicy } from '@rss/mdm-inventory'
 import { referenceKey } from '@rss/mdm-devices'
 import { boolean, count, enumeration, list, nullable, text, uuid } from './decode'
 import { viewSummary } from './devices'
@@ -243,15 +243,7 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
         },
         (value) => {
           const { policy } = asset(value, tenant, 'retention_policy')
-          const { input } = change
-          if (
-            !policy ||
-            policy.key !== input.key ||
-            policy.revision !== input.revision ||
-            policy.rawSeconds !== input.rawSeconds ||
-            policy.summarySeconds !== input.summarySeconds ||
-            policy.restoreSeconds !== input.restoreSeconds
-          )
+          if (!policy || !sameRetentionPolicy(policy, change.input))
             throw new Error('Wrong retention policy receipt')
           return policy
         },

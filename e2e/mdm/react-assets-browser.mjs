@@ -336,6 +336,7 @@ try {
   const priorPosts = run.count(p, 'POST', retentionPath)
   await retentionButton('发布保留策略').click()
   await retentionButton('读取原发布回执').waitFor()
+  assert.equal(await retentionDialog.getByText('策略发布已确认。', { exact: true }).count(), 0)
   await waitUntil(() => Boolean(committedPublication))
   assert.equal(committedPublication.expectedRevision, 1)
   assert.deepEqual(committedPublication.input, {
@@ -351,6 +352,8 @@ try {
   )
   assert.equal((await recovered.json()).originalResult.value.revision, 2)
   await retentionDialog.getByText('策略发布已确认。', { exact: true }).waitFor()
+  await retentionDialog.getByText(`${retentionKey} · 版本 2`, { exact: true }).waitFor()
+  assert.equal(await retentionButton('读取原发布回执').count(), 0)
   assert.equal(run.count(p, 'POST', retentionPath), priorPosts + 1)
   await p.unroute(origin + retentionPath)
   assert.deepEqual(await readPolicy(1), originalPolicy)
@@ -378,7 +381,27 @@ try {
   await p.keyboard.press('Escape')
   const saveTelemetry = p.getByRole('button', { name: '保存字段新版本', exact: true })
   assert.equal(await saveTelemetry.isDisabled(), true)
-  await p.getByRole('button', { name: '核对或更换保留策略', exact: true }).click()
+  const pickRetention = p.getByRole('button', { name: '核对或更换保留策略', exact: true })
+  for (const width of [390, 1440]) {
+    await p.setViewportSize({ width, height: 960 })
+    await pickRetention.evaluate((button) => button.scrollIntoView({ block: 'center' }))
+    const before = await p.evaluate(() => window.scrollY)
+    assert.ok(before > 0, 'the field editor opens the drawer after page scroll')
+    await pickRetention.click()
+    await retentionDialog.waitFor()
+    assert.equal(await p.evaluate(() => window.scrollY), before)
+    assert.equal(
+      await retentionDialog.evaluate((dialog) => {
+        const bounds = dialog.getBoundingClientRect()
+        return bounds.top >= 0 && bounds.bottom <= window.innerHeight + 1
+      }),
+      true,
+    )
+    if (width === 390) {
+      await p.keyboard.press('Escape')
+      await retentionDialog.waitFor({ state: 'hidden' })
+    }
+  }
   assert.deepEqual(await readPolicy(1), originalPolicy)
   await retentionButton('应用到字段草稿').click()
   assert.equal(run.count(p, 'PUT', telemetryFieldPath), 0)

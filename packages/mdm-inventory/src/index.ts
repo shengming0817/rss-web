@@ -1,5 +1,5 @@
 export type * from './model'
-export { operators } from './model'
+export { operators, sameRetentionPolicy } from './model'
 export {
   fieldKey,
   freeze,

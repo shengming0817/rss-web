@@ -123,6 +123,15 @@ export interface RetentionPolicy extends RetentionReference {
   readonly summarySeconds: number
   readonly restoreSeconds: number
 }
+export function sameRetentionPolicy(left: RetentionPolicy, right: RetentionPolicy): boolean {
+  return (
+    left.key === right.key &&
+    left.revision === right.revision &&
+    left.rawSeconds === right.rawSeconds &&
+    left.summarySeconds === right.summarySeconds &&
+    left.restoreSeconds === right.restoreSeconds
+  )
+}
 export interface TimeSeriesBinding {
   readonly kind: 'gauge' | 'cumulative_counter' | 'delta_counter' | 'state'
   readonly valuePath: readonly string[]

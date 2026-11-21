@@ -1070,11 +1070,18 @@ async function startFirstRetentionDraft() {
 }
 
 it('keeps a lost publication unconfirmed after an exact version read and reconciles the original UUID', async () => {
-  const publish = vi.fn(async (_change: Operation<RetentionPolicy>) => {
-      throw decodeMdmError(503, { code: 'operation_unknown' })
-    }),
+  const publish = vi
+      .fn<(change: Operation<RetentionPolicy>) => Promise<RetentionPolicy>>()
+      .mockImplementationOnce(async ({ input }) => input)
+      .mockRejectedValueOnce(
+        Object.assign(decodeMdmError(503, { code: 'operation_unknown' }), {
+          requestId: nested,
+        }),
+      )
+      .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict' })),
     diagnostics = vi.fn<OperationDiagnostics['operation']>(),
-    methods = { publishRetentionPolicy: publish, retentionPolicy: async () => retention }
+    revised = { ...retention, revision: 2, summarySeconds: 180 },
+    methods = { publishRetentionPolicy: publish, retentionPolicy: async () => revised }
   await render(retentionCatalog(methods, { operation: diagnostics }))
   await startFirstRetentionDraft()
   for (const invalid of ['59', '120.1', '4294967296']) {
@@ -1084,11 +1091,18 @@ it('keeps a lost publication unconfirmed after an exact version read and reconci
   }
   await fill('汇总时长（秒）', '120')
   await click('发布保留策略')
-  const change = publish.mock.calls[0]![0]
-  expect(change.input).toEqual(retention)
+  expect(host.textContent).toContain(`${retention.key} · 版本 1`)
+  await click('基于此版本起草新版')
+  await fill('汇总时长（秒）', '180')
+  await click('发布保留策略')
+  const change = publish.mock.calls[1]![0]
+  expect(change.input).toEqual(revised)
   expect(button('发布保留策略').disabled).toBe(true)
+  expect(host.textContent).not.toContain('策略发布已确认')
+  expect(host.textContent).toContain(nested)
+  expect(host.querySelector('a[href*="operation-diagnostics"]')).toBeNull()
 
-  await lookUpRetention('1')
+  await lookUpRetention('2')
   expect(host.textContent).toContain('原发布结果待确认')
   const detail = {
     operation: { product: 'mdm', owner: 'asset', operationId: change.operationId },
@@ -1104,13 +1118,21 @@ it('keeps a lost publication unconfirmed after an exact version read and reconci
   await click('读取原发布回执')
   expect(host.textContent).toContain('原发布结果待确认')
   expect(host.textContent).not.toContain('显式重提原发布请求')
+  diagnostics.mockResolvedValueOnce({ ...detail, originalResult: { availability: 'not_found' } })
+  await click('读取原发布回执')
+  expect(publish).toHaveBeenCalledTimes(2)
+  await click('显式重提原发布请求')
+  expect(publish.mock.calls[2]![0]).toBe(change)
+  expect(host.textContent).toContain('原发布结果待确认')
+  expect(host.textContent).toContain(change.operationId)
+
   diagnostics.mockResolvedValueOnce({
     ...detail,
     originalResult: {
       availability: 'available',
       value: {
         operationId: change.operationId,
-        revision: 1,
+        revision: 2,
         object: null,
         state: null,
         accepted: null,
@@ -1125,8 +1147,10 @@ it('keeps a lost publication unconfirmed after an exact version read and reconci
   await click('读取原发布回执')
   expect(diagnostics).toHaveBeenLastCalledWith({ owner: 'asset', operationId: change.operationId })
   expect(host.textContent).toContain('策略发布已确认')
+  expect(host.textContent).toContain(`${retention.key} · 版本 2`)
+  expect(host.textContent).not.toContain('原发布结果待确认')
   expect(host.textContent).not.toContain('基于此版本起草新版')
-  expect(publish).toHaveBeenCalledTimes(1)
+  expect(publish).toHaveBeenCalledTimes(3)
 })
 
 it('requires applying a verified version before saving an existing telemetry field', async () => {
@@ -1184,7 +1208,7 @@ it('requires applying a verified version before saving an existing telemetry fie
   )
 })
 
-it('replays a missing original receipt explicitly and rebases a definitive conflict without reverting newer durations', async () => {
+it('allows explicitly leaving an unresolved conflicting version before rebasing edited durations', async () => {
   const competing = { ...retention, revision: 2, rawSeconds: 90, restoreSeconds: 30 }
   const publish = vi
     .fn<(change: Operation<RetentionPolicy>) => Promise<RetentionPolicy>>()
@@ -1221,11 +1245,15 @@ it('replays a missing original receipt explicitly and rebases a definitive confl
   await click('显式重提原发布请求')
   expect(publish).toHaveBeenCalledTimes(2)
   expect(publish.mock.calls[1]![0]).toBe(publish.mock.calls[0]![0])
-  expect(host.textContent).not.toContain('原发布结果待确认')
+  expect(host.textContent).toContain('原发布结果待确认')
   expect(button('发布保留策略').disabled).toBe(true)
   expect(button('基于此版本起草新版').disabled).toBe(true)
 
+  await click('读取原发布回执')
+  expect(host.textContent).not.toContain('放弃跟进原发布')
   await lookUpRetention('2')
+  await click('放弃跟进原发布')
+  expect(host.textContent).not.toContain('原发布结果待确认')
   await click('基于此版本起草新版')
   await click('发布保留策略')
   expect(publish).toHaveBeenCalledTimes(3)

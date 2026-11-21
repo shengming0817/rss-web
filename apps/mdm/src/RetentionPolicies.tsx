@@ -3,6 +3,7 @@ import { Alert, Button, Drawer, Form, Input, Space } from 'antd'
 import type { OperationDiagnostics } from '@rss/mdm-audit'
 import {
   freeze,
+  sameRetentionPolicy,
   validateRetentionPolicy,
   validateRetentionReference,
   type Operation,
@@ -45,7 +46,7 @@ interface Workspace {
   revision: string
   lookup: RetentionReference | null
   verifiedReceipt: RetentionPolicy | null
-  confirmed: boolean
+  confirmed: RetentionReference | null
   draft: Publication | null
 }
 
@@ -65,7 +66,7 @@ function workspace(target: RetentionPolicyTarget | null): Workspace {
     revision: target?.reference?.revision.toString() ?? '',
     lookup: null,
     verifiedReceipt: null,
-    confirmed: false,
+    confirmed: null,
     draft: null,
   }
 }
@@ -99,10 +100,16 @@ export function RetentionPolicies({
     }),
     verified = lookup ? read.value : current.verifiedReceipt,
     draft = current.draft,
-    previousRevision = draft?.base?.revision ?? 0
+    previousRevision = draft?.base?.revision ?? 0,
+    canAbandon =
+      pending?.canResubmit === true &&
+      verified != null &&
+      verified.key === pending.change.input.key &&
+      verified.revision === pending.change.input.revision &&
+      !sameRetentionPolicy(verified, pending.change.input)
 
   function changeLookup(key: string, revision: string) {
-    setEditing({ ...current, key, revision, lookup: null, verifiedReceipt: null, confirmed: false })
+    setEditing({ ...current, key, revision, lookup: null, verifiedReceipt: null, confirmed: null })
   }
   function finish(reference: RetentionReference, policy: RetentionPolicy | null) {
     setPending(null)
@@ -111,7 +118,7 @@ export function RetentionPolicies({
       key: reference.key,
       revision: String(reference.revision),
       verifiedReceipt: policy,
-      confirmed: true,
+      confirmed: { key: reference.key, revision: reference.revision },
     })
   }
   function publish(original?: PendingPublication) {
@@ -136,13 +143,12 @@ export function RetentionPolicies({
         validateInput(() => validateRetentionPolicy(input))
         change = freeze({ operationId: crypto.randomUUID(), expectedRevision, input })
       }
+      setEditing({ ...current, confirmed: null })
       try {
         const policy = await inventory.publishRetentionPolicy(change)
         finish(policy, policy)
       } catch (error) {
-        if (codeOf(error) === 'operation_conflict') {
-          // A definitive conflict from the same operation passed the server's original receipt check.
-          setPending(null)
+        if (!original && codeOf(error) === 'operation_conflict') {
           setEditing({ ...current, draft: { ...publication, conflicted: true } })
         } else if (original || isUnknown(error)) {
           setPending({ change, draft: publication, canResubmit: false })
@@ -178,6 +184,7 @@ export function RetentionPolicies({
   return (
     <Drawer
       getContainer={false}
+      rootClassName={`mdm-drawer ${open ? 'mdm-overlay-open' : ''}`}
       title={l('遥测保留策略', 'Telemetry retention policies')}
       open={open}
       onClose={() => {
@@ -227,7 +234,14 @@ export function RetentionPolicies({
         </Button>
       </Form>
 
-      {lookup && <ReadState locale={locale} busy={read.busy} error={read.error} />}
+      {lookup && (
+        <ReadState
+          locale={locale}
+          busy={read.busy}
+          error={read.error}
+          canNavigateDiagnostics={pending === null}
+        />
+      )}
       {lookup && read.value === null && (
         <Alert
           type="info"
@@ -235,7 +249,11 @@ export function RetentionPolicies({
         />
       )}
       {current.confirmed && (
-        <Alert type="success" title={l('策略发布已确认。', 'Policy publication confirmed.')} />
+        <Alert
+          type="success"
+          title={l('策略发布已确认。', 'Policy publication confirmed.')}
+          description={`${current.confirmed.key} · ${l('版本', 'Revision')} ${current.confirmed.revision}`}
+        />
       )}
       {verified && (
         <div className="admin-subsection">
@@ -376,7 +394,7 @@ export function RetentionPolicies({
             </Button>
           </Form>
         )}
-        <Failure locale={locale} error={action.error} />
+        <Failure locale={locale} error={action.error} canNavigateDiagnostics={pending === null} />
         {pending && (
           <div className="admin-recovery">
             <Alert
@@ -388,9 +406,21 @@ export function RetentionPolicies({
               <Button disabled={action.busy} onClick={readReceipt}>
                 {l('读取原发布回执', 'Read original publication receipt')}
               </Button>
-              {pending.canResubmit && (
+              {pending.canResubmit && !canAbandon && (
                 <Button disabled={action.busy} onClick={() => publish(pending)}>
                   {l('显式重提原发布请求', 'Resubmit original publication request')}
+                </Button>
+              )}
+              {canAbandon && (
+                <Button
+                  disabled={action.busy}
+                  onClick={() => {
+                    action.clear()
+                    setPending(null)
+                    setEditing({ ...current, draft: { ...pending.draft, conflicted: true } })
+                  }}
+                >
+                  {l('放弃跟进原发布', 'Stop following up on original publication')}
                 </Button>
               )}
             </Space>
