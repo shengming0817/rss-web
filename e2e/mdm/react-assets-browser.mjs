@@ -12,6 +12,7 @@ import assert from 'node:assert/strict'
 const run = await realBrowser('MDM_DEVICE_BROWSER_FIXTURE', 'react-assets')
 let failure, diagnosticPage
 const groupRequests = []
+const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 try {
   const { fixture: f, origin, checks } = run,
     p = await run.page()
@@ -160,20 +161,54 @@ try {
       run.directoryFilter(p, `id=='${id}'`),
     )
     const card = p.locator('.asset-group-card').filter({ hasText: name })
-    await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/groups/${id}`, () =>
+    const response = await run.response(p, 'GET', `/api/v1/tenants/${f.tenant}/groups/${id}`, () =>
       card.getByRole('link', { name: '查看定义与成员 →', exact: true }).click(),
     )
     assert.equal(new URL(p.url()).searchParams.get('group'), id)
+    return response.json()
   }
-  async function settleGroup(id, task) {
+  const groupTaskPath = (id, task) => `/api/v1/tenants/${f.tenant}/groups/${id}/tasks/${task}`
+  async function readGroupTask(id, task, deadline = Date.now() + 90_000) {
+    assert.match(task, uuidPattern)
+    const remaining = deadline - Date.now()
+    assert.ok(remaining > 0, 'group calculation deadline')
     const value = await poll(
-      `/api/v1/tenants/${run.fixture.tenant}/groups/${id}/tasks/${task}`,
+      groupTaskPath(id, task),
       () => p.getByRole('button', { name: '读取任务进度', exact: true }).click(),
       (v) => v,
       (v) => ['completed', 'failed', 'superseded'].includes(v.status),
+      remaining / 1000,
     )
-    assert.equal(value.status, 'completed')
+    assert.equal(value.task, task)
+    assert.equal(value.target, id)
+    if (value.status !== 'completed') {
+      console.error(
+        JSON.stringify({
+          phase: 'group-task-terminal',
+          group: id,
+          task,
+          status: value.status,
+          failure: [
+            'superseded',
+            'invalid_input',
+            'permission_denied',
+            'source_unavailable',
+            'capacity_exceeded',
+            'owner_conflict',
+          ].includes(value.failure)
+            ? value.failure
+            : null,
+          failureDetail:
+            value.failureDetail?.reason === 'group_input_pending' ? 'group_input_pending' : null,
+          replacementTask: uuidPattern.test(value.replacementTask) ? value.replacementTask : null,
+        }),
+      )
+    }
     return value
+  }
+  async function settleGroup(id, task) {
+    const value = await readGroupTask(id, task)
+    assert.equal(value.status, 'completed')
   }
   async function settleCompliance(id, task) {
     const value = await poll(
@@ -614,7 +649,8 @@ try {
   assert.equal(nestedAccepted.kind, 'group_definition')
   await settleGroup(nestedId, nestedAccepted.task)
   await p.getByRole('button', { name: '任务已受理，重新读取组事实', exact: true }).click()
-  await openGroup(nestedId, 'React nested assets')
+  const nestedName = 'React nested assets'
+  const beforeRecompute = await openGroup(nestedId, nestedName)
   const recomputeResponse = await run.response(
       p,
       'POST',
@@ -623,25 +659,76 @@ try {
       202,
     ),
     recompute = await recomputeResponse.json()
-  await settleGroup(nestedId, recompute.task)
-  await p.getByRole('button', { name: '读取此任务固定结果', exact: true }).click()
-  const memberResult = await api(
-    'GET',
-    `/api/v1/tenants/${run.fixture.tenant}/groups/${nestedId}/results/${recompute.task}/members`,
-  )
+  assert.equal(recompute.target, nestedId)
+  assert.equal(recompute.kind, 'group')
+  assert.match(recompute.task, uuidPattern)
+  assert.equal(recompute.statusUrl, groupTaskPath(nestedId, recompute.task))
+  const deadline = Date.now() + 90_000
+  const seen = new Set([recompute.task])
+  let calculation = await readGroupTask(nestedId, recompute.task, deadline)
+  assert.equal(calculation.kind, 'group')
+  while (calculation.status === 'superseded' && calculation.replacementTask !== null) {
+    const replacement = calculation.replacementTask
+    assert.match(replacement, uuidPattern)
+    assert.ok(!seen.has(replacement), 'group calculation replacement cycle')
+    assert.ok(Date.now() < deadline, 'group calculation deadline')
+    seen.add(replacement)
+    await run.response(p, 'GET', groupTaskPath(nestedId, replacement), () =>
+      p.getByRole('button', { name: '读取服务端替代任务', exact: true }).click(),
+    )
+    calculation = await readGroupTask(nestedId, replacement, deadline)
+    assert.equal(calculation.kind, 'group')
+  }
+
+  let resultId = calculation.task
+  let readResult = '读取此任务固定结果'
+  const superseded = calculation.status === 'superseded'
+  if (superseded) {
+    // If a concurrent publication already covers the input, the server records no replacement.
+    assert.equal(calculation.failure, 'superseded')
+    const current = await openGroup(nestedId, nestedName)
+    assert.equal(current.group.id, nestedId)
+    assert.equal(current.group.revision, beforeRecompute.group.revision)
+    assert.equal(current.group.ruleVersion, beforeRecompute.group.ruleVersion)
+    assert.equal(current.freshness, 'current')
+    assert.match(current.memberSet, uuidPattern)
+    resultId = current.memberSet
+    readResult = '读取固定成员集结果'
+  } else {
+    assert.equal(calculation.status, 'completed')
+  }
+  const membersPath = `/api/v1/tenants/${f.tenant}/groups/${nestedId}/results/${resultId}/members`
+  const memberResult = await (
+    await run.response(p, 'GET', membersPath, () =>
+      p.getByRole('button', { name: readResult, exact: true }).click(),
+    )
+  ).json()
+  assert.equal(memberResult.group, nestedId)
+  assert.equal(memberResult.result, resultId)
+  if (superseded) assert.equal(memberResult.current, true)
   assert.equal(memberResult.totalMembers, 0)
-  assert.ok(
-    memberResult.sources.some(
-      (source) => source.group === staticGroup.id && source.coordinates.memberSet === null,
-    ),
+  assert.deepEqual(memberResult.page, { kind: 'members', items: [] })
+  assert.equal(memberResult.sources.length, 1)
+  const [nestedSource] = memberResult.sources
+  assert.equal(nestedSource.group, staticGroup.id)
+  assert.equal(nestedSource.coordinates.memberSet, null)
+  assert.equal(nestedSource.coordinates.memberVersion, staticGroup.memberVersion)
+  assert.equal(nestedSource.coordinates.assetContext, staticGroup.assetContext)
+  console.log(
+    JSON.stringify({
+      phase: 'nested-group-published-result',
+      group: nestedId,
+      result: resultId,
+      taskStatus: calculation.status,
+      current: memberResult.current,
+    }),
   )
   checks.push(
     'real-empty-static-source-nested-definition-task-paged-picker-and-authoritative-empty-result',
   )
 
   run.step('preview-separation-and-static-membership')
-  await p.getByRole('button', { name: '任务已受理，重新读取组事实', exact: true }).click()
-  await openGroup(nestedId, 'React nested assets')
+  await openGroup(nestedId, nestedName)
   const beforePreview = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/groups/${nestedId}`)
   await visibleLabel('设备组名称').fill('Unsaved title')
   const previewResponse = await run.response(
