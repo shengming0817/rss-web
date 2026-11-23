@@ -62,6 +62,56 @@ it('reads an empty initial static group without manufacturing a result UUID', as
     createGroupsAdapter(f.transport, '11111111-1111-4111-8111-111111111111').read(nested),
   ).rejects.toThrow()
 })
+it('projects endpoint membership for its exact tenant, endpoint and continuation', async () => {
+  const membership = {
+      id,
+      kind: 'dynamic',
+      assetContext: 'associated_device',
+      presentation: group().presentation,
+      revision: 2,
+      memberVersion: 3,
+      calculationRevision: 5,
+      memberSet: task,
+      currentRuleVersion: 'rule-2',
+      evaluatedRuleVersion: 'rule-1',
+      inputVersion: 'input-1',
+      asOf: 100,
+      ruleCurrent: false,
+      objects: [
+        { kind: 'endpoint', id: nested },
+        { kind: 'association', id: task },
+      ],
+      associationCurrent: false,
+      inputCurrent: true,
+      evaluation: 'stale',
+    },
+    f = fixture({ items: [membership], associationCurrent: false, nextCursor: 'b3BhcXVl' }),
+    client = createGroupsAdapter(f.transport, id),
+    signal = new AbortController().signal
+  expect(await client.memberships(nested, { limit: 1, cursor: 'cHJldmlvdXM' }, signal)).toEqual({
+    items: [
+      {
+        id,
+        kind: 'dynamic',
+        presentation: membership.presentation,
+        asOf: 100,
+        evaluation: 'stale',
+        objects: membership.objects,
+      },
+    ],
+    associationCurrent: false,
+    nextCursor: 'b3BhcXVl',
+  })
+  expect(f.request).toHaveBeenCalledWith(
+    expect.objectContaining({
+      method: 'GET',
+      path: '/api/v1/tenants/{tenant}/devices/{device}/groups',
+      pathParams: { tenant: id, device: nested },
+      query: { limit: 1, cursor: 'cHJldmlvdXM' },
+      signal,
+    }),
+  )
+})
 it('distinguishes asynchronous definition acceptance from a completed membership change', async () => {
   const f = fixture({
       task,

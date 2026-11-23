@@ -12,6 +12,7 @@ import assert from 'node:assert/strict'
 const run = await realBrowser('MDM_DEVICE_BROWSER_FIXTURE', 'react-assets')
 let failure, diagnosticPage
 const groupRequests = []
+const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 try {
   const { fixture: f, origin, checks } = run,
     p = await run.page()
@@ -84,6 +85,42 @@ try {
     expectedRevision,
     input,
   })
+  async function publishEndpointGroup(id, name, endpoints) {
+    const path = `/api/v1/tenants/${f.tenant}/groups/${id}`
+    const created = await api(
+      'POST',
+      path,
+      operation({
+        action: 'create',
+        presentation: { name, description: '' },
+        assetContext: 'endpoint',
+        criteria: null,
+      }),
+    )
+    const membership = await api(
+      'POST',
+      path,
+      operation(
+        {
+          action: 'members',
+          add: endpoints.map((id) => ({ kind: 'endpoint', id })),
+          remove: [],
+        },
+        created.group.revision,
+      ),
+      202,
+    )
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const result = await api('GET', `${path}/tasks/${membership.task}`)
+      if (result.status === 'completed') return
+      assert.ok(
+        result.status === 'pending' || result.status === 'running',
+        'group publication failed',
+      )
+      await new Promise((done) => setTimeout(done, 250))
+    }
+    throw new Error('group publication deadline')
+  }
   const tab = (name) => p.getByRole('tab', { name, exact: true }).click()
   async function poll(path, trigger, value, complete, seconds = 90) {
     const until = Date.now() + seconds * 1000
@@ -124,19 +161,54 @@ try {
       run.directoryFilter(p, `id=='${id}'`),
     )
     const card = p.locator('.asset-group-card').filter({ hasText: name })
-    await run.response(p, 'GET', `/api/v1/tenants/${run.fixture.tenant}/groups/${id}`, () =>
-      card.getByRole('button', { name: '查看定义与成员 →', exact: true }).click(),
+    const response = await run.response(p, 'GET', `/api/v1/tenants/${f.tenant}/groups/${id}`, () =>
+      card.getByRole('link', { name: '查看定义与成员 →', exact: true }).click(),
     )
+    assert.equal(new URL(p.url()).searchParams.get('group'), id)
+    return response.json()
   }
-  async function settleGroup(id, task) {
+  const groupTaskPath = (id, task) => `/api/v1/tenants/${f.tenant}/groups/${id}/tasks/${task}`
+  async function readGroupTask(id, task, deadline = Date.now() + 90_000) {
+    assert.match(task, uuidPattern)
+    const remaining = deadline - Date.now()
+    assert.ok(remaining > 0, 'group calculation deadline')
     const value = await poll(
-      `/api/v1/tenants/${run.fixture.tenant}/groups/${id}/tasks/${task}`,
+      groupTaskPath(id, task),
       () => p.getByRole('button', { name: '读取任务进度', exact: true }).click(),
       (v) => v,
       (v) => ['completed', 'failed', 'superseded'].includes(v.status),
+      remaining / 1000,
     )
-    assert.equal(value.status, 'completed')
+    assert.equal(value.task, task)
+    assert.equal(value.target, id)
+    if (value.status !== 'completed') {
+      console.error(
+        JSON.stringify({
+          phase: 'group-task-terminal',
+          group: id,
+          task,
+          status: value.status,
+          failure: [
+            'superseded',
+            'invalid_input',
+            'permission_denied',
+            'source_unavailable',
+            'capacity_exceeded',
+            'owner_conflict',
+          ].includes(value.failure)
+            ? value.failure
+            : null,
+          failureDetail:
+            value.failureDetail?.reason === 'group_input_pending' ? 'group_input_pending' : null,
+          replacementTask: uuidPattern.test(value.replacementTask) ? value.replacementTask : null,
+        }),
+      )
+    }
     return value
+  }
+  async function settleGroup(id, task) {
+    const value = await readGroupTask(id, task)
+    assert.equal(value.status, 'completed')
   }
   async function settleCompliance(id, task) {
     const value = await poll(
@@ -577,7 +649,8 @@ try {
   assert.equal(nestedAccepted.kind, 'group_definition')
   await settleGroup(nestedId, nestedAccepted.task)
   await p.getByRole('button', { name: '任务已受理，重新读取组事实', exact: true }).click()
-  await openGroup(nestedId, 'React nested assets')
+  const nestedName = 'React nested assets'
+  const beforeRecompute = await openGroup(nestedId, nestedName)
   const recomputeResponse = await run.response(
       p,
       'POST',
@@ -586,25 +659,76 @@ try {
       202,
     ),
     recompute = await recomputeResponse.json()
-  await settleGroup(nestedId, recompute.task)
-  await p.getByRole('button', { name: '读取此任务固定结果', exact: true }).click()
-  const memberResult = await api(
-    'GET',
-    `/api/v1/tenants/${run.fixture.tenant}/groups/${nestedId}/results/${recompute.task}/members`,
-  )
+  assert.equal(recompute.target, nestedId)
+  assert.equal(recompute.kind, 'group')
+  assert.match(recompute.task, uuidPattern)
+  assert.equal(recompute.statusUrl, groupTaskPath(nestedId, recompute.task))
+  const deadline = Date.now() + 90_000
+  const seen = new Set([recompute.task])
+  let calculation = await readGroupTask(nestedId, recompute.task, deadline)
+  assert.equal(calculation.kind, 'group')
+  while (calculation.status === 'superseded' && calculation.replacementTask !== null) {
+    const replacement = calculation.replacementTask
+    assert.match(replacement, uuidPattern)
+    assert.ok(!seen.has(replacement), 'group calculation replacement cycle')
+    assert.ok(Date.now() < deadline, 'group calculation deadline')
+    seen.add(replacement)
+    await run.response(p, 'GET', groupTaskPath(nestedId, replacement), () =>
+      p.getByRole('button', { name: '读取服务端替代任务', exact: true }).click(),
+    )
+    calculation = await readGroupTask(nestedId, replacement, deadline)
+    assert.equal(calculation.kind, 'group')
+  }
+
+  let resultId = calculation.task
+  let readResult = '读取此任务固定结果'
+  const superseded = calculation.status === 'superseded'
+  if (superseded) {
+    // If a concurrent publication already covers the input, the server records no replacement.
+    assert.equal(calculation.failure, 'superseded')
+    const current = await openGroup(nestedId, nestedName)
+    assert.equal(current.group.id, nestedId)
+    assert.equal(current.group.revision, beforeRecompute.group.revision)
+    assert.equal(current.group.ruleVersion, beforeRecompute.group.ruleVersion)
+    assert.equal(current.freshness, 'current')
+    assert.match(current.memberSet, uuidPattern)
+    resultId = current.memberSet
+    readResult = '读取固定成员集结果'
+  } else {
+    assert.equal(calculation.status, 'completed')
+  }
+  const membersPath = `/api/v1/tenants/${f.tenant}/groups/${nestedId}/results/${resultId}/members`
+  const memberResult = await (
+    await run.response(p, 'GET', membersPath, () =>
+      p.getByRole('button', { name: readResult, exact: true }).click(),
+    )
+  ).json()
+  assert.equal(memberResult.group, nestedId)
+  assert.equal(memberResult.result, resultId)
+  if (superseded) assert.equal(memberResult.current, true)
   assert.equal(memberResult.totalMembers, 0)
-  assert.ok(
-    memberResult.sources.some(
-      (source) => source.group === staticGroup.id && source.coordinates.memberSet === null,
-    ),
+  assert.deepEqual(memberResult.page, { kind: 'members', items: [] })
+  assert.equal(memberResult.sources.length, 1)
+  const [nestedSource] = memberResult.sources
+  assert.equal(nestedSource.group, staticGroup.id)
+  assert.equal(nestedSource.coordinates.memberSet, null)
+  assert.equal(nestedSource.coordinates.memberVersion, staticGroup.memberVersion)
+  assert.equal(nestedSource.coordinates.assetContext, staticGroup.assetContext)
+  console.log(
+    JSON.stringify({
+      phase: 'nested-group-published-result',
+      group: nestedId,
+      result: resultId,
+      taskStatus: calculation.status,
+      current: memberResult.current,
+    }),
   )
   checks.push(
     'real-empty-static-source-nested-definition-task-paged-picker-and-authoritative-empty-result',
   )
 
   run.step('preview-separation-and-static-membership')
-  await p.getByRole('button', { name: '任务已受理，重新读取组事实', exact: true }).click()
-  await openGroup(nestedId, 'React nested assets')
+  await openGroup(nestedId, nestedName)
   const beforePreview = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/groups/${nestedId}`)
   await visibleLabel('设备组名称').fill('Unsaved title')
   const previewResponse = await run.response(
@@ -971,6 +1095,188 @@ try {
   )
   assert.equal(associated.fields['custom.asset_tag'].state.kind, 'conflict')
   await p.getByText('数据冲突', { exact: true }).first().waitFor()
+
+  run.step('device-group-memberships')
+  const sharedGroup = randomUUID(),
+    sharedName = 'React group shared by both endpoints',
+    membershipPath = (device) => `/api/v1/tenants/${f.tenant}/devices/${device}/groups`,
+    showMemberships = () => p.getByRole('button', { name: '所属组', exact: true }).click(),
+    membershipRegion = (device) => p.getByRole('region', { name: new RegExp(device + '$') })
+  await publishEndpointGroup(sharedGroup, sharedName, [f.mdm, f.agent])
+  async function openMembershipGroup(region, name, id) {
+    const sourceUrl = p.url(),
+      sourceHistory = await p.evaluate(() => history.length),
+      groupPath = `/api/v1/tenants/${f.tenant}/groups/${id}`,
+      link = region.getByRole('link', { name, exact: true })
+    const [detailPage, details] = await Promise.all([
+      p.waitForEvent('popup'),
+      p.context().waitForEvent('response', {
+        predicate: (response) =>
+          response.request().method() === 'GET' && new URL(response.url()).pathname === groupPath,
+        timeout: 20_000,
+      }),
+      link.click(),
+    ])
+    try {
+      const groupName = detailPage.getByLabel('设备组名称', { exact: true })
+      await groupName.waitFor()
+      assert.equal(await groupName.inputValue(), name)
+      assert.equal(details.request().frame().page(), detailPage)
+      assert.equal(details.status(), 200)
+      assert.equal((await details.json()).group.id, id)
+      const destination = new URL(detailPage.url())
+      assert.equal(destination.pathname, `/tenants/${f.tenant}/groups`)
+      assert.equal(destination.searchParams.get('group'), id)
+      assert.equal(await detailPage.evaluate(() => window.opener), null)
+      assert.equal(await detailPage.goBack(), null)
+      assert.equal(detailPage.url(), destination.href)
+    } finally {
+      await detailPage.close()
+    }
+    assert.equal(p.url(), sourceUrl)
+    assert.equal(await p.evaluate(() => history.length), sourceHistory)
+    await link.waitFor()
+  }
+  async function checkMembershipRow(region, membership, name, device) {
+    assert.ok(membership, 'expected published membership')
+    assert.deepEqual(membership.objects, [{ kind: 'endpoint', id: device }])
+    const row = region.getByRole('row').filter({
+      has: p.getByRole('link', { name, exact: true }),
+    })
+    await row.getByRole('cell', { name: '静态设备组', exact: true }).waitFor()
+    await row.getByText(device, { exact: true }).waitFor()
+    await row
+      .getByRole('cell', {
+        name: membership.evaluation === 'current' ? '当前' : '待更新',
+        exact: true,
+      })
+      .waitFor()
+    const asOf = await p.evaluate(
+      (seconds) => new Date(seconds * 1000).toLocaleString('zh-CN'),
+      membership.asOf,
+    )
+    await row.getByRole('cell', { name: asOf, exact: true }).waitFor()
+  }
+  await p.goto(origin + `/tenants/${f.tenant}/devices/endpoint/${f.mdm}`)
+  const single = await (await run.response(p, 'GET', membershipPath(f.mdm), showMemberships)).json()
+  await checkMembershipRow(
+    membershipRegion(f.mdm),
+    single.items.find((item) => item.id === staticGroup.id),
+    'React empty source',
+    f.mdm,
+  )
+  await openMembershipGroup(membershipRegion(f.mdm), 'React empty source', staticGroup.id)
+
+  function membershipResponse(device, limit, cursor = null) {
+    return p.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return (
+        response.request().method() === 'GET' &&
+        url.origin === origin &&
+        url.pathname === membershipPath(device) &&
+        url.searchParams.get('limit') === String(limit) &&
+        url.searchParams.get('cursor') === cursor
+      )
+    })
+  }
+  await p.goto(origin + `/tenants/${f.tenant}/devices/association/${association.id}`)
+  const [mdmMemberships, agentMemberships] = await Promise.all([
+    membershipResponse(f.mdm, 100),
+    membershipResponse(f.agent, 100),
+    showMemberships(),
+  ])
+  for (const [device, response] of [
+    [f.mdm, mdmMemberships],
+    [f.agent, agentMemberships],
+  ]) {
+    assert.equal(response.status(), 200)
+    const page = await response.json()
+    await checkMembershipRow(
+      membershipRegion(device),
+      page.items.find((item) => item.id === sharedGroup),
+      sharedName,
+      device,
+    )
+  }
+  assert.equal(
+    await membershipRegion(f.agent).getByRole('link', { name: 'React empty source' }).count(),
+    0,
+  )
+  const pageSize = p.getByRole('spinbutton', { name: '所属组每页条目', exact: true })
+  const [firstResponse, agentFirstResponse] = await Promise.all([
+    membershipResponse(f.mdm, 1),
+    membershipResponse(f.agent, 1),
+    pageSize.fill('1'),
+  ])
+  assert.equal(firstResponse.status(), 200)
+  assert.equal(agentFirstResponse.status(), 200)
+  const firstMembership = await firstResponse.json()
+  assert.equal(firstMembership.items.length, 1)
+  assert.ok(firstMembership.nextCursor)
+  const [continuedResponse] = await Promise.all([
+    membershipResponse(f.mdm, 1, firstMembership.nextCursor),
+    membershipRegion(f.mdm).getByRole('button', { name: '下一页', exact: true }).click(),
+  ])
+  assert.equal(continuedResponse.status(), 200)
+  const continuedMembership = await continuedResponse.json()
+  assert.equal(continuedMembership.items.length, 1)
+  assert.notEqual(continuedMembership.items[0].id, firstMembership.items[0].id)
+  const mdmRegion = membershipRegion(f.mdm)
+  await mdmRegion.locator(`tr[data-row-key="${continuedMembership.items[0].id}"] a`).waitFor()
+  await mdmRegion
+    .locator(`tr[data-row-key="${firstMembership.items[0].id}"]`)
+    .waitFor({ state: 'hidden' })
+  const agentFirst = await agentFirstResponse.json()
+  await membershipRegion(f.agent)
+    .locator(`tr[data-row-key="${agentFirst.items[0].id}"] a`)
+    .waitFor()
+  assert.equal(
+    await membershipRegion(f.agent)
+      .getByRole('button', { name: '返回首页', exact: true })
+      .isDisabled(),
+    true,
+  )
+  await Promise.all([
+    membershipResponse(f.mdm, 100),
+    membershipResponse(f.agent, 100),
+    pageSize.fill('100'),
+  ])
+  await openMembershipGroup(membershipRegion(f.agent), sharedName, sharedGroup)
+  checks.push(
+    'real-device-group-memberships-for-single-and-associated-endpoints-with-opaque-continuation',
+  )
+
+  async function setFixtureGrants(grants) {
+    const current = (
+      await api('GET', `/api/v1/tenants/${f.tenant}/authorization/rules`)
+    ).items.find((rule) => rule.id === f.ruleId)
+    await api('PUT', `/api/v1/tenants/${f.tenant}/authorization/rules/${f.ruleId}`, {
+      operationId: randomUUID(),
+      expectedRevision: current.revision,
+      value: { ...f.rule, grants },
+    })
+  }
+  try {
+    for (const grants of [
+      f.rule.grants.filter((grant) => grant.operation !== 'group_read'),
+      f.rule.grants.map((grant) =>
+        grant.operation === 'inventory_read'
+          ? { ...grant, scope: { kind: 'device', id: f.mdm } }
+          : grant,
+      ),
+    ]) {
+      await setFixtureGrants(grants)
+      await p.goto(origin + `/tenants/${f.tenant}/devices/endpoint/${f.mdm}`)
+      await run.response(p, 'GET', membershipPath(f.mdm), showMemberships, 403)
+      await membershipRegion(f.mdm).getByText('当前账户没有此操作权限。', { exact: true }).waitFor()
+      assert.equal(await membershipRegion(f.mdm).getByRole('link', { name: sharedName }).count(), 0)
+    }
+  } finally {
+    await setFixtureGrants(f.rule.grants)
+  }
+  await api('GET', membershipPath(f.foreignDevice), undefined, 404)
+  checks.push('real-device-group-memberships-require-group-read-and-all-device-inventory-read')
+
   assert.equal(
     (
       await p.request.get(
@@ -1169,38 +1475,7 @@ try {
 
   const overlappingGroups = [randomUUID(), randomUUID()]
   for (const [index, group] of overlappingGroups.entries()) {
-    const created = await api(
-      'POST',
-      `/api/v1/tenants/${run.fixture.tenant}/groups/` + group,
-      operation({
-        action: 'create',
-        presentation: { name: 'Software overlap ' + index, description: '' },
-        assetContext: 'endpoint',
-        criteria: null,
-      }),
-    )
-    const membership = await api(
-      'POST',
-      `/api/v1/tenants/${run.fixture.tenant}/groups/` + group,
-      operation(
-        {
-          action: 'members',
-          add: [{ kind: 'endpoint', id: collector }],
-          remove: [],
-        },
-        created.group.revision,
-      ),
-      202,
-    )
-    for (let attempt = 0; attempt < 60; attempt++) {
-      const result = await api(
-        'GET',
-        `/api/v1/tenants/${run.fixture.tenant}/groups/` + group + '/tasks/' + membership.task,
-      )
-      if (result.status === 'completed') break
-      assert.ok(attempt < 59, 'software group publication deadline')
-      await new Promise((done) => setTimeout(done, 250))
-    }
+    await publishEndpointGroup(group, 'Software overlap ' + index, [collector])
   }
 
   run.step('software-asset-configuration-and-retained-query')

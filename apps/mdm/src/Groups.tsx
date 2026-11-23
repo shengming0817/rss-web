@@ -1,7 +1,8 @@
 import { useDirectoryQuery } from './directory-location'
-import { useState } from 'react'
-import { Button, Card, Tag } from 'antd'
-import type { Group, GroupRead } from '@rss/mdm-groups'
+import { useEffect, useState } from 'react'
+import { Alert, Button, Card, Tag } from 'antd'
+import { Link, useSearchParams } from 'react-router-dom'
+import type { Group } from '@rss/mdm-groups'
 import type { GroupsUseCases } from './GroupPicker'
 import type { DevicesUseCases } from './EndpointPicker'
 import type { Locale } from './i18n'
@@ -9,15 +10,13 @@ import {
   CursorControls,
   DirectoryControls,
   directoryQuery,
-  Failure,
   firstPage,
   Heading,
   labels,
   ReadState,
-  useAction,
   useRead,
 } from './AdminUi'
-import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
+import { SelectionGuard, useSelectionGuard } from './SelectionGuard'
 import { GroupEditor } from './GroupEditor'
 import { SecretTabs } from './SecretTabs'
 import { useAdministration } from './useAdministration'
@@ -36,44 +35,45 @@ const fields = [
   'ruleVersion',
   'deleted',
 ] as const satisfies readonly (keyof Group)[]
-export function Groups({
-  groups,
-  devices,
-  locale,
-  canWrite,
-  canPreview,
-  canRecompute,
-}: {
+export function groupDetailPath(id: string, params?: URLSearchParams): string {
+  const query = new URLSearchParams(params)
+  query.set('group', id)
+  return `/groups?${query}`
+}
+export function groupKindLabel(locale: Locale, kind: Group['kind']): string {
+  const l = labels(locale)
+  switch (kind) {
+    case 'static':
+      return l('静态设备组', 'Static group')
+    case 'dynamic':
+      return l('动态设备组', 'Dynamic group')
+    case 'system':
+      return l('系统设备组', 'System group')
+  }
+}
+type GroupAccess = {
   groups: GroupsUseCases
   devices: DevicesUseCases
   locale: Locale
   canWrite: boolean
   canPreview: boolean
   canRecompute: boolean
-}) {
+}
+function GroupDirectory({ locked, ...editor }: GroupAccess & { locked: boolean }) {
+  const { locale, groups, canWrite } = editor
   const l = labels(locale),
-    action = useAction(),
-    guard = useSelectionGuard(),
+    [params] = useSearchParams(),
     [query, setQuery] = useDirectoryQuery('groups.'),
-    read = useRead(`groups/${JSON.stringify(query)}`, () =>
-      groups.list(directoryQuery(query, fields)),
+    read = useRead(`groups/${JSON.stringify(query)}`, (signal) =>
+      groups.list(directoryQuery(query, fields), signal),
     ),
-    [selected, setSelected] = useState<{
-      id: string
-      baseline: GroupRead | null
-      key: number
-    } | null>(null),
-    [generation, setGeneration] = useState(0)
-  usePendingSelection(guard.locked || action.busy)
-  async function open(id: string) {
-    const result = await action.run(() => groups.read(id))
-    if (result.ok) {
-      setGeneration((v) => v + 1)
-      setSelected({ id, baseline: result.value, key: generation + 1 })
-    }
+    [draftId, setDraftId] = useState<string | null>(null)
+  function closeDraft() {
+    setDraftId(null)
+    read.reload()
   }
   return (
-    <SelectionGuard.Provider value={guard.register}>
+    <>
       <Heading
         title={l('设备组', 'Device groups')}
         hint={l(
@@ -84,18 +84,15 @@ export function Groups({
           canWrite && (
             <Button
               type="primary"
-              disabled={guard.locked || action.busy}
-              onClick={() => {
-                setGeneration((v) => v + 1)
-                setSelected({ id: crypto.randomUUID(), baseline: null, key: generation + 1 })
-              }}
+              disabled={locked}
+              onClick={() => setDraftId(crypto.randomUUID())}
             >
               {l('新建设备组', 'New device group')}
             </Button>
           )
         }
       />
-      <fieldset className="permission-panel" disabled={guard.locked || action.busy}>
+      <fieldset className="permission-panel" disabled={locked}>
         <DirectoryControls
           catalog="groups"
           locale={locale}
@@ -131,17 +128,7 @@ export function Groups({
                       ? group.presentation['name']
                       : group.id
                   }
-                  extra={
-                    group.kind && (
-                      <Tag>
-                        {group.kind === 'static'
-                          ? l('静态设备组', 'Static group')
-                          : group.kind === 'dynamic'
-                            ? l('动态设备组', 'Dynamic group')
-                            : l('系统设备组', 'System group')}
-                      </Tag>
-                    )
-                  }
+                  extra={group.kind && <Tag>{groupKindLabel(locale, group.kind)}</Tag>}
                 >
                   <p className="asset-group-count">
                     {group.memberCount ?? '—'} <span>{l('个成员', 'members')}</span>
@@ -159,9 +146,15 @@ export function Groups({
                         : '—'}{' '}
                     · {l('成员版本', 'Member version')} {group.memberVersion ?? '—'}
                   </p>
-                  <Button type="link" onClick={() => void open(group.id)}>
-                    {l('查看定义与成员 →', 'View definition and members →')}
-                  </Button>
+                  {locked ? (
+                    <span aria-disabled="true">
+                      {l('查看定义与成员 →', 'View definition and members →')}
+                    </span>
+                  ) : (
+                    <Link to={groupDetailPath(group.id, params)}>
+                      {l('查看定义与成员 →', 'View definition and members →')}
+                    </Link>
+                  )}
                 </Card>
               ))}
             </div>
@@ -180,69 +173,110 @@ export function Groups({
           </Button>
         )}
       </fieldset>
-      <Failure locale={locale} error={action.error} />
-      {selected && (
+      {draftId && (
         <div className="admin-subsection">
           <div className="admin-table-footer">
-            <Button disabled={guard.locked || action.busy} onClick={() => setSelected(null)}>
+            <Button disabled={locked} onClick={closeDraft}>
               {l('关闭设备组详情', 'Close group detail')}
             </Button>
           </div>
-          <GroupEditor
-            key={selected.key}
-            groups={groups}
-            devices={devices}
-            locale={locale}
-            id={selected.id}
-            baseline={selected.baseline}
-            canWrite={canWrite}
-            canPreview={canPreview}
-            canRecompute={canRecompute}
-            done={() => {
-              setSelected(null)
-              read.reload()
-            }}
-          />
+          <GroupEditor {...editor} key={draftId} id={draftId} baseline={null} done={closeDraft} />
         </div>
       )}
-    </SelectionGuard.Provider>
+    </>
+  )
+}
+function GroupDetail({
+  binding,
+  id,
+  close,
+  ...editor
+}: GroupAccess & { binding: string; id: string; close: () => void }) {
+  const read = useRead(`${binding}/group-detail/${id}`, (signal) => editor.groups.read(id, signal))
+  return (
+    <>
+      <ReadState locale={editor.locale} busy={read.busy} error={read.error} onRetry={read.reload} />
+      {read.value && <GroupEditor {...editor} id={id} baseline={read.value} done={close} />}
+    </>
   )
 }
 export function GroupsPage({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
+    [params, setParams] = useSearchParams(),
+    requested = params.get('group'),
+    guard = useSelectionGuard(),
+    [heldGroup, setHeldGroup] = useState(requested),
+    id = guard.locked ? heldGroup : requested,
     { groups, devices, authorization, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/groups-presentation`, authorization.effective),
     has = (operation: string) =>
       permissions.value?.grants.some(
         (grant) => grant.scope.kind === 'tenant' && grant.operation === operation,
       ) ?? false,
-    read = has('group_read')
+    access = {
+      groups,
+      devices,
+      locale,
+      canWrite: has('group_write'),
+      canPreview: has('group_read'),
+      canRecompute: has('group_recompute'),
+    }
+  useEffect(() => {
+    if (!guard.locked) {
+      setHeldGroup(requested)
+    } else if (requested !== heldGroup) {
+      // Keep the original write owner through history changes within the group workspace.
+      const restored = new URLSearchParams(params)
+      if (heldGroup === null) restored.delete('group')
+      else restored.set('group', heldGroup)
+      setParams(restored, { replace: true })
+    }
+  }, [guard.locked, requested, heldGroup, params, setParams])
+  function close() {
+    const next = new URLSearchParams(params)
+    next.delete('group')
+    setParams(next, { replace: true })
+  }
   return (
-    <>
-      <Button onClick={permissions.reload}>
+    <SelectionGuard.Provider value={guard.register}>
+      <Button disabled={guard.locked} onClick={permissions.reload}>
         {l('读取设备组入口权限', 'Read device group entry permissions')}
       </Button>
       <ReadState locale={locale} busy={permissions.busy} error={permissions.error} />
-      <SecretTabs
-        uiLocale={locale}
-        authorizedKeys={read || has('group_write') || has('group_recompute') ? ['directory'] : []}
-        items={[
-          {
-            key: 'directory',
-            label: l('设备组', 'Device groups'),
-            children: (
-              <Groups
-                groups={groups}
-                devices={devices}
-                locale={locale}
-                canWrite={has('group_write')}
-                canPreview={read}
-                canRecompute={has('group_recompute')}
+      {id !== null ? (
+        <div className="admin-subsection">
+          <div className="admin-table-footer">
+            <Button disabled={guard.locked} onClick={close}>
+              {l('关闭设备组详情', 'Close group detail')}
+            </Button>
+          </div>
+          {access.canPreview ? (
+            <GroupDetail {...access} key={id} binding={binding} id={id} close={close} />
+          ) : (
+            permissions.value && (
+              <Alert
+                type="error"
+                role="alert"
+                title={l('当前账户没有设备组读取权限。', 'Your account cannot read device groups.')}
               />
-            ),
-          },
-        ]}
-      />
-    </>
+            )
+          )}
+        </div>
+      ) : (
+        <SecretTabs
+          uiLocale={locale}
+          authorizedKeys={
+            access.canPreview || access.canWrite || access.canRecompute ? ['directory'] : []
+          }
+          items={[
+            {
+              key: 'directory',
+              label: l('设备组', 'Device groups'),
+              children: <GroupDirectory {...access} locked={guard.locked} />,
+            },
+          ]}
+        />
+      )}
+    </SelectionGuard.Provider>
   )
 }
