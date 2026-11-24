@@ -165,7 +165,7 @@ it('erases a late profile response from the previous enrollment without disclosi
   await click('受保护下载 macOS 配置描述文件')
   await selectEnrollment(b)
   await act(async () => release(file))
-  expect(view.read).toHaveBeenLastCalledWith(b)
+  expect(view.read).toHaveBeenLastCalledWith(b, expect.any(AbortSignal))
   expect(createUrl).not.toHaveBeenCalled()
   expect([...new Uint8Array(file.bytes)]).toEqual([0, 0, 0])
 })

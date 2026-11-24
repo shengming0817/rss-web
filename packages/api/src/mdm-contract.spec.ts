@@ -39,7 +39,13 @@ describe('fixed producer HTTP operations', () => {
       ] as const) {
         mock
           .onGet(`/api/v1/tenants/11111111-1111-4111-8111-111111111111/device-views/endpoint/${id}`)
-          .reply(status, body, { 'content-type': media })
+          .reply(status, body, {
+            'content-type': media,
+            'cache-control': 'no-store',
+            'referrer-policy': 'no-referrer',
+            'x-content-type-options': 'nosniff',
+            'x-request-id': id,
+          })
         await expect(request()).rejects.toMatchObject({
           cause,
           status,
@@ -342,6 +348,7 @@ describe('fixed producer HTTP operations', () => {
         hostId: id,
         operationId: id,
         revision: 1,
+        unavailableTelemetry: [],
         materialDigest: '0'.repeat(64),
         processGeneration: id,
         instanceId: id,
@@ -350,6 +357,22 @@ describe('fixed producer HTTP operations', () => {
         .onGet('/readyz')
         .reply(503, { ready: false, observation }, { 'content-type': 'application/json' })
       await expect(getReadyz(transport, {})).resolves.toEqual({ ready: false, observation })
+      mock.onGet('/readyz').reply(
+        503,
+        { code: 'service_unavailable' },
+        {
+          'content-type': 'application/json',
+          'cache-control': 'no-store',
+          'referrer-policy': 'no-referrer',
+          'x-content-type-options': 'nosniff',
+          'x-request-id': id,
+        },
+      )
+      await expect(getReadyz(transport, {})).rejects.toMatchObject({
+        cause: 'wire',
+        status: 503,
+        code: 'service_unavailable',
+      })
       mock
         .onGet('/readyz')
         .reply(503, { ready: 'false', observation }, { 'content-type': 'application/json' })

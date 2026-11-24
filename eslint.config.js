@@ -579,8 +579,8 @@ export default tseslint.config(
           NO_AXIOS_PATH,
           {
             name: '@rss/api/mdm-query',
-            allowImportNames: ['allOf'],
-            message: 'Only the pure RSQL conjunction is available to feature pages.',
+            allowImportNames: ['allOf', 'comparison'],
+            message: 'Only pure RSQL filter builders are available to feature pages.',
           },
           {
             name: '@rss/auth-core',

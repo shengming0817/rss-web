@@ -103,7 +103,7 @@ function CatalogField({ prefix, ...props }: Props & { prefix: string }) {
       <Form.Item label={title}>
         <Select
           aria-label={title}
-          value={value.field === prefix ? undefined : value.field}
+          value={value.field === prefix ? null : value.field}
           options={rows.map((r) => ({ value: r.key, label: r.key.slice(prefix.length) }))}
           onChange={(key: string) => {
             const next = rows.find((r) => r.key === key)

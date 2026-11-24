@@ -122,7 +122,7 @@ export function defineEndpoint<Input extends object, Output>(description: Endpoi
           : input.body
       if (!description.checks.body(JSON.parse(JSON.stringify(checked)))) throw clientError()
     } else if (input.body !== undefined) throw clientError()
-    const success = description.responses.filter((r) => description.statuses.includes(r.status))
+    const success = description.responses.filter((r) => r.status < 400 || r.result)
     const empty = success.every((r) => !r.validate)
     const options = {
       method: description.method,

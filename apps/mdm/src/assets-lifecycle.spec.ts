@@ -657,6 +657,7 @@ it('opens a group directly by URL and restores the group directory query on clos
           }),
         },
         groups: { read, list },
+        inventory: { fields: vi.fn() },
         devices: {},
       }),
     } as unknown as Runtime
@@ -712,6 +713,7 @@ it('retains the exact unresolved group write across history navigation within th
             })),
           }),
         },
+        inventory: { fields: vi.fn() },
         groups: { read, change, list, references: empty, impacts: empty },
         devices: {},
       }),

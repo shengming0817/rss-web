@@ -506,6 +506,19 @@ await output(
 )
 // Shared response branches avoid repeating the same mounted failure contracts in every operation.
 const responseBranches = new Map()
+const readinessResults = new Set(
+  endpoints
+    .filter((e) => e.path === '/readyz')
+    .flatMap((e) =>
+      e.responses
+        .filter(
+          (r) => r.status === 503 && schemas[r.body?.schema.schemaId]?.required?.includes('ready'),
+        )
+        .map((r) => r.body.schema.schemaId),
+    ),
+)
+const isResult = (r) =>
+  r.status < 400 || (r.status === 503 && readinessResults.has(r.body?.schema.schemaId))
 for (const e of endpoints)
   for (const r of e.responses) responseBranches.set('r' + digest(r).slice(0, 20), r)
 const responseValidationIds = [
@@ -525,7 +538,7 @@ await output(
     [...responseBranches]
       .map(
         ([name, r]) =>
-          `export const ${name}={status:${r.status},media:${JSON.stringify(r.body?.content_type ?? null)},validate:${r.body ? short(r.body.schema.schemaId) : 'null'},headers:{${Object.entries(
+          `export const ${name}={status:${r.status},${r.status >= 400 && isResult(r) ? 'result:true,' : ''}media:${JSON.stringify(r.body?.content_type ?? null)},validate:${r.body ? short(r.body.schema.schemaId) : 'null'},headers:{${Object.entries(
             r.headers,
           )
             .map(([k, v]) => `${JSON.stringify(k)}:${short(v.schemaId)}`)
@@ -621,9 +634,7 @@ for (const e of endpoints) {
       `headers${requiredHeaders.length ? '' : '?'}: {${requestHeaders.map(([key, ref]) => `${JSON.stringify(headerName(key))}${requiredHeaders.includes(key) ? '' : '?'}: ${typeOf(ref)}`).join(';')}}${requiredHeaders.length ? '' : '| undefined'}`,
     )
   args.push('signal?: AbortSignal | undefined', 'timeoutMs?: number | undefined')
-  const success = e.responses.filter(
-    (r) => r.status < 400 || (e.path === '/readyz' && r.status === 503),
-  )
+  const success = e.responses.filter(isResult)
   const binary = success.some(
     (r) =>
       r.body &&
