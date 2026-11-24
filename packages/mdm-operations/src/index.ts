@@ -35,11 +35,6 @@ export interface CommandDetail extends DetailIdentity {
   readonly inputVersion: string
   readonly dispatchFailure: EvidenceDocument | null
   readonly authorization: EvidenceDocument & { readonly state: string }
-  readonly reauthorization: {
-    readonly state: 'available' | 'unavailable' | 'not_applicable'
-    readonly confirmationRequired: boolean
-    readonly reason: string | null
-  } | null
   readonly delivery: string
   readonly observation: EvidenceDocument & { readonly protocol: string; readonly effect: string }
 }

@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom'
 // @vitest-environment jsdom
 // UI lifecycle tests use injected use cases; real HTTP/product evidence is owned by e2e/mdm.
 import { act, createElement, useState } from 'react'
@@ -102,7 +103,12 @@ function native(
     } as unknown as Runtime
   return {
     read,
-    render: () => createElement(NativeEnrollment, { runtime, locale: 'zh', initialEnrollment: a }),
+    render: () =>
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(NativeEnrollment, { runtime, locale: 'zh', initialEnrollment: a }),
+      ),
   }
 }
 function input(label: string): HTMLInputElement {

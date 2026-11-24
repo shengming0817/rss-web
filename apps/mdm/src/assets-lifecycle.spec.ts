@@ -1,3 +1,5 @@
+import { GroupCriteriaEditor } from './CriteriaEditor'
+import { createRuleCatalog } from './group-rule-catalog'
 import { isValidElement } from 'react'
 import { DirectoryCatalogContext } from './DirectorySearch'
 import { directoryFixtures } from './directory.spec-helper'
@@ -15,7 +17,7 @@ import type {
   ValueMapping,
 } from '@rss/mdm-resources'
 import type { ViewEndpoint } from '@rss/mdm-devices'
-import type { GroupMemberships, GroupRead } from '@rss/mdm-groups'
+import type { GroupCriteria, GroupMemberships, GroupRead } from '@rss/mdm-groups'
 import type {
   FieldDetail,
   Operation,
@@ -321,7 +323,13 @@ it.each(['blocker', 'continuation', 'unreadable'] as const)(
         MemoryRouter,
         null,
         createElement(GroupEditor, {
-          catalog: { scope: 'test', registration: true, fields: vi.fn(), userGroups: vi.fn() },
+          catalog: {
+            scope: 'test',
+            registration: true,
+            current: true,
+            fields: vi.fn(),
+            userGroups: vi.fn(),
+          },
           groups,
           devices,
           locale: 'zh',
@@ -1027,7 +1035,13 @@ it('recovers an unknown recompute by exact replay and reads only the returned se
       MemoryRouter,
       null,
       createElement(GroupEditor, {
-        catalog: { scope: 'test', registration: true, fields: vi.fn(), userGroups: vi.fn() },
+        catalog: {
+          scope: 'test',
+          registration: true,
+          current: true,
+          fields: vi.fn(),
+          userGroups: vi.fn(),
+        },
         groups,
         devices,
         locale: 'zh',
@@ -1562,4 +1576,59 @@ it('drops late policy results when tenant or permission context changes', async 
   await click('管理遥测保留策略')
   expect(host.querySelector<HTMLInputElement>('[aria-label="查询策略键"]')?.value).toBe('')
   expect(newRead).not.toHaveBeenCalled()
+})
+
+it('uses an exact field description after typing and keeps its row through a rule move', async () => {
+  const counted = 'device.test.count'
+  const catalog = createRuleCatalog(
+    'author',
+    true,
+    true,
+    vi.fn(async ({ filter }) => ({
+      dictionary: '1',
+      items: filter?.includes(counted)
+        ? [{ key: counted, valueType: { kind: 'integer' as const }, operations: ['gt' as const] }]
+        : [],
+      nextCursor: null,
+    })),
+    vi.fn(),
+  )
+  const first = {
+    kind: 'predicate' as const,
+    field: 'device.original',
+    op: 'eq' as const,
+    value: { kind: 'string' as const, value: 'retained' },
+  }
+  function Tree() {
+    const [value, onChange] = useState<GroupCriteria>({
+      kind: 'and',
+      children: [first, { ...first, field: 'device.other' }],
+    })
+    return createElement(GroupCriteriaEditor, {
+      value,
+      onChange,
+      catalog,
+      locale: 'zh',
+      groups: inject<GroupsUseCases>({}),
+      assetContext: 'endpoint',
+    })
+  }
+  await render(createElement(Tree))
+  const fields = () => host.querySelectorAll<HTMLInputElement>('input[aria-label="条件字段"]')
+  const edited = fields()[1]!
+  await act(async () => {
+    edited.focus()
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(edited, counted)
+    edited.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => edited.blur())
+  expect(host.querySelector<HTMLInputElement>('input[aria-label="数值"]')?.value).toBe('0')
+  const move = [...host.querySelectorAll('button')].find(
+    (node) => node.textContent?.trim() === '条件上移' && !node.disabled,
+  )!
+  await act(async () => move.click())
+  expect(fields()[0]).toBe(edited)
+  expect(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="文本值"]')?.value).toBe(
+    'retained',
+  )
 })

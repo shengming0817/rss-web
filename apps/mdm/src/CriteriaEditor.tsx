@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { PredicateEditor } from './PredicateEditor'
 import { GroupPredicate } from './GroupPredicate'
 import type { RuleCatalog } from './group-rule-catalog'
@@ -99,6 +100,15 @@ export function GroupCriteriaEditor({
   depth?: number
 }) {
   const l = labels(locale)
+  const childKeys = useRef(new WeakMap<GroupCriteria, string>()).current
+  function childKey(child: GroupCriteria) {
+    let key = childKeys.get(child)
+    if (!key) {
+      key = crypto.randomUUID()
+      childKeys.set(child, key)
+    }
+    return key
+  }
   return (
     <fieldset className="asset-editor-section">
       <legend>{l('组规则条件', 'Group rule condition')}</legend>
@@ -148,7 +158,7 @@ export function GroupCriteriaEditor({
       ) : (
         <>
           {value.children.map((child, index) => (
-            <div key={index}>
+            <div key={childKey(child)}>
               <GroupCriteriaEditor
                 locale={locale}
                 catalog={catalog}
@@ -157,12 +167,13 @@ export function GroupCriteriaEditor({
                 {...(referenceableFor ? { referenceableFor } : {})}
                 value={child}
                 depth={depth + 1}
-                onChange={(next) =>
+                onChange={(next) => {
+                  childKeys.set(next, childKey(child))
                   onChange({
                     ...value,
                     children: value.children.map((v, i) => (i === index ? next : v)),
                   })
-                }
+                }}
               />
               <Space wrap>
                 <Button

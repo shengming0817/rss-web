@@ -13,7 +13,17 @@ export function createDeviceControlAdapter(transport: HttpTransport, tenant: str
         (value) => {
           if (value.owner !== 'device' || value.operationId !== id || value.commandId !== id)
             throw new Error('Wrong original control operation')
+          const recovery = requestInput(
+            value.reauthorization,
+            schema.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse
+              .validateReauthorization,
+          )
           return {
+            terminal: ['applied', 'rejected', 'cancelled', 'timed_out', 'superseded'].includes(
+              value.commandStatus,
+            ),
+            canReauthorize: recovery.state === 'available',
+            confirmationRequired: recovery.state === 'available' && recovery.confirmationRequired,
             operationId: id,
             revision: positive(value.revision),
             status: value.commandStatus,

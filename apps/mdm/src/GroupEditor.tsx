@@ -13,7 +13,7 @@ import type { DevicesUseCases } from './EndpointPicker'
 import type { Locale } from './i18n'
 import { Failure, isUnknown, labels, useAction } from './AdminUi'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
-import { usesRegistration, type RuleCatalog } from './group-rule-catalog'
+import { usableCriteria, type RuleCatalog } from './group-rule-catalog'
 import { ConditionContextEditor } from './InventoryScopeEditor'
 import { emptyPredicate, GroupCriteriaEditor } from './CriteriaEditor'
 import { StringItems } from './ValueTypeEditor'
@@ -78,8 +78,7 @@ export function GroupEditor({
     [approved, setApproved] = useState(false),
     [invalid, setInvalid] = useState(false),
     [deletionBlocked, setDeletionBlocked] = useState<boolean | null>(null),
-    canUseCriteria =
-      kind !== 'dynamic' || catalog.registration || !usesRegistration(criteria.criteria),
+    canUseCriteria = kind !== 'dynamic' || usableCriteria(criteria.criteria, catalog),
     mutable = canWrite && group?.kind !== 'system' && !group?.deleted,
     writeDisabled = !mutable || guard.locked || action.busy || pending !== null
   usePendingSelection(

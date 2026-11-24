@@ -219,10 +219,17 @@ export function GroupsPage({ runtime, locale }: { runtime: Runtime; locale: Loca
       permissions.value?.grants.some(
         (g) => g.operation === 'enrollment' && g.scope.kind === 'all_devices',
       ) ?? false,
+    current = has('inventory_sensitive_read'),
     catalog = useMemo(
       () =>
-        createRuleCatalog(permissions.key, registration, inventory.fields, authorization.groups),
-      [permissions.key, registration, inventory.fields, authorization.groups],
+        createRuleCatalog(
+          permissions.key,
+          registration,
+          current,
+          inventory.fields,
+          authorization.groups,
+        ),
+      [permissions.key, registration, current, inventory.fields, authorization.groups],
     ),
     access = {
       catalog,

@@ -210,29 +210,45 @@ try {
   await run.nav(admin, '/enroll', '设备注册')
   const before = await readStatus(admin, windows.enrollment)
   const path = origin + enrollmentPath(windows.enrollment)
-  let release, captured
-  const waiting = new Promise((done) => {
-    captured = done
-  })
+  let release
   const gate = new Promise((done) => {
     release = done
   })
+  const handled = Promise.withResolvers()
   const delayed = async (route) => {
-    const response = await route.fetch()
-    captured()
-    await gate
-    await route.fulfill({ response }).catch(() => {})
+    try {
+      const response = await route.fetch()
+      await gate
+      await route.fulfill({ response })
+      handled.resolve()
+    } catch (error) {
+      if (route.request().failure()?.errorText.includes('ERR_ABORTED')) handled.resolve()
+      else handled.reject(error)
+    }
   }
   await admin.route(path, delayed)
-  await open(admin).click()
-  await waiting
+  const capture = admin.waitForRequest(path, { timeout: 10000 })
   const detailPath = `/api/v1/tenants/${f.tenant}/device-views/endpoint/${windows.device}`
   const reads = run.count(admin, 'GET', detailPath)
-  await readStatus(admin, apple.enrollment)
-  release()
+  await open(admin).click()
+  const request = await capture
+  const completed = request.response().then((response) => response?.finished())
+  try {
+    await readStatus(admin, apple.enrollment)
+  } finally {
+    release()
+  }
+  const timeout = globalThis.AbortSignal.timeout(15000)
+  await Promise.race([
+    Promise.all([handled.promise, completed]),
+    new Promise((_, reject) =>
+      timeout.addEventListener('abort', () => reject(timeout.reason), { once: true }),
+    ),
+  ])
   await admin.unroute(path, delayed)
   await open(admin).waitFor()
   assert.equal(run.count(admin, 'GET', detailPath), reads)
+  assert.equal(new URL(admin.url()).pathname, `/tenants/${f.tenant}/enroll`)
   assert.equal(
     await admin.getByLabel('注册申请标识', { exact: true }).inputValue(),
     apple.enrollment,
@@ -248,16 +264,18 @@ try {
   await admin.getByText('expired', { exact: true }).last().waitFor()
   assert.equal(await open(admin).count(), 0)
   await admin.unroute(path)
+  await readStatus(admin, windows.enrollment)
   await admin.route(path, (route) =>
     route.fulfill({ json: { ...before, enrollmentId: apple.enrollment } }),
   )
-  await readStatus(admin, windows.enrollment)
+  await run.response(admin, 'GET', enrollmentPath(windows.enrollment), () => open(admin).click())
   await admin
     .getByText('无法读取当前数据，请检查查询或连接后重新读取。', { exact: true })
     .first()
     .waitFor()
   assert.equal(await open(admin).count(), 0)
   await admin.unroute(path)
+  assert.equal(await admin.getByText('后台已确认管理就绪。', { exact: true }).count(), 0)
   checks.push('late-status-after-switch-and-controlled-expiry-or-wrong-request')
   const limited = await readStatus(employee, restricted.enrollment)
   assert.equal(limited.progress.managementReady, true)

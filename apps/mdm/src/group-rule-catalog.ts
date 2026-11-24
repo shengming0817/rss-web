@@ -5,10 +5,15 @@ import type { InventoryPort } from '@rss/mdm-inventory'
 export const registrationFields = 'device.registration_user.'
 export const currentFields = 'device.current_user.'
 
-export function usesRegistration(criteria: GroupCriteria): boolean {
-  if (criteria.kind === 'predicate') return criteria.field.startsWith(registrationFields)
-  if (criteria.kind === 'group') return false
-  return criteria.children.some(usesRegistration)
+export function usableCriteria(criteria: GroupCriteria, catalog: RuleCatalog): boolean {
+  if (criteria.kind === 'group') return true
+  if (criteria.kind !== 'predicate')
+    return criteria.children.every((child) => usableCriteria(child, catalog))
+  const field = criteria.field
+  if (field.startsWith(registrationFields))
+    return catalog.registration && field.length > registrationFields.length
+  if (field.startsWith(currentFields)) return catalog.current && field.length > currentFields.length
+  return field.trim().length > 0
 }
 
 // A rule tree can show the same directory in many leaves. Share only pending reads
@@ -45,12 +50,14 @@ function shareRead<Q, T>(load: (query: Q, signal: AbortSignal) => Promise<T>) {
 export function createRuleCatalog(
   scope: string,
   registration: boolean,
+  current: boolean,
   fields: InventoryPort['fields'],
   groups: AuthorizationPort['groups'],
 ) {
   return {
     scope,
     registration,
+    current,
     fields: shareRead(fields),
     userGroups: shareRead((query: DirectoryQuery<'id' | 'name'>, signal) => groups(query, signal)),
   }

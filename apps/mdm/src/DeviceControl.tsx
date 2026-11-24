@@ -79,6 +79,8 @@ export function DeviceControl({
   function prepare() {
     if (!ready || !snapshot || action.busy || outcome === 'unknown') return
     action.clear()
+    setOutcome('none')
+    setPending(null)
     setStale(false)
     setApproved(false)
     setOriginalId(null)

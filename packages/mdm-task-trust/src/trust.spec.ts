@@ -15,4 +15,17 @@ it('keeps the original change identity and checks the accepted revision', async 
   )
   expect(await client.trustOperation(id)).toEqual(trust)
   expect(port.trustOperation).toHaveBeenCalledWith(id)
+  const observation = {
+    device: id,
+    state: 'applied',
+    reason: null,
+    targetRevision: 2,
+    actualRevision: 2,
+    receivedAt: 42,
+  }
+  port.trustObservation.mockResolvedValue(observation)
+  await expect(client.trustObservation(id)).resolves.toEqual(observation)
+  await expect(client.trustObservation('22222222-2222-4222-8222-222222222222')).rejects.toThrow(
+    'observation device',
+  )
 })

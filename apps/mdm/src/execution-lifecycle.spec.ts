@@ -170,7 +170,15 @@ it('allows a wipe-only principal to confirm backend-authorized recovery without 
             grants: [{ operation: 'device_wipe', scope: { kind: 'all_devices' } }],
           }),
         },
-        deviceControl: { reauthorize },
+        deviceControl: {
+          reauthorize,
+          original: async () => ({
+            revision: 4,
+            canReauthorize: true,
+            terminal: false,
+            confirmationRequired: true,
+          }),
+        },
       }),
     } as unknown as Runtime
   await act(async () =>
@@ -183,12 +191,6 @@ it('allows a wipe-only principal to confirm backend-authorized recovery without 
           locale: 'zh',
           device: 'device-a',
           id: '11111111-1111-4111-8111-111111111111',
-          revision: 4,
-
-          canReauthorize: true,
-          confirmationRequired: true,
-          terminal: false,
-          onRefresh() {},
         }),
       ),
     ),
@@ -214,9 +216,13 @@ it('allows a wipe-only principal to select, review and explicitly submit a wipe'
       operationId: input.operationId,
       revision: 1,
     })),
+    preflight = vi
+      .fn()
+      .mockResolvedValueOnce(detailSnapshot(endpoint, ['wipe']))
+      .mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' })),
     runtime = {
       administration: () => ({
-        devices: { endpoint: async () => detailSnapshot(endpoint, ['wipe']) },
+        devices: { endpoint: preflight },
         deviceControl: { create },
       }),
     } as unknown as Runtime
@@ -258,6 +264,13 @@ it('allows a wipe-only principal to select, review and explicitly submit a wipe'
     kind: 'wipe',
     confirmed: true,
   })
+  await act(async () => button('核对设备与动作').click())
+  await act(async () =>
+    document.querySelector<HTMLInputElement>('[role=dialog] input[type=checkbox]')!.click(),
+  )
+  await act(async () => button('确认提交此动作').click())
+  expect(host.textContent).toContain('当前账户没有此操作权限。')
+  expect(create).toHaveBeenCalledOnce()
 })
 it.each<EnterpriseConfiguration>([
   {
@@ -1042,13 +1055,20 @@ it('retains an unknown recovery request while refreshing the containing result d
         task: { name: 'Restart', kind: 'command', platform: 'windows', objects: [] },
         inputVersion: '1',
         deadline: 2,
-        reauthorization: null,
       },
+    })),
+    readOriginal = vi.fn(async () => ({
+      operationId: id,
+      revision: 7,
+      status: 'queued',
+      terminal: false,
+      canReauthorize: false,
+      confirmationRequired: false,
     })),
     runtime = {
       administration: () => ({
         binding: 'recovery-owner',
-        deviceControl: { cancel },
+        deviceControl: { cancel, original: readOriginal },
         authorization: {
           effective: async () => ({
             grants: [{ operation: 'operation_cancel', scope: { kind: 'all_devices' } }],
@@ -1080,7 +1100,9 @@ it('retains an unknown recovery request while refreshing the containing result d
   expect(cancel).toHaveBeenCalledOnce()
   const original = cancel.mock.calls[0]
   await act(async () => button('查询原操作当前事实').click())
-  expect(detail).toHaveBeenCalledTimes(2)
+  expect(readOriginal).toHaveBeenCalledTimes(2)
+  expect(detail).toHaveBeenCalledTimes(1)
+  expect(original).toEqual(['device-a', id, expect.objectContaining({ expectedRevision: 7 })])
   await act(async () => button('显式重提同一恢复请求').click())
   expect(cancel.mock.calls[1]).toEqual(original)
 })

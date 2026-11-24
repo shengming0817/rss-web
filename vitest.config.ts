@@ -19,6 +19,7 @@ export default defineConfig({
             'apps/mdm/src/policy-lifecycle.spec.ts',
             'apps/mdm/src/directory-search.spec.ts',
             'apps/mdm/src/assets-lifecycle.spec.ts',
+            'apps/mdm/src/group-rule-catalog.spec.ts',
             'apps/mdm/src/resources-lifecycle.spec.ts',
             'apps/mdm/src/material-source.spec.ts',
             'apps/mdm/src/public-materials.spec.ts',

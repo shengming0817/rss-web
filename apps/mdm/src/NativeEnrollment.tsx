@@ -6,7 +6,6 @@ import {
   windowsEnrollmentLink,
   type NativeIntent,
   type Enrollment,
-  type EnrollmentPort,
 } from '@rss/mdm-enrollment'
 import { useNavigate } from 'react-router-dom'
 import { devicePath } from './Devices'
@@ -55,44 +54,6 @@ function readyDevice(status: Enrollment, id: string) {
   )
 }
 
-function OpenEnrolledDevice({
-  status,
-  load,
-  locale,
-  reload,
-}: {
-  status: Enrollment
-  load: EnrollmentPort['enrollment']
-  locale: Locale
-  reload: () => void
-}) {
-  const navigate = useNavigate(),
-    l = labels(locale),
-    action = useAction()
-  const request = useRef<AbortController | null>(null)
-  useEffect(() => () => request.current?.abort(), [])
-  async function open() {
-    if (request.current) return
-    const controller = new AbortController()
-    request.current = controller
-    const fresh = await action.run(() => load(status.enrollmentId, controller.signal))
-    if (controller.signal.aborted) return
-    request.current = null
-    if (!fresh.ok) return
-    if (readyDevice(fresh.value, status.enrollmentId) && fresh.value.deviceId === status.deviceId) {
-      navigate(devicePath('endpoint', fresh.value.deviceId))
-    } else reload()
-  }
-  return (
-    <>
-      <Button disabled={action.busy} onClick={() => void open()}>
-        {l('打开已注册设备详情', 'Open enrolled device details')}
-      </Button>
-      <Failure locale={locale} error={action.error} kind="read" />
-    </>
-  )
-}
-
 export function NativeEnrollment({
   runtime,
   locale,
@@ -120,6 +81,13 @@ export function NativeEnrollment({
     [idDraft, setIdDraft] = useState(initialEnrollment),
     [pending, setPending] = useState<{ intent: NativeIntent; fingerprint: string } | null>(null),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none')
+  const navigate = useNavigate()
+  const opening = useRef<{
+    binding: typeof binding
+    id: string
+    device: string
+    readKey: string
+  } | null>(null)
   const currentId = useRef(id)
   const delivery = useProtectedDelivery(() => {
       setPassword('')
@@ -138,6 +106,24 @@ export function NativeEnrollment({
     unavailable = !channel || channel.availability !== 'ready',
     locked =
       maintenance.locked || (pending !== null && outcome !== 'confirmed' && outcome !== 'rejected')
+  useEffect(() => {
+    const original = opening.current
+    if (!original) return
+    if (
+      original.binding !== binding ||
+      original.id !== id ||
+      idDraft !== id ||
+      !visible ||
+      locked
+    ) {
+      opening.current = null
+      return
+    }
+    if (read.key === original.readKey || read.busy) return
+    opening.current = null
+    if (read.value && readyDevice(read.value, id) && read.value.deviceId === original.device)
+      navigate(devicePath('endpoint', original.device))
+  }, [binding, id, idDraft, visible, locked, read.key, read.busy, read.value, navigate])
   usePendingSelection(action.busy || locked)
   function selectEnrollment(next: string) {
     if (currentId.current !== next) {
@@ -392,6 +378,7 @@ export function NativeEnrollment({
           layout="inline"
           onFinish={() => {
             if (locked && idDraft !== id) return
+            opening.current = null
             selectEnrollment(idDraft)
             read.reload()
           }}
@@ -428,13 +415,15 @@ export function NativeEnrollment({
               }
             />
             {visible && !locked && idDraft === id && readyDevice(read.value, id) && (
-              <OpenEnrolledDevice
-                key={read.key + read.value.deviceId}
-                locale={locale}
-                status={read.value}
-                load={enrollment.enrollment}
-                reload={read.reload}
-              />
+              <Button
+                onClick={() => {
+                  if (!read.value || opening.current) return
+                  opening.current = { binding, id, device: read.value.deviceId, readKey: read.key }
+                  read.reload()
+                }}
+              >
+                {l('打开已注册设备详情', 'Open enrolled device details')}
+              </Button>
             )}
             <dl className="device-facts">
               <div>

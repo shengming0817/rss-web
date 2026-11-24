@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Button, Form, Input, Select } from 'antd'
 import type { FieldRow, Predicate, ValueType } from '@rss/mdm-inventory'
 import type { Locale } from './i18n'
@@ -121,17 +121,23 @@ function CatalogField({ prefix, ...props }: Props & { prefix: string }) {
   const row = listed ?? selected.value?.items.find((r) => r.key === value.field)
   const title = prefix ? l('人员属性', 'User attribute') : l('条件字段', 'Condition field')
   const options = rows.map((r) => ({ value: r.key, label: r.key.slice(prefix.length) }))
+  const edited = useRef<string | null>(null)
+  function selectField(field: string, operations: readonly Predicate['op'][], type: ValueType) {
+    return withOperator(
+      field,
+      operations.includes('contains_any') ? 'contains_any' : operations[0]!,
+      operand(type),
+    )
+  }
+  useEffect(() => {
+    if (edited.current !== value.field || !row?.valueType || !row.operations?.length) return
+    edited.current = null
+    onChange(selectField(value.field, row.operations, row.valueType))
+  }, [value.field, row, onChange])
   function changeField(key: string) {
     const next = rows.find((r) => r.key === key)
-    onChange(
-      next
-        ? withOperator(
-            key,
-            next.operations.includes('contains_any') ? 'contains_any' : next.operations[0]!,
-            operand(next.valueType),
-          )
-        : { ...value, field: key },
-    )
+    edited.current = next ? null : key
+    onChange(next ? selectField(key, next.operations, next.valueType) : { ...value, field: key })
   }
   return (
     <>
@@ -183,6 +189,9 @@ function CatalogField({ prefix, ...props }: Props & { prefix: string }) {
           )}
         </p>
       )}
+      {prefix && page.value && !page.value.nextCursor && !cursor && !rows.length && (
+        <p>{l('当前没有可读的人员属性。', 'No readable user attributes are available.')}</p>
+      )}
       {(!prefix || (row?.valueType && row.operations?.length)) && (
         <PredicateEditor
           {...props}
@@ -225,14 +234,25 @@ export function GroupPredicate(props: Props) {
               disabled: !props.catalog.registration,
               label: l('注册用户', 'Registration user'),
             },
-            { value: current, label: l('当前使用人', 'Current user') },
+            {
+              value: current,
+              disabled: !props.catalog.current,
+              label: l('当前使用人', 'Current user'),
+            },
           ]}
           onChange={(field: string) =>
             onChange({ kind: 'predicate', field, op: 'eq', value: { kind: 'string', value: '' } })
           }
         />
       </Form.Item>
-      {prefix === registered && !props.catalog.registration ? (
+      {prefix === current && !props.catalog.current ? (
+        <p>
+          {l(
+            '读取当前使用人条件需要敏感资产读取权限。',
+            'Current user conditions require sensitive inventory read permission.',
+          )}
+        </p>
+      ) : prefix === registered && !props.catalog.registration ? (
         <p>
           {l(
             '此条件需要全部设备的注册读取权限。',

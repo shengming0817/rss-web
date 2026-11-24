@@ -14,17 +14,19 @@ export interface ControlReceipt {
   readonly operationId: string
   readonly revision: number
 }
+export interface OriginalControl extends ControlReceipt {
+  readonly status: string
+  readonly terminal: boolean
+  readonly canReauthorize: boolean
+  readonly confirmationRequired: boolean
+}
 export interface ControlRecovery {
   readonly requestId: string
   readonly expectedRevision: number
   readonly confirmation?: Confirmation | null
 }
 export interface ControlPort {
-  original(
-    device: string,
-    id: string,
-    signal?: AbortSignal,
-  ): Promise<ControlReceipt & { status: string }>
+  original(device: string, id: string, signal?: AbortSignal): Promise<OriginalControl>
   create(input: ControlIntent, pin?: string): Promise<ControlReceipt>
   cancel(device: string, id: string, input: ControlRecovery): Promise<ControlReceipt>
   reauthorize(device: string, id: string, input: ControlRecovery): Promise<ControlReceipt>

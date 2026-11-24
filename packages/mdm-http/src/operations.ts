@@ -66,14 +66,6 @@ export function createOperationsAdapter(transport: HttpTransport, tenant: string
             value.commandId !== id
           )
             throw new Error('Wrong command detail')
-          const recovery =
-            value.owner === 'device'
-              ? requestInput(
-                  value.reauthorization,
-                  schema.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse
-                    .validateReauthorization,
-                )
-              : null
           return {
             kind: 'command',
             id,
@@ -82,14 +74,6 @@ export function createOperationsAdapter(transport: HttpTransport, tenant: string
             target: value.target,
             inputVersion: text(value.inputVersion),
             dispatchFailure: value.dispatchFailure,
-            reauthorization: recovery
-              ? {
-                  state: recovery.state,
-                  confirmationRequired:
-                    recovery.state === 'available' && recovery.confirmationRequired,
-                  reason: recovery.state === 'unavailable' ? recovery.reason : null,
-                }
-              : null,
             device,
             owner: value.owner,
             delivery: text(value.commandStatus),

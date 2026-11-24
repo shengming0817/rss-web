@@ -78,26 +78,15 @@ function ExecutionFacts({
     device = detail?.device ?? item?.device,
     deviceHref = device ? devicePath('endpoint', device) : null,
     returnDevice = deviceHref ? resultReturnPath(params.get('returnTo'), deviceHref) : null,
-    [recovery, setRecovery] = useState<Parameters<typeof ControlRecoveryPanel>[0] | null>(null)
+    [controlDevice, setControlDevice] = useState<string | null>(null)
   useEffect(() => {
-    // A pending recovery owner survives read refreshes and denied reads.
-    if (!detail || !item) return
-    if (detail.kind === 'command' && detail.owner === 'device' && item?.origin === 'direct')
-      setRecovery({
-        runtime,
-        locale,
-        device: detail.device,
-        id: detail.id,
-        revision: detail.revision,
-        canReauthorize: detail.reauthorization?.state === 'available',
-        confirmationRequired: detail.reauthorization?.confirmationRequired ?? false,
-        terminal: ['applied', 'rejected', 'cancelled', 'timed_out', 'superseded'].includes(
-          detail.delivery,
-        ),
-        onRefresh: read.reload,
-      })
-    else setRecovery(null)
-  }, [detail, item, runtime, locale])
+    if (detail && item)
+      setControlDevice(
+        detail.kind === 'command' && detail.owner === 'device' && item.origin === 'direct'
+          ? detail.device
+          : null,
+      )
+  }, [detail, item])
   const entries: CopyEntry[] = []
   if (detail?.kind === 'run' && detail.attempt) {
     const selector = { kind: 'task' as const, task: detail.id, attempt: detail.attempt }
@@ -234,13 +223,18 @@ function ExecutionFacts({
           'Observe admission, delivery, device receipts and actual effects separately. Missing receipts remain unknown.',
         )}
       />
-      {recovery && (
+      {controlDevice && (
         <fieldset
           className="permission-panel"
           hidden={read.busy || !!read.error || summary.busy || !!summary.error}
           disabled={read.busy || !!read.error || summary.busy || !!summary.error}
         >
-          <ControlRecoveryPanel {...recovery} />
+          <ControlRecoveryPanel
+            runtime={runtime}
+            locale={locale}
+            device={controlDevice}
+            id={reference.id}
+          />
         </fieldset>
       )}
     </Card>

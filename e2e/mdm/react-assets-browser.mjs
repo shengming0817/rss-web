@@ -635,16 +635,45 @@ try {
       )
     ).json()
     assert.equal(decisions.result, group.memberSet)
-    assert.ok(
-      decisions.page.items.some(
-        (row) => row.object.id === expectedDevice && row.decision === 'match',
-      ),
-    )
-    assert.ok(
-      decisions.page.items.some(
-        (row) => row.object.id !== expectedDevice && row.decision !== 'match',
-      ),
-    )
+    for (const [device, result, title] of [
+      [expectedDevice, 'match', '匹配'],
+      [f.alone, 'unknown', '未知'],
+    ]) {
+      const record = decisions.page.items.find((item) => item.object.id === device)
+      assert.equal(record?.decision, result, `published ${relation} decision for ${device}`)
+      const explanation = record.explanations.find((part) =>
+        result === 'match'
+          ? part.outcome === 'match'
+          : ['missing', 'null', 'unsupported', 'conflict', 'deleted'].includes(part.outcome),
+      )
+      assert.ok(explanation, 'predicate has a recorded match or a concrete unknown reason')
+      const row = p
+        .getByRole('row')
+        .filter({ has: p.getByRole('link', { name: `endpoint · ${device}`, exact: true }) })
+      await row.getByText(title, { exact: true }).waitFor()
+      await row.getByText('查看条件路径及注册代次', { exact: true }).click()
+      async function openRecord(key, index) {
+        const section = row.getByText(key, { exact: true })
+        const values = section.locator('..').locator(':scope > dd > details')
+        await values.locator(':scope > summary').click()
+        const entry = values
+          .getByText(String(index), { exact: true })
+          .locator('..')
+          .locator(':scope > dd > details')
+        await entry.locator(':scope > summary').click()
+        return entry
+      }
+      const explained = await openRecord('explanations', record.explanations.indexOf(explanation))
+      await explained.getByText(explanation.outcome, { exact: true }).waitFor()
+      if (device === expectedDevice) {
+        const field = `device.${relation}.local_group_ids`
+        const source = record.provenance.find((evidence) => evidence.field === field)
+        assert.ok(source?.source)
+        const recorded = await openRecord('provenance', record.provenance.indexOf(source))
+        await recorded.getByText(field, { exact: true }).waitFor()
+        await recorded.getByText(source.source, { exact: true }).waitFor()
+      }
+    }
     checks.push('formal-personnel-group-preview-save-decisions-' + relation)
   }
 

@@ -15,7 +15,6 @@ const detail: CommandDetail = {
   kind: 'command',
   id,
   revision: 1,
-  reauthorization: null,
   task: { name: 'sync', kind: 'sync_ml', platform: 'windows', objects: [] },
   target: { kind: 'device' },
   inputVersion: 'v1',
