@@ -17,6 +17,7 @@ import {
   useRead,
 } from './AdminUi'
 import { SelectionGuard, useSelectionGuard } from './SelectionGuard'
+import type { RuleCatalog } from './PersonnelPredicate'
 import { GroupEditor } from './GroupEditor'
 import { SecretTabs } from './SecretTabs'
 import { useAdministration } from './useAdministration'
@@ -52,6 +53,7 @@ export function groupKindLabel(locale: Locale, kind: Group['kind']): string {
   }
 }
 type GroupAccess = {
+  catalog: RuleCatalog
   groups: GroupsUseCases
   devices: DevicesUseCases
   locale: Locale
@@ -207,13 +209,14 @@ export function GroupsPage({ runtime, locale }: { runtime: Runtime; locale: Loca
     guard = useSelectionGuard(),
     [heldGroup, setHeldGroup] = useState(requested),
     id = guard.locked ? heldGroup : requested,
-    { groups, devices, authorization, binding } = useAdministration(runtime),
+    { groups, devices, authorization, inventory, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/groups-presentation`, authorization.effective),
     has = (operation: string) =>
       permissions.value?.grants.some(
         (grant) => grant.scope.kind === 'tenant' && grant.operation === operation,
       ) ?? false,
     access = {
+      catalog: { fields: inventory.fields, userGroups: authorization.groups },
       groups,
       devices,
       locale,

@@ -16,11 +16,13 @@ export function ScalarEditor({
   onChange,
   locale,
   compound = true,
+  fixedType = false,
   depth = 0,
 }: {
   value: Scalar
   onChange: (value: Scalar) => void
   locale: Locale
+  fixedType?: boolean
   compound?: boolean
   depth?: number
 }) {
@@ -30,6 +32,7 @@ export function ScalarEditor({
     <div className="asset-type-editor">
       <Form.Item label={l('输入值类型', 'Input value type')}>
         <Select
+          disabled={fixedType}
           aria-label={l('输入值类型', 'Input value type')}
           value={value.kind}
           options={(

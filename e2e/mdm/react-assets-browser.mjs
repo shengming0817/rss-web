@@ -122,11 +122,11 @@ try {
     throw new Error('group publication deadline')
   }
   const tab = (name) => p.getByRole('tab', { name, exact: true }).click()
-  async function poll(path, trigger, value, complete, seconds = 90) {
+  async function poll(path, trigger, value, complete, seconds = 90, method = 'GET') {
     const until = Date.now() + seconds * 1000
     let observed
     do {
-      const response = await run.response(p, 'GET', path, trigger)
+      const response = await run.response(p, method, path, trigger)
       observed = value(await response.json())
       if (complete(observed)) return observed
       await new Promise((done) => setTimeout(done, 350))
@@ -565,6 +565,88 @@ try {
   )
   assert.equal(followingList.request().postDataJSON().cursor, sourceList.nextCursor)
   checks.push('real-custom-field-layout-typed-false-and-live-namespace-list')
+
+  run.step('personnel-device-group-rules')
+  const userScope = randomUUID()
+  const userScopeName = 'Browser enrollment staff'
+  const tenantApi = `/api/v1/tenants/${f.tenant}`
+  await api('PUT', `${tenantApi}/authorization/user-groups/${userScope}`, {
+    operationId: randomUUID(),
+    expectedRevision: 0,
+    value: {
+      name: userScopeName,
+      enabled: true,
+      members: [{ tenantId: f.tenant, instanceId: f.instance, principalId: f.principal }],
+    },
+  })
+  for (const [label, relation, expectedDevice] of [
+    ['注册用户', 'registration_user', f.mdm],
+    ['当前使用人', 'current_user', f.collector.runtime.deviceId],
+  ]) {
+    await run.nav(p, '/groups', '设备组')
+    await p.getByRole('button', { name: '新建设备组', exact: true }).click()
+    const name = 'Browser devices by ' + relation
+    await visibleLabel('设备组名称').fill(name)
+    await run.choose(p, visibleLabel('设备组类型'), '动态设备组')
+    await run.choose(p, visibleLabel('条件来源'), label)
+    await run.choose(p, visibleLabel('人员属性'), 'local_group_ids')
+    await visibleLabel('授权用户组').click()
+    await p
+      .locator('.ant-select-dropdown:visible .ant-select-item-option-content')
+      .getByText(userScopeName, { exact: true })
+      .click()
+    await p.keyboard.press('Escape')
+    const preview = await poll(
+      `${tenantApi}/groups/previews`,
+      () => p.getByRole('button', { name: '预览当前条件样例（不保存）', exact: true }).click(),
+      (v) => v,
+      (v) => v.items.some((item) => item.id === expectedDevice),
+      120,
+      'POST',
+    )
+    assert.equal(preview.assetCut.tenant, f.tenant)
+    const saved = p.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        /^\/api\/v1\/tenants\/[^/]+\/groups\/[a-f0-9-]+$/.test(new URL(r.url()).pathname),
+    )
+    await p.getByRole('button', { name: '创建设备组', exact: true }).click()
+    const response = await saved
+    assert.equal(response.status(), 202)
+    assert.deepEqual(response.request().postDataJSON().input.criteria.criteria, {
+      kind: 'predicate',
+      field: `device.${relation}.local_group_ids`,
+      op: 'contains_any',
+      values: [{ kind: 'string', value: userScope }],
+    })
+    const receipt = await response.json()
+    await settleGroup(receipt.target, receipt.task)
+    const until = Date.now() + 90_000
+    while (!(await api('GET', `${tenantApi}/groups/${receipt.target}`)).memberSet) {
+      assert.ok(Date.now() < until, 'personnel group publication deadline')
+      await new Promise((done) => setTimeout(done, 500))
+    }
+    const group = await openGroup(receipt.target, name)
+    assert.match(group.memberSet, uuidPattern)
+    const decisionsPath = `${tenantApi}/groups/${receipt.target}/results/${group.memberSet}/decisions`
+    const decisions = await (
+      await run.response(p, 'GET', decisionsPath, () =>
+        run.choose(p, visibleLabel('成员集结果页类型'), '判定与证据'),
+      )
+    ).json()
+    assert.equal(decisions.result, group.memberSet)
+    assert.ok(
+      decisions.page.items.some(
+        (row) => row.object.id === expectedDevice && row.decision === 'match',
+      ),
+    )
+    assert.ok(
+      decisions.page.items.some(
+        (row) => row.object.id !== expectedDevice && row.decision !== 'match',
+      ),
+    )
+    checks.push('formal-personnel-group-preview-save-decisions-' + relation)
+  }
 
   run.step('empty-static-and-nested-rule-authoring')
   await run.nav(p, '/groups', '设备组')

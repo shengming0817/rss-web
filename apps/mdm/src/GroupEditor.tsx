@@ -13,6 +13,7 @@ import type { DevicesUseCases } from './EndpointPicker'
 import type { Locale } from './i18n'
 import { Failure, isUnknown, labels, useAction } from './AdminUi'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
+import type { RuleCatalog } from './PersonnelPredicate'
 import { ConditionContextEditor } from './InventoryScopeEditor'
 import { emptyPredicate, GroupCriteriaEditor } from './CriteriaEditor'
 import { StringItems } from './ValueTypeEditor'
@@ -24,6 +25,7 @@ import { Status } from './DevicePresentation'
 type Pending = { readonly kind: 'change'; readonly change: Operation<GroupChange> }
 export function GroupEditor({
   groups,
+  catalog,
   devices,
   locale,
   id,
@@ -34,6 +36,7 @@ export function GroupEditor({
   done,
 }: {
   groups: GroupsUseCases
+  catalog: RuleCatalog
   devices: DevicesUseCases
   locale: Locale
   id: string
@@ -247,6 +250,7 @@ export function GroupEditor({
                 }}
               />
               <GroupCriteriaEditor
+                catalog={catalog}
                 locale={locale}
                 groups={groups}
                 assetContext={assetContext}
@@ -279,6 +283,7 @@ export function GroupEditor({
               }}
             />
             <GroupCriteriaEditor
+              catalog={catalog}
               locale={locale}
               groups={groups}
               referenceableFor={group.id}
@@ -391,6 +396,7 @@ export function GroupEditor({
                   <summary>{l('预览输入坐标', 'Preview input coordinates')}</summary>
                   <code>{preview.inputFingerprint}</code>
                   <p>
+                    {preview.assetCut.epoch} · {preview.assetCut.snapshot} ·{' '}
                     {preview.objectSnapshot ?? '—'} · {preview.asOf}
                   </p>
                 </details>
