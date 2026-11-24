@@ -1027,6 +1027,7 @@ it('keeps a retirement read-only without every grant, and never treats a failed 
 })
 
 it('retains an unknown recovery request while refreshing the containing result detail', async () => {
+  let cancelled = false
   const id = '11111111-1111-4111-8111-111111111111',
     item = {
       id,
@@ -1036,9 +1037,14 @@ it('retains an unknown recovery request while refreshing the containing result d
       origin: 'direct',
       status: 'queued',
     },
-    cancel = vi.fn(async () => {
-      throw decodeMdmError(503, { code: 'service_unavailable' })
-    }),
+    cancel = vi
+      .fn()
+      .mockRejectedValueOnce(decodeMdmError(503, { code: 'service_unavailable' }))
+      .mockImplementationOnce(async () => {
+        cancelled = true
+        return { operationId: id, revision: 8 }
+      }),
+    summary = vi.fn(async () => ({ ...item, status: cancelled ? 'cancelled' : 'queued' })),
     detail = vi.fn(async () => ({
       item,
       policy: null,
@@ -1048,7 +1054,7 @@ it('retains an unknown recovery request while refreshing the containing result d
         id,
         device: 'device-a',
         revision: 1,
-        delivery: 'queued',
+        delivery: cancelled ? 'cancelled' : 'queued',
         authorization: { state: 'authorized' },
         observation: { protocol: 'syncml', effect: 'waiting' },
         target: { kind: 'device' },
@@ -1059,9 +1065,9 @@ it('retains an unknown recovery request while refreshing the containing result d
     })),
     readOriginal = vi.fn(async () => ({
       operationId: id,
-      revision: 7,
-      status: 'queued',
-      terminal: false,
+      revision: cancelled ? 8 : 7,
+      status: cancelled ? 'cancelled' : 'queued',
+      terminal: cancelled,
       canReauthorize: false,
       confirmationRequired: false,
     })),
@@ -1075,7 +1081,7 @@ it('retains an unknown recovery request while refreshing the containing result d
           }),
         },
         operations: {
-          summary: async () => item,
+          summary,
           detail,
           list: async () => ({ items: [], nextCursor: null }),
           statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
@@ -1105,6 +1111,10 @@ it('retains an unknown recovery request while refreshing the containing result d
   expect(original).toEqual(['device-a', id, expect.objectContaining({ expectedRevision: 7 })])
   await act(async () => button('显式重提同一恢复请求').click())
   expect(cancel.mock.calls[1]).toEqual(original)
+  expect(summary).toHaveBeenCalledTimes(2)
+  expect(detail).toHaveBeenCalledTimes(2)
+  expect(readOriginal).toHaveBeenCalledTimes(3)
+  expect(host.textContent).toContain('已取消')
 })
 
 it.each(['//[', '//%'])(

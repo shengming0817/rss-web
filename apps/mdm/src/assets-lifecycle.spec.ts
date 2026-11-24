@@ -1580,17 +1580,38 @@ it('drops late policy results when tenant or permission context changes', async 
 
 it('uses an exact field description after typing and keeps its row through a rule move', async () => {
   const counted = 'device.test.count'
+  const slow = 'device.test.alias'
+  let release!: () => void
+  const delayed = new Promise<void>((resolve) => {
+    release = resolve
+  })
   const catalog = createRuleCatalog(
     'author',
     true,
     true,
-    vi.fn(async ({ filter }) => ({
-      dictionary: '1',
-      items: filter?.includes(counted)
-        ? [{ key: counted, valueType: { kind: 'integer' as const }, operations: ['gt' as const] }]
-        : [],
-      nextCursor: null,
-    })),
+    vi.fn(async ({ filter }) => {
+      if (filter?.includes(slow)) {
+        await delayed
+        return {
+          dictionary: '1',
+          items: [
+            {
+              key: slow,
+              valueType: { kind: 'string' as const, allowEmpty: true, maxLength: 255 },
+              operations: ['eq' as const],
+            },
+          ],
+          nextCursor: null,
+        }
+      }
+      return {
+        dictionary: '1',
+        items: filter?.includes(counted)
+          ? [{ key: counted, valueType: { kind: 'integer' as const }, operations: ['gt' as const] }]
+          : [],
+        nextCursor: null,
+      }
+    }),
     vi.fn(),
   )
   const first = {
@@ -1630,5 +1651,24 @@ it('uses an exact field description after typing and keeps its row through a rul
   expect(fields()[0]).toBe(edited)
   expect(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="文本值"]')?.value).toBe(
     'retained',
+  )
+  const remaining = fields()[1]!
+  await act(async () => {
+    remaining.focus()
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(remaining, slow)
+    remaining.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => remaining.blur())
+  const text = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="文本值"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+      text,
+      'operator input',
+    )
+    text.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => release())
+  expect(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="文本值"]')?.value).toBe(
+    'operator input',
   )
 })

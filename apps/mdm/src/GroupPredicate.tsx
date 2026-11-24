@@ -121,23 +121,48 @@ function CatalogField({ prefix, ...props }: Props & { prefix: string }) {
   const row = listed ?? selected.value?.items.find((r) => r.key === value.field)
   const title = prefix ? l('人员属性', 'User attribute') : l('条件字段', 'Condition field')
   const options = rows.map((r) => ({ value: r.key, label: r.key.slice(prefix.length) }))
-  const edited = useRef<string | null>(null)
-  function selectField(field: string, operations: readonly Predicate['op'][], type: ValueType) {
-    return withOperator(
+  const edited = useRef<{ field: string; input?: Predicate } | null>(null)
+  function selectField(
+    field: string,
+    operations: readonly Predicate['op'][],
+    type: ValueType,
+    input?: Predicate,
+  ) {
+    const initial = operand(type)
+    const choices = enumChoices(type)
+    const accepts = (item: typeof initial) =>
+      item.kind === initial.kind &&
+      (!choices || (item.kind === 'string' && choices.includes(item.value)))
+    const op =
+      input && operations.includes(input.op)
+        ? input.op
+        : operations.includes('contains_any')
+          ? 'contains_any'
+          : operations[0]!
+    const prior = input && {
+      kind: 'predicate' as const,
       field,
-      operations.includes('contains_any') ? 'contains_any' : operations[0]!,
-      operand(type),
-    )
+      op,
+      ...(input.value && accepts(input.value) ? { value: input.value } : {}),
+      ...(input.values ? { values: input.values.filter(accepts) } : {}),
+    }
+    return withOperator(field, op, initial, prior)
   }
   useEffect(() => {
-    if (edited.current !== value.field || !row?.valueType || !row.operations?.length) return
+    const pending = edited.current
+    if (!pending || pending.field !== value.field || !row?.valueType || !row.operations?.length)
+      return
     edited.current = null
-    onChange(selectField(value.field, row.operations, row.valueType))
+    onChange(selectField(value.field, row.operations, row.valueType, pending.input))
   }, [value.field, row, onChange])
   function changeField(key: string) {
     const next = rows.find((r) => r.key === key)
-    edited.current = next ? null : key
+    edited.current = next ? null : { field: key }
     onChange(next ? selectField(key, next.operations, next.valueType) : { ...value, field: key })
+  }
+  function changeInput(next: Predicate) {
+    if (edited.current?.field === next.field) edited.current.input = next
+    onChange(next)
   }
   return (
     <>
@@ -195,6 +220,7 @@ function CatalogField({ prefix, ...props }: Props & { prefix: string }) {
       {(!prefix || (row?.valueType && row.operations?.length)) && (
         <PredicateEditor
           {...props}
+          onChange={changeInput}
           showField={false}
           {...(row?.valueType && row.operations?.length
             ? {

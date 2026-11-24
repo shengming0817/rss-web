@@ -234,6 +234,10 @@ function ExecutionFacts({
             locale={locale}
             device={controlDevice}
             id={reference.id}
+            onChanged={() => {
+              summary.reload()
+              read.reload()
+            }}
           />
         </fieldset>
       )}

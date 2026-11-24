@@ -15,11 +15,13 @@ export function ControlRecoveryPanel({
   locale,
   device,
   id,
+  onChanged,
 }: {
   runtime: Runtime
   locale: Locale
   device: string
   id: string
+  onChanged?: () => void
 }) {
   const l = labels(locale),
     { deviceControl, authorization, binding } = useAdministration(runtime),
@@ -86,7 +88,10 @@ export function ControlRecoveryPanel({
       )
     if (!delivery.isCurrent(epoch)) return
     setOutcome(result.ok ? 'confirmed' : isUnknown(result.error) ? 'unknown' : 'rejected')
-    if (result.ok) facts.reload()
+    if (result.ok) {
+      facts.reload()
+      onChanged?.()
+    }
   }
   return (
     <section className="device-editor">
