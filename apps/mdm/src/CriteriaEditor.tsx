@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type SetStateAction } from 'react'
 import { PredicateEditor } from './PredicateEditor'
 import { GroupPredicate } from './GroupPredicate'
 import type { RuleCatalog } from './group-rule-catalog'
@@ -91,7 +91,7 @@ export function GroupCriteriaEditor({
   depth = 0,
 }: {
   value: GroupCriteria
-  onChange: (value: GroupCriteria) => void
+  onChange: (update: SetStateAction<GroupCriteria>) => void
   locale: Locale
   groups: GroupsUseCases
   catalog: RuleCatalog
@@ -108,6 +108,24 @@ export function GroupCriteriaEditor({
       childKeys.set(child, key)
     }
     return key
+  }
+  function changeChildren(edit: (children: GroupCriteria[]) => void) {
+    onChange((current) => {
+      if (!('children' in current) || current.kind !== value.kind) return current
+      const children = [...current.children]
+      edit(children)
+      return { ...current, children }
+    })
+  }
+  function changeChild(
+    child: GroupCriteria,
+    edit: (children: GroupCriteria[], index: number) => void,
+  ) {
+    const key = childKey(child)
+    changeChildren((children) => {
+      const index = children.findIndex((item) => childKeys.get(item) === key)
+      if (index >= 0) edit(children, index)
+    })
   }
   return (
     <fieldset className="asset-editor-section">
@@ -167,29 +185,27 @@ export function GroupCriteriaEditor({
                 {...(referenceableFor ? { referenceableFor } : {})}
                 value={child}
                 depth={depth + 1}
-                onChange={(next) => {
-                  childKeys.set(next, childKey(child))
-                  onChange({
-                    ...value,
-                    children: value.children.map((v, i) => (i === index ? next : v)),
+                onChange={(update) =>
+                  changeChild(child, (children, index) => {
+                    const next = typeof update === 'function' ? update(children[index]!) : update
+                    childKeys.set(next, childKey(child))
+                    children[index] = next
                   })
-                }}
+                }
               />
               <Space wrap>
                 <Button
                   disabled={index === 0}
-                  onClick={() => {
-                    const next = [...value.children]
-                    ;[next[index - 1], next[index]] = [next[index]!, next[index - 1]!]
-                    onChange({ ...value, children: next })
-                  }}
+                  onClick={() =>
+                    changeChild(child, (children, from) => {
+                      if (from > 0) children.splice(from - 1, 0, ...children.splice(from, 1))
+                    })
+                  }
                 >
                   {l('条件上移', 'Move condition up')}
                 </Button>
                 <Button
-                  onClick={() =>
-                    onChange({ ...value, children: value.children.filter((_, i) => i !== index) })
-                  }
+                  onClick={() => changeChild(child, (children, from) => children.splice(from, 1))}
                 >
                   {l('移除条件', 'Remove condition')}
                 </Button>
@@ -198,7 +214,7 @@ export function GroupCriteriaEditor({
           ))}
           <Button
             disabled={depth >= 16}
-            onClick={() => onChange({ ...value, children: [...value.children, emptyPredicate()] })}
+            onClick={() => changeChildren((children) => children.push(emptyPredicate()))}
           >
             {l('添加子条件', 'Add child condition')}
           </Button>

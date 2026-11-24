@@ -1,6 +1,11 @@
-import { useState } from 'react'
+import { useState, type SetStateAction } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space } from 'antd'
-import { freeze, type AssetContext, type Operation } from '@rss/mdm-inventory'
+import {
+  freeze,
+  type AssetContext,
+  type ConditionContext,
+  type Operation,
+} from '@rss/mdm-inventory'
 import {
   validateChange,
   type GroupChange,
@@ -86,6 +91,17 @@ export function GroupEditor({
       action.busy ||
       (pending !== null && !['confirmed', 'accepted', 'rejected'].includes(outcome)),
   )
+  function changeContext({ selector, quantifier }: ConditionContext) {
+    setPreview(null)
+    setCriteria((current) => ({ ...current, selector, quantifier }))
+  }
+  function changeRule(update: SetStateAction<GroupCondition['criteria']>) {
+    setPreview(null)
+    setCriteria((current) => ({
+      ...current,
+      criteria: typeof update === 'function' ? update(current.criteria) : update,
+    }))
+  }
   async function submit(intent: Pending) {
     const result = await action.run(() => groups.change(id, intent.change))
     if (result.ok) {
@@ -244,24 +260,14 @@ export function GroupEditor({
           )}
           {!group && kind === 'dynamic' && (
             <>
-              <ConditionContextEditor
-                locale={locale}
-                value={criteria}
-                onChange={(context) => {
-                  setPreview(null)
-                  setCriteria({ ...criteria, ...context })
-                }}
-              />
+              <ConditionContextEditor locale={locale} value={criteria} onChange={changeContext} />
               <GroupCriteriaEditor
                 catalog={catalog}
                 locale={locale}
                 groups={groups}
                 assetContext={assetContext}
                 value={criteria.criteria}
-                onChange={(value) => {
-                  setPreview(null)
-                  setCriteria({ ...criteria, criteria: value })
-                }}
+                onChange={changeRule}
               />
             </>
           )}
@@ -281,14 +287,7 @@ export function GroupEditor({
             onFinish={() => start({ action: 'rule', criteria })}
           >
             <h3>{l('规则定义', 'Rule definition')}</h3>
-            <ConditionContextEditor
-              locale={locale}
-              value={criteria}
-              onChange={(context) => {
-                setPreview(null)
-                setCriteria({ ...criteria, ...context })
-              }}
-            />
+            <ConditionContextEditor locale={locale} value={criteria} onChange={changeContext} />
             <GroupCriteriaEditor
               catalog={catalog}
               locale={locale}
@@ -296,10 +295,7 @@ export function GroupEditor({
               referenceableFor={group.id}
               assetContext={group.assetContext}
               value={criteria.criteria}
-              onChange={(value) => {
-                setPreview(null)
-                setCriteria({ ...criteria, criteria: value })
-              }}
+              onChange={changeRule}
             />
             <Button type="primary" htmlType="submit" disabled={writeDisabled || !canUseCriteria}>
               {l('提交规则验证与保存任务', 'Submit rule validation and save task')}

@@ -20,6 +20,7 @@ import type { ViewEndpoint } from '@rss/mdm-devices'
 import type { GroupCriteria, GroupMemberships, GroupRead } from '@rss/mdm-groups'
 import type {
   FieldDetail,
+  InventoryPort,
   Operation,
   QueryDefinition,
   RetentionPolicy,
@@ -1578,6 +1579,27 @@ it('drops late policy results when tenant or permission context changes', async 
   expect(newRead).not.toHaveBeenCalled()
 })
 
+function RuleTree({ catalog }: { catalog: ReturnType<typeof createRuleCatalog> }) {
+  const first = {
+    kind: 'predicate' as const,
+    field: 'device.original',
+    op: 'eq' as const,
+    value: { kind: 'string' as const, value: 'retained' },
+  }
+  const [value, onChange] = useState<GroupCriteria>({
+    kind: 'and',
+    children: [first, { ...first, field: 'device.other' }],
+  })
+  return createElement(GroupCriteriaEditor, {
+    value,
+    onChange,
+    catalog,
+    locale: 'zh',
+    groups: inject<GroupsUseCases>({}),
+    assetContext: 'endpoint',
+  })
+}
+
 it('uses an exact field description after typing and keeps its row through a rule move', async () => {
   const counted = 'device.test.count'
   const slow = 'device.test.alias'
@@ -1614,27 +1636,7 @@ it('uses an exact field description after typing and keeps its row through a rul
     }),
     vi.fn(),
   )
-  const first = {
-    kind: 'predicate' as const,
-    field: 'device.original',
-    op: 'eq' as const,
-    value: { kind: 'string' as const, value: 'retained' },
-  }
-  function Tree() {
-    const [value, onChange] = useState<GroupCriteria>({
-      kind: 'and',
-      children: [first, { ...first, field: 'device.other' }],
-    })
-    return createElement(GroupCriteriaEditor, {
-      value,
-      onChange,
-      catalog,
-      locale: 'zh',
-      groups: inject<GroupsUseCases>({}),
-      assetContext: 'endpoint',
-    })
-  }
-  await render(createElement(Tree))
+  await render(createElement(RuleTree, { catalog }))
   const fields = () => host.querySelectorAll<HTMLInputElement>('input[aria-label="条件字段"]')
   const edited = fields()[1]!
   await act(async () => {
@@ -1671,4 +1673,41 @@ it('uses an exact field description after typing and keeps its row through a rul
   expect(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="文本值"]')?.value).toBe(
     'operator input',
   )
+})
+
+it('applies one delayed field description to both reordered sibling rules', async () => {
+  const field = 'device.test.count'
+  let release!: () => void
+  const delayed = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const fields = vi.fn<InventoryPort['fields']>(async ({ filter }) => {
+    if (!filter?.includes(field)) return { dictionary: '1', items: [], nextCursor: null }
+    await delayed
+    return {
+      dictionary: '1',
+      items: [{ key: field, valueType: { kind: 'integer' }, operations: ['gt'] }],
+      nextCursor: null,
+    }
+  })
+  const catalog = createRuleCatalog('author', true, true, fields, vi.fn())
+  await render(createElement(RuleTree, { catalog }))
+  const inputs = [...host.querySelectorAll<HTMLInputElement>('input[aria-label="条件字段"]')]
+  for (const input of inputs) {
+    await act(async () => {
+      input.focus()
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, field)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => input.blur())
+  }
+  expect(inputs).toHaveLength(2)
+  expect(fields.mock.calls.filter(([query]) => query.filter?.includes(field))).toHaveLength(1)
+  const move = [...host.querySelectorAll('button')].find(
+    (node) => node.textContent?.trim() === '条件上移' && !node.disabled,
+  )!
+  await act(async () => move.click())
+  await act(async () => release())
+  expect([...host.querySelectorAll('input[aria-label="条件字段"]')]).toEqual(inputs.reverse())
+  expect(host.querySelectorAll('input[aria-label="数值"]')).toHaveLength(2)
 })
