@@ -486,10 +486,28 @@ await output(
     .map((name) => `export {default as validate${name}} from './validate${name}.validator.js'`)
     .join('\n'),
 )
+// Readiness publishes an observation on 503 alongside ordinary gateway failures.
+const unavailable = endpoints
+  .filter((e) => e.path === '/readyz' && e.method === 'GET')
+  .flatMap((e) =>
+    e.responses.filter((r) => {
+      const schema = schemas[r.body?.schema.schemaId]
+      return (
+        r.status === 503 &&
+        schema?.required?.includes('ready') &&
+        schema.properties?.ready?.const === false
+      )
+    }),
+  )
+if (unavailable.length !== 1)
+  throw new Error('Expected a unique GET /readyz unavailable observation')
+const isResult = (response) => response.status < 400 || response === unavailable[0]
+const responseName = (response) =>
+  'r' + digest(response).slice(0, 20) + (response === unavailable[0] ? 'Result' : '')
 const errorResponses = new Map()
 for (const e of endpoints)
   for (const r of e.responses)
-    if (r.status >= 400 && r.body?.content_type === 'application/json')
+    if (!isResult(r) && r.body?.content_type === 'application/json')
       errorResponses.set(`${r.status}:${r.body.schema.schemaId}`, {
         status: r.status,
         id: r.body.schema.schemaId,
@@ -506,21 +524,7 @@ await output(
 )
 // Shared response branches avoid repeating the same mounted failure contracts in every operation.
 const responseBranches = new Map()
-const readinessResults = new Set(
-  endpoints
-    .filter((e) => e.path === '/readyz')
-    .flatMap((e) =>
-      e.responses
-        .filter(
-          (r) => r.status === 503 && schemas[r.body?.schema.schemaId]?.required?.includes('ready'),
-        )
-        .map((r) => r.body.schema.schemaId),
-    ),
-)
-const isResult = (r) =>
-  r.status < 400 || (r.status === 503 && readinessResults.has(r.body?.schema.schemaId))
-for (const e of endpoints)
-  for (const r of e.responses) responseBranches.set('r' + digest(r).slice(0, 20), r)
+for (const e of endpoints) for (const r of e.responses) responseBranches.set(responseName(r), r)
 const responseValidationIds = [
   ...new Set(
     [...responseBranches.values()].flatMap((r) => [
@@ -691,7 +695,7 @@ for (const e of endpoints) {
     binary,
     statuses: [...new Set(success.map((r) => r.status))],
   }
-  const responses = e.responses.map((r) => 'r.r' + digest(r).slice(0, 20))
+  const responses = e.responses.map((r) => 'r.' + responseName(r))
   const headerChecks = Object.entries(e.request.headers)
     .filter(([key]) => descriptor.requestHeaders.includes(key))
     .map(([key, ref]) => `${JSON.stringify(key)}:${validatorOf(ref)}`)

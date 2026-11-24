@@ -321,7 +321,7 @@ it.each(['blocker', 'continuation', 'unreadable'] as const)(
         MemoryRouter,
         null,
         createElement(GroupEditor, {
-          catalog: { fields: vi.fn(), userGroups: vi.fn() },
+          catalog: { scope: 'test', registration: true, fields: vi.fn(), userGroups: vi.fn() },
           groups,
           devices,
           locale: 'zh',
@@ -1027,7 +1027,7 @@ it('recovers an unknown recompute by exact replay and reads only the returned se
       MemoryRouter,
       null,
       createElement(GroupEditor, {
-        catalog: { fields: vi.fn(), userGroups: vi.fn() },
+        catalog: { scope: 'test', registration: true, fields: vi.fn(), userGroups: vi.fn() },
         groups,
         devices,
         locale: 'zh',

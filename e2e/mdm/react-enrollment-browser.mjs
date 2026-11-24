@@ -174,101 +174,97 @@ try {
   assert.equal(await employee.getByLabel('本次原生注册密码', { exact: true }).count(), 0)
   const openDevice = '打开已注册设备详情'
   assert.equal(await employee.getByRole('button', { name: openDevice }).count(), 0)
-  // Use the live self-enrollment response as the envelope. Exercise late/terminal
-  // protocol observations deterministically; the device detail and its ACL run on the host.
-  const statusPath = `/api/v1/tenants/${f.tenant}/enrollments/${enrolled.enrollmentId}`
-  const original = await api('GET', statusPath)
-  async function readStatus(page) {
-    await page.getByLabel('注册申请标识', { exact: true }).fill(enrolled.enrollmentId)
-    await run.response(page, 'GET', statusPath, () =>
-      page.getByRole('button', { name: '读取原生注册进度', exact: true }).click(),
-    )
+  const enrollmentPath = (id) => `/api/v1/tenants/${f.tenant}/enrollments/${id}`
+  async function readStatus(page, id) {
+    await page.getByLabel('注册申请标识', { exact: true }).fill(id)
+    return (
+      await run.response(page, 'GET', enrollmentPath(id), () =>
+        page.getByRole('button', { name: '读取原生注册进度', exact: true }).click(),
+      )
+    ).json()
   }
-  for (const source of ['mdm.windows', 'mdm.apple']) {
+  const open = (page) => page.getByRole('button', { name: openDevice, exact: true })
+  const { windows, apple } = f.readyEnrollments
+  for (const [purpose, registered] of Object.entries(f.readyEnrollments)) {
     await run.nav(admin, '/enroll', '设备注册')
-    let status = {
-      ...original,
-      status: 'bound',
-      deviceId: f.existingDevice,
-      source,
-      instructions:
-        source === 'mdm.windows'
-          ? original.instructions
-          : {
-              platform: 'macos',
-              profileUrl: `/api/v1/enrollments/${enrolled.enrollmentId}/profile`,
-              enrollmentMethod: 'profile_based_device_enrollment',
-            },
-      progress: {
-        ...original.progress,
-        managementReady: true,
-        diagnostic: 'ready',
-        certificateIssued: true,
-        firstAuthenticatedCheckIn: true,
-      },
-    }
-    const respond = (route) => route.fulfill({ json: status })
-    await admin.route(origin + statusPath, respond)
-    await readStatus(admin)
-    const open = admin.getByRole('button', { name: openDevice, exact: true })
-    await open.waitFor()
-    await admin.getByLabel('注册申请标识', { exact: true }).fill(randomUUID())
-    assert.equal(await open.count(), 0)
-    await readStatus(admin)
+    const status = await readStatus(admin, registered.enrollment)
+    assert.equal(status.source, 'mdm.' + purpose)
+    assert.equal(status.enrollmentId, registered.enrollment)
+    assert.equal(status.deviceId, registered.device)
+    assert.equal(status.status, 'bound')
+    assert.equal(status.progress.managementReady, true)
+    await open(admin).waitFor()
     await run.response(
       admin,
       'GET',
-      `/api/v1/tenants/${f.tenant}/device-views/endpoint/${f.existingDevice}`,
-      () => open.click(),
+      `/api/v1/tenants/${f.tenant}/device-views/endpoint/${registered.device}`,
+      () => open(admin).click(),
     )
     assert.equal(
       new URL(admin.url()).pathname,
-      `/tenants/${f.tenant}/devices/endpoint/${f.existingDevice}`,
+      `/tenants/${f.tenant}/devices/endpoint/${registered.device}`,
     )
-    await run.nav(admin, '/enroll', '设备注册')
-    await readStatus(admin)
-    status = {
-      ...status,
-      status: 'expired',
-      progress: { ...status.progress, diagnostic: 'expired', managementReady: false },
-    }
-    await run.response(admin, 'GET', statusPath, () => open.click())
-    await admin.getByText('expired', { exact: true }).last().waitFor()
-    assert.equal(await open.count(), 0)
-    status = {
-      ...status,
-      enrollmentId: randomUUID(),
-      status: 'bound',
-      progress: { ...status.progress, diagnostic: 'ready', managementReady: true },
-    }
-    await readStatus(admin)
-    assert.equal(await open.count(), 0)
-    await admin.unroute(origin + statusPath, respond)
-    checks.push('controlled-' + source + '-ready-navigation-real-detail-and-stale-status')
+    checks.push('live-' + purpose + '-bound-ready-status-and-matching-device-detail')
   }
-  await employee.route(origin + statusPath, (route) =>
-    route.fulfill({
-      json: {
-        ...original,
-        deviceId: f.existingDevice,
-        status: 'bound',
-        progress: { ...original.progress, managementReady: true, diagnostic: 'ready' },
-      },
-    }),
+  // Delay a real read across a switch. The released response belongs to the previous application.
+  await run.nav(admin, '/enroll', '设备注册')
+  const before = await readStatus(admin, windows.enrollment)
+  const path = origin + enrollmentPath(windows.enrollment)
+  let release, captured
+  const waiting = new Promise((done) => {
+    captured = done
+  })
+  const gate = new Promise((done) => {
+    release = done
+  })
+  const delayed = async (route) => {
+    const response = await route.fetch()
+    captured()
+    await gate
+    await route.fulfill({ response }).catch(() => {})
+  }
+  await admin.route(path, delayed)
+  await open(admin).click()
+  await waiting
+  const detailPath = `/api/v1/tenants/${f.tenant}/device-views/endpoint/${windows.device}`
+  const reads = run.count(admin, 'GET', detailPath)
+  await readStatus(admin, apple.enrollment)
+  release()
+  await admin.unroute(path, delayed)
+  await open(admin).waitFor()
+  assert.equal(run.count(admin, 'GET', detailPath), reads)
+  assert.equal(
+    await admin.getByLabel('注册申请标识', { exact: true }).inputValue(),
+    apple.enrollment,
   )
-  await readStatus(employee)
-  await run.response(
-    employee,
-    'GET',
-    `/api/v1/tenants/${f.tenant}/device-views/endpoint/${f.existingDevice}`,
-    () => employee.getByRole('button', { name: openDevice }).click(),
-    403,
+  await readStatus(admin, windows.enrollment)
+  const expired = {
+    ...before,
+    status: 'expired',
+    progress: { ...before.progress, managementReady: false, diagnostic: 'expired' },
+  }
+  await admin.route(path, (route) => route.fulfill({ json: expired }))
+  await run.response(admin, 'GET', enrollmentPath(windows.enrollment), () => open(admin).click())
+  await admin.getByText('expired', { exact: true }).last().waitFor()
+  assert.equal(await open(admin).count(), 0)
+  await admin.unroute(path)
+  await admin.route(path, (route) =>
+    route.fulfill({ json: { ...before, enrollmentId: apple.enrollment } }),
   )
+  await readStatus(admin, windows.enrollment)
+  await admin
+    .getByText('无法读取当前数据，请检查查询或连接后重新读取。', { exact: true })
+    .first()
+    .waitFor()
+  assert.equal(await open(admin).count(), 0)
+  await admin.unroute(path)
+  checks.push('late-status-after-switch-and-controlled-expiry-or-wrong-request')
+  await readStatus(employee, windows.enrollment)
+  await run.response(employee, 'GET', detailPath, () => open(employee).click(), 403)
   await employee.getByText('当前账户没有此操作权限。', { exact: true }).first().waitFor()
-  await employee.unroute(origin + statusPath)
   await run.nav(employee, '/enroll', '设备注册')
-  await readStatus(employee)
-  checks.push('ready-enrollment-keeps-live-device-detail-permission')
+  await readStatus(employee, enrolled.enrollmentId)
+  checks.push('live-ready-enrollment-keeps-device-detail-permission')
   checks.push('native-instructions-and-progress-do-not-imply-device-enrollment')
   const cancellationPath = `/api/v1/tenants/${run.fixture.tenant}/enrollments/${enrolled.enrollmentId}/cancel`
   let originalCancellation, replayCancellation

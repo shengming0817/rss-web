@@ -27,8 +27,14 @@ export function PredicateEditor({
   locale,
   descriptor,
   operands,
+  showField = !descriptor,
 }: {
-  descriptor?: { operations: readonly Predicate['op'][]; initial: NonNullable<Predicate['value']> }
+  descriptor?: {
+    operations: readonly Predicate['op'][]
+    initial: NonNullable<Predicate['value']>
+    choices?: readonly string[] | undefined
+  }
+  showField?: boolean
   operands?: ReactNode
   value: Predicate
   onChange: (value: Predicate) => void
@@ -37,9 +43,34 @@ export function PredicateEditor({
   const l = labels(locale),
     multiple = ['in', 'not_in', 'contains_any', 'contains_all'].includes(value.op),
     unary = ['is_null', 'is_not_null'].includes(value.op)
+  function scalar(
+    item: NonNullable<Predicate['value']>,
+    change: (item: NonNullable<Predicate['value']>) => void,
+  ) {
+    if (descriptor?.choices)
+      return (
+        <Select
+          aria-label={l('枚举值', 'Enumeration value')}
+          value={item.kind === 'string' ? item.value : undefined}
+          options={descriptor.choices.map((v) => ({ value: v, label: v }))}
+          onChange={(v: string) => change({ kind: 'string', value: v })}
+        />
+      )
+    return (
+      <ScalarEditor
+        locale={locale}
+        compound={false}
+        fixedType={!!descriptor}
+        value={item}
+        onChange={(next) => {
+          if (primitive(next)) change(next)
+        }}
+      />
+    )
+  }
   return (
     <>
-      {!descriptor && (
+      {showField && (
         <Form.Item label={l('条件字段', 'Condition field')}>
           <Input
             aria-label={l('条件字段', 'Condition field')}
@@ -71,19 +102,12 @@ export function PredicateEditor({
             <>
               {(value.values ?? []).map((item, index) => (
                 <div key={index}>
-                  <ScalarEditor
-                    locale={locale}
-                    compound={false}
-                    fixedType={!!descriptor}
-                    value={item}
-                    onChange={(next) => {
-                      if (primitive(next))
-                        onChange({
-                          ...value,
-                          values: (value.values ?? []).map((v, i) => (i === index ? next : v)),
-                        })
-                    }}
-                  />
+                  {scalar(item, (next) =>
+                    onChange({
+                      ...value,
+                      values: (value.values ?? []).map((v, i) => (i === index ? next : v)),
+                    }),
+                  )}
                   <Button
                     onClick={() =>
                       onChange({
@@ -111,15 +135,9 @@ export function PredicateEditor({
               </Button>
             </>
           ) : (
-            <ScalarEditor
-              locale={locale}
-              compound={false}
-              fixedType={!!descriptor}
-              value={value.value ?? { kind: 'string', value: '' }}
-              onChange={(next) => {
-                if (primitive(next)) onChange({ ...value, value: next })
-              }}
-            />
+            scalar(value.value ?? descriptor?.initial ?? { kind: 'string', value: '' }, (next) =>
+              onChange({ ...value, value: next }),
+            )
           )))}
     </>
   )

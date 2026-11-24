@@ -1,5 +1,6 @@
 import { PredicateEditor } from './PredicateEditor'
-import { GroupPredicate, type RuleCatalog } from './GroupPredicate'
+import { GroupPredicate } from './GroupPredicate'
+import type { RuleCatalog } from './group-rule-catalog'
 import { Button, Form, Select, Space } from 'antd'
 import { type AssetContext, type Criteria, type Predicate } from '@rss/mdm-inventory'
 import type { GroupCriteria } from '@rss/mdm-groups'

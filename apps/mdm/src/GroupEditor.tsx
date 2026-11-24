@@ -13,7 +13,7 @@ import type { DevicesUseCases } from './EndpointPicker'
 import type { Locale } from './i18n'
 import { Failure, isUnknown, labels, useAction } from './AdminUi'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
-import type { RuleCatalog } from './GroupPredicate'
+import { usesRegistration, type RuleCatalog } from './group-rule-catalog'
 import { ConditionContextEditor } from './InventoryScopeEditor'
 import { emptyPredicate, GroupCriteriaEditor } from './CriteriaEditor'
 import { StringItems } from './ValueTypeEditor'
@@ -78,6 +78,8 @@ export function GroupEditor({
     [approved, setApproved] = useState(false),
     [invalid, setInvalid] = useState(false),
     [deletionBlocked, setDeletionBlocked] = useState<boolean | null>(null),
+    canUseCriteria =
+      kind !== 'dynamic' || catalog.registration || !usesRegistration(criteria.criteria),
     mutable = canWrite && group?.kind !== 'system' && !group?.deleted
   usePendingSelection(
     guard.locked ||
@@ -100,6 +102,7 @@ export function GroupEditor({
       )
   }
   function start(input: GroupChange) {
+    if ('criteria' in input && !canUseCriteria) return
     try {
       const change = freeze({
         operationId: crypto.randomUUID(),
@@ -262,7 +265,7 @@ export function GroupEditor({
               />
             </>
           )}
-          <Button type="primary" htmlType="submit">
+          <Button type="primary" htmlType="submit" disabled={!group && !canUseCriteria}>
             {group ? l('保存设备组元数据', 'Save group metadata') : l('创建设备组', 'Create group')}
           </Button>
         </Form>
@@ -294,7 +297,7 @@ export function GroupEditor({
                 setCriteria({ ...criteria, criteria: value })
               }}
             />
-            <Button type="primary" htmlType="submit">
+            <Button type="primary" htmlType="submit" disabled={!canUseCriteria}>
               {l('提交规则验证与保存任务', 'Submit rule validation and save task')}
             </Button>
           </Form>
@@ -350,7 +353,12 @@ export function GroupEditor({
           <>
             <Button
               disabled={
-                !canPreview || !!group?.deleted || action.busy || pending !== null || guard.locked
+                !canUseCriteria ||
+                !canPreview ||
+                !!group?.deleted ||
+                action.busy ||
+                pending !== null ||
+                guard.locked
               }
               onClick={() => {
                 setPreview(null)

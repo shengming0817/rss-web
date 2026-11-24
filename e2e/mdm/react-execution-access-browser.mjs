@@ -111,6 +111,15 @@ try {
     1,
   )
   await p.context().unroute(`**/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations`)
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations/${original.operationId}`,
+    () => button('读取原设备操作').click(),
+  )
+  await p.getByText('已受理，设备效果另行核实', { exact: false }).waitFor()
+  assert.equal(await p.getByLabel('设备动作', { exact: true }).isEnabled(), true)
+
   await p
     .locator('a')
     .filter({ hasText: '查看操作排障' })

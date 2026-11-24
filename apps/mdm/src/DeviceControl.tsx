@@ -18,6 +18,7 @@ import { useAdministration } from './useAdministration'
 import { deviceName } from './DevicePresentation'
 import { executionPath } from './Executions'
 import { useProtectedDelivery } from './useProtectedDelivery'
+import { useSecretVisibility } from './SecretTabs'
 import { usePendingSelection } from './SelectionGuard'
 export function DeviceControl({
   runtime,
@@ -48,16 +49,19 @@ export function DeviceControl({
   const [pending, setPending] = useState<ControlIntent | null>(null)
   const [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none')
   const [originalId, setOriginalId] = useState<string | null>(null)
+  const visible = useSecretVisibility() && canReadOriginal
   const original = useRead(
-    `original-control/${pending?.device}/${originalId}/${canReadOriginal}`,
+    `original-control/${pending?.device}/${originalId}/${visible}`,
     (signal) =>
-      canReadOriginal &&
-      originalId &&
-      originalId === pending?.operationId &&
-      pending.device === endpoint.id
+      visible && originalId && originalId === pending?.operationId && pending.device === endpoint.id
         ? deviceControl.original(pending.device, originalId, signal)
         : Promise.resolve(null),
   )
+  useEffect(() => {
+    if (original.value && original.value.operationId === pending?.operationId) {
+      setOutcome('confirmed')
+    }
+  }, [original.value, pending?.operationId])
   const [stale, setStale] = useState(false)
   const [errorKind, setErrorKind] = useState<'read' | 'write'>('read')
   const { fact, ready } = controlApplicability(snapshot, kind)
@@ -77,6 +81,7 @@ export function DeviceControl({
     action.clear()
     setStale(false)
     setApproved(false)
+    setOriginalId(null)
     setReview({
       intent: freeze({
         device: endpoint.id,
@@ -199,7 +204,11 @@ export function DeviceControl({
           {l('刷新设备能力', 'Refresh device capabilities')}
         </Button>
       )}
-      <Failure locale={locale} error={action.error} kind={errorKind} />
+      <Failure
+        locale={locale}
+        error={outcome === 'confirmed' ? undefined : action.error}
+        kind={errorKind}
+      />
       {pending && (
         <p>
           <DiagnosticReference
@@ -233,16 +242,18 @@ export function DeviceControl({
               : l('未确认受理', 'Acceptance unconfirmed')}
         </p>
       )}
-      {pending && outcome === 'unknown' && canReadOriginal && pending.device === endpoint.id && (
+      {pending && visible && pending.device === endpoint.id && (
         <>
-          <Button
-            onClick={() => {
-              setOriginalId(pending.operationId)
-              original.reload()
-            }}
-          >
-            {l('读取原设备操作', 'Read original device control')}
-          </Button>
+          {outcome === 'unknown' && (
+            <Button
+              onClick={() => {
+                setOriginalId(pending.operationId)
+                original.reload()
+              }}
+            >
+              {l('读取原设备操作', 'Read original device control')}
+            </Button>
+          )}
           <ReadState locale={locale} busy={original.busy && !!originalId} error={original.error} />
           {original.value && (
             <p>

@@ -1,5 +1,5 @@
 import { useDirectoryQuery } from './directory-location'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Card, Tag } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Group } from '@rss/mdm-groups'
@@ -17,7 +17,7 @@ import {
   useRead,
 } from './AdminUi'
 import { SelectionGuard, useSelectionGuard } from './SelectionGuard'
-import type { RuleCatalog } from './GroupPredicate'
+import { createRuleCatalog, type RuleCatalog } from './group-rule-catalog'
 import { GroupEditor } from './GroupEditor'
 import { SecretTabs } from './SecretTabs'
 import { useAdministration } from './useAdministration'
@@ -215,8 +215,17 @@ export function GroupsPage({ runtime, locale }: { runtime: Runtime; locale: Loca
       permissions.value?.grants.some(
         (grant) => grant.scope.kind === 'tenant' && grant.operation === operation,
       ) ?? false,
+    registration =
+      permissions.value?.grants.some(
+        (g) => g.operation === 'enrollment' && g.scope.kind === 'all_devices',
+      ) ?? false,
+    catalog = useMemo(
+      () =>
+        createRuleCatalog(permissions.key, registration, inventory.fields, authorization.groups),
+      [permissions.key, registration, inventory.fields, authorization.groups],
+    ),
     access = {
-      catalog: { fields: inventory.fields, userGroups: authorization.groups },
+      catalog,
       groups,
       devices,
       locale,

@@ -263,6 +263,7 @@ export interface AuthorizationPort {
   changeRule(id: string, change: Change<Rule>): Promise<Receipt>
   groups<F extends keyof GroupRow = keyof GroupRow>(
     query?: DirectoryQuery<F>,
+    signal?: AbortSignal,
   ): Promise<Page<Pick<GroupRow, F>>>
   group(id: string): Promise<Revision<UserGroup>>
   changeGroup(id: string, change: Change<UserGroup>): Promise<Receipt>

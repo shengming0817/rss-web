@@ -20,7 +20,16 @@ import type {
 import { SecretTabs, useSecretVisibility } from './SecretTabs'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import { Failure, Heading, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'
+import {
+  codeOf,
+  Failure,
+  Heading,
+  isUnknown,
+  labels,
+  ReadState,
+  useAction,
+  useRead,
+} from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { DataTable } from './DataTable'
 import { deviceName, FieldValue, Status, timestamp } from './DevicePresentation'
@@ -418,7 +427,17 @@ function Detail({
           </Button>
         }
       />
-      <ReadState busy={read.busy} error={read.error} locale={locale} onRetry={read.reload} />
+      {codeOf(read.error) === 'not_found' ? (
+        <Alert
+          type="warning"
+          title={l(
+            '此设备当前不可用。请返回设备目录核对。',
+            'This device is unavailable. Check the device directory.',
+          )}
+        />
+      ) : (
+        <ReadState busy={read.busy} error={read.error} locale={locale} onRetry={read.reload} />
+      )}
       <Button onClick={permissions.reload}>
         {l('读取设备资产与合规权限', 'Read device inventory and compliance permissions')}
       </Button>
