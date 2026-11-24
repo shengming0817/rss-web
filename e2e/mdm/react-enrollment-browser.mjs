@@ -172,6 +172,103 @@ try {
     .waitFor()
   assert.match(enrolled.enrollmentId, /^[a-f0-9-]{36}$/)
   assert.equal(await employee.getByLabel('本次原生注册密码', { exact: true }).count(), 0)
+  const openDevice = '打开已注册设备详情'
+  assert.equal(await employee.getByRole('button', { name: openDevice }).count(), 0)
+  // Use the live self-enrollment response as the envelope. Exercise late/terminal
+  // protocol observations deterministically; the device detail and its ACL run on the host.
+  const statusPath = `/api/v1/tenants/${f.tenant}/enrollments/${enrolled.enrollmentId}`
+  const original = await api('GET', statusPath)
+  async function readStatus(page) {
+    await page.getByLabel('注册申请标识', { exact: true }).fill(enrolled.enrollmentId)
+    await run.response(page, 'GET', statusPath, () =>
+      page.getByRole('button', { name: '读取原生注册进度', exact: true }).click(),
+    )
+  }
+  for (const source of ['mdm.windows', 'mdm.apple']) {
+    await run.nav(admin, '/enroll', '设备注册')
+    let status = {
+      ...original,
+      status: 'bound',
+      deviceId: f.existingDevice,
+      source,
+      instructions:
+        source === 'mdm.windows'
+          ? original.instructions
+          : {
+              platform: 'macos',
+              profileUrl: `/api/v1/enrollments/${enrolled.enrollmentId}/profile`,
+              enrollmentMethod: 'profile_based_device_enrollment',
+            },
+      progress: {
+        ...original.progress,
+        managementReady: true,
+        diagnostic: 'ready',
+        certificateIssued: true,
+        firstAuthenticatedCheckIn: true,
+      },
+    }
+    const respond = (route) => route.fulfill({ json: status })
+    await admin.route(origin + statusPath, respond)
+    await readStatus(admin)
+    const open = admin.getByRole('button', { name: openDevice, exact: true })
+    await open.waitFor()
+    await admin.getByLabel('注册申请标识', { exact: true }).fill(randomUUID())
+    assert.equal(await open.count(), 0)
+    await readStatus(admin)
+    await run.response(
+      admin,
+      'GET',
+      `/api/v1/tenants/${f.tenant}/device-views/endpoint/${f.existingDevice}`,
+      () => open.click(),
+    )
+    assert.equal(
+      new URL(admin.url()).pathname,
+      `/tenants/${f.tenant}/devices/endpoint/${f.existingDevice}`,
+    )
+    await run.nav(admin, '/enroll', '设备注册')
+    await readStatus(admin)
+    status = {
+      ...status,
+      status: 'expired',
+      progress: { ...status.progress, diagnostic: 'expired', managementReady: false },
+    }
+    await run.response(admin, 'GET', statusPath, () => open.click())
+    await admin.getByText('expired', { exact: true }).last().waitFor()
+    assert.equal(await open.count(), 0)
+    status = {
+      ...status,
+      enrollmentId: randomUUID(),
+      status: 'bound',
+      progress: { ...status.progress, diagnostic: 'ready', managementReady: true },
+    }
+    await readStatus(admin)
+    assert.equal(await open.count(), 0)
+    await admin.unroute(origin + statusPath, respond)
+    checks.push('controlled-' + source + '-ready-navigation-real-detail-and-stale-status')
+  }
+  await employee.route(origin + statusPath, (route) =>
+    route.fulfill({
+      json: {
+        ...original,
+        deviceId: f.existingDevice,
+        status: 'bound',
+        progress: { ...original.progress, managementReady: true, diagnostic: 'ready' },
+      },
+    }),
+  )
+  await readStatus(employee)
+  await run.response(
+    employee,
+    'GET',
+    `/api/v1/tenants/${f.tenant}/device-views/endpoint/${f.existingDevice}`,
+    () => employee.getByRole('button', { name: openDevice }).click(),
+    403,
+  )
+  await employee.getByText('当前账户没有此操作权限。', { exact: true }).first().waitFor()
+  await employee.unroute(origin + statusPath)
+  await run.nav(employee, '/enroll', '设备注册')
+  await readStatus(employee)
+  checks.push('ready-enrollment-keeps-live-device-detail-permission')
   checks.push('native-instructions-and-progress-do-not-imply-device-enrollment')
   const cancellationPath = `/api/v1/tenants/${run.fixture.tenant}/enrollments/${enrolled.enrollmentId}/cancel`
   let originalCancellation, replayCancellation

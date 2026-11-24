@@ -1,7 +1,11 @@
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space } from 'antd'
 import { nativeIntent, windowsEnrollmentLink, type NativeIntent } from '@rss/mdm-enrollment'
+import { useNavigate } from 'react-router-dom'
+import { devicePath } from './Devices'
+import { useSecretVisibility } from './SecretTabs'
+import type { Enrollment, EnrollmentPort } from '@rss/mdm-enrollment'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { codeOf, Failure, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'
@@ -37,6 +41,53 @@ export function EnrollmentFailure({ error, locale }: { error: unknown; locale: L
     <Failure error={error} locale={locale} />
   )
 }
+function readyDevice(status: Enrollment, id: string) {
+  return (
+    status.enrollmentId === id &&
+    status.status === 'bound' &&
+    status.progress.managementReady &&
+    status.progress.diagnostic === 'ready'
+  )
+}
+
+function OpenEnrolledDevice({
+  status,
+  load,
+  locale,
+  reload,
+}: {
+  status: Enrollment
+  load: EnrollmentPort['enrollment']
+  locale: Locale
+  reload: () => void
+}) {
+  const navigate = useNavigate(),
+    l = labels(locale),
+    action = useAction()
+  const request = useRef<AbortController | null>(null)
+  useEffect(() => () => request.current?.abort(), [])
+  async function open() {
+    if (request.current) return
+    const controller = new AbortController()
+    request.current = controller
+    const fresh = await action.run(() => load(status.enrollmentId, controller.signal))
+    if (controller.signal.aborted) return
+    request.current = null
+    if (!fresh.ok) return
+    if (readyDevice(fresh.value, status.enrollmentId) && fresh.value.deviceId === status.deviceId) {
+      navigate(devicePath('endpoint', fresh.value.deviceId))
+    } else reload()
+  }
+  return (
+    <>
+      <Button disabled={action.busy} onClick={() => void open()}>
+        {l('打开已注册设备详情', 'Open enrolled device details')}
+      </Button>
+      <Failure locale={locale} error={action.error} kind="read" />
+    </>
+  )
+}
+
 export function NativeEnrollment({
   runtime,
   locale,
@@ -46,7 +97,8 @@ export function NativeEnrollment({
   locale: Locale
   initialEnrollment?: string
 }) {
-  const maintenance = useSelectionGuard()
+  const maintenance = useSelectionGuard(),
+    visible = useSecretVisibility()
   const l = labels(locale),
     { enrollment, binding } = useAdministration(runtime),
     action = useAction(),
@@ -70,8 +122,8 @@ export function NativeEnrollment({
       setSaved(false)
       setRecoveryPassword('')
     }),
-    read = useRead(`${binding}/enrollment/${id}`, () =>
-      id ? enrollment.enrollment(id) : Promise.resolve(null),
+    read = useRead(`${binding}/enrollment/${id}/${visible}`, (signal) =>
+      id && visible ? enrollment.enrollment(id, signal) : Promise.resolve(null),
     ),
     channel = channels.value?.channels.find(
       (c) => c.channel === (source === 'mdm.windows' ? 'windows_mdm' : 'macos_mdm'),
@@ -370,6 +422,15 @@ export function NativeEnrollment({
                     )
               }
             />
+            {visible && !locked && idDraft === id && readyDevice(read.value, id) && (
+              <OpenEnrolledDevice
+                key={read.key + read.value.deviceId}
+                locale={locale}
+                status={read.value}
+                load={enrollment.enrollment}
+                reload={read.reload}
+              />
+            )}
             <dl className="device-facts">
               <div>
                 <dt>{l('配置文件准备', 'Profile prepared')}</dt>

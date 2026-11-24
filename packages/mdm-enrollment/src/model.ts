@@ -384,7 +384,7 @@ export interface EnrollmentPort {
   ): Promise<QuotaConfiguration>
   selfOptions(): Promise<SelfOptions>
   createNative(intent: NativeIntent, password: string): Promise<EnrollmentReceipt>
-  enrollment(id: string): Promise<Enrollment>
+  enrollment(id: string, signal?: AbortSignal): Promise<Enrollment>
   resume(id: string, operationId: string, password: string): Promise<EnrollmentReceipt>
   cancel(id: string, operationId: string): Promise<EnrollmentReceipt>
   profile(id: string, password: string): Promise<Download>
