@@ -720,6 +720,7 @@ try {
     .filter({ hasText: 'React empty source' })
     .getByRole('button', { name: '使用此组', exact: true })
     .click()
+  await picker.locator('p code').filter({ hasText: staticGroup.id }).waitFor()
   const nestedAcceptedResponse = p.waitForResponse(
     (r) => r.request().method() === 'POST' && groupDefinition.test(new URL(r.url()).pathname),
   )

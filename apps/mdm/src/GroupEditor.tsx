@@ -80,7 +80,8 @@ export function GroupEditor({
     [deletionBlocked, setDeletionBlocked] = useState<boolean | null>(null),
     canUseCriteria =
       kind !== 'dynamic' || catalog.registration || !usesRegistration(criteria.criteria),
-    mutable = canWrite && group?.kind !== 'system' && !group?.deleted
+    mutable = canWrite && group?.kind !== 'system' && !group?.deleted,
+    writeDisabled = !mutable || guard.locked || action.busy || pending !== null
   usePendingSelection(
     guard.locked ||
       action.busy ||
@@ -179,7 +180,7 @@ export function GroupEditor({
         )}
         <Form
           layout="vertical"
-          disabled={!mutable || guard.locked || action.busy || pending !== null}
+          disabled={writeDisabled}
           onFinish={() =>
             start(
               group
@@ -265,7 +266,11 @@ export function GroupEditor({
               />
             </>
           )}
-          <Button type="primary" htmlType="submit" disabled={!group && !canUseCriteria}>
+          <Button
+            type="primary"
+            htmlType="submit"
+            disabled={writeDisabled || (!group && !canUseCriteria)}
+          >
             {group ? l('保存设备组元数据', 'Save group metadata') : l('创建设备组', 'Create group')}
           </Button>
         </Form>
@@ -273,7 +278,7 @@ export function GroupEditor({
           <Form
             className="admin-subsection"
             layout="vertical"
-            disabled={!mutable || guard.locked || action.busy || pending !== null}
+            disabled={writeDisabled}
             onFinish={() => start({ action: 'rule', criteria })}
           >
             <h3>{l('规则定义', 'Rule definition')}</h3>
@@ -297,7 +302,7 @@ export function GroupEditor({
                 setCriteria({ ...criteria, criteria: value })
               }}
             />
-            <Button type="primary" htmlType="submit" disabled={!canUseCriteria}>
+            <Button type="primary" htmlType="submit" disabled={writeDisabled || !canUseCriteria}>
               {l('提交规则验证与保存任务', 'Submit rule validation and save task')}
             </Button>
           </Form>
@@ -306,7 +311,7 @@ export function GroupEditor({
           <Form
             className="admin-subsection"
             layout="vertical"
-            disabled={!mutable || guard.locked || action.busy || pending !== null}
+            disabled={writeDisabled}
             onFinish={() =>
               start({
                 action: 'members',

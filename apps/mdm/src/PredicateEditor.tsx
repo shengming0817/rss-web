@@ -51,7 +51,7 @@ export function PredicateEditor({
       return (
         <Select
           aria-label={l('枚举值', 'Enumeration value')}
-          value={item.kind === 'string' ? item.value : undefined}
+          value={item.kind === 'string' ? item.value : null}
           options={descriptor.choices.map((v) => ({ value: v, label: v }))}
           onChange={(v: string) => change({ kind: 'string', value: v })}
         />

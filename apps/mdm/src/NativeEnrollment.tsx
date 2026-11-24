@@ -1,11 +1,16 @@
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space } from 'antd'
-import { nativeIntent, windowsEnrollmentLink, type NativeIntent } from '@rss/mdm-enrollment'
+import {
+  nativeIntent,
+  windowsEnrollmentLink,
+  type NativeIntent,
+  type Enrollment,
+  type EnrollmentPort,
+} from '@rss/mdm-enrollment'
 import { useNavigate } from 'react-router-dom'
 import { devicePath } from './Devices'
 import { useSecretVisibility } from './SecretTabs'
-import type { Enrollment, EnrollmentPort } from '@rss/mdm-enrollment'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { codeOf, Failure, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'

@@ -184,8 +184,8 @@ try {
     ).json()
   }
   const open = (page) => page.getByRole('button', { name: openDevice, exact: true })
-  const { windows, apple } = f.readyEnrollments
-  for (const [purpose, registered] of Object.entries(f.readyEnrollments)) {
+  const { windows, apple, restricted } = f.readyEnrollments
+  for (const [purpose, registered] of Object.entries({ windows, apple })) {
     await run.nav(admin, '/enroll', '设备注册')
     const status = await readStatus(admin, registered.enrollment)
     assert.equal(status.source, 'mdm.' + purpose)
@@ -259,8 +259,15 @@ try {
   assert.equal(await open(admin).count(), 0)
   await admin.unroute(path)
   checks.push('late-status-after-switch-and-controlled-expiry-or-wrong-request')
-  await readStatus(employee, windows.enrollment)
-  await run.response(employee, 'GET', detailPath, () => open(employee).click(), 403)
+  const limited = await readStatus(employee, restricted.enrollment)
+  assert.equal(limited.progress.managementReady, true)
+  await run.response(
+    employee,
+    'GET',
+    `/api/v1/tenants/${f.tenant}/device-views/endpoint/${restricted.device}`,
+    () => open(employee).click(),
+    403,
+  )
   await employee.getByText('当前账户没有此操作权限。', { exact: true }).first().waitFor()
   await run.nav(employee, '/enroll', '设备注册')
   await readStatus(employee, enrolled.enrollmentId)

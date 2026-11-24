@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -20,6 +21,13 @@ def configure(environment, config, private):
     root.mkdir(mode=0o700)
     pem = subprocess.run(['openssl', 'genpkey', '-algorithm', 'EC', '-pkeyopt', 'ec_paramgen_curve:P-256'], capture_output=True, check=True, timeout=15).stdout
     key = private(root / 'psso-key.pem', pem.decode())
+    # Local Windows account provisioning requires the configured recovery owner.
+    from task_trust_materials import prepare
+    recipient = prepare(root)
+    custody_key = private(root/'custody.key', '')
+    custody_key.write_bytes(os.urandom(32))
+    config['recovery_credentials'] = dict(active_key='browser', key_files={'browser': str(custody_key)},
+        recipients=[dict(certificate_file=str(recipient/'ca.pem'), private_key_file=str(recipient/'ca.key'))])
     config['device_access']['platform_sso'] = dict(configuration=dict(teamId='ABCDEFGHIJ', extensionId='com.example.da.extension', applicationId='com.example.da', applicationVersion='1.0', clientId=str(uuid.uuid4())), active_key='browser', signing_keys={'browser': str(key)})
     return dict(root=str(root), device=str(uuid.uuid4()), policy=str(uuid.uuid4()), version=str(uuid.uuid4()))
 
