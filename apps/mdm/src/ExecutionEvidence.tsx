@@ -1,5 +1,5 @@
 import { Descriptions } from 'antd'
-import type { EvidenceDocument, ExecutionDetail } from '@rss/mdm-execution'
+import type { EvidenceDocument, ExecutionDetail } from '@rss/mdm-operations'
 import type { Locale } from './i18n'
 import { labels } from './AdminUi'
 import { Status, timestamp } from './DevicePresentation'

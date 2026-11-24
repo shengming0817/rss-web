@@ -17,7 +17,7 @@ import {
   useRead,
 } from './AdminUi'
 import { SelectionGuard, useSelectionGuard } from './SelectionGuard'
-import type { RuleCatalog } from './PersonnelPredicate'
+import type { RuleCatalog } from './GroupPredicate'
 import { GroupEditor } from './GroupEditor'
 import { SecretTabs } from './SecretTabs'
 import { useAdministration } from './useAdministration'

@@ -1,7 +1,7 @@
 import { DiagnosticReference } from './DiagnosticReference'
 import { useState } from 'react'
 import { Alert, Button, Checkbox, Space } from 'antd'
-import type { ControlRecovery } from '@rss/mdm-execution'
+import type { ControlRecovery } from '@rss/mdm-devices/control'
 import { freeze } from '@rss/mdm-inventory'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
@@ -32,7 +32,7 @@ export function ControlRecoveryPanel({
   onRefresh(): void
 }) {
   const l = labels(locale),
-    { execution, authorization, binding } = useAdministration(runtime),
+    { deviceControl, authorization, binding } = useAdministration(runtime),
     permissions = useRead(
       `${binding}/control-recovery-permissions/${device}`,
       authorization.effective,
@@ -77,8 +77,8 @@ export function ControlRecoveryPanel({
     const epoch = delivery.capture(),
       result = await action.run(() =>
         value.kind === 'cancel'
-          ? execution.cancel(device, id, value.input)
-          : execution.reauthorize(device, id, value.input),
+          ? deviceControl.cancel(device, id, value.input)
+          : deviceControl.reauthorize(device, id, value.input),
       )
     if (!delivery.isCurrent(epoch)) return
     setOutcome(result.ok ? 'confirmed' : isUnknown(result.error) ? 'unknown' : 'rejected')

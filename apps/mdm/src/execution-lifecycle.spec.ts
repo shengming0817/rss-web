@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Runtime } from './runtime'
-import type { ControlIntent, ControlRecovery } from '@rss/mdm-execution'
+import type { ControlIntent, ControlRecovery } from '@rss/mdm-devices/control'
 import type { DeviceRef, EndpointDetail, ViewEndpoint, ViewRow } from '@rss/mdm-devices'
 import { DeviceDetail } from './DeviceDetail'
 import { DeviceControl } from './DeviceControl'
@@ -114,7 +114,7 @@ it('retains the original write as unknown across hiding and a late public receip
     runtime = {
       administration: () => ({
         devices: { endpoint: async () => detailSnapshot() },
-        execution: { create },
+        deviceControl: { create },
       }),
     } as unknown as Runtime
   await act(async () =>
@@ -170,7 +170,7 @@ it('allows a wipe-only principal to confirm backend-authorized recovery without 
             grants: [{ operation: 'device_wipe', scope: { kind: 'all_devices' } }],
           }),
         },
-        execution: { reauthorize },
+        deviceControl: { reauthorize },
       }),
     } as unknown as Runtime
   await act(async () =>
@@ -217,7 +217,7 @@ it('allows a wipe-only principal to select, review and explicitly submit a wipe'
     runtime = {
       administration: () => ({
         devices: { endpoint: async () => detailSnapshot(endpoint, ['wipe']) },
-        execution: { create },
+        deviceControl: { create },
       }),
     } as unknown as Runtime
   await act(async () =>
@@ -432,7 +432,7 @@ it.each(['runs', 'assignments'])(
             runs,
             assignments,
           },
-          execution: {
+          operations: {
             summary: async () => ({
               id: run,
               device: 'device-a',
@@ -623,14 +623,13 @@ it('loads sensitive evidence explicitly and keeps the authorized summary when de
     runtime = {
       administration: () => ({
         binding: 'sensitive',
+        deviceControl: { create },
         authorization: { effective: async () => ({ grants: [] }) },
-        execution: {
+        operations: {
           summary,
           detail,
-          create,
           list: async () => ({ items: [], nextCursor: null }),
           statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
-          trust: async () => ({ revision: 1, keys: [] }),
         },
       }),
     } as unknown as Runtime
@@ -851,7 +850,7 @@ it.each([false, true])(
             }),
           },
           authorization: { effective: async () => ({ grants: [] }) },
-          execution: {
+          operations: {
             summary: async () => ({
               id,
               device: 'device-a',
@@ -1049,15 +1048,15 @@ it('retains an unknown recovery request while refreshing the containing result d
     runtime = {
       administration: () => ({
         binding: 'recovery-owner',
+        deviceControl: { cancel },
         authorization: {
           effective: async () => ({
             grants: [{ operation: 'operation_cancel', scope: { kind: 'all_devices' } }],
           }),
         },
-        execution: {
+        operations: {
           summary: async () => item,
           detail,
-          cancel,
           list: async () => ({ items: [], nextCursor: null }),
           statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
         },
@@ -1094,7 +1093,7 @@ it.each(['//[', '//%'])(
         administration: () => ({
           binding: 'malformed',
           authorization: { effective: async () => ({ grants: [] }) },
-          execution: {
+          operations: {
             summary: async () => ({
               id,
               device: 'device-a',
@@ -1146,7 +1145,7 @@ it('keeps the default endpoint location during a delayed control preflight', asy
         view: async () => view,
         endpoint: read,
       },
-      execution: { create },
+      deviceControl: { create },
       connections: { agent: {} },
     }),
   } as unknown as Runtime
@@ -1218,7 +1217,7 @@ it('uses URL endpoint selection for back and forward while retaining an unknown 
           view: async () => ({ association: null, endpoints, fields: {} }),
           endpoint: async (id: string) => detailSnapshot(endpoints.find((e) => e.id === id)!),
         },
-        execution: { create },
+        deviceControl: { create },
         connections: { agent: {} },
       }),
     } as unknown as Runtime,
@@ -1416,7 +1415,10 @@ it('clears a confirmed lock PIN on permission loss and again when issuing the wr
     revision: 1,
   }))
   const runtime = {
-    administration: () => ({ devices: { endpoint: async () => permitted }, execution: { create } }),
+    administration: () => ({
+      devices: { endpoint: async () => permitted },
+      deviceControl: { create },
+    }),
   } as unknown as Runtime
   async function show(snapshot: EndpointDetail) {
     await act(async () =>
@@ -1490,7 +1492,7 @@ it('keeps the original device command locked when an accepted response cannot be
   const runtime = {
     administration: () => ({
       devices: { endpoint: async () => snapshot },
-      execution: { create },
+      deviceControl: { create },
     }),
   } as unknown as Runtime
   await act(async () =>

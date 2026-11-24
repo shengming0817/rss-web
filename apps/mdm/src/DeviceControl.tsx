@@ -9,11 +9,11 @@ import {
   type EndpointDetail,
   type ViewEndpoint,
 } from '@rss/mdm-devices'
-import type { ControlIntent } from '@rss/mdm-execution'
+import type { ControlIntent } from '@rss/mdm-devices/control'
 import { freeze } from '@rss/mdm-inventory'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import { Failure, isUnknown, labels, useAction } from './AdminUi'
+import { Failure, isUnknown, labels, useAction, useRead, ReadState } from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { deviceName } from './DevicePresentation'
 import { executionPath } from './Executions'
@@ -37,7 +37,7 @@ export function DeviceControl({
   canReadOriginal: boolean
 }) {
   const l = labels(locale)
-  const { execution, devices } = useAdministration(runtime)
+  const { deviceControl, devices } = useAdministration(runtime)
   const action = useAction()
   const [kind, setKind] = useState<DeviceControlAction>('restart')
   const [pin, setPin] = useState('')
@@ -47,6 +47,17 @@ export function DeviceControl({
   } | null>(null)
   const [pending, setPending] = useState<ControlIntent | null>(null)
   const [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none')
+  const [originalId, setOriginalId] = useState<string | null>(null)
+  const original = useRead(
+    `original-control/${pending?.device}/${originalId}/${canReadOriginal}`,
+    (signal) =>
+      canReadOriginal &&
+      originalId &&
+      originalId === pending?.operationId &&
+      pending.device === endpoint.id
+        ? deviceControl.original(pending.device, originalId, signal)
+        : Promise.resolve(null),
+  )
   const [stale, setStale] = useState(false)
   const [errorKind, setErrorKind] = useState<'read' | 'write'>('read')
   const { fact, ready } = controlApplicability(snapshot, kind)
@@ -114,7 +125,7 @@ export function DeviceControl({
       setErrorKind('write')
       setPending(intent)
       setOutcome('unknown')
-      return execution.create(intent, intent.action.kind === 'lock' ? secret : undefined)
+      return deviceControl.create(intent, intent.action.kind === 'lock' ? secret : undefined)
     })
     if (issued && delivery.isCurrent(epoch)) {
       setOutcome(result.ok ? 'confirmed' : isUnknown(result.error) ? 'unknown' : 'rejected')
@@ -221,6 +232,25 @@ export function DeviceControl({
               ? l('已受理，设备效果另行核实', 'Accepted; device effect is separate')
               : l('未确认受理', 'Acceptance unconfirmed')}
         </p>
+      )}
+      {pending && outcome === 'unknown' && canReadOriginal && pending.device === endpoint.id && (
+        <>
+          <Button
+            onClick={() => {
+              setOriginalId(pending.operationId)
+              original.reload()
+            }}
+          >
+            {l('读取原设备操作', 'Read original device control')}
+          </Button>
+          <ReadState locale={locale} busy={original.busy && !!originalId} error={original.error} />
+          {original.value && (
+            <p>
+              {original.value.operationId} · {original.value.status} · {l('版本', 'Revision')}{' '}
+              {original.value.revision}
+            </p>
+          )}
+        </>
       )}
       <Modal
         open={!!validReview}

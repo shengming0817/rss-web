@@ -3,7 +3,7 @@ import { ControlRecoveryPanel } from './ControlRecovery'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, Space } from 'antd'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import type { ExecutionRef } from '@rss/mdm-execution'
+import type { ExecutionRef } from '@rss/mdm-operations'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { CursorControls, Heading, labels, ReadState, usePageRead, type Query } from './AdminUi'
@@ -47,16 +47,16 @@ function ExecutionFacts({
   const l = labels(locale),
     location = useLocation(),
     [params] = useSearchParams(),
-    { execution, binding } = useAdministration(runtime),
+    { operations, binding } = useAdministration(runtime),
     summary = usePageRead(
       `${binding}/execution-summary/${reference.kind}/${reference.id}`,
-      (signal) => execution.summary(reference, signal),
+      (signal) => operations.summary(reference, signal),
       { retryReadConflict: true },
     ),
     [expanded, setExpanded] = useState(false),
     read = usePageRead(
       `${binding}/execution/${reference.kind}/${reference.id}/${reference.policy ?? ''}/${expanded}`,
-      (signal) => (expanded ? execution.detail(reference, signal) : Promise.resolve(null)),
+      (signal) => (expanded ? operations.detail(reference, signal) : Promise.resolve(null)),
       { retryReadConflict: true },
     ),
     observed = read.value?.detail,
@@ -250,7 +250,7 @@ function ExecutionFacts({
 export function Executions({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     location = useLocation(),
-    { execution, binding } = useAdministration(runtime),
+    { operations, binding } = useAdministration(runtime),
     [params, setParams] = useSearchParams(),
     filter = params.get('filter') ?? '',
     cursor = params.get('cursor'),
@@ -258,12 +258,12 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
     query: Query = { limit: 100, ...(filter ? { filter } : {}), ...(cursor ? { cursor } : {}) },
     read = usePageRead(
       `${binding}/executions/${JSON.stringify(query)}`,
-      (signal) => execution.list(query, signal),
+      (signal) => operations.list(query, signal),
       { retryReadConflict: !query.cursor },
     ),
     statistics = usePageRead(
       `${binding}/execution-statistics/${filter}`,
-      (signal) => execution.statistics(filter || undefined, signal),
+      (signal) => operations.statistics(filter || undefined, signal),
       { retryReadConflict: true },
     ),
     operation = params.get('operation'),

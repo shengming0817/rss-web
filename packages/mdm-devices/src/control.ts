@@ -1,4 +1,4 @@
-import { freeze, uuid } from '@rss/mdm-inventory'
+import { deviceId, uuid } from './authoring'
 export interface Confirmation {
   readonly confirmed: true
 }
@@ -20,6 +20,11 @@ export interface ControlRecovery {
   readonly confirmation?: Confirmation | null
 }
 export interface ControlPort {
+  original(
+    device: string,
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<ControlReceipt & { status: string }>
   create(input: ControlIntent, pin?: string): Promise<ControlReceipt>
   cancel(device: string, id: string, input: ControlRecovery): Promise<ControlReceipt>
   reauthorize(device: string, id: string, input: ControlRecovery): Promise<ControlReceipt>
@@ -34,7 +39,7 @@ export function validateControl(input: ControlIntent, pin?: string) {
   if (input.action.kind === 'lock' && !/^[0-9]{6}$/.test(pin ?? ''))
     throw new Error('Six ASCII digit PIN required')
 }
-export function createControl(port: ControlPort) {
+export function createDeviceControl(port: ControlPort) {
   const recover = async (
     kind: 'cancel' | 'reauthorize',
     device: string,
@@ -45,14 +50,29 @@ export function createControl(port: ControlPort) {
     uuid(input.requestId)
     if (!device || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1)
       throw new Error('Invalid operation revision')
-    const value = await port[kind](device, id, freeze(input))
+    const value = await port[kind](
+      device,
+      id,
+      Object.freeze({
+        ...input,
+        ...(input.confirmation ? { confirmation: Object.freeze({ ...input.confirmation }) } : {}),
+      }),
+    )
     if (value.operationId !== id) throw new Error('Wrong control recovery receipt')
     return value
   }
   return {
+    async original(device: string, id: string, signal?: AbortSignal) {
+      const value = await port.original(deviceId(device), uuid(id), signal)
+      if (value.operationId !== id) throw new Error('Wrong original control operation')
+      return value
+    },
     async create(input: ControlIntent, pin?: string) {
       validateControl(input, pin)
-      const value = await port.create(freeze(input), pin)
+      const value = await port.create(
+        Object.freeze({ ...input, action: Object.freeze({ ...input.action }) }),
+        pin,
+      )
       if (value.operationId !== input.operationId) throw new Error('Wrong control receipt')
       return value
     },

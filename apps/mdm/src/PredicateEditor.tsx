@@ -9,16 +9,26 @@ import { ScalarEditor } from './ScalarEditor'
 function primitive(value: Scalar): value is NonNullable<Predicate['value']> {
   return value.kind !== 'array' && value.kind !== 'object'
 }
+export function withOperator(
+  field: string,
+  op: Predicate['op'],
+  initial: NonNullable<Predicate['value']>,
+  previous?: Predicate,
+): Predicate {
+  const base = { kind: 'predicate' as const, field, op }
+  if (['is_null', 'is_not_null'].includes(op)) return base
+  if (['in', 'not_in', 'contains_any', 'contains_all'].includes(op))
+    return { ...base, values: previous?.values ?? (previous?.value ? [previous.value] : []) }
+  return { ...base, value: previous?.value ?? previous?.values?.[0] ?? initial }
+}
 export function PredicateEditor({
   value,
   onChange,
   locale,
   descriptor,
-  changeOperator,
   operands,
 }: {
   descriptor?: { operations: readonly Predicate['op'][]; initial: NonNullable<Predicate['value']> }
-  changeOperator?: (op: Predicate['op']) => void
   operands?: ReactNode
   value: Predicate
   onChange: (value: Predicate) => void
@@ -43,20 +53,16 @@ export function PredicateEditor({
           aria-label={l('比较操作', 'Comparison')}
           value={value.op}
           options={(descriptor?.operations ?? operators).map((value) => ({ value, label: value }))}
-          onChange={(op: Predicate['op']) => {
-            if (changeOperator) return changeOperator(op)
-            const base = { kind: 'predicate' as const, field: value.field, op }
+          onChange={(op: Predicate['op']) =>
             onChange(
-              ['is_null', 'is_not_null'].includes(op)
-                ? base
-                : ['in', 'not_in', 'contains_any', 'contains_all'].includes(op)
-                  ? { ...base, values: value.values ?? (value.value ? [value.value] : []) }
-                  : {
-                      ...base,
-                      value: value.value ?? value.values?.[0] ?? { kind: 'string', value: '' },
-                    },
+              withOperator(
+                value.field,
+                op,
+                descriptor?.initial ?? { kind: 'string', value: '' },
+                value,
+              ),
             )
-          }}
+          }
         />
       </Form.Item>
       {operands ??

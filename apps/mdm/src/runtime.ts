@@ -11,9 +11,15 @@ import { createTenantSetupAdapter, createCatalogAdapter } from '@rss/mdm-http/te
 import { createRuntimeDiagnosticsAdapter } from '@rss/mdm-http/runtime-diagnostics'
 import { createTelemetry } from '@rss/mdm-telemetry'
 import { createTelemetryAdapter } from '@rss/mdm-http/telemetry'
-import { createExecution } from '@rss/mdm-execution'
+import { createOperations } from '@rss/mdm-operations'
+import { createTaskTrust } from '@rss/mdm-task-trust'
+import { createDeviceControl } from '@rss/mdm-devices/control'
+import { createDeviceDeclarations } from '@rss/mdm-devices/declarations'
 import { createDeviceAccess } from '@rss/mdm-device-access'
-import { createExecutionAdapter } from '@rss/mdm-http/execution'
+import { createOperationsAdapter } from '@rss/mdm-http/operations'
+import { createDeviceControlAdapter } from '@rss/mdm-http/device-control'
+import { createDeviceDeclarationsAdapter } from '@rss/mdm-http/device-declarations'
+import { createTaskTrustAdapter } from '@rss/mdm-http/task-trust'
 import { createDeviceAccessAdapter } from '@rss/mdm-http/device-access'
 import { createPolicies, createPolicyEvents } from '@rss/mdm-policies'
 import { createPoliciesAdapter } from '@rss/mdm-http/policies'
@@ -265,7 +271,12 @@ function createRuntime(
           createSoftwareSnapshotsAdapter(transport, tenant),
         ),
         publications: createPublications(createPublicationsAdapter(transport, tenant)),
-        execution: createExecution(createExecutionAdapter(transport, tenant, host.serviceId)),
+        operations: createOperations(createOperationsAdapter(transport, tenant)),
+        deviceControl: createDeviceControl(createDeviceControlAdapter(transport, tenant)),
+        deviceDeclarations: createDeviceDeclarations(
+          createDeviceDeclarationsAdapter(transport, tenant),
+        ),
+        taskTrust: createTaskTrust(createTaskTrustAdapter(transport, tenant, host.serviceId)),
         deviceAccess: createDeviceAccess(createDeviceAccessAdapter(transport, tenant)),
         policies: createPolicies(createPoliciesAdapter(transport, tenant)),
         policyEvents: createPolicyEvents(createPolicyEventsAdapter(transport, tenant)),

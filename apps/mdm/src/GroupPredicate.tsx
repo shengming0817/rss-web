@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Button, Form, Select } from 'antd'
 import type { AuthorizationPort } from '@rss/mdm-authorization'
-import type { FieldRow, InventoryPort, Predicate, ValueType, Operator } from '@rss/mdm-inventory'
+import type { FieldRow, InventoryPort, Predicate, ValueType } from '@rss/mdm-inventory'
 import type { Locale } from './i18n'
 import { labels, ReadState, useRead } from './AdminUi'
-import { PredicateEditor } from './PredicateEditor'
+import { PredicateEditor, withOperator } from './PredicateEditor'
 import { comparison } from '@rss/api/mdm-query'
 
 export interface RuleCatalog {
@@ -31,15 +31,6 @@ function operand(type: ValueType): NonNullable<Predicate['value']> {
       return { kind: 'string', value: '' }
   }
 }
-function preset(row: FieldRow, op: Operator): Predicate {
-  const base = { kind: 'predicate' as const, field: row.key, op }
-  if (op === 'is_null' || op === 'is_not_null') return base
-  const initial = operand(row.valueType!)
-  return ['in', 'not_in', 'contains_any', 'contains_all'].includes(op)
-    ? { ...base, values: [] }
-    : { ...base, value: initial }
-}
-
 function LocalGroups({ catalog, locale, value, onChange }: Props) {
   const l = labels(locale)
   const [cursor, setCursor] = useState<string | null>(null)
@@ -81,33 +72,32 @@ interface Props {
   value: Predicate
   onChange: (next: Predicate) => void
 }
-function PersonnelFields({ prefix, ...props }: Props & { prefix: string }) {
+function CatalogField({ prefix, ...props }: Props & { prefix: string }) {
   const { catalog, locale, value, onChange } = props
   const l = labels(locale)
   const [cursor, setCursor] = useState<string | null>(null)
   const page = useRead(`personnel-fields/${prefix}/${cursor}`, () =>
     catalog.fields({
-      filter: comparison('key', '=icontains=', prefix),
+      ...(prefix ? { filter: comparison('key', '=icontains=', prefix) } : {}),
       fields: projection,
       limit: 50,
       ...(cursor ? { cursor } : {}),
     }),
   )
-  const selected = useRead(`personnel-field/${value.field}`, () =>
-    value.field === prefix
-      ? Promise.resolve(null)
-      : catalog.fields({
-          filter: comparison('key', '==', value.field),
-          fields: projection,
-          limit: 1,
-        }),
-  )
-  const row = selected.value?.items.find((r) => r.key === value.field)
   const rows =
     page.value?.items.filter(
-      (r) => r.key.startsWith(prefix) && r.operations?.length && r.valueType,
+      (r): r is FieldRow & Required<Pick<FieldRow, 'operations' | 'valueType'>> =>
+        r.key.startsWith(prefix) && !!r.operations?.length && !!r.valueType,
     ) ?? []
-  const title = l('人员属性', 'User attribute')
+  const listed = rows.find((r) => r.key === value.field)
+  const missing = page.value && !listed && value.field !== prefix ? value.field : ''
+  const selected = useRead(`selected-group-field/${missing}`, () =>
+    missing
+      ? catalog.fields({ filter: comparison('key', '==', missing), fields: projection, limit: 1 })
+      : Promise.resolve(null),
+  )
+  const row = listed ?? selected.value?.items.find((r) => r.key === value.field)
+  const title = prefix ? l('人员属性', 'User attribute') : l('条件字段', 'Condition field')
   return (
     <>
       <Form.Item label={title}>
@@ -116,13 +106,15 @@ function PersonnelFields({ prefix, ...props }: Props & { prefix: string }) {
           value={value.field === prefix ? undefined : value.field}
           options={rows.map((r) => ({ value: r.key, label: r.key.slice(prefix.length) }))}
           onChange={(key: string) => {
-            const next = rows.find((r) => r.key === key)!
-            onChange(
-              preset(
-                next,
-                next.operations!.includes('contains_any') ? 'contains_any' : next.operations![0]!,
-              ),
-            )
+            const next = rows.find((r) => r.key === key)
+            if (next)
+              onChange(
+                withOperator(
+                  key,
+                  next.operations.includes('contains_any') ? 'contains_any' : next.operations[0]!,
+                  operand(next.valueType),
+                ),
+              )
           }}
         />
       </Form.Item>
@@ -153,7 +145,6 @@ function PersonnelFields({ prefix, ...props }: Props & { prefix: string }) {
         <PredicateEditor
           {...props}
           descriptor={{ operations: row.operations, initial: operand(row.valueType) }}
-          changeOperator={(op) => onChange(preset(row, op))}
           {...(row.key === prefix + 'local_group_ids' &&
           ['contains_all', 'contains_any'].includes(value.op)
             ? { operands: <LocalGroups {...props} /> }
@@ -185,11 +176,7 @@ export function GroupPredicate(props: Props) {
           }
         />
       </Form.Item>
-      {prefix ? (
-        <PersonnelFields key={prefix} prefix={prefix} {...props} />
-      ) : (
-        <PredicateEditor {...props} />
-      )}
+      <CatalogField key={prefix} prefix={prefix} {...props} />
     </>
   )
 }
