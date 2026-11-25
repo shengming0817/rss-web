@@ -351,6 +351,22 @@ describe('fixed producer HTTP operations', () => {
         .onGet('/readyz')
         .reply(503, { ready: false, observation }, { 'content-type': 'application/json' })
       await expect(getReadyz(transport, {})).resolves.toEqual({ ready: false, observation })
+      mock.onGet('/readyz').reply(
+        503,
+        { code: 'service_unavailable' },
+        {
+          'content-type': 'application/json',
+          'cache-control': 'no-store',
+          'referrer-policy': 'no-referrer',
+          'x-content-type-options': 'nosniff',
+          'x-request-id': id,
+        },
+      )
+      await expect(getReadyz(transport, {})).rejects.toMatchObject({
+        cause: 'wire',
+        status: 503,
+        code: 'service_unavailable',
+      })
       mock
         .onGet('/readyz')
         .reply(503, { ready: 'false', observation }, { 'content-type': 'application/json' })

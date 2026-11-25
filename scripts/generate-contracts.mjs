@@ -685,7 +685,14 @@ for (const e of endpoints) {
     binary,
     statuses: [...new Set(success.map((r) => r.status))],
   }
-  const responses = e.responses.map((r) => 'r.r' + digest(r).slice(0, 20))
+  const responseRef = (r) => 'r.r' + digest(r).slice(0, 20)
+  const responses = e.responses.map(responseRef)
+  const ambiguousStatus = e.responses.some(
+    (r) => descriptor.statuses.includes(r.status) && !success.includes(r),
+  )
+  const expectedResponses = ambiguousStatus
+    ? `, expectedResponses: [${success.map(responseRef).join(',')}]`
+    : ''
   const headerChecks = Object.entries(e.request.headers)
     .filter(([key]) => descriptor.requestHeaders.includes(key))
     .map(([key, ref]) => `${JSON.stringify(key)}:${validatorOf(ref)}`)
@@ -711,7 +718,7 @@ for (const e of endpoints) {
     ${e.request.body ? `export type * as Body from './${rootFor(e.request.body.schema)}'` : ''}
     ${success.length === 1 && success[0].body ? `export type * as Response from './${rootFor(success[0].body.schema)}'` : ''}
     export const ${name} = /* @__PURE__ */ defineEndpoint<Input, Output>({
-      ...${JSON.stringify(descriptor)}, checks: {${checks}}, responses: [${responses.join(',')}]
+      ...${JSON.stringify(descriptor)}, checks: {${checks}}, responses: [${responses.join(',')}]${expectedResponses}
     })
   `,
   )
