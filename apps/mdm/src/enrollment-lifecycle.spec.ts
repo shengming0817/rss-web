@@ -436,37 +436,47 @@ it('explains which server setting blocks issuance without retrying a rejected re
   expect(issueConfiguration).toHaveBeenCalledOnce()
 })
 
-it('refreshes connection status before retrying device confirmation at the new revision', async () => {
-  function state(revision: number) {
-    return {
-      configuration: {
+it.each([
+  { button: 'Refresh connection status', revision: 3, after: 'next-device' },
+  { button: 'Read again', revision: 3, after: 'next-device' },
+  { button: 'Read again', revision: 4, after: undefined },
+])(
+  'refreshes device confirmation via $button at revision $revision',
+  async ({ button, revision, after }) => {
+    function state(revision: number) {
+      return {
         configuration: {
-          revision,
-          preferredOrigin: 'https://agent.example',
-          origins: ['https://agent.example'],
+          configuration: {
+            revision,
+            preferredOrigin: 'https://agent.example',
+            origins: ['https://agent.example'],
+          },
         },
-      },
-      convergence: { targetRevision: revision, activeDevices: 1, confirmedDevices: 0 },
+        convergence: { targetRevision: revision, activeDevices: 1, confirmedDevices: 0 },
+      }
     }
-  }
-  const read = vi.fn().mockResolvedValueOnce(state(3)).mockResolvedValueOnce(state(4))
-  const devices = vi
-    .fn()
-    .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict', issuanceId: null }))
-    .mockResolvedValueOnce({
-      targetRevision: 4,
-      items: [{ device: 'device-awaiting-revision-4' }],
-      next: null,
-    })
-  const r = runtime({ connections: { agent: { read, devices } } })
-  await render(h(AgentConnections, { runtime: r, locale: 'en' }))
-  expect(devices).toHaveBeenNthCalledWith(1, 3, undefined)
-  await click('Read again')
-  expect(read).toHaveBeenCalledTimes(2)
-  expect(devices).toHaveBeenCalledTimes(2)
-  expect(devices).toHaveBeenNthCalledWith(2, 4, undefined)
-  expect(host.textContent).toContain('device-awaiting-revision-4')
-})
+    const read = vi.fn().mockResolvedValueOnce(state(3)).mockResolvedValueOnce(state(revision))
+    const devices = vi
+      .fn()
+      .mockResolvedValueOnce({ targetRevision: 3, items: [], next: 'next-device' })
+      .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict', issuanceId: null }))
+      .mockResolvedValueOnce({
+        targetRevision: revision,
+        items: [{ device: 'confirmed-row' }],
+        next: null,
+      })
+    const r = runtime({ connections: { agent: { read, devices } } })
+    await render(h(AgentConnections, { runtime: r, locale: 'en' }))
+    await click('Next convergence page')
+    expect(devices).toHaveBeenNthCalledWith(1, 3, undefined)
+    expect(devices).toHaveBeenNthCalledWith(2, 3, 'next-device')
+    await click(button)
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(devices).toHaveBeenCalledTimes(3)
+    expect(devices).toHaveBeenNthCalledWith(3, revision, after)
+    expect(host.textContent).toContain('confirmed-row')
+  },
+)
 
 it('hides the read-only Agent tab when connection read permission is lost', async () => {
   const grants = (operation: string) => ({ grants: [{ scope: { kind: 'tenant' }, operation }] })
