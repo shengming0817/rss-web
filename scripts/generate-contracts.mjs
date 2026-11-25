@@ -621,8 +621,13 @@ for (const e of endpoints) {
       `headers${requiredHeaders.length ? '' : '?'}: {${requestHeaders.map(([key, ref]) => `${JSON.stringify(headerName(key))}${requiredHeaders.includes(key) ? '' : '?'}: ${typeOf(ref)}`).join(';')}}${requiredHeaders.length ? '' : '| undefined'}`,
     )
   args.push('signal?: AbortSignal | undefined', 'timeoutMs?: number | undefined')
+  // The readiness payload is expected at 503. Transport failures also use 503.
   const success = e.responses.filter(
-    (r) => r.status < 400 || (e.path === '/readyz' && r.status === 503),
+    (r) =>
+      r.status < 400 ||
+      (e.path === '/readyz' &&
+        r.status === 503 &&
+        schemas[r.body?.schema.schemaId]?.properties?.ready !== undefined),
   )
   const binary = success.some(
     (r) =>

@@ -1,6 +1,5 @@
 export type * from './model'
 import type {
-  AgentIntent,
   AppleCommand,
   ApplePurpose,
   ConnectionsPorts,
@@ -41,30 +40,6 @@ export function httpsOrigin(value: string): string {
   if (url.protocol !== 'https:' || url.origin !== value || url.username || url.password)
     throw new Error('Invalid HTTPS origin')
   return value
-}
-export function agentIntent(
-  operationId: string,
-  expectedRevision: number,
-  preferredOrigin: string,
-  origins: readonly string[],
-): AgentIntent {
-  uuid(operationId)
-  revision(expectedRevision)
-  httpsOrigin(preferredOrigin)
-  if (
-    !origins.length ||
-    origins.length > 8 ||
-    new Set(origins).size !== origins.length ||
-    !origins.includes(preferredOrigin)
-  )
-    throw new Error('Invalid connection origins')
-  const ordered = origins.map(httpsOrigin).sort()
-  return Object.freeze({
-    operationId,
-    expectedRevision,
-    preferredOrigin,
-    origins: Object.freeze(ordered),
-  })
 }
 function validateStorageSource(source: StorageSource): void {
   if (source.kind === 'generate') return
@@ -264,37 +239,6 @@ export function createConnections(ports: ConnectionsPorts, tenant: string, servi
     }),
     agent: Object.freeze({
       ...ports.agent,
-      async save(intent: AgentIntent) {
-        const expected = agentIntent(
-            intent.operationId,
-            intent.expectedRevision,
-            intent.preferredOrigin,
-            intent.origins,
-          ),
-          result = await ports.agent.save(expected),
-          configuration = result.configuration
-        if (
-          configuration.tenantId !== tenant ||
-          configuration.serviceId !== service ||
-          configuration.revision !== expected.expectedRevision + 1 ||
-          configuration.preferredOrigin !== expected.preferredOrigin ||
-          configuration.origins.join() !== expected.origins.join()
-        )
-          throw new Error('Wrong saved connection receipt')
-        return result
-      },
-      async publish(id: string, expectedRevision: number) {
-        uuid(id)
-        revision(expectedRevision, true)
-        const result = await ports.agent.publish(id, expectedRevision)
-        if (
-          result.configuration.tenantId !== tenant ||
-          result.configuration.serviceId !== service ||
-          result.configuration.revision !== expectedRevision
-        )
-          throw new Error('Wrong published connection receipt')
-        return result
-      },
       async devices(targetRevision: number, after?: string) {
         revision(targetRevision, true)
         if (after !== undefined) uuid(after)

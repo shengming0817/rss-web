@@ -166,7 +166,7 @@ export function Connections({ runtime, locale }: { runtime: Runtime; locale: Loc
     {
       key: 'agent',
       label: l('Agent 连接', 'Agent connections'),
-      children: <AgentConnections runtime={runtime} locale={locale} canWrite={registrationWrite} />,
+      children: <AgentConnections runtime={runtime} locale={locale} />,
     },
     {
       key: 'observations',

@@ -5,7 +5,6 @@ import type { HttpTransport } from '@rss/api/mdm'
 import {
   httpsOrigin,
   type AgentDirectory,
-  type AgentOperation,
   type AppleDirectory,
   type AppleMaterial,
   type AppleReceipt,
@@ -130,7 +129,7 @@ function connectionConfiguration(
   return value
 }
 function signedConnections(value: unknown, tenant: string, service: string): SignedConnections {
-  if (!schema.postApiV1TenantsByTenantAgentConnectionsPublishResponse.validateRoot(value))
+  if (!schema.getApiV1TenantsByTenantAgentConnectionsResponse.validateSignedConfiguration(value))
     throw new Error('Invalid signed connection contract')
   connectionConfiguration(value.configuration, tenant, service)
   base64url(value.signature, 64)
@@ -140,25 +139,17 @@ function agentDirectory(value: unknown, tenant: string, service: string): AgentD
   if (!schema.getApiV1TenantsByTenantAgentConnectionsResponse.validateRoot(value))
     throw new Error('Invalid Agent connection directory')
   if (value.serviceId !== service) throw new Error('Wrong connection service')
-  if (value.draft) connectionConfiguration(value.draft.configuration, tenant, service)
-  if (value.published) signedConnections(value.published, tenant, service)
+  if (value.configuration) signedConnections(value.configuration, tenant, service)
   if (Object.keys(value.verificationKeys).length > 16) throw new Error('Invalid verification keys')
   for (const [key, publicKey] of Object.entries(value.verificationKeys)) {
     if (!/^[A-Za-z0-9._-]{1,128}$/.test(key)) throw new Error('Invalid verification key identity')
     base64url(publicKey, 32)
   }
-  for (const deployment of value.deployments) {
-    httpsOrigin(deployment.origin)
-    uuid(deployment.hostId)
-    positive(deployment.revision)
-    count(deployment.configurationRevision)
-  }
   if (
-    new Set(value.deployments.map((d) => d.origin)).size !== value.deployments.length ||
     value.convergence.confirmedDevices > value.convergence.activeDevices ||
-    value.convergence.targetRevision !== (value.published?.configuration.revision ?? null) ||
-    (value.draft && !value.verificationKeys[value.draft.configuration.keyId]) ||
-    (value.published && !value.verificationKeys[value.published.configuration.keyId])
+    value.convergence.targetRevision !== (value.configuration?.configuration.revision ?? null) ||
+    (value.configuration &&
+      !Object.hasOwn(value.verificationKeys, value.configuration.configuration.keyId))
   )
     throw new Error('Invalid connection convergence or trust binding')
   return value
@@ -446,43 +437,6 @@ export function createConnectionsAdapters(
           transport,
           { pathParams: { tenant } },
           (value) => agentDirectory(value, tenant, service),
-        ),
-      save: (intent) =>
-        api.putApiV1TenantsByTenantAgentConnections(
-          transport,
-          { pathParams: { tenant }, body: { ...intent, origins: [...intent.origins] } },
-          (value) => ({
-            configuration: connectionConfiguration(value.configuration, tenant, service),
-          }),
-        ),
-      publish: (id, expectedRevision) =>
-        api.postApiV1TenantsByTenantAgentConnectionsPublish(
-          transport,
-          { pathParams: { tenant }, body: { operationId: uuid(id), expectedRevision } },
-          (value) => signedConnections(value, tenant, service),
-        ),
-      operation: (id) =>
-        api.getApiV1TenantsByTenantAgentConnectionOperationsById(
-          transport,
-          { pathParams: { tenant, id: uuid(id) } },
-          (value): AgentOperation | null => {
-            if (value === null) return null
-            return value.action === 'saved'
-              ? {
-                  action: value.action,
-                  draft: {
-                    configuration: connectionConfiguration(
-                      value.draft.configuration,
-                      tenant,
-                      service,
-                    ),
-                  },
-                }
-              : {
-                  action: value.action,
-                  configuration: signedConnections(value.configuration, tenant, service),
-                }
-          },
         ),
       download: () =>
         api.getApiV1TenantsByTenantAgentConnectionsConfiguration(

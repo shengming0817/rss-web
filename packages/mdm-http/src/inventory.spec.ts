@@ -101,6 +101,7 @@ it('keeps current unknown distinct from historical known values and source regis
     f = fixture(
       envelope({
         kind: 'detail',
+        moduleObservationStale: null,
         device: {
           device: '0ecbfa6c-9a99-5881-83ed-2059142c94d9',
           collectionScope: { kind: 'device' },

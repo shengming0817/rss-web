@@ -231,49 +231,22 @@ try {
   await material.getByRole('button', { name: '读取原材料操作', exact: true }).click()
   await material.getByText('Apple 材料回执', { exact: true }).waitFor()
   checks.push('apple-generated-key-and-original-receipt-through-real-owner')
-  await admin.getByRole('tab', { name: 'Agent 连接', exact: true }).click()
-  const connectionPath = `/api/v1/tenants/${run.fixture.tenant}/agent-connections`
-  await admin.getByLabel('首选 HTTPS origin', { exact: true }).fill(origin)
-  await admin.getByLabel('允许的 HTTPS origins（1–8 个，每行一个）', { exact: true }).fill(origin)
-  let savedOperation
-  await admin.route(origin + connectionPath, async (route) => {
-    if (route.request().method() !== 'PUT') return route.continue()
-    savedOperation = route.request().postDataJSON().operationId
-    const actual = await route.fetch()
-    assert.equal(actual.status(), 200)
-    await route.abort('failed')
-  })
-  await admin.getByRole('button', { name: '仅保存连接草稿', exact: true }).click()
-  await admin.getByRole('button', { name: '查询本次原连接操作', exact: true }).waitFor()
-  await run.response(admin, 'GET', `/api/v1/tenants/${run.fixture.tenant}/authorization`, () =>
-    admin.getByRole('button', { name: '重新读取当前入口权限', exact: true }).click(),
-  )
-  await admin.getByRole('button', { name: '查询本次原连接操作', exact: true }).waitFor()
-  await admin.getByText(savedOperation, { exact: true }).waitFor()
-  assert.equal(run.count(admin, 'PUT', connectionPath), 1)
-  await run.response(
+  const connectionState = await run.response(
     admin,
     'GET',
-    `/api/v1/tenants/${run.fixture.tenant}/agent-connection-operations/${savedOperation}`,
-    () => admin.getByRole('button', { name: '查询本次原连接操作', exact: true }).click(),
+    `/api/v1/tenants/${f.tenant}/agent-connections`,
+    () => admin.getByRole('tab', { name: 'Agent 连接', exact: true }).click(),
   )
-  await admin.getByRole('button', { name: '原连接操作已确认，读取最新版本', exact: true }).click()
-  await admin.unroute(origin + connectionPath)
-  checks.push('permission-refresh-retains-the-original-unknown-connection-owner-without-replay')
-  const savedWrites = run.count(admin, 'POST', connectionPath + '/publish')
-  await admin.getByRole('heading', { name: '网关部署观察', exact: true }).waitFor()
-  const publication = await run.response(
-    admin,
-    'POST',
-    connectionPath + '/publish',
-    () => admin.getByRole('button', { name: /^明确发布已保存草稿/ }).click(),
-    409,
-  )
-  assert.equal((await publication.json()).code, 'connection_deployment_unobserved')
-  await admin.getByRole('button', { name: '放弃已拒绝请求并重读', exact: true }).click()
-  await admin.getByRole('heading', { name: '网关部署观察', exact: true }).waitFor()
-  assert.equal(run.count(admin, 'POST', connectionPath + '/publish'), savedWrites + 1)
-  checks.push('agent-draft-real-unobserved-gateway-publication-rejection-no-automatic-replay')
+  const connection = await connectionState.json()
+  await admin.getByText('当前签名连接配置', { exact: true }).waitFor()
+  if (connection.configuration) {
+    await admin
+      .getByText(connection.configuration.configuration.preferredOrigin, { exact: true })
+      .waitFor()
+  } else {
+    await admin.getByText('服务器尚未签发连接配置。', { exact: true }).waitFor()
+  }
+  checks.push('agent-connection-status-reads-the-real-signed-configuration')
   await admin.getByRole('tab', { name: '加载与启用观察', exact: true }).click()
   await admin.getByRole('button', { name: '读取当前连接运行观察', exact: true }).waitFor()
   checks.push('narrow-catalog-and-runtime-loaded-observations')

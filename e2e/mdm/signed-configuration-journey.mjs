@@ -10,12 +10,7 @@ function signature(bytes, signature, publicKey) {
     Buffer.from(signature, 'base64url'),
   )
 }
-export async function signedConfigurationJourney(
-  run,
-  admin,
-  verificationKeys,
-  publishedConfiguration,
-) {
+export async function signedConfigurationJourney(run, admin) {
   const { checks, origin } = run
   await run.nav(admin, '/enroll', '设备注册')
   await admin.getByRole('tab', { name: '管理员安装配置', exact: true }).click()
@@ -29,7 +24,13 @@ export async function signedConfigurationJourney(
   const originalBytes = await delivered.body(),
     document = JSON.parse(originalBytes.toString('utf8'))
   const nested = document.configuration.connections
-  assert.deepEqual(nested.configuration, publishedConfiguration)
+  const status = await admin.request.get(
+    `${origin}/api/v1/tenants/${run.fixture.tenant}/agent-connections`,
+  )
+  assert.equal(status.status(), 200)
+  const connection = await status.json()
+  assert.deepEqual(nested, connection.configuration)
+  const { verificationKeys } = connection
   assert.equal(nested.configuration.preferredOrigin, origin)
   assert.ok(nested.configuration.revision > 0)
   assert.equal(nested.configuration.serviceId, run.fixture.serviceId)
@@ -135,4 +136,5 @@ export async function signedConfigurationJourney(
   checks.push(
     'committed-json-loss-original-metadata-revoke-explicit-new-issuance-no-refresh-replay',
   )
+  return nested
 }

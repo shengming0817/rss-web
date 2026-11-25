@@ -18,7 +18,7 @@ MDM 的宿主、部署、回退和验收入口见 [MDM 与 Identity 独立前端
 
 管理员安装配置只交付一份 `rss-agent-enrollment.json`；隐藏、关闭或离开页面会清除秘密下载。签发结果未知时查询原操作元数据，不能恢复秘密文件；确认撤销后才能显式开始新的签发。刷新和重认证不会自动重放写入。配额和通道读取仅供展示，新注册是否准入由服务端决定；暂停不停止已有设备维护或公开下载。
 
-签名 Agent 安装 JSON 的真实交付使用正式安装候选和受控宿主部署观察。运行注册旅程时设置 `MDM_ENROLLMENT_CANDIDATE` 指向包含当前 Web 镜像的固定候选；runner 分别验证普通注册和正式 Compose 安装后的连接发布、JSON 签名及秘密清理。只复验固定安装候选时可在同一命令末尾指定 `installation`，继续使用同一 owner 记录与独立清理。
+签名 Agent 安装 JSON 的真实交付使用正式安装候选配置的 Agent 入口。运行注册旅程时设置 `MDM_ENROLLMENT_CANDIDATE` 指向包含当前 Web 镜像的固定候选；runner 分别验证普通注册和正式 Compose 安装后的连接状态、直接签发 JSON、签名校验、恢复文件下载和秘密清理。只复验固定安装候选时可在同一命令末尾指定 `installation`，继续使用同一 owner 记录与独立清理。
 
 新设备、注册与连接代表旅程：`MDM_REACT_DEVICES_BACKEND=/absolute/rss-mdm pnpm test:mdm:react-devices-enrollment-browser`。入口构建新应用，复用既有设备与注册 HTTPS 夹具、构建租约和隔离清理。浏览器覆盖目录、关联原请求恢复、后台准入拒绝、单 JSON 交付及连接版本观察；输出无秘密的桌面、移动和暗色页面截图目录。合成注册与测试 PKI 只证明 HTTP 接缝；真实 Windows/macOS 安装、ADE/Entra 组织资格及设备效果分别验收。
 

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import { agentIntent, createConnections } from './index'
-import type { ConnectionConfiguration, ConnectionsPorts, Migration } from './model'
+import { createConnections } from './index'
+import type { ConnectionsPorts, Migration } from './model'
 const tenant = '11111111-1111-4111-8111-111111111111',
   service = '22222222-2222-4222-8222-222222222222',
   operation = '33333333-3333-4333-8333-333333333333',
@@ -16,50 +16,6 @@ function ports(value: Partial<ConnectionsPorts>): ConnectionsPorts {
     ...value,
   } as ConnectionsPorts
 }
-const configuration: ConnectionConfiguration = {
-  wireVersion: 1,
-  tenantId: tenant,
-  serviceId: service,
-  revision: 3,
-  preferredOrigin: 'https://b.example',
-  origins: ['https://a.example', 'https://b.example'],
-  keyId: 'public-key',
-}
-it('prepares canonical explicit connection authoring without collapsing save into publish', async () => {
-  const save = vi.fn(async () => ({ configuration })),
-    publish = vi.fn(),
-    connection = createConnections(
-      ports({ agent: { save, publish } as unknown as ConnectionsPorts['agent'] }),
-      tenant,
-      service,
-    ),
-    intent = agentIntent(operation, 2, 'https://b.example', [
-      'https://b.example',
-      'https://a.example',
-    ])
-  expect(intent.origins).toEqual(['https://a.example', 'https://b.example'])
-  expect(Object.isFrozen(intent.origins)).toBe(true)
-  expect((await connection.agent.save(intent)).configuration.revision).toBe(3)
-  expect(publish).not.toHaveBeenCalled()
-  expect(() => agentIntent(operation, 2, 'https://other.example', ['https://a.example'])).toThrow()
-})
-it('publishes the exact saved revision and rejects a foreign service receipt', async () => {
-  const publish = vi.fn(async () => ({ configuration, signature: 'public-signature' })),
-    connection = createConnections(
-      ports({ agent: { publish } as unknown as ConnectionsPorts['agent'] }),
-      tenant,
-      service,
-    )
-  expect((await connection.agent.publish(operation, 3)).configuration.revision).toBe(3)
-  expect(publish).toHaveBeenCalledWith(operation, 3)
-  await expect(connection.agent.publish(operation, 2)).rejects.toThrow('Wrong published')
-  const foreign = createConnections(
-    ports({ agent: { publish } as unknown as ConnectionsPorts['agent'] }),
-    tenant,
-    generation,
-  )
-  await expect(foreign.agent.publish(operation, 3)).rejects.toThrow('Wrong published')
-})
 it('keeps the migration request bound to storage revision and target material without assuming cutover', async () => {
   const receipt: Migration = {
       operationId: operation,
