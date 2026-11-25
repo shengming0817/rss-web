@@ -2,6 +2,7 @@ import { clientError, protocolError } from './wire-error'
 import type { HttpMethod } from './types'
 type Validate = (value: unknown) => boolean
 interface ResponseBranch {
+  result?: boolean
   status: number
   media: string | null
   validate: Validate | null
@@ -46,7 +47,6 @@ export interface EndpointDescription {
     body: Validate | null
   }
   responses: readonly ResponseBranch[]
-  expectedResponses?: readonly ResponseBranch[]
 }
 /** JSON boundary policy shared by generated contracts, including open extension leaves. */
 export function safeJson(value: unknown): void {
@@ -78,13 +78,13 @@ export function validateEndpointResponse(
   const media =
     typeof contentType === 'string' ? contentType.split(';')[0]?.trim().toLowerCase() : null
   // A gateway can reject before the handler. Its body never becomes trusted domain data.
-  if (status === 413) return false
+  if (status === 413) return
   const candidates = contract.responses.filter(
     (r) =>
       r.status === status &&
       (r.media === null || r.media.split(';')[0]?.trim().toLowerCase() === media),
   )
-  const matched = candidates.find((r) => {
+  const accepted = candidates.find((r) => {
     if (
       !Object.entries(r.headers).every(([name, validate]) => {
         if (name.toLowerCase() === 'set-cookie') return true // The browser owns this inaccessible response header.
@@ -109,7 +109,7 @@ export function validateEndpointResponse(
     }
     return r.validate(data)
   })
-  if (!matched) throw protocolError(status)
+  if (!accepted) throw protocolError(status)
   if (!(data instanceof ArrayBuffer)) safeJson(data)
-  return contract.expectedResponses?.includes(matched) ?? contract.statuses.includes(status)
+  return accepted
 }

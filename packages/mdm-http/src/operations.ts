@@ -1,10 +1,10 @@
 import * as api from '@rss/api/mdm-operations'
+import type { HttpTransport } from '@rss/api/mdm'
 import * as schema from '@rss/api/mdm-schemas'
 import { nextCursor, queryParameters } from '@rss/api/mdm-query'
-import type { HttpTransport } from '@rss/api/mdm'
-import type { Execution, ExecutionPort, RunDetail, Trust, DdmItem } from '@rss/mdm-execution'
 import { enumeration, nullable, positive, text, uuid, count, record } from './decode'
 import { integer, requestInput } from './inventory-values'
+import type { OperationsPort, Execution, RunDetail } from '@rss/mdm-operations'
 const fields = [
   'id',
   'kind',
@@ -15,52 +15,8 @@ const fields = [
   'status',
   'evidence',
 ] as const
-export function createExecutionAdapter(
-  transport: HttpTransport,
-  tenant: string,
-  serviceId: string,
-): ExecutionPort {
-  function trust(value: unknown): Trust {
-    if (
-      !schema.getApiV1TenantsByTenantTaskSigningTrustResponse.validateRoot(value) ||
-      value.version !== 1 ||
-      value.tenant !== tenant ||
-      value.service_id !== serviceId
-    )
-      throw new Error('Wrong task signing trust')
-    return {
-      tenant: uuid(value.tenant),
-      serviceId: uuid(value.service_id),
-      revision: count(value.revision),
-      keys: value.keys.map((key) => ({
-        id: text(key.id),
-        publicKey: text(key.public_key),
-        state: key.state,
-      })),
-    }
-  }
+export function createOperationsAdapter(transport: HttpTransport, tenant: string): OperationsPort {
   return {
-    declarations: (device, cursor, signal) =>
-      api.getApiV1TenantsByTenantDevicesByDeviceDdm(
-        transport,
-        {
-          pathParams: { tenant, device },
-          query: { limit: 100, ...(cursor ? { cursor } : {}) },
-          ...(signal ? { signal } : {}),
-        },
-        (value) => ({
-          ...value,
-          items: value.items.map((item): DdmItem => {
-            if (
-              item.deviceId !== device ||
-              item.observation.protocol !== 'mdm.apple' ||
-              item.observation.observationScope !== 'declarations'
-            )
-              throw new Error('Wrong DDM declaration observation')
-            return { ...item, observation: item.observation }
-          }),
-        }),
-      ),
     statistics: (filter, signal) =>
       api.getApiV1TenantsByTenantOperationsStatistics(
         transport,
@@ -72,88 +28,6 @@ export function createExecutionAdapter(
           unknown: count(value.statistics.unknown),
           asOf: integer(value.asOf),
         }),
-      ),
-    create: (input, pin) =>
-      api.postApiV1TenantsByTenantDevicesByDeviceOperations(
-        transport,
-        {
-          pathParams: { tenant, device: input.device },
-          body: requestInput(
-            {
-              operationId: input.operationId,
-              deadline: input.deadline,
-              action: input.action.kind === 'lock' ? { ...input.action, pin } : input.action,
-            },
-            schema.postApiV1TenantsByTenantDevicesByDeviceOperationsBody.validateRoot,
-          ),
-        },
-        (value) => {
-          if (value.operationId !== input.operationId || value.commandId !== input.operationId)
-            throw new Error('Wrong control receipt')
-          return { operationId: uuid(value.operationId), revision: positive(value.revision) }
-        },
-      ),
-    cancel: (device, id, input) =>
-      api.postApiV1TenantsByTenantDevicesByDeviceOperationsByIdCancel(
-        transport,
-        {
-          pathParams: { tenant, device, id },
-          body: requestInput(
-            { requestId: input.requestId, expectedRevision: input.expectedRevision },
-            schema.postApiV1TenantsByTenantDevicesByDeviceOperationsByIdCancelBody.validateRoot,
-          ),
-        },
-        (value) => ({ operationId: uuid(value.operationId), revision: positive(value.revision) }),
-      ),
-    reauthorize: (device, id, input) =>
-      api.postApiV1TenantsByTenantDevicesByDeviceOperationsByIdReauthorize(
-        transport,
-        {
-          pathParams: { tenant, device, id },
-          body: requestInput(
-            input,
-            schema.postApiV1TenantsByTenantDevicesByDeviceOperationsByIdReauthorizeBody
-              .validateRoot,
-          ),
-        },
-        (value) => ({ operationId: uuid(value.operationId), revision: positive(value.revision) }),
-      ),
-    trust: () =>
-      api.getApiV1TenantsByTenantTaskSigningTrust(transport, { pathParams: { tenant } }, trust),
-    changeTrust: (operationId, input) =>
-      api.postApiV1TenantsByTenantTaskSigningTrust(
-        transport,
-        {
-          pathParams: { tenant },
-          body: requestInput(
-            input,
-            schema.postApiV1TenantsByTenantTaskSigningTrustBody.validateRoot,
-          ),
-          headers: { 'Idempotency-Key': operationId },
-        },
-        trust,
-      ),
-    trustOperation: (id) =>
-      api.getApiV1TenantsByTenantTaskSigningOperationsById(
-        transport,
-        { pathParams: { tenant, id } },
-        trust,
-      ),
-    trustObservation: (device) =>
-      api.getApiV1TenantsByTenantTaskSigningTrustDevicesByDeviceObservation(
-        transport,
-        { pathParams: { tenant, device } },
-        (value) =>
-          value === null
-            ? null
-            : {
-                device: value.observation.deviceId,
-                state: value.observation.state,
-                reason: value.observation.reason,
-                targetRevision: nullable(value.observation.target_revision, positive),
-                actualRevision: nullable(value.observation.actual_revision, positive),
-                receivedAt: integer(value.received_at),
-              },
       ),
     list: (query, signal) =>
       api.getApiV1TenantsByTenantOperations(
@@ -192,14 +66,6 @@ export function createExecutionAdapter(
             value.commandId !== id
           )
             throw new Error('Wrong command detail')
-          const recovery =
-            value.owner === 'device'
-              ? requestInput(
-                  value.reauthorization,
-                  schema.getApiV1TenantsByTenantDevicesByDeviceOperationsByIdResponse
-                    .validateReauthorization,
-                )
-              : null
           return {
             kind: 'command',
             id,
@@ -208,14 +74,6 @@ export function createExecutionAdapter(
             target: value.target,
             inputVersion: text(value.inputVersion),
             dispatchFailure: value.dispatchFailure,
-            reauthorization: recovery
-              ? {
-                  state: recovery.state,
-                  confirmationRequired:
-                    recovery.state === 'available' && recovery.confirmationRequired,
-                  reason: recovery.state === 'unavailable' ? recovery.reason : null,
-                }
-              : null,
             device,
             owner: value.owner,
             delivery: text(value.commandStatus),

@@ -133,11 +133,11 @@ export function createInventoryAdapter(transport: HttpTransport, tenant: string)
       }
     }
   return {
-    fields: (query = {}) => {
+    fields: (query = {}, signal) => {
       if (query.fields && !query.fields.includes('key')) throw new Error('Field identity required')
       return api.getApiV1TenantsByTenantAssetFields(
         transport,
-        { pathParams: { tenant }, query: queryParameters(query) },
+        { pathParams: { tenant }, query: queryParameters(query), signal },
         (value) => {
           if (value.tenantId !== tenant || value.asset.kind !== 'field_list')
             throw new Error('Wrong field directory binding')

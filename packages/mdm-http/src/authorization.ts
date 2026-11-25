@@ -212,11 +212,11 @@ export function createAuthorizationAdapter(
             project,
           )
     },
-    groups: (query = {}) => {
+    groups: (query = {}, signal) => {
       tenantOnly()
       return api.getApiV1TenantsByTenantAuthorizationUserGroups(
         transport,
-        { pathParams: { tenant }, query: queryParameters(query) },
+        { pathParams: { tenant }, query: queryParameters(query), signal },
         (v) => projectedPage(v, groups, query.fields, ['id']),
       )
     },

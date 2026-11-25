@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Runtime } from './runtime'
-import type { ControlIntent, ControlRecovery } from '@rss/mdm-execution'
+import type { ControlIntent, ControlRecovery } from '@rss/mdm-devices/control'
 import type { DeviceRef, EndpointDetail, ViewEndpoint, ViewRow } from '@rss/mdm-devices'
 import { DeviceDetail } from './DeviceDetail'
 import { DeviceControl } from './DeviceControl'
@@ -114,7 +114,7 @@ it('retains the original write as unknown across hiding and a late public receip
     runtime = {
       administration: () => ({
         devices: { endpoint: async () => detailSnapshot() },
-        execution: { create },
+        deviceControl: { create },
       }),
     } as unknown as Runtime
   await act(async () =>
@@ -170,7 +170,15 @@ it('allows a wipe-only principal to confirm backend-authorized recovery without 
             grants: [{ operation: 'device_wipe', scope: { kind: 'all_devices' } }],
           }),
         },
-        execution: { reauthorize },
+        deviceControl: {
+          reauthorize,
+          original: async () => ({
+            revision: 4,
+            canReauthorize: true,
+            terminal: false,
+            confirmationRequired: true,
+          }),
+        },
       }),
     } as unknown as Runtime
   await act(async () =>
@@ -183,12 +191,6 @@ it('allows a wipe-only principal to confirm backend-authorized recovery without 
           locale: 'zh',
           device: 'device-a',
           id: '11111111-1111-4111-8111-111111111111',
-          revision: 4,
-
-          canReauthorize: true,
-          confirmationRequired: true,
-          terminal: false,
-          onRefresh() {},
         }),
       ),
     ),
@@ -214,10 +216,14 @@ it('allows a wipe-only principal to select, review and explicitly submit a wipe'
       operationId: input.operationId,
       revision: 1,
     })),
+    preflight = vi
+      .fn()
+      .mockResolvedValueOnce(detailSnapshot(endpoint, ['wipe']))
+      .mockRejectedValueOnce(decodeMdmError(403, { code: 'permission_denied' })),
     runtime = {
       administration: () => ({
-        devices: { endpoint: async () => detailSnapshot(endpoint, ['wipe']) },
-        execution: { create },
+        devices: { endpoint: preflight },
+        deviceControl: { create },
       }),
     } as unknown as Runtime
   await act(async () =>
@@ -258,6 +264,13 @@ it('allows a wipe-only principal to select, review and explicitly submit a wipe'
     kind: 'wipe',
     confirmed: true,
   })
+  await act(async () => button('核对设备与动作').click())
+  await act(async () =>
+    document.querySelector<HTMLInputElement>('[role=dialog] input[type=checkbox]')!.click(),
+  )
+  await act(async () => button('确认提交此动作').click())
+  expect(host.textContent).toContain('当前账户没有此操作权限。')
+  expect(create).toHaveBeenCalledOnce()
 })
 it.each<EnterpriseConfiguration>([
   {
@@ -432,7 +445,7 @@ it.each(['runs', 'assignments'])(
             runs,
             assignments,
           },
-          execution: {
+          operations: {
             summary: async () => ({
               id: run,
               device: 'device-a',
@@ -623,14 +636,13 @@ it('loads sensitive evidence explicitly and keeps the authorized summary when de
     runtime = {
       administration: () => ({
         binding: 'sensitive',
+        deviceControl: { create },
         authorization: { effective: async () => ({ grants: [] }) },
-        execution: {
+        operations: {
           summary,
           detail,
-          create,
           list: async () => ({ items: [], nextCursor: null }),
           statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
-          trust: async () => ({ revision: 1, keys: [] }),
         },
       }),
     } as unknown as Runtime
@@ -851,7 +863,7 @@ it.each([false, true])(
             }),
           },
           authorization: { effective: async () => ({ grants: [] }) },
-          execution: {
+          operations: {
             summary: async () => ({
               id,
               device: 'device-a',
@@ -1015,6 +1027,7 @@ it('keeps a retirement read-only without every grant, and never treats a failed 
 })
 
 it('retains an unknown recovery request while refreshing the containing result detail', async () => {
+  let cancelled = false
   const id = '11111111-1111-4111-8111-111111111111',
     item = {
       id,
@@ -1024,9 +1037,14 @@ it('retains an unknown recovery request while refreshing the containing result d
       origin: 'direct',
       status: 'queued',
     },
-    cancel = vi.fn(async () => {
-      throw decodeMdmError(503, { code: 'service_unavailable' })
-    }),
+    cancel = vi
+      .fn()
+      .mockRejectedValueOnce(decodeMdmError(503, { code: 'service_unavailable' }))
+      .mockImplementationOnce(async () => {
+        cancelled = true
+        return { operationId: id, revision: 8 }
+      }),
+    summary = vi.fn(async () => ({ ...item, status: cancelled ? 'cancelled' : 'queued' })),
     detail = vi.fn(async () => ({
       item,
       policy: null,
@@ -1036,28 +1054,35 @@ it('retains an unknown recovery request while refreshing the containing result d
         id,
         device: 'device-a',
         revision: 1,
-        delivery: 'queued',
+        delivery: cancelled ? 'cancelled' : 'queued',
         authorization: { state: 'authorized' },
         observation: { protocol: 'syncml', effect: 'waiting' },
         target: { kind: 'device' },
         task: { name: 'Restart', kind: 'command', platform: 'windows', objects: [] },
         inputVersion: '1',
         deadline: 2,
-        reauthorization: null,
       },
+    })),
+    readOriginal = vi.fn(async () => ({
+      operationId: id,
+      revision: cancelled ? 8 : 7,
+      status: cancelled ? 'cancelled' : 'queued',
+      terminal: cancelled,
+      canReauthorize: false,
+      confirmationRequired: false,
     })),
     runtime = {
       administration: () => ({
         binding: 'recovery-owner',
+        deviceControl: { cancel, original: readOriginal },
         authorization: {
           effective: async () => ({
             grants: [{ operation: 'operation_cancel', scope: { kind: 'all_devices' } }],
           }),
         },
-        execution: {
-          summary: async () => item,
+        operations: {
+          summary,
           detail,
-          cancel,
           list: async () => ({ items: [], nextCursor: null }),
           statistics: async () => ({ total: 0, commands: 0, actionRuns: 0, unknown: 0, asOf: 1 }),
         },
@@ -1081,9 +1106,15 @@ it('retains an unknown recovery request while refreshing the containing result d
   expect(cancel).toHaveBeenCalledOnce()
   const original = cancel.mock.calls[0]
   await act(async () => button('查询原操作当前事实').click())
-  expect(detail).toHaveBeenCalledTimes(2)
+  expect(readOriginal).toHaveBeenCalledTimes(2)
+  expect(detail).toHaveBeenCalledTimes(1)
+  expect(original).toEqual(['device-a', id, expect.objectContaining({ expectedRevision: 7 })])
   await act(async () => button('显式重提同一恢复请求').click())
   expect(cancel.mock.calls[1]).toEqual(original)
+  expect(summary).toHaveBeenCalledTimes(2)
+  expect(detail).toHaveBeenCalledTimes(2)
+  expect(readOriginal).toHaveBeenCalledTimes(3)
+  expect(host.textContent).toContain('已取消')
 })
 
 it.each(['//[', '//%'])(
@@ -1094,7 +1125,7 @@ it.each(['//[', '//%'])(
         administration: () => ({
           binding: 'malformed',
           authorization: { effective: async () => ({ grants: [] }) },
-          execution: {
+          operations: {
             summary: async () => ({
               id,
               device: 'device-a',
@@ -1146,7 +1177,7 @@ it('keeps the default endpoint location during a delayed control preflight', asy
         view: async () => view,
         endpoint: read,
       },
-      execution: { create },
+      deviceControl: { create },
       connections: { agent: {} },
     }),
   } as unknown as Runtime
@@ -1218,7 +1249,7 @@ it('uses URL endpoint selection for back and forward while retaining an unknown 
           view: async () => ({ association: null, endpoints, fields: {} }),
           endpoint: async (id: string) => detailSnapshot(endpoints.find((e) => e.id === id)!),
         },
-        execution: { create },
+        deviceControl: { create },
         connections: { agent: {} },
       }),
     } as unknown as Runtime,
@@ -1416,7 +1447,10 @@ it('clears a confirmed lock PIN on permission loss and again when issuing the wr
     revision: 1,
   }))
   const runtime = {
-    administration: () => ({ devices: { endpoint: async () => permitted }, execution: { create } }),
+    administration: () => ({
+      devices: { endpoint: async () => permitted },
+      deviceControl: { create },
+    }),
   } as unknown as Runtime
   async function show(snapshot: EndpointDetail) {
     await act(async () =>
@@ -1490,7 +1524,7 @@ it('keeps the original device command locked when an accepted response cannot be
   const runtime = {
     administration: () => ({
       devices: { endpoint: async () => snapshot },
-      execution: { create },
+      deviceControl: { create },
     }),
   } as unknown as Runtime
   await act(async () =>

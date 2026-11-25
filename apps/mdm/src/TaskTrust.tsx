@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Space } from 'antd'
-import type { Trust, TrustChange } from '@rss/mdm-execution'
+import type { Trust, TrustChange } from '@rss/mdm-task-trust'
 import { freeze } from '@rss/mdm-inventory'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
@@ -11,7 +11,7 @@ import { useAdministration } from './useAdministration'
 import { usePendingSelection } from './SelectionGuard'
 export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
-    { execution, authorization, binding } = useAdministration(runtime),
+    { taskTrust, authorization, binding } = useAdministration(runtime),
     permissions = usePageRead(`${binding}/task-trust-permissions`, authorization.effective),
     has = (operation: string) =>
       permissions.value?.grants.some(
@@ -20,7 +20,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
     canRead = has('registration_configuration_read'),
     canWrite = has('registration_configuration_write'),
     read = usePageRead(`${binding}/task-trust/${canRead}`, () =>
-      canRead ? execution.trust() : Promise.resolve(null),
+      canRead ? taskTrust.trust() : Promise.resolve(null),
     ),
     action = useAction(),
     [approved, setApproved] = useState(false),
@@ -30,7 +30,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
     [draft, setDraft] = useState(''),
     [device, setDevice] = useState(''),
     observation = usePageRead(`${binding}/task-trust-observation/${device}`, () =>
-      device ? execution.trustObservation(device) : Promise.resolve(null),
+      device ? taskTrust.trustObservation(device) : Promise.resolve(null),
     )
   useEffect(() => setApproved(false), [canWrite, read.value?.revision])
   usePendingSelection(action.busy || outcome === 'unknown')
@@ -39,7 +39,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
     const original = freeze({ id: crypto.randomUUID(), input })
     setPending(original)
     setApproved(false)
-    const result = await action.run(() => execution.changeTrust(original.id, original.input))
+    const result = await action.run(() => taskTrust.changeTrust(original.id, original.input))
     setOutcome(result.ok ? 'confirmed' : isUnknown(result.error) ? 'unknown' : 'rejected')
     if (result.ok) {
       setReceipt(result.value)
@@ -48,7 +48,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
   }
   async function original() {
     if (!pending) return
-    const result = await action.run(() => execution.trustOperation(pending.id))
+    const result = await action.run(() => taskTrust.trustOperation(pending.id))
     if (result.ok) {
       setReceipt(result.value)
       setOutcome('confirmed')

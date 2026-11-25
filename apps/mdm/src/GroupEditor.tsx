@@ -1,6 +1,11 @@
-import { useState } from 'react'
+import { useState, type SetStateAction } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space } from 'antd'
-import { freeze, type AssetContext, type Operation } from '@rss/mdm-inventory'
+import {
+  freeze,
+  type AssetContext,
+  type ConditionContext,
+  type Operation,
+} from '@rss/mdm-inventory'
 import {
   validateChange,
   type GroupChange,
@@ -13,6 +18,7 @@ import type { DevicesUseCases } from './EndpointPicker'
 import type { Locale } from './i18n'
 import { Failure, isUnknown, labels, useAction } from './AdminUi'
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
+import { usableCriteria, type RuleCatalog } from './group-rule-catalog'
 import { ConditionContextEditor } from './InventoryScopeEditor'
 import { emptyPredicate, GroupCriteriaEditor } from './CriteriaEditor'
 import { StringItems } from './ValueTypeEditor'
@@ -24,6 +30,7 @@ import { Status } from './DevicePresentation'
 type Pending = { readonly kind: 'change'; readonly change: Operation<GroupChange> }
 export function GroupEditor({
   groups,
+  catalog,
   devices,
   locale,
   id,
@@ -34,6 +41,7 @@ export function GroupEditor({
   done,
 }: {
   groups: GroupsUseCases
+  catalog: RuleCatalog
   devices: DevicesUseCases
   locale: Locale
   id: string
@@ -75,12 +83,25 @@ export function GroupEditor({
     [approved, setApproved] = useState(false),
     [invalid, setInvalid] = useState(false),
     [deletionBlocked, setDeletionBlocked] = useState<boolean | null>(null),
-    mutable = canWrite && group?.kind !== 'system' && !group?.deleted
+    canUseCriteria = kind !== 'dynamic' || usableCriteria(criteria.criteria, catalog),
+    mutable = canWrite && group?.kind !== 'system' && !group?.deleted,
+    writeDisabled = !mutable || guard.locked || action.busy || pending !== null
   usePendingSelection(
     guard.locked ||
       action.busy ||
       (pending !== null && !['confirmed', 'accepted', 'rejected'].includes(outcome)),
   )
+  function changeContext({ selector, quantifier }: ConditionContext) {
+    setPreview(null)
+    setCriteria((current) => ({ ...current, selector, quantifier }))
+  }
+  function changeRule(update: SetStateAction<GroupCondition['criteria']>) {
+    setPreview(null)
+    setCriteria((current) => ({
+      ...current,
+      criteria: typeof update === 'function' ? update(current.criteria) : update,
+    }))
+  }
   async function submit(intent: Pending) {
     const result = await action.run(() => groups.change(id, intent.change))
     if (result.ok) {
@@ -97,6 +118,7 @@ export function GroupEditor({
       )
   }
   function start(input: GroupChange) {
+    if ('criteria' in input && !canUseCriteria) return
     try {
       const change = freeze({
         operationId: crypto.randomUUID(),
@@ -173,7 +195,7 @@ export function GroupEditor({
         )}
         <Form
           layout="vertical"
-          disabled={!mutable || guard.locked || action.busy || pending !== null}
+          disabled={writeDisabled}
           onFinish={() =>
             start(
               group
@@ -238,27 +260,22 @@ export function GroupEditor({
           )}
           {!group && kind === 'dynamic' && (
             <>
-              <ConditionContextEditor
-                locale={locale}
-                value={criteria}
-                onChange={(context) => {
-                  setPreview(null)
-                  setCriteria({ ...criteria, ...context })
-                }}
-              />
+              <ConditionContextEditor locale={locale} value={criteria} onChange={changeContext} />
               <GroupCriteriaEditor
+                catalog={catalog}
                 locale={locale}
                 groups={groups}
                 assetContext={assetContext}
                 value={criteria.criteria}
-                onChange={(value) => {
-                  setPreview(null)
-                  setCriteria({ ...criteria, criteria: value })
-                }}
+                onChange={changeRule}
               />
             </>
           )}
-          <Button type="primary" htmlType="submit">
+          <Button
+            type="primary"
+            htmlType="submit"
+            disabled={writeDisabled || (!group && !canUseCriteria)}
+          >
             {group ? l('保存设备组元数据', 'Save group metadata') : l('创建设备组', 'Create group')}
           </Button>
         </Form>
@@ -266,30 +283,21 @@ export function GroupEditor({
           <Form
             className="admin-subsection"
             layout="vertical"
-            disabled={!mutable || guard.locked || action.busy || pending !== null}
+            disabled={writeDisabled}
             onFinish={() => start({ action: 'rule', criteria })}
           >
             <h3>{l('规则定义', 'Rule definition')}</h3>
-            <ConditionContextEditor
-              locale={locale}
-              value={criteria}
-              onChange={(context) => {
-                setPreview(null)
-                setCriteria({ ...criteria, ...context })
-              }}
-            />
+            <ConditionContextEditor locale={locale} value={criteria} onChange={changeContext} />
             <GroupCriteriaEditor
+              catalog={catalog}
               locale={locale}
               groups={groups}
               referenceableFor={group.id}
               assetContext={group.assetContext}
               value={criteria.criteria}
-              onChange={(value) => {
-                setPreview(null)
-                setCriteria({ ...criteria, criteria: value })
-              }}
+              onChange={changeRule}
             />
-            <Button type="primary" htmlType="submit">
+            <Button type="primary" htmlType="submit" disabled={writeDisabled || !canUseCriteria}>
               {l('提交规则验证与保存任务', 'Submit rule validation and save task')}
             </Button>
           </Form>
@@ -298,7 +306,7 @@ export function GroupEditor({
           <Form
             className="admin-subsection"
             layout="vertical"
-            disabled={!mutable || guard.locked || action.busy || pending !== null}
+            disabled={writeDisabled}
             onFinish={() =>
               start({
                 action: 'members',
@@ -345,7 +353,12 @@ export function GroupEditor({
           <>
             <Button
               disabled={
-                !canPreview || !!group?.deleted || action.busy || pending !== null || guard.locked
+                !canUseCriteria ||
+                !canPreview ||
+                !!group?.deleted ||
+                action.busy ||
+                pending !== null ||
+                guard.locked
               }
               onClick={() => {
                 setPreview(null)
@@ -391,6 +404,7 @@ export function GroupEditor({
                   <summary>{l('预览输入坐标', 'Preview input coordinates')}</summary>
                   <code>{preview.inputFingerprint}</code>
                   <p>
+                    {preview.assetCut.epoch} · {preview.assetCut.snapshot} ·{' '}
                     {preview.objectSnapshot ?? '—'} · {preview.asOf}
                   </p>
                 </details>

@@ -1,7 +1,15 @@
 import { SelectionGuard, usePendingSelection, useSelectionGuard } from './SelectionGuard'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Select, Space } from 'antd'
-import { nativeIntent, windowsEnrollmentLink, type NativeIntent } from '@rss/mdm-enrollment'
+import {
+  nativeIntent,
+  windowsEnrollmentLink,
+  type NativeIntent,
+  type Enrollment,
+} from '@rss/mdm-enrollment'
+import { useNavigate } from 'react-router-dom'
+import { devicePath } from './Devices'
+import { useSecretVisibility } from './SecretTabs'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { codeOf, Failure, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'
@@ -47,6 +55,15 @@ export function EnrollmentFailure({ error, locale }: { error: unknown; locale: L
     <Failure error={error} locale={locale} />
   )
 }
+function readyDevice(status: Enrollment, id: string) {
+  return (
+    status.enrollmentId === id &&
+    status.status === 'bound' &&
+    status.progress.managementReady &&
+    status.progress.diagnostic === 'ready'
+  )
+}
+
 export function NativeEnrollment({
   runtime,
   locale,
@@ -56,7 +73,8 @@ export function NativeEnrollment({
   locale: Locale
   initialEnrollment?: string
 }) {
-  const maintenance = useSelectionGuard()
+  const maintenance = useSelectionGuard(),
+    visible = useSecretVisibility()
   const l = labels(locale),
     { enrollment, binding } = useAdministration(runtime),
     action = useAction(),
@@ -73,6 +91,13 @@ export function NativeEnrollment({
     [idDraft, setIdDraft] = useState(initialEnrollment),
     [pending, setPending] = useState<{ intent: NativeIntent; fingerprint: string } | null>(null),
     [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none')
+  const navigate = useNavigate()
+  const opening = useRef<{
+    binding: typeof binding
+    id: string
+    device: string
+    readKey: string
+  } | null>(null)
   const currentId = useRef(id)
   const delivery = useProtectedDelivery(() => {
       setPassword('')
@@ -80,8 +105,8 @@ export function NativeEnrollment({
       setSaved(false)
       setRecoveryPassword('')
     }),
-    read = useRead(`${binding}/enrollment/${id}`, () =>
-      id ? enrollment.enrollment(id) : Promise.resolve(null),
+    read = useRead(`${binding}/enrollment/${id}/${visible}`, (signal) =>
+      id && visible ? enrollment.enrollment(id, signal) : Promise.resolve(null),
     ),
     channel = channels.value?.channels.find(
       (c) => c.channel === (source === 'mdm.windows' ? 'windows_mdm' : 'macos_mdm'),
@@ -91,6 +116,24 @@ export function NativeEnrollment({
     unavailable = !channel || channel.availability !== 'ready',
     locked =
       maintenance.locked || (pending !== null && outcome !== 'confirmed' && outcome !== 'rejected')
+  useEffect(() => {
+    const original = opening.current
+    if (!original) return
+    if (
+      original.binding !== binding ||
+      original.id !== id ||
+      idDraft !== id ||
+      !visible ||
+      locked
+    ) {
+      opening.current = null
+      return
+    }
+    if (read.key === original.readKey || read.busy) return
+    opening.current = null
+    if (read.value && readyDevice(read.value, id) && read.value.deviceId === original.device)
+      navigate(devicePath('endpoint', original.device))
+  }, [binding, id, idDraft, visible, locked, read.key, read.busy, read.value, navigate])
   usePendingSelection(action.busy || locked)
   function selectEnrollment(next: string) {
     if (currentId.current !== next) {
@@ -345,6 +388,7 @@ export function NativeEnrollment({
           layout="inline"
           onFinish={() => {
             if (locked && idDraft !== id) return
+            opening.current = null
             selectEnrollment(idDraft)
             read.reload()
           }}
@@ -380,6 +424,17 @@ export function NativeEnrollment({
                     )
               }
             />
+            {visible && !locked && idDraft === id && readyDevice(read.value, id) && (
+              <Button
+                onClick={() => {
+                  if (!read.value || opening.current) return
+                  opening.current = { binding, id, device: read.value.deviceId, readKey: read.key }
+                  read.reload()
+                }}
+              >
+                {l('打开已注册设备详情', 'Open enrolled device details')}
+              </Button>
+            )}
             <dl className="device-facts">
               <div>
                 <dt>{l('配置文件准备', 'Profile prepared')}</dt>
