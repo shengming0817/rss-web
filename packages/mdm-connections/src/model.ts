@@ -214,34 +214,13 @@ export interface SignedConnections {
 }
 export interface AgentDirectory {
   readonly serviceId: string
-  readonly draft: { readonly configuration: ConnectionConfiguration } | null
-  readonly published: SignedConnections | null
+  readonly configuration: SignedConnections | null
   readonly verificationKeys: Readonly<Record<string, string>>
-  readonly deployments: readonly {
-    readonly origin: string
-    readonly hostId: string
-    readonly revision: number
-    readonly observedAt: number
-    readonly configurationRevision: number
-  }[]
   readonly convergence: {
     readonly targetRevision: number | null
     readonly activeDevices: number
     readonly confirmedDevices: number
   }
-  readonly retirementBlockers: { readonly configurations: number; readonly installations: number }
-}
-export type AgentOperation =
-  | {
-      readonly action: 'saved'
-      readonly draft: { readonly configuration: ConnectionConfiguration }
-    }
-  | { readonly action: 'published'; readonly configuration: SignedConnections }
-export interface AgentIntent {
-  readonly operationId: string
-  readonly expectedRevision: number
-  readonly preferredOrigin: string
-  readonly origins: readonly string[]
 }
 export interface ConnectionObservation {
   readonly device: string
@@ -305,9 +284,6 @@ export interface AppleMaterialsPort {
 }
 export interface AgentConnectionsPort {
   read(): Promise<AgentDirectory>
-  save(intent: AgentIntent): Promise<{ readonly configuration: ConnectionConfiguration }>
-  publish(id: string, expectedRevision: number): Promise<SignedConnections>
-  operation(id: string): Promise<AgentOperation | null>
   download(): Promise<{ readonly file: Download; readonly document: SignedConnections }>
   devices(
     revision: number,

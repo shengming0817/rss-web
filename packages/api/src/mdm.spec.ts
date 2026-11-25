@@ -39,12 +39,7 @@ it('decodes the current Agent pause envelope without classifying a rejected crea
   )
 })
 
-it('preserves closed connection and package rejection reasons while rejecting malformed status/envelopes', () => {
-  for (const code of ['connection_deployment_unobserved', 'connection_retirement_blocked']) {
-    expect(decodeMdmError(409, { code, issuanceId: null })).toMatchObject({ cause: 'wire', code })
-    expect(decodeMdmError(418, { code, issuanceId: null }).cause).toBe('protocol')
-    expect(decodeMdmError(409, { code, issuanceId: null, detail: 'secret' }).cause).toBe('protocol')
-  }
+it('preserves closed package rejection reasons while rejecting malformed status/envelopes', () => {
   for (const code of [
     'agent_package_installer_mismatch',
     'agent_package_lifecycle_not_admitted',

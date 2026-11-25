@@ -166,7 +166,7 @@ export function Connections({ runtime, locale }: { runtime: Runtime; locale: Loc
     {
       key: 'agent',
       label: l('Agent 连接', 'Agent connections'),
-      children: <AgentConnections runtime={runtime} locale={locale} canWrite={registrationWrite} />,
+      children: <AgentConnections runtime={runtime} locale={locale} />,
     },
     {
       key: 'observations',
@@ -198,11 +198,12 @@ export function Connections({ runtime, locale }: { runtime: Runtime; locale: Loc
       <SecretTabs
         activeKey={requested && tabs.includes(requested) ? requested : tabs[0]!}
         onChange={(key) => setParams({ tab: key })}
-        items={items}
+        items={items.filter(({ key }) => key !== 'agent' || registrationRead)}
         uiLocale={locale}
         authorizedKeys={[
           ...(storageRead || storageWrite ? ['storage'] : []),
-          ...(registrationRead || registrationWrite ? ['mail', 'wns', 'apple', 'agent'] : []),
+          ...(registrationRead || registrationWrite ? ['mail', 'wns', 'apple'] : []),
+          ...(registrationRead ? ['agent'] : []),
           ...(storageRead || registrationRead ? ['observations'] : []),
         ]}
       />

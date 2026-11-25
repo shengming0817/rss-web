@@ -6,6 +6,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OriginalRequests } from './OriginalRequests'
 import { AgentPackages } from './AgentPackages'
+import { AgentConfigurations } from './AgentConfigurations'
+import { AgentConnections } from './AgentConnections'
+import { Connections } from './Connections'
+import { decodeMdmError } from '@rss/api/mdm'
 import { DevicePki } from './DevicePki'
 import { SelectionGuard } from './SelectionGuard'
 import type { Runtime } from './runtime'
@@ -408,4 +412,94 @@ it('keeps the original request and outer device selection fenced while a real re
   expect(host.textContent).toContain('Administrator recovery operation')
   expect(outer.mock.calls.some((call) => call[1] === true)).toBe(true)
   expect(recoverIssuance).toHaveBeenCalledOnce()
+})
+
+it('explains which server setting blocks issuance without retrying a rejected request', async () => {
+  const issueConfiguration = vi
+    .fn()
+    .mockRejectedValue(decodeMdmError(409, { code: 'agent_endpoint_not_configured' }))
+  const r = runtime({
+    enrollment: {
+      configurations: async () => ({ items: [], nextCursor: null }),
+      issueConfiguration,
+    },
+  })
+  await render(h(AgentConfigurations, { runtime: r, locale: 'en', canWrite: true }))
+  await click('Issue administrator enrollment JSON')
+  const dialog = host.querySelector('[role=dialog]')!
+  await act(async () => dialog.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  await click('Issue and prepare JSON download')
+  expect(dialog.textContent).toContain(
+    'Ask the deployment administrator to set agent_pki.endpoint.origin',
+  )
+  expect(dialog.querySelector('a[download]')).toBeNull()
+  expect(issueConfiguration).toHaveBeenCalledOnce()
+})
+
+it.each([
+  { button: 'Refresh connection status', revision: 3, after: 'next-device' },
+  { button: 'Read again', revision: 3, after: 'next-device' },
+  { button: 'Read again', revision: 4, after: undefined },
+])(
+  'refreshes device confirmation via $button at revision $revision',
+  async ({ button, revision, after }) => {
+    function state(revision: number) {
+      return {
+        configuration: {
+          configuration: {
+            revision,
+            preferredOrigin: 'https://agent.example',
+            origins: ['https://agent.example'],
+          },
+        },
+        convergence: { targetRevision: revision, activeDevices: 1, confirmedDevices: 0 },
+      }
+    }
+    const read = vi.fn().mockResolvedValueOnce(state(3)).mockResolvedValueOnce(state(revision))
+    const devices = vi
+      .fn()
+      .mockResolvedValueOnce({ targetRevision: 3, items: [], next: 'next-device' })
+      .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict', issuanceId: null }))
+      .mockResolvedValueOnce({
+        targetRevision: revision,
+        items: [{ device: 'confirmed-row' }],
+        next: null,
+      })
+    const r = runtime({ connections: { agent: { read, devices } } })
+    await render(h(AgentConnections, { runtime: r, locale: 'en' }))
+    await click('Next convergence page')
+    expect(devices).toHaveBeenNthCalledWith(1, 3, undefined)
+    expect(devices).toHaveBeenNthCalledWith(2, 3, 'next-device')
+    await click(button)
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(devices).toHaveBeenCalledTimes(3)
+    expect(devices).toHaveBeenNthCalledWith(3, revision, after)
+    expect(host.textContent).toContain('confirmed-row')
+  },
+)
+
+it('hides the read-only Agent tab when connection read permission is lost', async () => {
+  const grants = (operation: string) => ({ grants: [{ scope: { kind: 'tenant' }, operation }] })
+  const effective = vi
+    .fn()
+    .mockResolvedValueOnce(grants('registration_configuration_read'))
+    .mockResolvedValueOnce(grants('registration_configuration_write'))
+  const read = vi.fn().mockResolvedValue({
+    configuration: null,
+    convergence: { targetRevision: null, activeDevices: 0, confirmedDevices: 0 },
+  })
+  const r = runtime({
+    authorization: { effective },
+    connections: { agent: { read }, mail: { read: () => Promise.resolve(null) } },
+  })
+  await render(h(Connections, { runtime: r, locale: 'en' }))
+  const findAgent = () =>
+    [...host.querySelectorAll<HTMLElement>('[role=tab]')].find(
+      (tab) => tab.textContent === 'Agent connections',
+    )
+  await act(async () => findAgent()!.click())
+  expect(read).toHaveBeenCalledOnce()
+  await click('Read current entry permissions')
+  expect(findAgent()).toBeUndefined()
+  expect(read).toHaveBeenCalledOnce()
 })

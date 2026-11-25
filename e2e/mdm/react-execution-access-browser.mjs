@@ -805,7 +805,7 @@ try {
     await p.getByText(f.executionAccess.device, { exact: false }).first().waitFor()
     await button('新建账户绑定').click()
     await label('Identity 实例 UUID').fill(f.instance)
-    await label('账户主体 UUID').fill(f.principal)
+    await label('账户主体 UUID').fill(f.personB.principalId)
     await label('Device Access 策略 UUID').fill(f.executionAccess.policy)
     await label('新账户名称').fill('browser-account')
     await button('冻结此绑定操作并核对').click()

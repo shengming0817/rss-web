@@ -101,3 +101,59 @@ it('keeps Apple version pagination on the formal per-purpose endpoint', async ()
     }),
   )
 })
+
+it('reads the signed Agent connection and ties device confirmation to its exact revision', async () => {
+  const verificationKeys = { 'fixture-key': 'A'.repeat(43) }
+  const configuration = {
+    configuration: {
+      wireVersion: 1,
+      serviceId: service,
+      tenantId: tenant,
+      revision: 3,
+      preferredOrigin: 'https://agent.example',
+      origins: ['https://agent.example'],
+      keyId: 'fixture-key',
+    },
+    signature: 'A'.repeat(86),
+  }
+  const state = {
+    serviceId: service,
+    configuration,
+    verificationKeys,
+    convergence: { targetRevision: 3, activeDevices: 4, confirmedDevices: 2 },
+  }
+  const f = fixture(state)
+  await expect(
+    createConnectionsAdapters(f.transport, tenant, service).agent.read(),
+  ).resolves.toEqual(state)
+  expect(f.request).toHaveBeenCalledWith(
+    expect.objectContaining({ method: 'GET', path: '/api/v1/tenants/{tenant}/agent-connections' }),
+  )
+  const stale = fixture({ ...state, convergence: { ...state.convergence, targetRevision: 2 } })
+  await expect(
+    createConnectionsAdapters(stale.transport, tenant, service).agent.read(),
+  ).rejects.toThrow('Invalid connection convergence or trust binding')
+  const foreign = fixture({
+    ...state,
+    configuration: {
+      ...configuration,
+      configuration: { ...configuration.configuration, tenantId: service },
+    },
+  })
+  await expect(
+    createConnectionsAdapters(foreign.transport, tenant, service).agent.read(),
+  ).rejects.toThrow('Wrong Agent connection binding')
+})
+
+it('reads Agent connection status before an initial configuration is issued', async () => {
+  const state = {
+    serviceId: service,
+    configuration: null,
+    verificationKeys: {},
+    convergence: { targetRevision: null, activeDevices: 0, confirmedDevices: 0 },
+  }
+  const f = fixture(state)
+  await expect(
+    createConnectionsAdapters(f.transport, tenant, service).agent.read(),
+  ).resolves.toEqual(state)
+})
