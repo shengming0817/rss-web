@@ -3,7 +3,7 @@ import { ControlRecoveryPanel } from './ControlRecovery'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, Space } from 'antd'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import type { ExecutionRef } from '@rss/mdm-execution'
+import type { ExecutionRef } from '@rss/mdm-operations'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { CursorControls, Heading, labels, ReadState, usePageRead, type Query } from './AdminUi'
@@ -47,16 +47,16 @@ function ExecutionFacts({
   const l = labels(locale),
     location = useLocation(),
     [params] = useSearchParams(),
-    { execution, binding } = useAdministration(runtime),
+    { operations, binding } = useAdministration(runtime),
     summary = usePageRead(
       `${binding}/execution-summary/${reference.kind}/${reference.id}`,
-      (signal) => execution.summary(reference, signal),
+      (signal) => operations.summary(reference, signal),
       { retryReadConflict: true },
     ),
     [expanded, setExpanded] = useState(false),
     read = usePageRead(
       `${binding}/execution/${reference.kind}/${reference.id}/${reference.policy ?? ''}/${expanded}`,
-      (signal) => (expanded ? execution.detail(reference, signal) : Promise.resolve(null)),
+      (signal) => (expanded ? operations.detail(reference, signal) : Promise.resolve(null)),
       { retryReadConflict: true },
     ),
     observed = read.value?.detail,
@@ -78,26 +78,15 @@ function ExecutionFacts({
     device = detail?.device ?? item?.device,
     deviceHref = device ? devicePath('endpoint', device) : null,
     returnDevice = deviceHref ? resultReturnPath(params.get('returnTo'), deviceHref) : null,
-    [recovery, setRecovery] = useState<Parameters<typeof ControlRecoveryPanel>[0] | null>(null)
+    [controlDevice, setControlDevice] = useState<string | null>(null)
   useEffect(() => {
-    // A pending recovery owner survives read refreshes and denied reads.
-    if (!detail || !item) return
-    if (detail.kind === 'command' && detail.owner === 'device' && item?.origin === 'direct')
-      setRecovery({
-        runtime,
-        locale,
-        device: detail.device,
-        id: detail.id,
-        revision: detail.revision,
-        canReauthorize: detail.reauthorization?.state === 'available',
-        confirmationRequired: detail.reauthorization?.confirmationRequired ?? false,
-        terminal: ['applied', 'rejected', 'cancelled', 'timed_out', 'superseded'].includes(
-          detail.delivery,
-        ),
-        onRefresh: read.reload,
-      })
-    else setRecovery(null)
-  }, [detail, item, runtime, locale])
+    if (detail && item)
+      setControlDevice(
+        detail.kind === 'command' && detail.owner === 'device' && item.origin === 'direct'
+          ? detail.device
+          : null,
+      )
+  }, [detail, item])
   const entries: CopyEntry[] = []
   if (detail?.kind === 'run' && detail.attempt) {
     const selector = { kind: 'task' as const, task: detail.id, attempt: detail.attempt }
@@ -234,13 +223,22 @@ function ExecutionFacts({
           'Observe admission, delivery, device receipts and actual effects separately. Missing receipts remain unknown.',
         )}
       />
-      {recovery && (
+      {controlDevice && (
         <fieldset
           className="permission-panel"
           hidden={read.busy || !!read.error || summary.busy || !!summary.error}
           disabled={read.busy || !!read.error || summary.busy || !!summary.error}
         >
-          <ControlRecoveryPanel {...recovery} />
+          <ControlRecoveryPanel
+            runtime={runtime}
+            locale={locale}
+            device={controlDevice}
+            id={reference.id}
+            onChanged={() => {
+              summary.reload()
+              read.reload()
+            }}
+          />
         </fieldset>
       )}
     </Card>
@@ -250,7 +248,7 @@ function ExecutionFacts({
 export function Executions({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     location = useLocation(),
-    { execution, binding } = useAdministration(runtime),
+    { operations, binding } = useAdministration(runtime),
     [params, setParams] = useSearchParams(),
     filter = params.get('filter') ?? '',
     cursor = params.get('cursor'),
@@ -258,12 +256,12 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
     query: Query = { limit: 100, ...(filter ? { filter } : {}), ...(cursor ? { cursor } : {}) },
     read = usePageRead(
       `${binding}/executions/${JSON.stringify(query)}`,
-      (signal) => execution.list(query, signal),
+      (signal) => operations.list(query, signal),
       { retryReadConflict: !query.cursor },
     ),
     statistics = usePageRead(
       `${binding}/execution-statistics/${filter}`,
-      (signal) => execution.statistics(filter || undefined, signal),
+      (signal) => operations.statistics(filter || undefined, signal),
       { retryReadConflict: true },
     ),
     operation = params.get('operation'),

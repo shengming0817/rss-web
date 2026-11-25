@@ -2,6 +2,7 @@ import { clientError, protocolError } from './wire-error'
 import type { HttpMethod } from './types'
 type Validate = (value: unknown) => boolean
 interface ResponseBranch {
+  result?: boolean
   status: number
   media: string | null
   validate: Validate | null
@@ -83,7 +84,7 @@ export function validateEndpointResponse(
       r.status === status &&
       (r.media === null || r.media.split(';')[0]?.trim().toLowerCase() === media),
   )
-  const accepted = candidates.some((r) => {
+  const accepted = candidates.find((r) => {
     if (
       !Object.entries(r.headers).every(([name, validate]) => {
         if (name.toLowerCase() === 'set-cookie') return true // The browser owns this inaccessible response header.
@@ -110,4 +111,5 @@ export function validateEndpointResponse(
   })
   if (!accepted) throw protocolError(status)
   if (!(data instanceof ArrayBuffer)) safeJson(data)
+  return accepted
 }

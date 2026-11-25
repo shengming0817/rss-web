@@ -9,15 +9,16 @@ import {
   type EndpointDetail,
   type ViewEndpoint,
 } from '@rss/mdm-devices'
-import type { ControlIntent } from '@rss/mdm-execution'
+import type { ControlIntent } from '@rss/mdm-devices/control'
 import { freeze } from '@rss/mdm-inventory'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import { Failure, isUnknown, labels, useAction } from './AdminUi'
+import { Failure, isUnknown, labels, useAction, useRead, ReadState } from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { deviceName } from './DevicePresentation'
 import { executionPath } from './Executions'
 import { useProtectedDelivery } from './useProtectedDelivery'
+import { useSecretVisibility } from './SecretTabs'
 import { usePendingSelection } from './SelectionGuard'
 export function DeviceControl({
   runtime,
@@ -37,7 +38,7 @@ export function DeviceControl({
   canReadOriginal: boolean
 }) {
   const l = labels(locale)
-  const { execution, devices } = useAdministration(runtime)
+  const { deviceControl, devices } = useAdministration(runtime)
   const action = useAction()
   const [kind, setKind] = useState<DeviceControlAction>('restart')
   const [pin, setPin] = useState('')
@@ -47,6 +48,20 @@ export function DeviceControl({
   } | null>(null)
   const [pending, setPending] = useState<ControlIntent | null>(null)
   const [outcome, setOutcome] = useState<'none' | 'confirmed' | 'unknown' | 'rejected'>('none')
+  const [originalId, setOriginalId] = useState<string | null>(null)
+  const visible = useSecretVisibility() && canReadOriginal
+  const original = useRead(
+    `original-control/${pending?.device}/${originalId}/${visible}`,
+    (signal) =>
+      visible && originalId && originalId === pending?.operationId && pending.device === endpoint.id
+        ? deviceControl.original(pending.device, originalId, signal)
+        : Promise.resolve(null),
+  )
+  useEffect(() => {
+    if (original.value && original.value.operationId === pending?.operationId) {
+      setOutcome('confirmed')
+    }
+  }, [original.value, pending?.operationId])
   const [stale, setStale] = useState(false)
   const [errorKind, setErrorKind] = useState<'read' | 'write'>('read')
   const { fact, ready } = controlApplicability(snapshot, kind)
@@ -64,8 +79,11 @@ export function DeviceControl({
   function prepare() {
     if (!ready || !snapshot || action.busy || outcome === 'unknown') return
     action.clear()
+    setOutcome('none')
+    setPending(null)
     setStale(false)
     setApproved(false)
+    setOriginalId(null)
     setReview({
       intent: freeze({
         device: endpoint.id,
@@ -114,7 +132,7 @@ export function DeviceControl({
       setErrorKind('write')
       setPending(intent)
       setOutcome('unknown')
-      return execution.create(intent, intent.action.kind === 'lock' ? secret : undefined)
+      return deviceControl.create(intent, intent.action.kind === 'lock' ? secret : undefined)
     })
     if (issued && delivery.isCurrent(epoch)) {
       setOutcome(result.ok ? 'confirmed' : isUnknown(result.error) ? 'unknown' : 'rejected')
@@ -188,7 +206,11 @@ export function DeviceControl({
           {l('刷新设备能力', 'Refresh device capabilities')}
         </Button>
       )}
-      <Failure locale={locale} error={action.error} kind={errorKind} />
+      <Failure
+        locale={locale}
+        error={outcome === 'confirmed' ? undefined : action.error}
+        kind={errorKind}
+      />
       {pending && (
         <p>
           <DiagnosticReference
@@ -221,6 +243,27 @@ export function DeviceControl({
               ? l('已受理，设备效果另行核实', 'Accepted; device effect is separate')
               : l('未确认受理', 'Acceptance unconfirmed')}
         </p>
+      )}
+      {pending && visible && pending.device === endpoint.id && (
+        <>
+          {outcome === 'unknown' && (
+            <Button
+              onClick={() => {
+                setOriginalId(pending.operationId)
+                original.reload()
+              }}
+            >
+              {l('读取原设备操作', 'Read original device control')}
+            </Button>
+          )}
+          <ReadState locale={locale} busy={original.busy && !!originalId} error={original.error} />
+          {original.value && (
+            <p>
+              {original.value.operationId} · {original.value.status} · {l('版本', 'Revision')}{' '}
+              {original.value.revision}
+            </p>
+          )}
+        </>
       )}
       <Modal
         open={!!validReview}

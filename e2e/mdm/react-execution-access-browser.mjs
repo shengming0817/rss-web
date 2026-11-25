@@ -49,6 +49,9 @@ try {
     const raw = await response.text()
     return raw ? JSON.parse(raw) : null
   }
+  const deviceExecution = p
+    .getByRole('row')
+    .filter({ has: p.getByText('设备执行', { exact: true }) })
   await run.login(p)
   run.step('device-confirmation-and-unknown-acceptance')
   const endpoint = await api('GET', `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}`)
@@ -111,6 +114,15 @@ try {
     1,
   )
   await p.context().unroute(`**/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations`)
+  await run.response(
+    p,
+    'GET',
+    `/api/v1/tenants/${run.fixture.tenant}/devices/${f.mdm}/operations/${original.operationId}`,
+    () => button('读取原设备操作').click(),
+  )
+  await p.getByText('已受理，设备效果另行核实', { exact: false }).waitFor()
+  assert.equal(await p.getByLabel('设备动作', { exact: true }).isEnabled(), true)
+
   await p
     .locator('a')
     .filter({ hasText: '查看操作排障' })
@@ -183,7 +195,7 @@ try {
   checks.push('real-macos-capability-unknown-blocked-before-pin-confirmation-and-post')
 
   run.step('script-policy-real-agent-lifecycle')
-  const base = '/api/v1',
+  const base = `/api/v1/tenants/${f.tenant}`,
     group = randomUUID(),
     resource = randomUUID()
   async function mutate(kind, id, input, expectedRevision = 0, expected = 200) {
@@ -288,7 +300,7 @@ try {
     'POST',
     `${base}/resources/${resource}/uploads/${upload}?version=1&platform=macos&architecture=aarch64&variant=default`,
   )
-  const session = await api('GET', `${base}/identity/tenants/${f.tenant}/session`)
+  const session = await api('GET', `/api/v1/identity/tenants/${f.tenant}/session`)
   const appended = await p.request.patch(
     `${origin}${base}/resources/${resource}/uploads/${upload}?offset=0`,
     {
@@ -413,7 +425,7 @@ try {
       .click()
     await p.getByRole('heading', { name: '执行与结果', exact: true }).waitFor()
     await button('读取详细结果与证据').click()
-    await p.locator('.device-facts').getByText('运行中', { exact: true }).waitFor()
+    await deviceExecution.getByText('运行中', { exact: true }).waitFor()
     if (terminal !== 'unknown') await agent(`script_${terminal}`, policy)
     const final = await until(
       () => api('GET', runPath),
@@ -423,8 +435,7 @@ try {
       terminal === 'unknown' ? 120000 : 45000,
     )
     await button('读取详细结果与证据').click()
-    await p
-      .locator('.device-facts')
+    await deviceExecution
       .getByText({ succeeded: '成功', failed: '失败', unknown: '未知' }[final.state.execution], {
         exact: true,
       })
@@ -597,7 +608,7 @@ try {
   await button(collected.task).click()
   await p.getByText('原操作与结果', { exact: true }).waitFor()
   await button('读取详细结果与证据').click()
-  await p.locator('.device-facts').getByText('成功', { exact: true }).first().waitFor()
+  await deviceExecution.getByText('成功', { exact: true }).waitFor()
   checks.push('real-collection-mtls-report-global-directory-evidence-and-original-run')
 
   run.step('configuration-publication-assignment-native-command')
@@ -660,7 +671,7 @@ try {
     'POST',
     `${base}/resources/${configurationResource}/uploads/${configurationUpload}?version=1&platform=windows&architecture=x86_64&variant=default`,
   )
-  const configurationSession = await api('GET', `${base}/identity/tenants/${f.tenant}/session`)
+  const configurationSession = await api('GET', `/api/v1/identity/tenants/${f.tenant}/session`)
   assert.equal(
     (
       await p.request.patch(

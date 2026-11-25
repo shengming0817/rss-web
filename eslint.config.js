@@ -408,7 +408,7 @@ export default tseslint.config(
   {
     files: [
       'apps/mdm/**/*.{ts,tsx}',
-      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections,mdm-inventory,mdm-policies,mdm-scopes,mdm-groups,mdm-compliance,mdm-resources,mdm-content,mdm-software,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-execution,mdm-device-access,mdm-telemetry,mdm-tenant-setup,mdm-runtime-diagnostics}/**/*.ts',
+      'packages/{auth-core,auth-http,mdm-http,mdm-authorization,mdm-tenant-administration,mdm-user-profiles,mdm-devices,mdm-enrollment,mdm-connections,mdm-inventory,mdm-policies,mdm-scopes,mdm-groups,mdm-compliance,mdm-resources,mdm-content,mdm-software,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-operations,mdm-task-trust,mdm-device-access,mdm-telemetry,mdm-tenant-setup,mdm-runtime-diagnostics}/**/*.ts',
     ],
     languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
     plugins: {
@@ -486,7 +486,7 @@ export default tseslint.config(
   },
   {
     files: [
-      'packages/{mdm-scopes,mdm-groups,mdm-compliance,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-execution,mdm-device-access,mdm-telemetry,mdm-tenant-setup,mdm-runtime-diagnostics}/**/*.ts',
+      'packages/{mdm-scopes,mdm-groups,mdm-compliance,mdm-certificates,mdm-recovery-credentials,mdm-audit,mdm-webhooks,mdm-operations,mdm-task-trust,mdm-device-access,mdm-telemetry,mdm-tenant-setup,mdm-runtime-diagnostics}/**/*.ts',
     ],
     rules: {
       'no-restricted-imports': boundaryRule([
@@ -541,7 +541,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment(?:/requests)?$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/(?:publications|agent-packages))?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$|api/))',
+              '^(?:react(?:/|$)|antd(?:/|$)|@rss/(?!auth-core$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices(?:/(?:control|declarations))?$|mdm-enrollment(?:/requests)?$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/(?:publications|agent-packages))?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-operations$|mdm-task-trust$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$|api/))',
             message: 'Adapters depend only on core ports and the API executor.',
           },
         ],
@@ -571,7 +571,7 @@ export default tseslint.config(
         [
           {
             regex:
-              '^(?:@rss/(?!api/(?:mdm-filter|mdm-query)$|auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices$|mdm-enrollment(?:/requests)?$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/(?:publications|agent-packages))?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-execution$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$))',
+              '^(?:@rss/(?!api/(?:mdm-filter|mdm-query)$|auth-core$|auth-http$|mdm-authorization$|mdm-tenant-administration$|mdm-user-profiles$|mdm-devices(?:/(?:control|declarations))?$|mdm-enrollment(?:/requests)?$|mdm-connections$|mdm-inventory$|mdm-policies$|mdm-scopes$|mdm-groups$|mdm-compliance$|mdm-resources$|mdm-content$|mdm-software(?:/(?:publications|agent-packages))?$|mdm-certificates/(?:device-pki|archive)$|mdm-recovery-credentials$|mdm-audit$|mdm-webhooks$|mdm-operations$|mdm-task-trust$|mdm-device-access$|mdm-tenant-setup$|mdm-runtime-diagnostics$|mdm-telemetry$))',
             message: 'Feature pages consume domain use cases; only runtime assembles adapters.',
           },
         ],
@@ -579,8 +579,8 @@ export default tseslint.config(
           NO_AXIOS_PATH,
           {
             name: '@rss/api/mdm-query',
-            allowImportNames: ['allOf'],
-            message: 'Only the pure RSQL conjunction is available to feature pages.',
+            allowImportNames: ['allOf', 'comparison'],
+            message: 'Only pure RSQL filter builders are available to feature pages.',
           },
           {
             name: '@rss/auth-core',

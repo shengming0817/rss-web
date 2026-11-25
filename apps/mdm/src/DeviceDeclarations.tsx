@@ -16,10 +16,10 @@ export function DeviceDeclarations({
   device: string
 }) {
   const l = labels(locale),
-    { execution, binding } = useAdministration(runtime),
+    { deviceDeclarations, binding } = useAdministration(runtime),
     [cursor, setCursor] = useState<string | null>(null)
   const read = useRead(`${binding}/device-ddm/${device}/${cursor}`, (signal) =>
-    execution.declarations(device, cursor, signal),
+    deviceDeclarations.declarations(device, cursor, signal),
   )
   return (
     <Card title={l('DDM 声明与原生状态', 'DDM declarations and native status')}>

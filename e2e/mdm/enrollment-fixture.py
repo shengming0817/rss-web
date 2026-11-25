@@ -123,9 +123,10 @@ def prepare_signer(origin, reader_password):
             return json.loads(data)
     login = post(f'/api/v1/identity/tenants/{TENANTS[0]}/login',
                  dict(login='admin',password=(environment.root/'account-password').read_text()))
-    post(f'/api/v1/identity/tenants/{TENANTS[0]}/accounts', dict(login='reader', password=reader_password.read_text()), login['csrfToken'], expected=201)
-    return post(f'/api/v1/tenants/{TENANTS[0]}/task-signing/trust', dict(action='prepare',expectedRevision=0),
-                login['csrfToken'], str(uuid.uuid4()))['revision']
+    reader = post(f'/api/v1/identity/tenants/{TENANTS[0]}/accounts', dict(login='reader', password=reader_password.read_text()), login['csrfToken'], expected=201)
+    post(f'/api/v1/tenants/{TENANTS[0]}/task-signing/trust', dict(action='prepare',expectedRevision=0),
+                login['csrfToken'], str(uuid.uuid4()))
+    return reader['principalId']
 
 try:
     environment.reset()
@@ -155,17 +156,18 @@ try:
     environment.sql(f"SET rss.tenant_id='{TENANTS[0]}';INSERT INTO mdm_access.authorization_rules(tenant_id,instance,id,revision,document) VALUES('{TENANTS[0]}','{INSTANCE}','{rule_id}',1,'{rule}'::jsonb)", 'mdm_dev')
     # Established device input for management-read continuity, not protocol/OS proof.
     tenant = TENANTS[0]
-    registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
-    environment.sql(installation_sql()+f"SET rss.tenant_id='{tenant}';"
-        f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','63804753-e02e-5502-943a-8c4050b5c7fc','enrollment','consumed',clock_timestamp()+interval '2 minutes');"
-        f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile,state,expires_at,issuance_operation,password_digest,password_version,credential_ref) VALUES('{tenant}','{request}','63804753-e02e-5502-943a-8c4050b5c7fc','{grant}','mdm.windows','Device','bound',clock_timestamp()+interval '1 hour',gen_random_uuid(),repeat('0',64),1,'{credential}');"
-        f"INSERT INTO mdm_access.devices(tenant_id,id,channel,request_id,state,purpose,epoch,first_authenticated_at) VALUES('{tenant}','63804753-e02e-5502-943a-8c4050b5c7fc','mdm','{request}','active','primary',gen_random_uuid(),clock_timestamp());"
-        f"INSERT INTO mdm_access.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES('{tenant}','{credential}','63804753-e02e-5502-943a-8c4050b5c7fc','primary','mdm',md5('{credential}')||md5('{registration}'),'active');", 'mdm_dev')
+    if browser_module == 'react-certificates-browser.mjs':
+        registration, grant, request, credential = [str(uuid.uuid4()) for _ in range(4)]
+        environment.sql(installation_sql()+f"SET rss.tenant_id='{tenant}';"
+            f"INSERT INTO mdm_access.grants(tenant_id,id,actor,instance,device,purpose,state,expires_at) VALUES('{tenant}','{grant}','fixture','{INSTANCE}','63804753-e02e-5502-943a-8c4050b5c7fc','enrollment','consumed',clock_timestamp()+interval '2 minutes');"
+            f"INSERT INTO mdm_access.requests(tenant_id,id,device,grant_id,source,windows_profile,state,expires_at,issuance_operation,password_digest,password_version,credential_ref) VALUES('{tenant}','{request}','63804753-e02e-5502-943a-8c4050b5c7fc','{grant}','mdm.windows','Device','bound',clock_timestamp()+interval '1 hour',gen_random_uuid(),repeat('0',64),1,'{credential}');"
+            f"INSERT INTO mdm_access.devices(tenant_id,id,channel,request_id,state,purpose,epoch,first_authenticated_at) VALUES('{tenant}','63804753-e02e-5502-943a-8c4050b5c7fc','mdm','{request}','active','primary',gen_random_uuid(),clock_timestamp());"
+            f"INSERT INTO mdm_access.credentials(tenant_id,id,device,purpose,channel,locator,state) VALUES('{tenant}','{credential}','63804753-e02e-5502-943a-8c4050b5c7fc','primary','mdm',md5('{credential}')||md5('{registration}'),'active');", 'mdm_dev')
     log_path = private(environment.root/'product.log', '')
     with log_path.open('w') as log:
         phase = 'signer'
         initial = start(binary, initialized, log, expected=None)
-        prepare_signer(initialized['origin'], reader_password)
+        reader_id = prepare_signer(initialized['origin'], reader_password)
         shutdown(initial)
         phase = 'native-inputs'
         native_ports = Environment(BACKEND, group='enrollment-native').host_ports()
@@ -195,6 +197,12 @@ try:
         seed_protocol_pki(environment, windows, config['device_pki'], TENANTS[0], INSTANCE, 'windows')
         phase = 'agent-pki'
         agent_trust = seed_protocol_pki(environment, agent, config['device_pki'], TENANTS[0], INSTANCE, 'agent')
+        ready = {}
+        if browser_module == 'react-enrollment-browser.mjs':
+            from ready_enrollments import ready_enrollments
+            config['native_protocols']['apple'] = dict(management=dict(origin=initialized['origin']))
+            ready = ready_enrollments(environment, root, reader_id,
+                next(entry for entry in config['device_pki'] if entry['purpose'] == 'windows'), initialized['origin'])
         private(config_path, config)
         phase = 'browser'
         start(binary, initialized, log)
@@ -236,7 +244,7 @@ try:
             origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,ruleId=rule_id,rule=authority_rule,
             admin=dict(login='admin',passwordFile=str(environment.root/'account-password')),
             reader=dict(login='reader',passwordFile=str(reader_password)),
-            installerFile=str(installer_file) if installer_file else None, installerRelease=installer_release, existingDevice='63804753-e02e-5502-943a-8c4050b5c7fc'))
+            installerFile=str(installer_file) if installer_file else None, installerRelease=installer_release, readyEnrollments=ready, existingDevice=ready['windows']['device'] if ready else '63804753-e02e-5502-943a-8c4050b5c7fc'))
         browser = subprocess.Popen(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,
             env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds())
         processes.append(browser)

@@ -305,6 +305,7 @@ export async function execute<T>(
     if (options.responseType === 'arraybuffer' && response.data instanceof ArrayBuffer) {
       binaryOwned = response.data
     }
+    let contractError = false
     if (options.contract) {
       let data: unknown = response.data
       if (
@@ -321,7 +322,13 @@ export async function execute<T>(
         }
       }
       try {
-        validateEndpointResponse(options.contract, response.status, data, response.headers)
+        const branch = validateEndpointResponse(
+          options.contract,
+          response.status,
+          data,
+          response.headers,
+        )
+        contractError = response.status >= 400 && !branch?.result
       } catch {
         throw protocolError(response.status)
       }
@@ -329,7 +336,7 @@ export async function execute<T>(
     const accepted = Array.isArray(options.successStatus)
       ? options.successStatus.includes(response.status)
       : response.status === options.successStatus
-    if (response.status >= 400 && !accepted) {
+    if (response.status >= 400 && (!accepted || contractError)) {
       let value: unknown = response.data
       if (response.status === 413 && options.responseType === 'arraybuffer') value = undefined
       else if ('responseType' in options && options.responseType === 'arraybuffer') {

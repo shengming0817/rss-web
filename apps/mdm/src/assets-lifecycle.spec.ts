@@ -1,3 +1,5 @@
+import { GroupCriteriaEditor } from './CriteriaEditor'
+import { createRuleCatalog } from './group-rule-catalog'
 import { isValidElement } from 'react'
 import { DirectoryCatalogContext } from './DirectorySearch'
 import { directoryFixtures } from './directory.spec-helper'
@@ -15,9 +17,10 @@ import type {
   ValueMapping,
 } from '@rss/mdm-resources'
 import type { ViewEndpoint } from '@rss/mdm-devices'
-import type { GroupMemberships, GroupRead } from '@rss/mdm-groups'
+import type { GroupCriteria, GroupMemberships, GroupRead } from '@rss/mdm-groups'
 import type {
   FieldDetail,
+  InventoryPort,
   Operation,
   QueryDefinition,
   RetentionPolicy,
@@ -321,6 +324,13 @@ it.each(['blocker', 'continuation', 'unreadable'] as const)(
         MemoryRouter,
         null,
         createElement(GroupEditor, {
+          catalog: {
+            scope: 'test',
+            registration: true,
+            current: true,
+            fields: vi.fn(),
+            userGroups: vi.fn(),
+          },
           groups,
           devices,
           locale: 'zh',
@@ -656,6 +666,7 @@ it('opens a group directly by URL and restores the group directory query on clos
           }),
         },
         groups: { read, list },
+        inventory: { fields: vi.fn() },
         devices: {},
       }),
     } as unknown as Runtime
@@ -711,6 +722,7 @@ it('retains the exact unresolved group write across history navigation within th
             })),
           }),
         },
+        inventory: { fields: vi.fn() },
         groups: { read, change, list, references: empty, impacts: empty },
         devices: {},
       }),
@@ -1024,6 +1036,13 @@ it('recovers an unknown recompute by exact replay and reads only the returned se
       MemoryRouter,
       null,
       createElement(GroupEditor, {
+        catalog: {
+          scope: 'test',
+          registration: true,
+          current: true,
+          fields: vi.fn(),
+          userGroups: vi.fn(),
+        },
         groups,
         devices,
         locale: 'zh',
@@ -1558,4 +1577,137 @@ it('drops late policy results when tenant or permission context changes', async 
   await click('管理遥测保留策略')
   expect(host.querySelector<HTMLInputElement>('[aria-label="查询策略键"]')?.value).toBe('')
   expect(newRead).not.toHaveBeenCalled()
+})
+
+function RuleTree({ catalog }: { catalog: ReturnType<typeof createRuleCatalog> }) {
+  const first = {
+    kind: 'predicate' as const,
+    field: 'device.original',
+    op: 'eq' as const,
+    value: { kind: 'string' as const, value: 'retained' },
+  }
+  const [value, onChange] = useState<GroupCriteria>({
+    kind: 'and',
+    children: [first, { ...first, field: 'device.other' }],
+  })
+  return createElement(GroupCriteriaEditor, {
+    value,
+    onChange,
+    catalog,
+    locale: 'zh',
+    groups: inject<GroupsUseCases>({}),
+    assetContext: 'endpoint',
+  })
+}
+
+it('uses an exact field description after typing and keeps its row through a rule move', async () => {
+  const counted = 'device.test.count'
+  const slow = 'device.test.alias'
+  let release!: () => void
+  const delayed = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const catalog = createRuleCatalog(
+    'author',
+    true,
+    true,
+    vi.fn(async ({ filter }) => {
+      if (filter?.includes(slow)) {
+        await delayed
+        return {
+          dictionary: '1',
+          items: [
+            {
+              key: slow,
+              valueType: { kind: 'string' as const, allowEmpty: true, maxLength: 255 },
+              operations: ['eq' as const],
+            },
+          ],
+          nextCursor: null,
+        }
+      }
+      return {
+        dictionary: '1',
+        items: filter?.includes(counted)
+          ? [{ key: counted, valueType: { kind: 'integer' as const }, operations: ['gt' as const] }]
+          : [],
+        nextCursor: null,
+      }
+    }),
+    vi.fn(),
+  )
+  await render(createElement(RuleTree, { catalog }))
+  const fields = () => host.querySelectorAll<HTMLInputElement>('input[aria-label="条件字段"]')
+  const edited = fields()[1]!
+  await act(async () => {
+    edited.focus()
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(edited, counted)
+    edited.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => edited.blur())
+  expect(host.querySelector<HTMLInputElement>('input[aria-label="数值"]')?.value).toBe('0')
+  const move = [...host.querySelectorAll('button')].find(
+    (node) => node.textContent?.trim() === '条件上移' && !node.disabled,
+  )!
+  await act(async () => move.click())
+  expect(fields()[0]).toBe(edited)
+  expect(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="文本值"]')?.value).toBe(
+    'retained',
+  )
+  const remaining = fields()[1]!
+  await act(async () => {
+    remaining.focus()
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(remaining, slow)
+    remaining.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => remaining.blur())
+  const text = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="文本值"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+      text,
+      'operator input',
+    )
+    text.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => release())
+  expect(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="文本值"]')?.value).toBe(
+    'operator input',
+  )
+})
+
+it('applies one delayed field description to both reordered sibling rules', async () => {
+  const field = 'device.test.count'
+  let release!: () => void
+  const delayed = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const fields = vi.fn<InventoryPort['fields']>(async ({ filter }) => {
+    if (!filter?.includes(field)) return { dictionary: '1', items: [], nextCursor: null }
+    await delayed
+    return {
+      dictionary: '1',
+      items: [{ key: field, valueType: { kind: 'integer' }, operations: ['gt'] }],
+      nextCursor: null,
+    }
+  })
+  const catalog = createRuleCatalog('author', true, true, fields, vi.fn())
+  await render(createElement(RuleTree, { catalog }))
+  const inputs = [...host.querySelectorAll<HTMLInputElement>('input[aria-label="条件字段"]')]
+  for (const input of inputs) {
+    await act(async () => {
+      input.focus()
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, field)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => input.blur())
+  }
+  expect(inputs).toHaveLength(2)
+  expect(fields.mock.calls.filter(([query]) => query.filter?.includes(field))).toHaveLength(1)
+  const move = [...host.querySelectorAll('button')].find(
+    (node) => node.textContent?.trim() === '条件上移' && !node.disabled,
+  )!
+  await act(async () => move.click())
+  await act(async () => release())
+  expect([...host.querySelectorAll('input[aria-label="条件字段"]')]).toEqual(inputs.reverse())
+  expect(host.querySelectorAll('input[aria-label="数值"]')).toHaveLength(2)
 })

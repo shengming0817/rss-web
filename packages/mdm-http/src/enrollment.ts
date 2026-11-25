@@ -193,6 +193,7 @@ function native(value: unknown, id: string): Enrollment {
   }
   return {
     ...value,
+    deviceId: uuid(value.deviceId),
     source: enumeration(value.source, ['mdm.windows', 'mdm.apple'] as const),
     instructions,
   }
@@ -433,10 +434,10 @@ export function createEnrollmentAdapter(
         (value) => receipt(value, intent.operationId, intent.source),
       )
     },
-    enrollment: (id) =>
+    enrollment: (id, signal) =>
       api.getApiV1TenantsByTenantEnrollmentsById(
         transport,
-        { pathParams: { tenant, id: uuid(id) } },
+        { pathParams: { tenant, id: uuid(id) }, signal },
         (value) => native(value, id),
       ),
     resume: (id, operationId, password) =>

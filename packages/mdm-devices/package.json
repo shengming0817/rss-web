@@ -5,7 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./control": "./src/control.ts",
+    "./declarations": "./src/declarations.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

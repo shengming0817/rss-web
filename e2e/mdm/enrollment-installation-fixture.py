@@ -78,7 +78,7 @@ with ExitStack() as providers:
     with socket.socket() as listener: listener.bind(('127.0.0.1',0)); port=listener.getsockname()[1]
     origin=f'https://localhost:{port}'
     network=Ingress(root,project,project); allocation=network.allocate(); providers.callback(network.release)
-    values=dict(MDM_POSTGRES_IMAGE=manifest['providers']['postgres'],MDM_GATEWAY_IMAGE=manifest['providers']['nginx'],MDM_SERVER_IMAGE=image_identity(manifest['image'])['id'],MDM_INSTALLER_IMAGE=image_identity(manifest['installer']['image'])['id'],MDM_WEB_IMAGE=ui['id'],MDM_INPUT_DIRECTORY=str(inputs),MDM_PRODUCT_ORIGIN=origin,MDM_PG_MAX_CONNECTIONS=160,MDM_GATEWAY_BIND_IP='127.0.0.1',**allocation)
+    values=dict(MDM_POSTGRES_IMAGE=manifest['providers']['postgres'],MDM_GATEWAY_IMAGE=manifest['providers']['nginx'],MDM_SERVER_IMAGE=image_identity(manifest['image'])['id'],MDM_INSTALLER_IMAGE=image_identity(manifest['installer']['image'])['id'],MDM_WEB_IMAGE=ui['id'],MDM_INPUT_DIRECTORY=str(inputs),MDM_PRODUCT_ORIGIN=origin,MDM_GATEWAY_BIND_IP='127.0.0.1',**allocation)
     private(root/'.env',''.join(f'{key}={value}\n' for key,value in values.items()))
     for name in ('production.compose.yaml','render_gateway.py'): shutil.copy(candidate/'deployment'/name,root/name)
     owner=Installation(root,root/'production.compose.yaml',project)
@@ -141,7 +141,10 @@ with ExitStack() as providers:
         status, runtime_observation=operator.call('GET','/readyz')
         if status!=200 or not runtime_observation.get('observation'): raise RuntimeError('installation-runtime-observation')
         status,state=operator.call('GET',operator.business_path('/agent-connections'))
-        if status!=200 or not state['deployments']: raise RuntimeError('installation-deployment-observation')
+        if status != 200:
+            raise RuntimeError(f'installation-connection-state-http-{status}')
+        if not state['deployments']:
+            raise RuntimeError('installation-connection-state-has-no-deployment-observations')
         fixture=private(root/'browser.json',dict(origin=origin,tenant=tenant,serviceId=service,admin=dict(login='administrator',passwordFile=str(inputs/'administrator-password')),verificationKeys=state['verificationKeys']))
         child=subprocess.run(['node',str(WEB/'e2e/mdm/react-signed-configuration-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds(),timeout=780)
         if child.returncode: raise RuntimeError('signed-configuration-browser')

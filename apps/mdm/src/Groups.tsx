@@ -1,5 +1,5 @@
 import { useDirectoryQuery } from './directory-location'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Card, Tag } from 'antd'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Group } from '@rss/mdm-groups'
@@ -17,6 +17,7 @@ import {
   useRead,
 } from './AdminUi'
 import { SelectionGuard, useSelectionGuard } from './SelectionGuard'
+import { createRuleCatalog, type RuleCatalog } from './group-rule-catalog'
 import { GroupEditor } from './GroupEditor'
 import { SecretTabs } from './SecretTabs'
 import { useAdministration } from './useAdministration'
@@ -52,6 +53,7 @@ export function groupKindLabel(locale: Locale, kind: Group['kind']): string {
   }
 }
 type GroupAccess = {
+  catalog: RuleCatalog
   groups: GroupsUseCases
   devices: DevicesUseCases
   locale: Locale
@@ -207,13 +209,30 @@ export function GroupsPage({ runtime, locale }: { runtime: Runtime; locale: Loca
     guard = useSelectionGuard(),
     [heldGroup, setHeldGroup] = useState(requested),
     id = guard.locked ? heldGroup : requested,
-    { groups, devices, authorization, binding } = useAdministration(runtime),
+    { groups, devices, authorization, inventory, binding } = useAdministration(runtime),
     permissions = useRead(`${binding}/groups-presentation`, authorization.effective),
     has = (operation: string) =>
       permissions.value?.grants.some(
         (grant) => grant.scope.kind === 'tenant' && grant.operation === operation,
       ) ?? false,
+    registration =
+      permissions.value?.grants.some(
+        (g) => g.operation === 'enrollment' && g.scope.kind === 'all_devices',
+      ) ?? false,
+    current = has('inventory_sensitive_read'),
+    catalog = useMemo(
+      () =>
+        createRuleCatalog(
+          permissions.key,
+          registration,
+          current,
+          inventory.fields,
+          authorization.groups,
+        ),
+      [permissions.key, registration, current, inventory.fields, authorization.groups],
+    ),
     access = {
+      catalog,
       groups,
       devices,
       locale,

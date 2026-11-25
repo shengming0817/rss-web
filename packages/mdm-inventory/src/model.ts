@@ -476,7 +476,7 @@ export interface CollectionItems extends Page<{
 
 /** Operations are explicit; session, HTTP, polling and write recovery stay with their owners. */
 export interface InventoryPort {
-  fields(query: DirectoryQuery<keyof FieldDescriptor>): Promise<FieldCatalog>
+  fields(query: DirectoryQuery<keyof FieldDescriptor>, signal?: AbortSignal): Promise<FieldCatalog>
   field(key: string): Promise<FieldDetail>
   references(key: string, query: WindowQuery): Promise<FieldReferences>
   putField(key: string, change: Operation<FieldChange>): Promise<FieldDetail>

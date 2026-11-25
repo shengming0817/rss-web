@@ -53,7 +53,8 @@ import {
 /** Explicit asset use cases. Server authorization, resolution and evaluation remain authoritative. */
 export function createInventory(port: InventoryPort) {
   return Object.freeze({
-    fields: (query: DirectoryQuery<keyof FieldDescriptor> = {}) => port.fields(query),
+    fields: (query: DirectoryQuery<keyof FieldDescriptor> = {}, signal?: AbortSignal) =>
+      port.fields(query, signal),
     field: (key: string) => port.field(fieldKey(key)),
     references: (key: string, query: WindowQuery = {}) => port.references(fieldKey(key), query),
     async putField(key: string, change: Operation<FieldChange>) {

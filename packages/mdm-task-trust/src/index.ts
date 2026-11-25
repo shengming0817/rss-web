@@ -30,7 +30,7 @@ export interface TrustPort {
   trustOperation(id: string): Promise<Trust>
   trustObservation(device: string): Promise<TrustObservation | null>
 }
-export function createTrust(port: TrustPort) {
+export function createTaskTrust(port: TrustPort) {
   return {
     trust: () => port.trust(),
     changeTrust(id: string, input: TrustChange) {
@@ -49,6 +49,11 @@ export function createTrust(port: TrustPort) {
       })
     },
     trustOperation: (id: string) => port.trustOperation(uuid(id)),
-    trustObservation: (device: string) => port.trustObservation(device),
+    async trustObservation(device: string) {
+      const observation = await port.trustObservation(uuid(device))
+      if (observation && observation.device !== device)
+        throw new Error('Wrong task trust observation device')
+      return observation
+    },
   }
 }
