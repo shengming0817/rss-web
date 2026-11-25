@@ -396,7 +396,7 @@ try:
         console['diagnosticsWriter'] = dict(login=login, passwordFile=str(writer_password))
 
     person_b = None
-    if browser_module == 'react-devices-browser.mjs':
+    if browser_module in {'react-devices-browser.mjs', 'react-execution-access-browser.mjs'}:
         status, account_b = operator.call('POST', f'/api/v1/identity/tenants/{TENANTS[0]}/accounts',
             dict(login='fixture-person-b', password=secrets.token_urlsafe(32)))
         if status != 201: raise RuntimeError('personnel-candidate-create')
