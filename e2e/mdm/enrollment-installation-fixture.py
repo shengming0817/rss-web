@@ -78,7 +78,7 @@ with ExitStack() as providers:
     with socket.socket() as listener: listener.bind(('127.0.0.1',0)); port=listener.getsockname()[1]
     origin=f'https://localhost:{port}'
     network=Ingress(root,project,project); allocation=network.allocate(); providers.callback(network.release)
-    values=dict(MDM_POSTGRES_IMAGE=manifest['providers']['postgres'],MDM_GATEWAY_IMAGE=manifest['providers']['nginx'],MDM_SERVER_IMAGE=image_identity(manifest['image'])['id'],MDM_INSTALLER_IMAGE=image_identity(manifest['installer']['image'])['id'],MDM_WEB_IMAGE=ui['id'],MDM_INPUT_DIRECTORY=str(inputs),MDM_PRODUCT_ORIGIN=origin,MDM_PG_MAX_CONNECTIONS=160,MDM_GATEWAY_BIND_IP='127.0.0.1',**allocation)
+    values=dict(MDM_POSTGRES_IMAGE=manifest['providers']['postgres'],MDM_GATEWAY_IMAGE=manifest['providers']['nginx'],MDM_SERVER_IMAGE=image_identity(manifest['image'])['id'],MDM_INSTALLER_IMAGE=image_identity(manifest['installer']['image'])['id'],MDM_WEB_IMAGE=ui['id'],MDM_INPUT_DIRECTORY=str(inputs),MDM_PRODUCT_ORIGIN=origin,MDM_PG_MAX_CONNECTIONS=200,MDM_GATEWAY_BIND_IP='127.0.0.1',**allocation)
     private(root/'.env',''.join(f'{key}={value}\n' for key,value in values.items()))
     for name in ('production.compose.yaml','render_gateway.py'): shutil.copy(candidate/'deployment'/name,root/name)
     owner=Installation(root,root/'production.compose.yaml',project)
@@ -101,7 +101,8 @@ with ExitStack() as providers:
         spec=importlib.util.spec_from_file_location('enrollment_gateway_renderer',root/'render_gateway.py'); renderer=importlib.util.module_from_spec(spec); spec.loader.exec_module(renderer)
         Gateway('',model['services']['gateway']['ports'],renderer).publish(owner.ports_file,isolated=True,published={port:port})
         owner.compose('up','-d')
-        runtime=json.loads(owner.read('/var/lib/rss-mdm/installation/runtime.json'))
+        runtime_path='/var/lib/rss-mdm/runtime/primary/server/runtime.json'
+        runtime=json.loads(owner.read(runtime_path))
         receipt=json.loads(owner.read('/var/lib/rss-mdm/installation/installation.json'))['receipt']
         tenant=receipt['tenantId']; service=runtime['identity']['instance_id']
         operator=Browser(origin,inputs/'gateway-ca.crt',port)
@@ -110,7 +111,7 @@ with ExitStack() as providers:
         observe_runtime(operator,runtime)
         status,signer=operator.call('POST',operator.business_path('/task-signing/trust'),dict(action='prepare',expectedRevision=0),str(uuid.uuid4()))
         if status!=200 or signer['revision']!=1: raise RuntimeError('installation-task-signing')
-        runtime=json.loads(owner.read('/var/lib/rss-mdm/installation/runtime.json'))
+        runtime=json.loads(owner.read(runtime_path))
         native=root/'pki'; native.mkdir(mode=0o700)
         for source,target in [('ca.crt','ca.crt'),('ca.key','ca.key'),('gateway.crt','server.crt'),('gateway.key','server.key')]: shutil.copy(inputs/source,native/target); (native/target).chmod(0o600)
         private(native/'case.json',dict(tenant=tenant))
@@ -136,7 +137,7 @@ with ExitStack() as providers:
         owner.compose('exec','-T','gateway','nginx','-t','-c','/run/gateway/nginx.conf'); owner.compose('exec','-T','gateway','nginx','-s','reload','-c','/run/gateway/nginx.conf')
         until(lambda: operator.call('GET','/readyz')[0]==200)
         product('configure-host',channels_file)
-        observe_runtime(operator,json.loads(owner.read('/var/lib/rss-mdm/installation/runtime.json')))
+        observe_runtime(operator,json.loads(owner.read(runtime_path)))
         fixture=private(root/'browser.json',dict(origin=origin,tenant=tenant,serviceId=service,admin=dict(login='administrator',passwordFile=str(inputs/'administrator-password'))))
         child=subprocess.run(['node',str(WEB/'e2e/mdm/react-signed-configuration-browser.mjs')],cwd=WEB,env={**os.environ,'MDM_ENROLLMENT_BROWSER_FIXTURE':str(fixture)},pass_fds=lease_fds(),timeout=780)
         if child.returncode: raise RuntimeError('signed-configuration-browser')
