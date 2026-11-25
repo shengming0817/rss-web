@@ -17,6 +17,16 @@ import { NativeMaintenance } from './NativeMaintenance'
 export function EnrollmentFailure({ error, locale }: { error: unknown; locale: Locale }) {
   const l = labels(locale),
     code = codeOf(error)
+  if (code === 'agent_endpoint_not_configured')
+    return (
+      <Alert
+        type="warning"
+        title={l(
+          '服务器尚未配置 Agent 的 HTTPS 地址。请让部署管理员设置 agent_pki.endpoint.origin，启用后再签发。',
+          'The server has no Agent HTTPS address. Ask the deployment administrator to set agent_pki.endpoint.origin and enable the endpoint before issuing a file.',
+        )}
+      />
+    )
   return code === 'enrollment_paused' ? (
     <Alert
       type="warning"

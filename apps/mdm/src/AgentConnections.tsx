@@ -22,6 +22,10 @@ export function AgentConnections({ runtime, locale }: { runtime: Runtime; locale
       targetRevision === null ? Promise.resolve(null) : agent.devices(targetRevision, after),
     ),
     delivery = useProtectedDelivery()
+  function refreshConnections() {
+    setPage({ revision: 0 })
+    read.reload()
+  }
   return (
     <>
       <ReadState busy={read.busy} error={read.error} locale={locale} />
@@ -59,19 +63,12 @@ export function AgentConnections({ runtime, locale }: { runtime: Runtime; locale
           </p>
         </>
       )}
-      <Button
-        onClick={() => {
-          read.reload()
-          devices.reload()
-        }}
-      >
-        {l('刷新连接状态', 'Refresh connection status')}
-      </Button>
+      <Button onClick={refreshConnections}>{l('刷新连接状态', 'Refresh connection status')}</Button>
       <ReadState
         busy={devices.busy}
         error={devices.error}
         locale={locale}
-        onRetry={devices.reload}
+        onRetry={refreshConnections}
       />
       {devices.value && (
         <>

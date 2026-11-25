@@ -6,6 +6,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OriginalRequests } from './OriginalRequests'
 import { AgentPackages } from './AgentPackages'
+import { AgentConfigurations } from './AgentConfigurations'
+import { AgentConnections } from './AgentConnections'
+import { Connections } from './Connections'
+import { decodeMdmError } from '@rss/api/mdm'
 import { DevicePki } from './DevicePki'
 import { SelectionGuard } from './SelectionGuard'
 import type { Runtime } from './runtime'
@@ -408,4 +412,84 @@ it('keeps the original request and outer device selection fenced while a real re
   expect(host.textContent).toContain('Administrator recovery operation')
   expect(outer.mock.calls.some((call) => call[1] === true)).toBe(true)
   expect(recoverIssuance).toHaveBeenCalledOnce()
+})
+
+it('explains which server setting blocks issuance without retrying a rejected request', async () => {
+  const issueConfiguration = vi
+    .fn()
+    .mockRejectedValue(decodeMdmError(409, { code: 'agent_endpoint_not_configured' }))
+  const r = runtime({
+    enrollment: {
+      configurations: async () => ({ items: [], nextCursor: null }),
+      issueConfiguration,
+    },
+  })
+  await render(h(AgentConfigurations, { runtime: r, locale: 'en', canWrite: true }))
+  await click('Issue administrator enrollment JSON')
+  const dialog = host.querySelector('[role=dialog]')!
+  await act(async () => dialog.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  await click('Issue and prepare JSON download')
+  expect(dialog.textContent).toContain(
+    'Ask the deployment administrator to set agent_pki.endpoint.origin',
+  )
+  expect(dialog.querySelector('a[download]')).toBeNull()
+  expect(issueConfiguration).toHaveBeenCalledOnce()
+})
+
+it('refreshes connection status before retrying device confirmation at the new revision', async () => {
+  function state(revision: number) {
+    return {
+      configuration: {
+        configuration: {
+          revision,
+          preferredOrigin: 'https://agent.example',
+          origins: ['https://agent.example'],
+        },
+      },
+      convergence: { targetRevision: revision, activeDevices: 1, confirmedDevices: 0 },
+    }
+  }
+  const read = vi.fn().mockResolvedValueOnce(state(3)).mockResolvedValueOnce(state(4))
+  const devices = vi
+    .fn()
+    .mockRejectedValueOnce(decodeMdmError(409, { code: 'operation_conflict', issuanceId: null }))
+    .mockResolvedValueOnce({
+      targetRevision: 4,
+      items: [{ device: 'device-awaiting-revision-4' }],
+      next: null,
+    })
+  const r = runtime({ connections: { agent: { read, devices } } })
+  await render(h(AgentConnections, { runtime: r, locale: 'en' }))
+  expect(devices).toHaveBeenNthCalledWith(1, 3, undefined)
+  await click('Read again')
+  expect(read).toHaveBeenCalledTimes(2)
+  expect(devices).toHaveBeenCalledTimes(2)
+  expect(devices).toHaveBeenNthCalledWith(2, 4, undefined)
+  expect(host.textContent).toContain('device-awaiting-revision-4')
+})
+
+it('hides the read-only Agent tab when connection read permission is lost', async () => {
+  const grants = (operation: string) => ({ grants: [{ scope: { kind: 'tenant' }, operation }] })
+  const effective = vi
+    .fn()
+    .mockResolvedValueOnce(grants('registration_configuration_read'))
+    .mockResolvedValueOnce(grants('registration_configuration_write'))
+  const read = vi.fn().mockResolvedValue({
+    configuration: null,
+    convergence: { targetRevision: null, activeDevices: 0, confirmedDevices: 0 },
+  })
+  const r = runtime({
+    authorization: { effective },
+    connections: { agent: { read }, mail: { read: () => Promise.resolve(null) } },
+  })
+  await render(h(Connections, { runtime: r, locale: 'en' }))
+  const findAgent = () =>
+    [...host.querySelectorAll<HTMLElement>('[role=tab]')].find(
+      (tab) => tab.textContent === 'Agent connections',
+    )
+  await act(async () => findAgent()!.click())
+  expect(read).toHaveBeenCalledOnce()
+  await click('Read current entry permissions')
+  expect(findAgent()).toBeUndefined()
+  expect(read).toHaveBeenCalledOnce()
 })

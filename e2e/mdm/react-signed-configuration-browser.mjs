@@ -16,8 +16,16 @@ try {
 
   const signed = await signedConfigurationJourney(run, page)
   await run.nav(page, '/connections', '连接配置')
+  const devices = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === connections + '/devices',
+  )
   await run.response(page, 'GET', connections, openConnections)
   await page.getByText(signed.configuration.preferredOrigin, { exact: true }).waitFor()
+  const pageResponse = await devices
+  assert.equal(pageResponse.status(), 200)
+  assert.equal((await pageResponse.json()).targetRevision, signed.configuration.revision)
   const receipt = await run.response(page, 'GET', connections + '/configuration', () =>
     page.getByRole('button', { name: '准备下载连接恢复文件', exact: true }).click(),
   )
