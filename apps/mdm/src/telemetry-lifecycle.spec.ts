@@ -294,23 +294,27 @@ it.each([
 })
 
 it.each([
-  ['query_cursor_invalidated', '分页上下文已失效', '保留条件重新开始'],
-  ['query_result_unavailable', '原查询结果已不可用', '重新查询'],
-])('restarts the original history query explicitly after %s', async (code, message, action) => {
-  const history = vi
-    .fn()
-    .mockResolvedValueOnce(page)
-    .mockRejectedValueOnce(decodeMdmError(409, { code }))
-    .mockResolvedValueOnce(page)
-  await act(async () =>
-    root.render(h(TelemetryResults, { runtime: runtime(history), locale: 'zh', query })),
-  )
-  await act(async () => button('下一页观察').click())
-  expect(history.mock.calls.map(([q]) => q)).toEqual([query, { ...query, after: 'cursor' }])
-  expect(host.textContent).toContain(message)
-  expect(host.textContent).not.toContain('-12.5 degree')
-  await act(async () => button(action).click())
-  expect(history).toHaveBeenCalledTimes(3)
-  expect(history).toHaveBeenLastCalledWith(query)
-  expect(host.textContent).toContain('-12.5 degree')
-})
+  [409, 'query_cursor_invalidated', '分页上下文已失效', '保留条件重新开始'],
+  [409, 'query_result_unavailable', '原查询结果已不可用', '重新查询'],
+  [400, 'malformed_request', '无法读取当前数据', '从首页重新查询'],
+] as const)(
+  'restarts the original history query explicitly after %s %s',
+  async (status, code, message, action) => {
+    const history = vi
+      .fn()
+      .mockResolvedValueOnce(page)
+      .mockRejectedValueOnce(decodeMdmError(status, { code }))
+      .mockResolvedValueOnce(page)
+    await act(async () =>
+      root.render(h(TelemetryResults, { runtime: runtime(history), locale: 'zh', query })),
+    )
+    await act(async () => button('下一页观察').click())
+    expect(history.mock.calls.map(([q]) => q)).toEqual([query, { ...query, after: 'cursor' }])
+    expect(host.textContent).toContain(message)
+    expect(host.textContent).not.toContain('-12.5 degree')
+    await act(async () => button(action).click())
+    expect(history).toHaveBeenCalledTimes(3)
+    expect(history).toHaveBeenLastCalledWith(query)
+    expect(host.textContent).toContain('-12.5 degree')
+  },
+)

@@ -82,7 +82,7 @@ export function TelemetryHealth({
                     { title: l('资源', 'Resource'), dataIndex: 'resource' },
                     { title: l('定义版本', 'Definition version'), dataIndex: 'definitionVersion' },
                     { title: l('到期（UTC）', 'Due (UTC)'), render: (_, r) => utcMicros(r.dueAt) },
-                    { title: l('阶段', 'Phase'), dataIndex: 'phase' },
+                    { title: l('当前阶段', 'Current phase'), dataIndex: 'phase' },
                     {
                       title: l('最近维护进度', 'Last maintenance progress'),
                       render: (_, { progress }) => {
@@ -95,9 +95,15 @@ export function TelemetryHealth({
                               l('受阻', 'Blocked') + ' · ' + diagnosticName(progress.reason, locale)
                             )
                           case 'more':
-                            return l('待继续', 'More work remaining') + ' · ' + progress.processed
+                            return l(
+                              `待继续，已处理 ${progress.processed} 项`,
+                              `More work remaining, ${progress.processed} processed`,
+                            )
                           case 'complete':
-                            return l('本阶段已完成', 'Phase complete') + ' · ' + progress.processed
+                            return l(
+                              `上次维护已完成，已处理 ${progress.processed} 项`,
+                              `Last maintenance completed, ${progress.processed} processed`,
+                            )
                         }
                       },
                     },

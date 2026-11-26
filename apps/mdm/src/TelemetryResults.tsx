@@ -13,7 +13,7 @@ import {
 } from '@rss/mdm-telemetry'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import { labels, ReadState, Failure, validateInput } from './AdminUi'
+import { labels, ReadState, codeOf, readFailure, Failure, validateInput } from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { useSecretVisibility } from './SecretTabs'
 import { DataTable } from './DataTable'
@@ -72,6 +72,27 @@ export function TelemetryUnavailable({
     </div>
   ) : null
 }
+function TelemetryPageState({
+  continued,
+  ...props
+}: Parameters<typeof ReadState>[0] & { continued: boolean }) {
+  const failure = readFailure(props.error)
+  return (
+    <>
+      <ReadState
+        {...props}
+        onRetry={
+          continued && codeOf(props.error) === 'malformed_request' ? undefined : props.onRetry
+        }
+      />
+      {continued && !!props.error && (failure === 'other' || failure === 'conflict') && (
+        <Button onClick={props.onRestart}>
+          {labels(props.locale)('从首页重新查询', 'Restart from first page')}
+        </Button>
+      )}
+    </>
+  )
+}
 function AggregateResults({
   runtime,
   locale,
@@ -103,7 +124,8 @@ function AggregateResults({
           <Button onClick={read.reload}>{l('重新读取聚合', 'Read aggregation again')}</Button>
         )}
       </Space>
-      <ReadState
+      <TelemetryPageState
+        continued={after !== null}
         locale={locale}
         busy={read.busy}
         error={read.error}
@@ -250,7 +272,8 @@ export function TelemetryResults({
                 'Historical values retain their device, source and definition. Pages are shown separately, without interpolation across gaps.',
               )}
         </p>
-        <ReadState
+        <TelemetryPageState
+          continued={after !== null}
           locale={locale}
           busy={read.busy}
           error={read.error}
