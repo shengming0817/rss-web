@@ -39,7 +39,10 @@ import { QueryExecution } from './InventoryQuery'
 import { SavedQueries } from './SavedQueries'
 import { SecretTabs } from './SecretTabs'
 import { ValueMappingEditor } from './ValueMappingEditor'
-import { decodeMdmError } from '@rss/api/mdm'
+import { decodeMdmError, type HttpTransport, type RequestOptions } from '@rss/api/mdm'
+import { createInventory } from '@rss/mdm-inventory'
+import { createInventoryAdapter } from '@rss/mdm-http/inventory'
+import { CollectionResults } from './CollectionResults'
 import { Devices } from './Devices'
 import { DeviceDetail } from './DeviceDetail'
 import { DeviceGroupMemberships } from './DeviceGroupMemberships'
@@ -1711,3 +1714,81 @@ it('applies one delayed field description to both reordered sibling rules', asyn
   expect([...host.querySelectorAll('input[aria-label="条件字段"]')]).toEqual(inputs.reverse())
   expect(host.querySelectorAll('input[aria-label="数值"]')).toHaveLength(2)
 })
+
+it.each([
+  ['found', 'projected', '已收到', '已投影'],
+  ['expired', 'projected', '已收到，回执已过期', '已投影'],
+  ['expired', 'unconfirmed', '已收到，回执已过期', '尚未确认'],
+  ['not_found', 'pending_receipt', '未找到回执', '等待回执'],
+  ['no_batch', 'not_applicable', '无观察批次', '不适用'],
+])(
+  'reads and presents the collection receipt %s independently of projection %s',
+  async (status, projection, receiptLabel, projectionLabel) => {
+    const state = {
+      version: 1,
+      revision: 0,
+      highWater: null,
+      cursor: null,
+      baseline: null,
+      need: null,
+    }
+    const receipt =
+      status === 'found'
+        ? {
+            status,
+            batch_id: 'original-batch',
+            received_at: 10,
+            decision: { version: 1, before: state, after: state, outcome: 'snapshot' },
+          }
+        : { status }
+    const run = {
+      id,
+      device: nested,
+      epoch: id,
+      source: 'agent.native',
+      dataset: 'inventory',
+      templateVersion: 'v1',
+      sequence: 1,
+      result: 'snapshot',
+      complete: true,
+      fingerprint: 'digest',
+      fields: [],
+      startedAt: 1,
+      finishedAt: 2,
+      reason: 'complete',
+      deliveryPending: false,
+      coverage: { id: 'coverage', version: '1', definition: 'hash', format: 'native' },
+      delivery: { receipt, projection },
+    }
+    const request = (options: RequestOptions<unknown>) =>
+      Promise.resolve(options.decode({ tenantId: id, asset: { kind: 'collection_run', run } }))
+    const inventory = createInventory(createInventoryAdapter({ request } as HttpTransport, id))
+    await act(async () =>
+      root.render(
+        createElement(CollectionResults, {
+          inventory,
+          locale: 'zh',
+          device: nested,
+          initialRun: id,
+          scope: { kind: 'device' },
+        }),
+      ),
+    )
+    const facts = [...host.querySelectorAll('.device-facts > div')].map((row) => row.textContent)
+    expect(facts).toContain('观察回执' + receiptLabel)
+    expect(facts).toContain('投影' + projectionLabel)
+    const details = [...host.querySelectorAll('details')].find((node) =>
+      node.querySelector(':scope > summary')?.textContent?.includes('batch_id'),
+    )
+    if (status === 'found') {
+      expect(details).toBeDefined()
+      await act(async () => {
+        details!.open = true
+        details!.dispatchEvent(new Event('toggle'))
+      })
+      expect(details?.textContent).toContain('original-batch')
+    } else {
+      expect(details).toBeUndefined()
+    }
+  },
+)

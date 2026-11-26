@@ -181,6 +181,10 @@ export interface Configurations {
   readonly evaluatedAtMicros: number
   readonly configurations: readonly Configuration[]
 }
+export type RetentionProgress =
+  | { readonly state: 'unknown' }
+  | { readonly state: 'blocked'; readonly reason: string }
+  | { readonly state: 'more' | 'complete'; readonly processed: number }
 export interface Health {
   readonly batches: readonly {
     readonly batchId: string
@@ -198,7 +202,7 @@ export interface Health {
     readonly definitionVersion: number
     readonly dueAt: number
     readonly phase: number
-    readonly progress: Readonly<Record<string, unknown>> | null
+    readonly progress: RetentionProgress | null
   }[]
 }
 export type GapCursor = { readonly receivedAt: number; readonly reportId: string } | null

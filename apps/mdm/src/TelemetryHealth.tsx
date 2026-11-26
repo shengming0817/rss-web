@@ -43,7 +43,7 @@ export function TelemetryHealth({
           locale={locale}
           busy={health.busy}
           error={health.error}
-          empty={health.value?.batches.length === 0}
+          empty={health.value?.batches.length === 0 && health.value.retention.length === 0}
         />
         {health.value && (
           <>
@@ -76,13 +76,37 @@ export function TelemetryHealth({
                 <summary>{l('保留与清理状态', 'Retention and cleanup')}</summary>
                 <DataTable
                   locale={locale}
-                  rowKey={(r) => `${r.resource}/${r.definitionVersion}`}
+                  rowKey={(_, index) => String(index)}
                   dataSource={health.value.retention}
                   columns={[
                     { title: l('资源', 'Resource'), dataIndex: 'resource' },
                     { title: l('定义版本', 'Definition version'), dataIndex: 'definitionVersion' },
                     { title: l('到期（UTC）', 'Due (UTC)'), render: (_, r) => utcMicros(r.dueAt) },
-                    { title: l('阶段', 'Phase'), dataIndex: 'phase' },
+                    { title: l('当前阶段', 'Current phase'), dataIndex: 'phase' },
+                    {
+                      title: l('最近维护进度', 'Last maintenance progress'),
+                      render: (_, { progress }) => {
+                        if (!progress) return '—'
+                        switch (progress.state) {
+                          case 'unknown':
+                            return l('未知', 'Unknown')
+                          case 'blocked':
+                            return (
+                              l('受阻', 'Blocked') + ' · ' + diagnosticName(progress.reason, locale)
+                            )
+                          case 'more':
+                            return l(
+                              `待继续，已处理 ${progress.processed} 项`,
+                              `More work remaining, ${progress.processed} processed`,
+                            )
+                          case 'complete':
+                            return l(
+                              `上次维护已完成，已处理 ${progress.processed} 项`,
+                              `Last maintenance completed, ${progress.processed} processed`,
+                            )
+                        }
+                      },
+                    },
                   ]}
                 />
               </details>

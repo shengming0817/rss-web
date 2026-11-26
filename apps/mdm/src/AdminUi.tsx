@@ -16,6 +16,15 @@ export function codeOf(error: unknown): string {
     return error.code
   return ''
 }
+export function isMalformedRead(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.cause === 'wire' &&
+    'status' in error &&
+    error.status === 400 &&
+    codeOf(error) === 'malformed_request'
+  )
+}
 /** Present sanitized error facts; protocol decoding remains with the HTTP owner. */
 export function readFailure(error: unknown): 'conflict' | 'cursor' | 'result' | 'denied' | 'other' {
   if (
@@ -90,8 +99,9 @@ export function Failure({
   const l = labels(locale),
     code = codeOf(error)
   const recovery = readFailure(error)
-  const readTitle =
-    recovery === 'conflict'
+  const readTitle = isMalformedRead(error)
+    ? l('查询请求无效，请核对查询条件。', 'Invalid query request. Check the query parameters.')
+    : recovery === 'conflict'
       ? l(
           '读取期间依据发生变化，请重新读取当前数据。',
           'The read basis changed. Read the current data again.',

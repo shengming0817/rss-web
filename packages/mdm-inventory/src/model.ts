@@ -416,8 +416,13 @@ export interface CollectionRun {
     | 'revoked'
     | null
   readonly delivery: {
-    readonly projection: 'projected' | 'pending' | 'pending_receipt' | 'not_applicable'
-    readonly receipt: DeliveryReceipt | null
+    readonly projection:
+      | 'projected'
+      | 'pending'
+      | 'pending_receipt'
+      | 'unconfirmed'
+      | 'not_applicable'
+    readonly receipt: DeliveryReceipt
   }
 }
 export type SnapshotNeed =
@@ -439,16 +444,19 @@ export interface ProjectionState {
   readonly highWater: number | null
   readonly need: SnapshotNeed | null
 }
-export interface DeliveryReceipt {
-  readonly batch_id: string
-  readonly received_at: number
-  readonly decision: {
-    readonly version: 1
-    readonly before: ProjectionState
-    readonly after: ProjectionState
-    readonly outcome: 'snapshot' | 'delta' | 'stale' | { readonly needSnapshot: SnapshotNeed }
-  }
-}
+export type DeliveryReceipt =
+  | { readonly status: 'expired' | 'not_found' | 'no_batch' }
+  | {
+      readonly status: 'found'
+      readonly batch_id: string
+      readonly received_at: number
+      readonly decision: {
+        readonly version: 1
+        readonly before: ProjectionState
+        readonly after: ProjectionState
+        readonly outcome: 'snapshot' | 'delta' | 'stale' | { readonly needSnapshot: SnapshotNeed }
+      }
+    }
 export interface ListItems extends Page<Scalar> {
   readonly reference: DeviceRef
   readonly endpoint: string

@@ -13,7 +13,7 @@ import {
 } from '@rss/mdm-telemetry'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import { labels, ReadState, Failure, validateInput } from './AdminUi'
+import { labels, ReadState, readFailure, isMalformedRead, Failure, validateInput } from './AdminUi'
 import { useAdministration } from './useAdministration'
 import { useSecretVisibility } from './SecretTabs'
 import { DataTable } from './DataTable'
@@ -72,6 +72,22 @@ export function TelemetryUnavailable({
     </div>
   ) : null
 }
+function TelemetryPageState({
+  continued,
+  ...props
+}: Parameters<typeof ReadState>[0] & { continued: boolean }) {
+  const failure = readFailure(props.error)
+  return (
+    <>
+      <ReadState {...props} onRetry={isMalformedRead(props.error) ? undefined : props.onRetry} />
+      {continued && !!props.error && (failure === 'other' || failure === 'conflict') && (
+        <Button onClick={props.onRestart}>
+          {labels(props.locale)('从首页重新查询', 'Restart from first page')}
+        </Button>
+      )}
+    </>
+  )
+}
 function AggregateResults({
   runtime,
   locale,
@@ -99,13 +115,18 @@ function AggregateResults({
             ? l('仅统计已观察数据', 'Observed data only')
             : `${l('有界保持上一状态', 'Bounded hold of the last state')} · ${`${request.coverage.maxHoldMicros} µs / 1000000`} ${l('秒', 'seconds')}`}
         </span>
-        <Button onClick={read.reload}>{l('重新读取聚合', 'Read aggregation again')}</Button>
+        {!read.error && (
+          <Button onClick={read.reload}>{l('重新读取聚合', 'Read aggregation again')}</Button>
+        )}
       </Space>
-      <ReadState
+      <TelemetryPageState
+        continued={after !== null}
         locale={locale}
         busy={read.busy}
         error={read.error}
         empty={read.value?.buckets.length === 0}
+        onRetry={read.reload}
+        onRestart={() => (after === null ? read.reload() : setAfter(null))}
       />
       {read.value && (
         <>
@@ -172,11 +193,6 @@ function AggregateResults({
           </Space>
         </>
       )}
-      {!!read.error && after && (
-        <Button onClick={() => setAfter(null)}>
-          {l('从首页重新查询', 'Restart from first page')}
-        </Button>
-      )}
     </Card>
   )
 }
@@ -228,14 +244,16 @@ export function TelemetryResults({
         title={l('查询结果', 'Query results')}
         className="telemetry-results"
         extra={
-          <Button
-            onClick={() => {
-              reset()
-              read.reload()
-            }}
-          >
-            {l('重新读取数据', 'Read data again')}
-          </Button>
+          !read.error && (
+            <Button
+              onClick={() => {
+                reset()
+                read.reload()
+              }}
+            >
+              {l('重新读取数据', 'Read data again')}
+            </Button>
+          )
         }
       >
         <p className="subtitle">
@@ -249,11 +267,18 @@ export function TelemetryResults({
                 'Historical values retain their device, source and definition. Pages are shown separately, without interpolation across gaps.',
               )}
         </p>
-        <ReadState
+        <TelemetryPageState
+          continued={after !== null}
           locale={locale}
           busy={read.busy}
           error={read.error}
           empty={read.value?.rows.length === 0}
+          onRetry={read.reload}
+          onRestart={() => {
+            reset()
+            if (after === null) read.reload()
+            else setAfter(null)
+          }}
         />
         {read.value && (
           <>
@@ -510,16 +535,7 @@ export function TelemetryResults({
             )}
           </>
         )}
-        {!!read.error && after && (
-          <Button
-            onClick={() => {
-              reset()
-              setAfter(null)
-            }}
-          >
-            {l('从首页重新查询', 'Restart from first page')}
-          </Button>
-        )}
+
         <Failure locale={locale} error={error} kind="read" />
       </Card>
       {aggregate && read.value && (
