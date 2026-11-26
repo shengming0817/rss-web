@@ -50,6 +50,10 @@ export function aggregationName(value: Aggregation, locale: 'zh' | 'en'): string
   }[value]
 }
 export function diagnosticName(value: string, locale: 'zh' | 'en'): string {
+  if (value === 'Cutoff')
+    return locale === 'en'
+      ? 'Retention cutoff does not cover the cleanup range'
+      : '保留边界尚未覆盖清理范围'
   if (locale === 'en') return value
   return (
     (
@@ -57,7 +61,6 @@ export function diagnosticName(value: string, locale: 'zh' | 'en'): string {
         accepted_batches_pending: '已接收的批次等待发布',
         budget_exceeded: '超过维护预算',
         PendingWrite: '等待写入',
-        Cutoff: '等待截止时间',
         DirtySummary: '汇总待刷新',
         RestoreWindow: '处于恢复窗口',
         ReplayGuarantee: '需保留重放数据',

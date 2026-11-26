@@ -4,9 +4,10 @@ import { act, createElement as h } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { HistoryPage, HistoryQuery } from '@rss/mdm-telemetry'
+import type { HistoryPage, HistoryQuery, TelemetryPort } from '@rss/mdm-telemetry'
 import type { Runtime } from './runtime'
 import { decodeMdmError } from '@rss/api/mdm'
+import { TelemetryHealth } from './TelemetryHealth'
 import { TelemetryChart } from './TelemetryChart'
 import { TelemetryResults } from './TelemetryResults'
 import { TelemetryWorkspace } from './Telemetry'
@@ -102,6 +103,7 @@ function runtime(
   effective = async () => ({
     grants: [{ operation: 'inventory_read', scope: { kind: 'device', id: 'device-a' } }],
   }),
+  overrides: Partial<TelemetryPort> = {},
 ) {
   const admin = {
     binding: 'tenant/principal/session',
@@ -116,6 +118,7 @@ function runtime(
         retentionTruncated: false,
       }),
       gaps: async () => ({ reports: [], next: null }),
+      ...overrides,
     },
     inventory: {
       fields: async () => ({ items: [], nextCursor: null, dictionary: 'catalog' }),
@@ -296,7 +299,7 @@ it.each([
 it.each([
   [409, 'query_cursor_invalidated', '分页上下文已失效', '保留条件重新开始'],
   [409, 'query_result_unavailable', '原查询结果已不可用', '重新查询'],
-  [400, 'malformed_request', '无法读取当前数据', '从首页重新查询'],
+  [400, 'malformed_request', '查询请求无效', '从首页重新查询'],
 ] as const)(
   'restarts the original history query explicitly after %s %s',
   async (status, code, message, action) => {
@@ -318,3 +321,98 @@ it.each([
     expect(host.textContent).toContain('-12.5 degree')
   },
 )
+
+it('shows an invalid first-page request without replaying the same query', async () => {
+  const history = vi.fn().mockRejectedValue(decodeMdmError(400, { code: 'malformed_request' }))
+  await act(async () =>
+    root.render(h(TelemetryResults, { runtime: runtime(history), locale: 'zh', query })),
+  )
+  expect(host.textContent).toContain('查询请求无效，请核对查询条件')
+  expect(host.querySelector('.telemetry-results button')).toBeNull()
+  expect(history).toHaveBeenCalledTimes(1)
+})
+
+it('drops stale aggregate buckets and explicitly reopens the selected series at its first page', async () => {
+  const bucket = {
+    window: { start: '0', end: '10' },
+    value: { kind: 'number', value: { type: 'f64', value: 42 } },
+    validSamples: '1',
+    coveredMicros: '10',
+    completeness: [],
+  }
+  const result = {
+    buckets: [bucket],
+    unavailable: [],
+    refreshedThrough: '10',
+    resolutionMicros: '300000000',
+    next: 'next-buckets',
+  }
+  const aggregate = vi
+    .fn()
+    .mockResolvedValueOnce(result)
+    .mockRejectedValueOnce(decodeMdmError(409, { code: 'query_cursor_invalidated' }))
+    .mockResolvedValueOnce({ ...result, next: null })
+  const r = runtime(async () => page, undefined, { aggregate })
+  await act(async () => root.render(h(TelemetryResults, { runtime: r, locale: 'zh', query })))
+  await act(async () =>
+    host
+      .querySelector('[aria-label="精确序列与维度"]')!
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true })),
+  )
+  await act(async () => document.querySelector<HTMLElement>('.ant-select-item-option')!.click())
+  await act(async () => button('查询聚合').click())
+  const first = aggregate.mock.calls[0]![0]
+  expect(host.querySelector('.telemetry-aggregate')?.textContent).toContain('42 degree')
+  await act(async () => button('下一页聚合').click())
+  expect(host.querySelector('.telemetry-aggregate')?.textContent).not.toContain('42 degree')
+  expect(aggregate.mock.calls[1]![0]).toEqual({
+    ...first,
+    query: { ...first.query, after: 'next-buckets' },
+  })
+  await act(async () => button('保留条件重新开始').click())
+  expect(aggregate).toHaveBeenCalledTimes(3)
+  expect(aggregate).toHaveBeenLastCalledWith(first)
+  expect(host.querySelector('.telemetry-aggregate')?.textContent).toContain('42 degree')
+})
+
+it('displays retention phases, processed counts and reasons when there are no received batches', async () => {
+  const steps = [
+    null,
+    { state: 'unknown' },
+    { state: 'more', processed: 2 },
+    { state: 'complete', processed: 4 },
+    { state: 'blocked', reason: 'accepted_batches_pending' },
+    { state: 'blocked', reason: 'budget_exceeded' },
+    { state: 'blocked', reason: 'Cutoff' },
+  ] as const
+  const r = runtime(async () => page, undefined, {
+    health: async () => ({
+      batches: [],
+      retired: false,
+      batchesTruncated: false,
+      retentionTruncated: false,
+      retention: steps.map((progress, i) => ({
+        resource: 'device',
+        definitionVersion: i + 1,
+        dueAt: 10,
+        phase: 1,
+        progress,
+      })),
+    }),
+  })
+  await act(async () => root.render(h(TelemetryHealth, { runtime: r, locale: 'zh', query })))
+  const table = host.querySelector('.telemetry-health-grid details')!
+  const values = [...table.querySelectorAll('tbody tr')].map(
+    (row) => row.lastElementChild?.textContent,
+  )
+  expect(table.textContent).toContain('当前阶段')
+  expect(values).toEqual([
+    '—',
+    '未知',
+    '待继续，已处理 2 项',
+    '上次维护已完成，已处理 4 项',
+    '受阻 · 已接收的批次等待发布',
+    '受阻 · 超过维护预算',
+    '受阻 · 保留边界尚未覆盖清理范围',
+  ])
+})

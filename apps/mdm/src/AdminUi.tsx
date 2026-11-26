@@ -17,7 +17,9 @@ export function codeOf(error: unknown): string {
   return ''
 }
 /** Present sanitized error facts; protocol decoding remains with the HTTP owner. */
-export function readFailure(error: unknown): 'conflict' | 'cursor' | 'result' | 'denied' | 'other' {
+export function readFailure(
+  error: unknown,
+): 'conflict' | 'cursor' | 'result' | 'denied' | 'invalid' | 'other' {
   if (
     !(error instanceof Error) ||
     error.cause !== 'wire' ||
@@ -25,6 +27,7 @@ export function readFailure(error: unknown): 'conflict' | 'cursor' | 'result' | 
     !('code' in error)
   )
     return 'other'
+  if (error.status === 400 && error.code === 'malformed_request') return 'invalid'
   if (error.status === 401 || error.status === 403) return 'denied'
   if (error.status !== 409) return 'other'
   switch (error.code) {
@@ -91,24 +94,26 @@ export function Failure({
     code = codeOf(error)
   const recovery = readFailure(error)
   const readTitle =
-    recovery === 'conflict'
-      ? l(
-          '读取期间依据发生变化，请重新读取当前数据。',
-          'The read basis changed. Read the current data again.',
-        )
-      : recovery === 'cursor'
+    recovery === 'invalid'
+      ? l('查询请求无效，请核对查询条件。', 'Invalid query request. Check the query parameters.')
+      : recovery === 'conflict'
         ? l(
-            '分页上下文已失效，请保留条件重新开始。',
-            'The page context expired. Restart with the same query.',
+            '读取期间依据发生变化，请重新读取当前数据。',
+            'The read basis changed. Read the current data again.',
           )
-        : recovery === 'result'
+        : recovery === 'cursor'
           ? l(
-              '原查询结果已不可用，请重新查询。',
-              'The original result is unavailable. Run the query again.',
+              '分页上下文已失效，请保留条件重新开始。',
+              'The page context expired. Restart with the same query.',
             )
-          : code === 'operation_conflict'
-            ? l('读取发生冲突，请重新读取。', 'The read encountered a conflict. Read again.')
-            : null
+          : recovery === 'result'
+            ? l(
+                '原查询结果已不可用，请重新查询。',
+                'The original result is unavailable. Run the query again.',
+              )
+            : code === 'operation_conflict'
+              ? l('读取发生冲突，请重新读取。', 'The read encountered a conflict. Read again.')
+              : null
   const title =
     kind === 'read' && readTitle
       ? readTitle
