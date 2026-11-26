@@ -54,6 +54,15 @@ export function diagnosticName(value: string, locale: 'zh' | 'en'): string {
   return (
     (
       {
+        accepted_batches_pending: '已接收的批次等待发布',
+        budget_exceeded: '超过维护预算',
+        PendingWrite: '等待写入',
+        Cutoff: '等待截止时间',
+        DirtySummary: '汇总待刷新',
+        RestoreWindow: '处于恢复窗口',
+        ReplayGuarantee: '需保留重放数据',
+        StreamOpen: '数据流仍开放',
+        RetainedData: '仍有保留数据',
         Expired: '已过期',
         expired: '缓冲已过期',
         capacity: '容量不足',

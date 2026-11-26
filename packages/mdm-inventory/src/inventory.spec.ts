@@ -235,7 +235,7 @@ it('does not reinterpret partial collection quality as a successful complete sna
     startedAt: 1,
     finishedAt: 2,
     reason: 'message_budget' as const,
-    delivery: { projection: 'pending_receipt' as const, receipt: null },
+    delivery: { projection: 'pending_receipt', receipt: { status: 'not_found' } } as const,
   }
   const inventory = createInventory(port({ collection: async () => run }))
   expect(await inventory.collection('endpoint', id)).toEqual(run)

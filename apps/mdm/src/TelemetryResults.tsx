@@ -99,13 +99,17 @@ function AggregateResults({
             ? l('仅统计已观察数据', 'Observed data only')
             : `${l('有界保持上一状态', 'Bounded hold of the last state')} · ${`${request.coverage.maxHoldMicros} µs / 1000000`} ${l('秒', 'seconds')}`}
         </span>
-        <Button onClick={read.reload}>{l('重新读取聚合', 'Read aggregation again')}</Button>
+        {!read.error && (
+          <Button onClick={read.reload}>{l('重新读取聚合', 'Read aggregation again')}</Button>
+        )}
       </Space>
       <ReadState
         locale={locale}
         busy={read.busy}
         error={read.error}
         empty={read.value?.buckets.length === 0}
+        onRetry={read.reload}
+        onRestart={() => (after === null ? read.reload() : setAfter(null))}
       />
       {read.value && (
         <>
@@ -172,11 +176,6 @@ function AggregateResults({
           </Space>
         </>
       )}
-      {!!read.error && after && (
-        <Button onClick={() => setAfter(null)}>
-          {l('从首页重新查询', 'Restart from first page')}
-        </Button>
-      )}
     </Card>
   )
 }
@@ -228,14 +227,16 @@ export function TelemetryResults({
         title={l('查询结果', 'Query results')}
         className="telemetry-results"
         extra={
-          <Button
-            onClick={() => {
-              reset()
-              read.reload()
-            }}
-          >
-            {l('重新读取数据', 'Read data again')}
-          </Button>
+          !read.error && (
+            <Button
+              onClick={() => {
+                reset()
+                read.reload()
+              }}
+            >
+              {l('重新读取数据', 'Read data again')}
+            </Button>
+          )
         }
       >
         <p className="subtitle">
@@ -254,6 +255,12 @@ export function TelemetryResults({
           busy={read.busy}
           error={read.error}
           empty={read.value?.rows.length === 0}
+          onRetry={read.reload}
+          onRestart={() => {
+            reset()
+            if (after === null) read.reload()
+            else setAfter(null)
+          }}
         />
         {read.value && (
           <>
@@ -510,16 +517,7 @@ export function TelemetryResults({
             )}
           </>
         )}
-        {!!read.error && after && (
-          <Button
-            onClick={() => {
-              reset()
-              setAfter(null)
-            }}
-          >
-            {l('从首页重新查询', 'Restart from first page')}
-          </Button>
-        )}
+
         <Failure locale={locale} error={error} kind="read" />
       </Card>
       {aggregate && read.value && (

@@ -232,6 +232,19 @@ export function CollectionResults({
               <dd>{String(read.value.deliveryPending)}</dd>
             </div>
             <div>
+              <dt>{l('观察回执', 'Observation receipt')}</dt>
+              <dd>
+                {
+                  {
+                    found: l('已收到', 'Received'),
+                    expired: l('已收到，回执已过期', 'Received, receipt expired'),
+                    not_found: l('未找到回执', 'Receipt not found'),
+                    no_batch: l('无观察批次', 'No observation batch'),
+                  }[read.value.delivery.receipt.status]
+                }
+              </dd>
+            </div>
+            <div>
               <dt>{l('投影', 'Projection')}</dt>
               <dd>
                 <Status locale={locale} value={read.value.delivery.projection} />
@@ -260,7 +273,9 @@ export function CollectionResults({
                 templateVersion: read.value.templateVersion,
                 fingerprint: read.value.fingerprint,
                 coverage: read.value.coverage,
-                receipt: read.value.delivery.receipt,
+                ...(read.value.delivery.receipt.status === 'found'
+                  ? { receipt: read.value.delivery.receipt }
+                  : {}),
               }}
             />
           </details>

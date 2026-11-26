@@ -234,3 +234,31 @@ it('preserves positive u64 aggregate coordinates and signed timestamp responses'
   })
   expect(f.request).toHaveBeenCalledWith(expect.objectContaining({ body: input }))
 })
+
+it('decodes last retention progress for each target in one health response', async () => {
+  const progress = [
+    null,
+    { state: 'unknown' },
+    { state: 'more', processed: 2 },
+    { state: 'complete', processed: 0 },
+    { state: 'blocked', reason: 'Cutoff' },
+    { state: 'blocked', reason: 'accepted_batches_pending' },
+    { state: 'blocked', reason: 'budget_exceeded' },
+  ]
+  const { telemetry } = fixture({
+    qualityOrder: ['valid', 'missing', 'failed'],
+    retired: false,
+    batches: [],
+    batchesTruncated: false,
+    retentionTruncated: false,
+    retention: progress.map((step, i) => ({
+      resource: 'device',
+      definitionVersion: i + 1,
+      dueAt: 100,
+      phase: 1,
+      progress: step,
+    })),
+  })
+  const response = await telemetry.health(query.device, query.field, '0', '100')
+  expect(response.retention.map((target) => target.progress)).toEqual(progress)
+})

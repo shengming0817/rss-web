@@ -369,6 +369,14 @@ try {
     maxPoints: 2,
   })
   assert.ok(small.next, 'history continuation')
+  const continued = await api('POST', `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`, {
+    ...query,
+    maxPoints: 2,
+    after: small.next,
+  })
+  assert.ok(continued.rows.length > 0)
+  const firstIds = new Set(small.rows.map((row) => row.sample.id))
+  assert.ok(continued.rows.every((row) => !firstIds.has(row.sample.id)))
   for (const changed of [
     { device: fixture.alone },
     { field: 'custom.browser.counter' },
@@ -382,6 +390,7 @@ try {
       },
     )
     assert.equal(response.status(), 400, 'cursor rejects changed coordinates')
+    assert.equal((await response.json()).code, 'malformed_request')
   }
   const foreign = await page.request.post(
     origin + `/api/v1/tenants/${run.fixture.tenant}/telemetry/history`,
@@ -428,6 +437,28 @@ try {
       (b) => b.value && typeof b.value === 'object' && 'Number' in b.value,
     )
   assert.ok(gaugeBucket, 'a numeric gauge bucket')
+  const coordinates = aggregateResponse.request().postDataJSON()
+  const times = representativeHistory.rows.map((row) => BigInt(row.sample.observedAt))
+  const start = times.reduce((a, b) => (a < b ? a : b))
+  const window = {
+    ...coordinates.query,
+    maxPoints: 1,
+    startMicros: String(start),
+    endMicros: String(start + 20000n),
+    after: null,
+  }
+  const aggregatePath = `/api/v1/tenants/${run.fixture.tenant}/telemetry/aggregate`
+  const original = { ...coordinates, query: window, resolutionMicros: '10000' }
+  const first = await api('POST', aggregatePath, original)
+  assert.ok(first.next)
+  const second = await api('POST', aggregatePath, {
+    ...original,
+    query: { ...window, after: first.next },
+  })
+  assert.equal(first.buckets.length, 1)
+  assert.equal(second.buckets.length, 1)
+  assert.ok(BigInt(second.buckets[0].window.start) >= BigInt(first.buckets[0].window.end))
+  coverage.push('real-history-and-aggregate-continuation')
   await page
     .locator('.telemetry-aggregate')
     .getByRole('cell', { name: String(gaugeBucket.value.Number.value) + ' degree', exact: true })

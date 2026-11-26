@@ -279,7 +279,7 @@ export function health(value: unknown): Health {
         definitionVersion: positive(r['definitionVersion']),
         dueAt: count(r['dueAt']),
         phase: count(r['phase']),
-        progress: r['progress'] === null ? null : r['progress'],
+        progress: r.progress ?? null,
       }
     }),
   }

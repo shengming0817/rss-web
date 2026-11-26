@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { HistoryPage, HistoryQuery } from '@rss/mdm-telemetry'
 import type { Runtime } from './runtime'
+import { decodeMdmError } from '@rss/api/mdm'
 import { TelemetryChart } from './TelemetryChart'
 import { TelemetryResults } from './TelemetryResults'
 import { TelemetryWorkspace } from './Telemetry'
@@ -290,4 +291,26 @@ it.each([
     '25',
   ])
   expect(host.querySelector('svg')?.textContent).toContain(String(high))
+})
+
+it.each([
+  ['query_cursor_invalidated', '分页上下文已失效', '保留条件重新开始'],
+  ['query_result_unavailable', '原查询结果已不可用', '重新查询'],
+])('restarts the original history query explicitly after %s', async (code, message, action) => {
+  const history = vi
+    .fn()
+    .mockResolvedValueOnce(page)
+    .mockRejectedValueOnce(decodeMdmError(409, { code }))
+    .mockResolvedValueOnce(page)
+  await act(async () =>
+    root.render(h(TelemetryResults, { runtime: runtime(history), locale: 'zh', query })),
+  )
+  await act(async () => button('下一页观察').click())
+  expect(history.mock.calls.map(([q]) => q)).toEqual([query, { ...query, after: 'cursor' }])
+  expect(host.textContent).toContain(message)
+  expect(host.textContent).not.toContain('-12.5 degree')
+  await act(async () => button(action).click())
+  expect(history).toHaveBeenCalledTimes(3)
+  expect(history).toHaveBeenLastCalledWith(query)
+  expect(host.textContent).toContain('-12.5 degree')
 })
