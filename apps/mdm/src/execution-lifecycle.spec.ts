@@ -1606,3 +1606,46 @@ it.each([false, true])(
     )
   },
 )
+
+it('restarts malformed policy batch and member cursors independently for the original device and batch', async () => {
+  const { PolicyEvents } = await import('./PolicyEvents')
+  const id = '11111111-1111-4111-8111-111111111111'
+  const invalid = decodeMdmError(400, { code: 'malformed_request' })
+  const page = { items: [], nextCursor: null }
+  const batches = vi.fn().mockRejectedValueOnce(invalid).mockResolvedValue(page)
+  const members = vi.fn().mockRejectedValueOnce(invalid).mockResolvedValue(page)
+  const admin = {
+    binding: 'policy-cursors',
+    devices: { endpoints: async () => page },
+    policyEvents: { batches, members, batch: async () => null },
+  } as unknown as ReturnType<Runtime['administration']>
+  const r = { administration: () => admin } as Runtime
+  await act(async () =>
+    root.render(
+      h(
+        MemoryRouter,
+        {
+          initialEntries: [
+            `/policies?tab=events&eventDevice=device-a&batch=${id}&batchCursor=bad-batch&memberCursor=bad-member`,
+          ],
+        },
+        h(PolicyEvents, {
+          runtime: r,
+          events: admin.policyEvents,
+          devices: admin.devices,
+          event: null,
+          locale: 'zh',
+          canSubmit: false,
+        }),
+      ),
+    ),
+  )
+  expect(batches.mock.calls[0]![1]).toMatchObject({ cursor: 'bad-batch' })
+  expect(members.mock.calls[0]![2]).toMatchObject({ cursor: 'bad-member' })
+  await act(async () => button('返回批次首页').click())
+  expect(batches.mock.calls[1]).toEqual(['device-a', { limit: 100 }, expect.any(AbortSignal)])
+  expect(members).toHaveBeenCalledTimes(1)
+  await act(async () => button('返回成员首页').click())
+  expect(members.mock.calls[1]).toEqual(['device-a', id, { limit: 100 }, expect.any(AbortSignal)])
+  expect(batches).toHaveBeenCalledTimes(2)
+})
