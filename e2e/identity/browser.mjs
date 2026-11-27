@@ -75,6 +75,27 @@ try {
   assert.equal((await created).status(), 201)
   await page.getByText(memberLogin, { exact: true }).first().waitFor()
   await page.locator('#account-password').waitFor({ state: 'detached' })
+  await page.getByRole('button', { name: '读取详情', exact: true }).first().click()
+  await button('本地资料').click()
+  const editor = page
+    .locator('section.auth-form')
+    .filter({ has: page.locator('#local-profile-age') })
+  await editor.locator('#local-extensions').fill('{"source":"profile-browser"}')
+  for (const [label, clearing] of [
+    ['保存配置', false],
+    ['删除本地资料', true],
+  ]) {
+    const sent = page.waitForResponse(
+      (r) => r.request().method() === 'PUT' && new URL(r.url()).pathname.endsWith('/profile'),
+    )
+    await editor.getByRole('button', { name: label, exact: true }).click()
+    const response = await sent
+    assert.equal(response.status(), 200)
+    const change = response.request().postDataJSON()
+    assert.match(change.operationId, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab]/)
+    assert.equal(change.value === null, clearing)
+    assert.equal((await response.json()).operationId, change.operationId)
+  }
   step = 'provider-management'
   await page.goto(`${origin}/tenants/${tenant}/providers`)
   await button('新增身份提供方').click()

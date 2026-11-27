@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Checkbox, Input, InputNumber } from 'antd'
 import { isRssApiError } from '@rss/api/identity'
 import {
+  newProfileOperationId,
   profileExtensions,
   validateLocalProfile,
   type LocalProfile,
@@ -89,7 +90,7 @@ export function LocalProfileEditor({ principal }: { principal: string }) {
       return
     }
     const change: LocalProfileChange = {
-      operationId: crypto.randomUUID(),
+      operationId: newProfileOperationId(),
       expectedRevision: revision,
       value,
     }
@@ -140,7 +141,12 @@ export function LocalProfileEditor({ principal }: { principal: string }) {
         result = await api.localProfileOperation(principal, id)
       } catch (failure) {
         checkpoint()
-        if (isRssApiError(failure) && (failure.status === 401 || failure.status === 403)) {
+        if (
+          isRssApiError(failure) &&
+          (failure.status === 401 ||
+            failure.status === 403 ||
+            failure.code === 'profile_operation_expired')
+        ) {
           setRevision(null)
           clearDraft()
           setPending(null)

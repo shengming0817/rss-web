@@ -772,6 +772,7 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
     expect(requests(f.calls, '/profile', 'PUT')).toHaveLength(1)
     const id = (requests(f.calls, '/profile', 'PUT')[0]?.body as { operationId: string })
       .operationId
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
     expect(document.body.textContent).toContain(id)
     await click('查询原操作')
     expect(document.body.textContent).toContain('尚未找到原操作回执')
@@ -779,6 +780,7 @@ describe('Identity React journeys with the shared owner and strict HTTP decoders
     await click('已比较，重新编辑')
     await click('删除本地资料')
     expect(requests(f.calls, '/profile', 'PUT').at(-1)?.body).toMatchObject({
+      operationId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab]/),
       expectedRevision: 4,
       value: null,
     })

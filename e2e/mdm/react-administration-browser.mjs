@@ -272,7 +272,9 @@ try {
     410,
   )
   await admin
-    .getByText('此资料操作的回执已过期。请重新读取资料，确认后再开始新的修改。', { exact: true })
+    .getByText('回执已过期，原修改的结果无法确认。请重新读取资料后再决定是否修改。', {
+      exact: true,
+    })
     .waitFor()
   assert.equal(await admin.getByRole('button', { name: '显式重提原请求', exact: true }).count(), 0)
   await admin.unroute('**/accounts/*/profile', expireChange)
@@ -280,6 +282,41 @@ try {
     admin.getByRole('button', { name: '读取本地资料', exact: true }).click(),
   )
   checks.push('expired-clear-requires-current-profile')
+
+  // Simulate a lost delivery and ask the real host for a receipt past its lookup window.
+  const loseDelivery = (route) =>
+    route.request().method() === 'PUT' ? route.abort('failed') : route.fallback()
+  await admin.route('**/accounts/*/profile', loseDelivery)
+  await admin.getByRole('button', { name: '清除本地资料', exact: true }).click()
+  await admin.getByRole('button', { name: '查询原资料操作', exact: true }).waitFor()
+  await admin.unroute('**/accounts/*/profile', loseDelivery)
+  const expiredId = profileOperationId({ msecs: Date.now() - 600_000 })
+  const expiredLookup = async (route) => {
+    const url = new URL(route.request().url())
+    url.pathname = url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1) + expiredId
+    await route.continue({ url: url.href })
+  }
+  await admin.route('**/profile/operations/*', expiredLookup)
+  const lookup = admin.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' && new URL(r.url()).pathname.includes('/profile/operations/'),
+  )
+  await admin.getByRole('button', { name: '查询原资料操作', exact: true }).click()
+  assert.equal((await lookup).status(), 410)
+  await admin
+    .getByText('回执已过期，原修改的结果无法确认。请重新读取资料后再决定是否修改。', {
+      exact: true,
+    })
+    .waitFor()
+  assert.equal(
+    await admin.getByText('请求未完成，请检查输入、权限或当前状态。', { exact: true }).count(),
+    0,
+  )
+  await admin.unroute('**/profile/operations/*', expiredLookup)
+  await result(admin, 'GET', '/profile', () =>
+    admin.getByRole('button', { name: '读取本地资料', exact: true }).click(),
+  )
+  checks.push('expired-receipt-preserves-unknown-write-outcome')
 
   phase = 'local-profile-real-conflict-recovery'
   // A concurrent real write advances the revision before the original reaches the backend.

@@ -1,10 +1,25 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import {
+  newProfileOperationId,
   profileExtensions,
   validateLocalProfile,
   validateNewPassword,
   validateLogin,
 } from './administration'
+it('uses the corrected wall clock for each new profile operation', () => {
+  const now = Date.now()
+  const clock = vi.spyOn(Date, 'now')
+  try {
+    for (const time of [now + 120_000, now]) {
+      clock.mockReturnValue(time)
+      const id = newProfileOperationId()
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+      expect(Number.parseInt(id.slice(0, 13).replace('-', ''), 16)).toBe(time)
+    }
+  } finally {
+    clock.mockRestore()
+  }
+})
 it('preserves unknown extension keys, including prototype-like names, without prototype mutation', () => {
   const input = JSON.parse(
     '{"__proto__":{"futureKey":0},"vendor":{"enabled":false,"empty":"","optional":null},"constructor":"business"}',

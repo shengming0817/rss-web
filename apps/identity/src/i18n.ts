@@ -130,6 +130,7 @@ const zh = {
     revision_conflict: '资料版本已变化，请重新读取后编辑。',
     operation_conflict: '操作 ID 与原始输入不一致，请查询原操作。',
     invalid_request: '资料输入无效，请检查格式和范围。',
+    profile_operation_expired: '回执已过期，原修改的结果无法确认。请重新读取资料后再决定是否修改。',
     profile_receipt_missing: '尚未找到原操作回执，请稍后再次查询。',
     profile_receipt_capacity_reached:
       '资料操作回执已达部署容量，请联系管理员调整额度。原操作仍可查询。',
@@ -290,6 +291,8 @@ const en = {
     operation_conflict:
       'This operation ID belongs to different input. Look up the original operation.',
     invalid_request: 'Invalid profile input. Check the format and limits.',
+    profile_operation_expired:
+      'The receipt has expired and the original outcome is unknown. Read the current profile before deciding whether to change it.',
     profile_receipt_missing: 'The original receipt is not available yet. Query it again later.',
     profile_receipt_capacity_reached:
       'Profile operation receipt capacity reached. Contact an administrator to adjust the quota. Existing operations remain queryable.',

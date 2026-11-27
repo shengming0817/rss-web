@@ -54,7 +54,7 @@ export function LocalProfile({
         )}
       />
       <ReadState busy={read.busy} error={read.error} locale={locale} />
-      <Failure error={action.error} locale={locale} />
+      {writeOutcome !== 'expired' && <Failure error={action.error} locale={locale} />}
       {invalid && (
         <Alert
           type="error"
@@ -70,8 +70,8 @@ export function LocalProfile({
           type="warning"
           role="alert"
           title={l(
-            '此资料操作的回执已过期。请重新读取资料，确认后再开始新的修改。',
-            'The receipt for this change has expired. Read the current profile before starting another change.',
+            '回执已过期，原修改的结果无法确认。请重新读取资料后再决定是否修改。',
+            'The receipt has expired and the original outcome is unknown. Read the current profile before deciding whether to change it.',
           )}
         />
       )}

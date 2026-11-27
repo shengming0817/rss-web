@@ -1,4 +1,8 @@
-export { v7 as newProfileOperationId } from 'uuid'
+import { v7 } from 'uuid'
+
+export function newProfileOperationId(): string {
+  return v7({ msecs: Date.now() })
+}
 
 /** Identity account management is independent from MDM resource authorization. */
 export interface Account {

@@ -13,7 +13,7 @@ catalog:
   # —— 运行时核心 ——
   '@noble/hashes': 2.4.0
   axios: ^1.7.9
-  uuid: 13.0.0
+  uuid: 13.0.2
   # —— 构建 / 类型工具 ——
   vite: ^6.0.7
   typescript: ^5.7.3
