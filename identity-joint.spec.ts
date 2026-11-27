@@ -10,9 +10,19 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { rootCertificates } from 'node:tls'
+import { X509Certificate } from 'node:crypto'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { executeBounded } from './e2e/identity/process.mjs'
+function currentTrustAnchor(): string {
+  const now = Date.now()
+  const pem = rootCertificates.find((candidate) => {
+    const certificate = new X509Certificate(candidate)
+    return Date.parse(certificate.validFrom) <= now && now < Date.parse(certificate.validTo)
+  })
+  if (!pem) throw new Error('No current trust anchor in the Node CA bundle')
+  return pem
+}
 const directories: string[] = []
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
@@ -152,7 +162,7 @@ it('forwards interruption to the owned transport child before publishing failure
       "'../../process.mjs'",
     ),
   )
-  writeFileSync(resolve(root, 'ca.pem'), rootCertificates[0]!)
+  writeFileSync(resolve(root, 'ca.pem'), currentTrustAnchor())
   const result = spawnSync(process.execPath, [resolve(root, 'e2e/identity/real.mjs')], {
     encoding: 'utf8',
     timeout: 10000,
@@ -222,7 +232,7 @@ export async function executeBounded() {
     )
     writeFileSync(
       resolve(root, 'ca.pem'),
-      mode === 'invalid-ca' ? 'not a certificate' : rootCertificates[0]!,
+      mode === 'invalid-ca' ? 'not a certificate' : currentTrustAnchor(),
     )
     const result = spawnSync(process.execPath, [resolve(root, 'e2e/identity/real.mjs')], {
       encoding: 'utf8',
@@ -286,7 +296,7 @@ it('private title', ({ task }) => {
   catch (error) { task.meta.failure = 'assertion'; throw error }
 })`,
     )
-    writeFileSync(resolve(root, 'ca.pem'), rootCertificates[0]!)
+    writeFileSync(resolve(root, 'ca.pem'), currentTrustAnchor())
     if (mode === 'passed') {
       expect(
         spawnSync(

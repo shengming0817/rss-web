@@ -1,8 +1,10 @@
 """Owned disposable PG + fixed Keycloak + production MDM HTTPS profile journey."""
+import ipaddress
 import json
 import os
 from pathlib import Path
 import signal
+import socket
 import ssl
 import subprocess
 import sys
@@ -65,7 +67,12 @@ try:
     initialized=environment.initialize()
     origin=initialized['origin'];config_path=Path(initialized['configuration'])
     binary=Path(os.environ['CARGO_TARGET_DIR'])/'debug/rss-mdm'
-    host=providers.private_host()
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
+        route.connect(('192.0.2.1', 9))
+        host = route.getsockname()[0]
+    if not any(ipaddress.ip_address(host) in ipaddress.ip_network(cidr)
+               for cidr in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')):
+        raise RuntimeError('private issuer needs an RFC1918 address on the fixture host')
     with providers.keycloak(redirect_uri=origin+'/api/v1/identity/oidc/callback',host=host) as idp:
         issuer=idp['IDENTITY_TEST_FEDERATED_ISSUER'];ca=Path(idp['IDENTITY_TEST_FEDERATED_CA'])
         config=json.loads(config_path.read_text())
