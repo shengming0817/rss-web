@@ -668,8 +668,11 @@ try {
   }
   await history('unavailable')
   await run.nav(p, diagnosticLocation, '操作排障')
-  const originalSection = p.locator('.ant-card').filter({ hasText: '原操作结果' })
-  await originalSection.getByText(report.id, { exact: true }).waitFor()
+  const originalSection = p.locator('.ant-card').filter({
+    has: p.getByText('原操作结果', { exact: true }),
+  })
+  const originalOperation = originalSection.getByRole('row').filter({ hasText: '操作编号' })
+  await originalOperation.getByText(report.id, { exact: true }).waitFor()
   const executionSection = p.locator('.ant-card').filter({
     has: p.getByText('执行证据', { exact: true }),
   })
