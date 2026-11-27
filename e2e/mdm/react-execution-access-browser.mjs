@@ -670,7 +670,10 @@ try {
   await run.nav(p, diagnosticLocation, '操作排障')
   const originalSection = p.locator('.ant-card').filter({ hasText: '原操作结果' })
   await originalSection.getByText(report.id, { exact: true }).waitFor()
-  await p.getByText('当前无法读取此证据。', { exact: true }).waitFor()
+  const executionSection = p.locator('.ant-card').filter({
+    has: p.getByText('执行证据', { exact: true }),
+  })
+  await executionSection.getByText('当前无法读取此证据。', { exact: true }).waitFor()
   const unavailable = await managementReport()
   assert.deepEqual(unavailable.originalResult, recorded.originalResult)
   assert.equal(unavailable.executionEvidence.availability, 'unavailable')
