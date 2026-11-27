@@ -301,7 +301,8 @@ try:
     if browser_module == 'react-execution-access-browser.mjs':
         # Exercise the real configured Windows channel alongside the bounded synthetic device facts.
         windows = windows_inputs(native)
-        windows['enrollment']['origin'] = f"https://localhost:{environment.host_ports()['backend']}"
+        backend_port = urlsplit('https://' + config['listen']).port
+        windows['enrollment']['origin'] = f"https://localhost:{backend_port}"
         windows['management']['origin'] = initialized['origin']
         private(native/'windows.json', windows)
         providers.enter_context(pki(native, dict(os.environ), case=str(WEB)+':execution-browser', windows=True))
