@@ -345,6 +345,32 @@ try {
   } while (Date.now() < publicationDeadline)
   assert.equal(published.outcome, 'published')
   assert.equal(published.resource, resource)
+  const versionPage = await run.page(p.context())
+  try {
+    await run.nav(
+      versionPage,
+      '/software?' + new URLSearchParams({ resource, version: 'resource-v1' }),
+      '软件目录',
+    )
+    const admission = versionPage
+      .locator('.ant-card')
+      .filter({
+        has: versionPage.getByText('软件版本准入', { exact: true }),
+      })
+      .last()
+    await admission.getByText('enabled', { exact: true }).waitFor()
+    const publication = versionPage
+      .locator('.ant-card')
+      .filter({
+        has: versionPage.getByText('软件发布状态', { exact: true }),
+      })
+      .last()
+    const target = publication.getByRole('row').filter({ hasText: f.target })
+    await target.getByText('published', { exact: true }).waitFor()
+    checks.push('exact-software-version-shows-enabled-admission-and-published-target')
+  } finally {
+    await versionPage.close()
+  }
   await button('请求撤回此源发布').click()
   await button('结束此操作并重新编辑或读取').click()
   const withdrawalDeadline = Date.now() + 60000
@@ -517,6 +543,150 @@ try {
   )
   checks.push(
     'direct-without-native-target-publication-independent-admission-and-withdrawal-revokes-download',
+  )
+
+  run.step('fixed-artifact-mirror-and-original-content-receipt')
+  const mirrorId = 'react-mirror-' + randomUUID()
+  const missingId = 'react-missing-' + randomUUID()
+  const importsPath = `/api/v1/tenants/${f.tenant}/software/imports`
+  const importRequest = importLoss.calls[0]
+  for (const [id, packageVersion] of [
+    [mirrorId, '1.2'],
+    [missingId, '1.3'],
+  ]) {
+    const { behavior } = importRequest.input
+    await api('POST', importsPath, {
+      ...importRequest,
+      operationId: randomUUID(),
+      input: {
+        ...importRequest.input,
+        resource: id,
+        packageVersion,
+        behavior: { ...behavior, detect: { ...behavior.detect, version: packageVersion } },
+      },
+    })
+  }
+  const mirrorDetails = async (id) => {
+    const version = (await api('GET', resourcePath(id))).versions[0]
+    const { definition } = version.variants[0].declaration
+    const artifact = definition.artifacts[definition.material.installer]
+    await run.nav(
+      p,
+      '/software?' + new URLSearchParams({ resource: id, version: version.id }),
+      '软件目录',
+    )
+    await run.choose(p, label('交付材料引用'), `${artifact.reference} · 3`)
+    await button('镜像到内容仓').waitFor()
+    return artifact
+  }
+  const mirror = resourcePath(mirrorId) + '/content/mirror'
+  const selected = await mirrorDetails(mirrorId)
+  let posted
+  await intercept('**' + mirror + '?*', async (route) => {
+    assert.equal(route.request().method(), 'POST')
+    posted = new URL(route.request().url()).searchParams
+    const response = await route.fetch()
+    assert.equal(response.status(), 201)
+    await route.abort('failed')
+  })
+  await button('镜像到内容仓').click()
+  await p.getByText('镜像入库尚未确认。请查询原回执。', { exact: true }).waitFor()
+  assert.ok(posted?.get('operation'))
+  assert.deepEqual(Object.fromEntries(posted), {
+    version: 'resource-v1',
+    variant: 'main',
+    platform: 'windows',
+    architecture: 'x86_64',
+    artifact: selected.reference,
+    operation: posted.get('operation'),
+  })
+  assert.equal(await button('镜像到内容仓').isDisabled(), true)
+  await p.unroute('**' + mirror + '?*')
+  const mirrorReceipt = resourcePath(mirrorId) + '/content/operations/' + posted.get('operation')
+  const confirmed = await run.response(p, 'GET', mirrorReceipt, () =>
+    button('查询原镜像回执').click(),
+  )
+  assert.deepEqual(await confirmed.json(), {
+    operationId: posted.get('operation'),
+    resource: mirrorId,
+    version: 'resource-v1',
+    reference: selected.reference,
+    length: 3,
+    sha256: sha,
+    committed: true,
+  })
+  await p.getByText('产物入库已确认', { exact: true }).waitFor()
+  const admissionFacts = p
+    .locator('.ant-card')
+    .filter({ has: p.getByText('软件版本准入', { exact: true }) })
+    .last()
+  const publicationFacts = p
+    .locator('.ant-card')
+    .filter({ has: p.getByText('软件发布状态', { exact: true }) })
+    .last()
+  await admissionFacts.getByText('尚未准入', { exact: true }).waitFor()
+  await publicationFacts.getByText('此版本没有发布记录。', { exact: true }).waitFor()
+  assert.equal(run.count(p, 'POST', mirror), 1)
+  assert.equal(await button('准备新的材料交付').isEnabled(), true)
+
+  await mirrorDetails(missingId)
+  const unavailable = await run.response(
+    p,
+    'POST',
+    resourcePath(missingId) + '/content/mirror',
+    () => button('镜像到内容仓').click(),
+    503,
+  )
+  await p.getByText('镜像入库尚未确认。请查询原回执。', { exact: true }).waitFor()
+  assert.equal(await button('镜像到内容仓').isDisabled(), true)
+  assert.equal(await p.getByText('产物入库已确认', { exact: true }).count(), 0)
+  const unavailableOperation = new URL(unavailable.url()).searchParams.get('operation')
+  await run.response(
+    p,
+    'GET',
+    resourcePath(missingId) + '/content/operations/' + unavailableOperation,
+    () => button('查询原镜像回执').click(),
+    404,
+  )
+  await button('转用手工上传').click()
+  await label('选择原材料文件').waitFor()
+  await p.getByText(unavailableOperation, { exact: true }).waitFor()
+  assert.equal(await button('关闭资源详情').isDisabled(), true)
+  await button('稍后查询并解锁资源选择').click()
+  await p.getByText(unavailableOperation, { exact: true }).waitFor()
+  assert.equal(await button('镜像到内容仓').isDisabled(), true)
+  await button('关闭资源详情').click()
+  assert.equal(run.count(p, 'POST', resourcePath(missingId) + '/content/mirror'), 1)
+
+  const wrong = new URLSearchParams(posted)
+  wrong.set('operation', randomUUID())
+  wrong.set('artifact', 'absent-material')
+  await api('POST', mirror + '?' + wrong, undefined, 400)
+  const accessRules = `/api/v1/tenants/${f.tenant}/authorization/rules`
+  const currentRule = (await api('GET', accessRules)).items.find((row) => row.id === f.ruleId)
+  const restricted = await api('PUT', accessRules + '/' + f.ruleId, {
+    operationId: randomUUID(),
+    expectedRevision: currentRule.revision,
+    value: {
+      ...f.rule,
+      grants: f.rule.grants.filter((grant) => grant.operation !== 'resource_write'),
+    },
+  })
+  try {
+    await mirrorDetails(mirrorId)
+    assert.equal(await button('镜像到内容仓').isDisabled(), true)
+    const denied = new URLSearchParams(posted)
+    denied.set('operation', randomUUID())
+    await api('POST', mirror + '?' + denied, undefined, 403)
+  } finally {
+    await api('PUT', accessRules + '/' + f.ruleId, {
+      operationId: randomUUID(),
+      expectedRevision: restricted.revision,
+      value: f.rule,
+    })
+  }
+  checks.push(
+    'fixed-mirror-committed-response-loss-original-receipt-source-condition-and-permission',
   )
 
   run.step('resource-script-authoring-content-and-original-source')

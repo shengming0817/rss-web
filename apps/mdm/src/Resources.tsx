@@ -1,7 +1,7 @@
 import { useDirectoryQuery } from './directory-location'
 import { DiagnosticReference } from './DiagnosticReference'
 import { useSearchParams } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button, Card, Form, Input, Select, Space, Tag } from 'antd'
 import {
   resourceKinds,
@@ -108,6 +108,7 @@ export function ResourceDirectory({
   locator,
   canReadSoftware,
   catalog,
+  versionFacts,
 }: {
   resources: ResourcesUseCases
   content: ContentUseCases
@@ -122,6 +123,7 @@ export function ResourceDirectory({
     | undefined
   fixedKind?: ResourceKind
   catalog?: CatalogLocation | undefined
+  versionFacts?: ((resource: string, version: string) => ReactNode) | undefined
   canReadSoftware: boolean
 }) {
   const l = labels(locale),
@@ -326,6 +328,7 @@ export function ResourceDirectory({
               (selected.id === locator?.resource ? locator.variant : undefined)
             }
             catalog={catalog}
+            versionFacts={versionFacts}
             resources={resources}
             content={content}
             canReadSoftware={canReadSoftware}

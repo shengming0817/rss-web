@@ -80,6 +80,11 @@ function receipt(value: ReceiptSummary): ReceiptSummary {
 
 function execution(value: WireExecution): ExecutionEvidence {
   const { owner } = value
+  if (owner === 'inventory_report')
+    return {
+      owner,
+      inventoryReport: { observation: value.observation, projection: value.projection },
+    }
   if (owner === 'native') {
     const { commandStatus, observation, dispatchFailure } = value.detail
     return {
@@ -138,10 +143,10 @@ function execution(value: WireExecution): ExecutionEvidence {
     ...(owner === 'collection' && value.report
       ? {
           collectionReport: {
+            id: uuid(value.report.id),
             result: value.report.result,
             reason: value.report.reason,
             sealedAt: value.report.sealedAt,
-            projectionPending: value.report.projectionPending,
           },
         }
       : {}),

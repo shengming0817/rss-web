@@ -1,3 +1,4 @@
+import type { Grant } from '@rss/mdm-authorization'
 import { useState } from 'react'
 import { Alert, Button, Checkbox, Form, Input, InputNumber, Space } from 'antd'
 import { useSearchParams } from 'react-router-dom'
@@ -45,6 +46,7 @@ export function PolicyEditor({
   canRerun,
   canInventory = false,
   canOperations = false,
+  grants = [],
   done,
   doneLabel,
 }: {
@@ -62,6 +64,7 @@ export function PolicyEditor({
   canRerun: boolean
   canInventory?: boolean
   canOperations?: boolean
+  grants?: readonly Grant[]
   done(): void
   doneLabel?: string | undefined
 }) {
@@ -466,6 +469,7 @@ export function PolicyEditor({
                               devices={devices}
                               policy={base}
                               locale={locale}
+                              grants={grants}
                             />
                           ),
                         },

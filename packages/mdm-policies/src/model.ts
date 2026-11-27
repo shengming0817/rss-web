@@ -353,7 +353,6 @@ export interface PolicyRun {
     readonly result: string
     readonly reason: string | null
     readonly sealedAt: number | null
-    readonly projectionPending: boolean
   } | null
   readonly taskId: string
   readonly device: string

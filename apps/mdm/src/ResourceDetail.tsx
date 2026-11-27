@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { CatalogLocation } from './directory-location'
 import { Alert, Button, Card, Select, Space, Tag } from 'antd'
@@ -26,6 +26,7 @@ export function ResourceDetail({
   blocked,
   canReadSoftware,
   catalog,
+  versionFacts,
 }: {
   initialVersion?: string | undefined
   initialVariant?: string | undefined
@@ -37,6 +38,7 @@ export function ResourceDetail({
   blocked: boolean
   canReadSoftware: boolean
   catalog?: CatalogLocation | undefined
+  versionFacts?: ((resource: string, version: string) => ReactNode) | undefined
 }) {
   const l = labels(locale),
     command = useResourceCommand(resources),
@@ -212,6 +214,7 @@ export function ResourceDetail({
                   canWrite={canWrite}
                   blocked={blocked}
                   canDownload={selected.declaration.kind === 'script' || canReadSoftware}
+                  canMirror={version.state !== 'archived'}
                 />
               </>
             )}
@@ -222,6 +225,7 @@ export function ResourceDetail({
                 'Resource version state does not confirm content commit, software admission, source publication or installation on devices.',
               )}
             />
+            {versionFacts?.(resource.id, version.id)}
             <ResourceBlockers
               key={`${resource.id}/${version.id}`}
               resources={resources}

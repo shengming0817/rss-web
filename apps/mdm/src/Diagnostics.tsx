@@ -272,6 +272,24 @@ function ComponentDetail({ component: c, locale }: { component: Component; local
                   label: l('确认位置 / 来源位置', 'Confirmed position / source head'),
                   children: `${c.progress.confirmedPosition ?? '—'} / ${c.progress.sourceHead ?? '—'}`,
                 },
+                ...(c.progress.expiredThrough !== null
+                  ? [
+                      {
+                        key: 'expiredThrough',
+                        label: l('历史过期至', 'History expired through'),
+                        children: c.progress.expiredThrough,
+                      },
+                    ]
+                  : []),
+                ...(c.progress.failurePosition !== null
+                  ? [
+                      {
+                        key: 'failurePosition',
+                        label: l('失败位置', 'Failure position'),
+                        children: c.progress.failurePosition,
+                      },
+                    ]
+                  : []),
                 {
                   key: 'lagging',
                   label: l('坐标落后', 'Coordinate lag'),

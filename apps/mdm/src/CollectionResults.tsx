@@ -8,6 +8,7 @@ import { DataTable } from './DataTable'
 import { ScalarValue, Status, timestamp } from './DevicePresentation'
 import { scopeName } from './InventoryScopeEditor'
 import { CollectionPlan } from './CollectionMappingEditor'
+import { collectionProjectionText, collectionReceiptText } from './collection-delivery'
 
 export function QualityRuns({
   values,
@@ -64,9 +65,6 @@ export function QualityRuns({
                 <Status locale={locale} value={row.result} />
                 <p>
                   {l('完整快照', 'Complete snapshot')} · {String(row.complete)}
-                </p>
-                <p>
-                  {l('投递待确认', 'Delivery pending')} · {String(row.deliveryPending)}
                 </p>
                 <details>
                   <summary>{l('覆盖坐标', 'Coverage coordinates')}</summary>
@@ -228,27 +226,12 @@ export function CollectionResults({
               <dd>{String(read.value.complete)}</dd>
             </div>
             <div>
-              <dt>{l('投递待确认', 'Delivery pending')}</dt>
-              <dd>{String(read.value.deliveryPending)}</dd>
-            </div>
-            <div>
               <dt>{l('观察回执', 'Observation receipt')}</dt>
-              <dd>
-                {
-                  {
-                    found: l('已收到', 'Received'),
-                    expired: l('已收到，回执已过期', 'Received, receipt expired'),
-                    not_found: l('未找到回执', 'Receipt not found'),
-                    no_batch: l('无观察批次', 'No observation batch'),
-                  }[read.value.delivery.receipt.status]
-                }
-              </dd>
+              <dd>{collectionReceiptText(locale, read.value.delivery.receipt.status)}</dd>
             </div>
             <div>
               <dt>{l('投影', 'Projection')}</dt>
-              <dd>
-                <Status locale={locale} value={read.value.delivery.projection} />
-              </dd>
+              <dd>{collectionProjectionText(locale, read.value.delivery.projection)}</dd>
             </div>
             <div>
               <dt>{l('开始 / 结束', 'Started / finished')}</dt>

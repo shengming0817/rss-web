@@ -230,7 +230,6 @@ it('does not reinterpret partial collection quality as a successful complete sna
     coverage: { id: 'coverage', version: '1', definition: 'hash', format: 'native' },
     complete: false,
     result: 'partial' as const,
-    deliveryPending: true,
     fields: [],
     startedAt: 1,
     finishedAt: 2,

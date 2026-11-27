@@ -1,3 +1,6 @@
+import type { Grant } from '@rss/mdm-authorization'
+import { DiagnosticReference } from './DiagnosticReference'
+import { devicePermission } from './DeviceSecurity'
 import { useDeviceNames } from './useDeviceNames'
 import type { DevicesUseCases } from './EndpointPicker'
 import { policyActionLabel } from './PolicyActionEditor'
@@ -253,11 +256,13 @@ export function PolicyRuns({
   devices,
   policy,
   locale,
+  grants,
 }: {
   policies: PoliciesUseCases
   devices: DevicesUseCases
   policy: Policy
   locale: Locale
+  grants: readonly Grant[]
 }) {
   const l = labels(locale),
     location = useLocation(),
@@ -347,10 +352,25 @@ export function PolicyRuns({
               { title: l('效果', 'Effect'), render: (_, row) => row.effect ?? '—' },
               {
                 title: l('采集报告', 'Collection report'),
-                render: (_, row) =>
-                  row.report
-                    ? `${row.report.result} · ${row.report.reason ?? '—'}${row.report.projectionPending ? l(' · 资产应用待完成', ' · asset projection pending') : ''}`
-                    : '—',
+                render: (_, { report, device }) =>
+                  report ? (
+                    <>
+                      {report.result} · {report.reason ?? '—'}
+                      {devicePermission(grants, device, 'inventory_read') && (
+                        <div>
+                          <DiagnosticReference
+                            locale={locale}
+                            selection={{
+                              mode: 'operation',
+                              address: { owner: 'collection', operationId: report.id, device },
+                            }}
+                          />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    '—'
+                  ),
               },
               {
                 title: l('取消', 'Cancellation'),

@@ -5,6 +5,7 @@ import type { BinaryResponse, HttpTransport } from '@rss/api/mdm'
 import {
   chunkBytes,
   type ContentPort,
+  type ResourceContentIntent,
   type DownloadChunk,
   type UploadSession,
   type ResourceUploadSession,
@@ -131,6 +132,15 @@ function downloadChunk(
   }
 }
 /** The sole content adapter uses the application's session-bound executor. */
+function contentSelection({ target }: ResourceContentIntent) {
+  return {
+    version: target.version,
+    variant: target.variant,
+    platform: target.platform,
+    architecture: target.architecture,
+    artifact: target.artifact.reference,
+  }
+}
 export function createContentAdapter(transport: HttpTransport, tenant: string): ContentPort {
   function originalResource(
     value: unknown,
@@ -142,18 +152,19 @@ export function createContentAdapter(transport: HttpTransport, tenant: string): 
     return session
   }
   return {
+    mirror: (intent, signal) =>
+      api.postApiV1TenantsByTenantResourcesByIdContentMirror(transport, {
+        pathParams: { tenant, id: intent.target.resource },
+        query: { ...contentSelection(intent), operation: intent.id },
+        timeoutMs: MDM_CONTENT_TIMEOUT_MS,
+        ...(signal ? { signal } : {}),
+      }),
     begin: (intent, signal) =>
       api.postApiV1TenantsByTenantResourcesByIdUploadsByUpload(
         transport,
         {
           pathParams: { tenant, id: intent.target.resource, upload: intent.id },
-          query: {
-            version: intent.target.version,
-            variant: intent.target.variant,
-            platform: intent.target.platform,
-            architecture: intent.target.architecture,
-            artifact: intent.target.artifact.reference,
-          },
+          query: contentSelection(intent),
           ...(signal ? { signal } : {}),
         },
         (value) => originalResource(value, intent.target.resource, intent.id),

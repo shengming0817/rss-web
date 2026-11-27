@@ -1,18 +1,19 @@
 import { useState } from 'react'
-import { Alert, Button, Card, Form, Input, Select } from 'antd'
+import { Alert, Button, Card, Form, Input, Select, Typography } from 'antd'
 import {
   declarationMaterials,
+  materialTarget,
   sameArtifact,
   type Declaration,
   type MaterialTarget,
   type PreparedResourceVersion,
   type Resource,
 } from '@rss/mdm-resources'
-import type { ResourceUploadIntent } from '@rss/mdm-content'
+import type { ContentReceipt, ResourceContentIntent, ResourceUploadIntent } from '@rss/mdm-content'
 import { ContentDownload } from './ContentDownload'
 import { ContentUpload, type ContentUseCases } from './ContentUpload'
 import { bufferedMaterial, type OwnedMaterialSource } from './MaterialSource'
-import { Failure, labels, useAction } from './AdminUi'
+import { Failure, isUnknown, labels, useAction } from './AdminUi'
 import type { ResourcesUseCases } from './ResourceCommand'
 import { usePendingSelection } from './SelectionGuard'
 import type { Locale } from './i18n'
@@ -134,6 +135,7 @@ export function ResourceMaterialUpload({
   canWrite,
   blocked,
   canDownload,
+  canMirror,
 }: {
   resources: ResourcesUseCases
   content: ContentUseCases
@@ -144,12 +146,52 @@ export function ResourceMaterialUpload({
   canWrite: boolean
   blocked: boolean
   canDownload: boolean
+  canMirror: boolean
 }) {
   const l = labels(locale),
     artifacts = declarationMaterials(variant.declaration),
     [reference, setReference] = useState(artifacts[0]?.reference ?? ''),
     [intent, setIntent] = useState<ResourceUploadIntent | null>(null),
-    [finished, setFinished] = useState(false)
+    [finished, setFinished] = useState(false),
+    action = useAction(),
+    [mirrorSelectionReleased, setMirrorSelectionReleased] = useState(false),
+    [mirror, setMirror] = useState<{
+      request: ResourceContentIntent
+      receipt: ContentReceipt | null
+      rejected: boolean
+    } | null>(null)
+  const mirrorPending = mirror !== null && !mirror.receipt && !mirror.rejected
+  usePendingSelection(action.busy || (mirrorPending && !finished && !mirrorSelectionReleased))
+  const selectedArtifact = artifacts.find((artifact) => artifact.reference === reference)
+  const mirrorable =
+    canMirror &&
+    variant.declaration.kind === 'software' &&
+    Object.values(variant.declaration.definition.artifacts).some(
+      (artifact) => artifact.reference === reference && !!artifact.origin,
+    )
+  const locked = blocked || action.busy || mirrorPending || (intent !== null && !finished)
+  function target() {
+    return materialTarget(resource, {
+      version,
+      variant: variant.key,
+      platform: variant.platform,
+      architecture: variant.architecture,
+      artifact: reference,
+    })
+  }
+  async function readMirror(request: ResourceContentIntent) {
+    const result = await action.run(() => content.receipt(request))
+    if (result.ok) setMirror({ request, receipt: result.value, rejected: false })
+  }
+  async function startMirror() {
+    if (!canWrite || !mirrorable || locked || !selectedArtifact) return
+    const request = { id: crypto.randomUUID(), target: target() }
+    setMirrorSelectionReleased(false)
+    setMirror({ request, receipt: null, rejected: false })
+    const result = await action.run(() => content.mirror(request))
+    if (result.ok) await readMirror(request)
+    else if (!isUnknown(result.error)) setMirror({ request, receipt: null, rejected: true })
+  }
   const restore = intent
     ? reconstruct(resources, content, intent.target, variant.declaration.kind)
     : undefined
@@ -158,36 +200,88 @@ export function ResourceMaterialUpload({
       <Select
         aria-label={l('交付材料引用', 'Delivery material reference')}
         className="resource-material-select"
-        disabled={blocked || (intent !== null && !finished)}
+        disabled={locked}
         value={reference || null}
         options={artifacts.map((artifact) => ({
           value: artifact.reference,
           label: `${artifact.reference} · ${artifact.length}`,
         }))}
-        onChange={setReference}
+        onChange={(value) => {
+          setReference(value)
+          setMirror(null)
+          action.clear()
+        }}
       />
       <Button
-        disabled={!canWrite || blocked || (intent !== null && !finished) || !reference}
+        disabled={
+          !canWrite ||
+          !selectedArtifact ||
+          action.busy ||
+          (intent !== null && !finished) ||
+          (blocked && !mirrorPending)
+        }
         onClick={() => {
-          const artifact = artifacts.find((artifact) => artifact.reference === reference)
-          if (!artifact) return
-          setIntent(
-            content.intent(crypto.randomUUID(), {
-              resource: resource.id,
-              version,
-              variant: variant.key,
-              platform: variant.platform,
-              architecture: variant.architecture,
-              artifact,
-            }),
-          )
+          const uploadTarget = mirrorPending ? mirror.request.target : target()
+          setIntent(content.intent(crypto.randomUUID(), uploadTarget))
           setFinished(false)
         }}
       >
-        {l('准备新的材料交付', 'Prepare a new material delivery')}
+        {mirrorPending
+          ? l('转用手工上传', 'Continue with manual upload')
+          : l('准备新的材料交付', 'Prepare a new material delivery')}
       </Button>
+      {mirrorable && (
+        <Button disabled={!canWrite || locked} onClick={() => void startMirror()}>
+          {l('镜像到内容仓', 'Mirror to content store')}
+        </Button>
+      )}
+      {mirror && (
+        <>
+          <p>
+            {l('原内容操作标识', 'Original content operation ID')}{' '}
+            <Typography.Text code copyable={{ text: mirror.request.id }}>
+              {mirror.request.id}
+            </Typography.Text>
+          </p>
+          {mirror.receipt ? (
+            <Alert
+              type="success"
+              title={l('产物入库已确认', 'Artifact commit confirmed')}
+              description={<ContentReceiptFacts locale={locale} receipt={mirror.receipt} />}
+            />
+          ) : (
+            <>
+              {!action.busy && !mirror.rejected && (
+                <p>
+                  {l(
+                    '镜像入库尚未确认。请查询原回执。',
+                    'Mirror commit is unconfirmed. Read the original receipt.',
+                  )}
+                </p>
+              )}
+              <Button disabled={action.busy} onClick={() => void readMirror(mirror.request)}>
+                {l('查询原镜像回执', 'Read original mirror receipt')}
+              </Button>
+              {mirrorPending && !mirrorSelectionReleased && (
+                <Button disabled={action.busy} onClick={() => setMirrorSelectionReleased(true)}>
+                  {l('稍后查询并解锁资源选择', 'Unlock resource selection and look up later')}
+                </Button>
+              )}
+              {mirrorPending && mirrorSelectionReleased && (
+                <p>
+                  {l(
+                    '离开前可复制原编号，在资源库的材料恢复中继续查询。',
+                    'Copy the original ID before leaving to continue in Material recovery.',
+                  )}
+                </p>
+              )}
+            </>
+          )}
+          <Failure locale={locale} error={action.error} kind={mirror.rejected ? 'write' : 'read'} />
+        </>
+      )}
       {(variant.declaration.kind === 'script' || variant.declaration.kind === 'software') &&
-        artifacts.find((artifact) => artifact.reference === reference) && (
+        selectedArtifact && (
           <ContentDownload
             key={reference}
             content={content}
@@ -195,14 +289,7 @@ export function ResourceMaterialUpload({
             locale={locale}
             request={{
               kind: variant.declaration.kind,
-              target: {
-                resource: resource.id,
-                version,
-                variant: variant.key,
-                platform: variant.platform,
-                architecture: variant.architecture,
-                artifact: artifacts.find((artifact) => artifact.reference === reference)!,
-              },
+              target: target(),
             }}
           />
         )}
@@ -221,6 +308,37 @@ export function ResourceMaterialUpload({
     </Card>
   )
 }
+function ContentReceiptFacts({ locale, receipt }: { locale: Locale; receipt: ContentReceipt }) {
+  const l = labels(locale)
+  const sha256 = receipt.sha256.map((byte) => byte.toString(16).padStart(2, '0')).join('')
+  return (
+    <dl className="device-facts">
+      <div>
+        <dt>{l('原内容操作标识', 'Original content operation ID')}</dt>
+        <dd>
+          <code>{receipt.operationId}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>{l('固定产物', 'Fixed artifact')}</dt>
+        <dd>
+          {receipt.resource} / {receipt.version} / {receipt.reference}
+        </dd>
+      </div>
+      <div>
+        <dt>{l('字节', 'Bytes')}</dt>
+        <dd>{receipt.length}</dd>
+      </div>
+      <div>
+        <dt>SHA-256</dt>
+        <dd>
+          <code>{sha256}</code>
+        </dd>
+      </div>
+    </dl>
+  )
+}
+
 export function ResourceContentRecovery({
   content,
   resources,
@@ -283,14 +401,22 @@ export function ResourceContentRecovery({
           <Input
             aria-label={l('恢复资源标识', 'Recovery resource ID')}
             value={resource}
-            onChange={(event) => setResource(event.target.value)}
+            onChange={(event) => {
+              setResource(event.target.value)
+              setReceipt(null)
+              action.clear()
+            }}
           />
         </Form.Item>
         <Form.Item label={l('原内容操作标识', 'Original content operation ID')}>
           <Input
             aria-label={l('原内容操作标识', 'Original content operation ID')}
             value={operation}
-            onChange={(event) => setOperation(event.target.value)}
+            onChange={(event) => {
+              setOperation(event.target.value)
+              setReceipt(null)
+              action.clear()
+            }}
           />
         </Form.Item>
         <Button
@@ -301,18 +427,19 @@ export function ResourceContentRecovery({
         </Button>
         <Button
           disabled={!resource || !operation || action.busy || original !== null}
-          onClick={() =>
+          onClick={() => {
+            setReceipt(null)
             void action
               .run(() => content.originalReceipt(resource, operation))
               .then((response) => {
                 if (response.ok) setReceipt(response.value)
               })
-          }
+          }}
         >
           {l('查询原材料提交回执', 'Read original material commit receipt')}
         </Button>
       </Form>
-      <Failure error={action.error} locale={locale} />
+      <Failure error={action.error} locale={locale} kind="read" />
       {finished && (
         <Button
           onClick={() => {
@@ -327,7 +454,8 @@ export function ResourceContentRecovery({
       {receipt && (
         <Alert
           type="success"
-          title={`${l('原材料提交已确认', 'Original material commit confirmed')}: ${receipt.resource} / ${receipt.version} / ${receipt.reference}`}
+          title={l('原材料提交已确认', 'Original material commit confirmed')}
+          description={<ContentReceiptFacts locale={locale} receipt={receipt} />}
         />
       )}
       {original &&

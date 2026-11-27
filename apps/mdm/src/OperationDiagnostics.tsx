@@ -19,6 +19,8 @@ import { codeOf, CursorControls, Failure, Heading, labels, ReadState, usePageRea
 import { AuditFactView } from './AuditFacts'
 import { useAuditFactFilter } from './AuditFactFilter'
 import { DiagnosticReference } from './DiagnosticReference'
+import { devicePermission } from './DeviceSecurity'
+import { collectionProjectionText, collectionReceiptText } from './collection-delivery'
 import {
   diagnosticsPath,
   readDiagnosticSelection,
@@ -175,8 +177,27 @@ function Receipt({ result, locale }: { result: ReceiptSummary; locale: Locale })
   )
 }
 
-function Execution({ value, locale }: { value: ExecutionEvidence; locale: Locale }) {
+function Execution({
+  value,
+  locale,
+  reportDevice,
+}: {
+  value: ExecutionEvidence
+  locale: Locale
+  reportDevice: string | undefined
+}) {
   const l = labels(locale)
+  if (value.inventoryReport)
+    return (
+      <Descriptions column={1} size="small">
+        <Descriptions.Item label={l('观察回执', 'Observation receipt')}>
+          {collectionReceiptText(locale, value.inventoryReport.observation)}
+        </Descriptions.Item>
+        <Descriptions.Item label={l('投影', 'Projection')}>
+          {collectionProjectionText(locale, value.inventoryReport.projection)}
+        </Descriptions.Item>
+      </Descriptions>
+    )
   return (
     <Descriptions column={1} size="small">
       <Descriptions.Item label={l('执行来源', 'Execution source')}>{value.owner}</Descriptions.Item>
@@ -229,11 +250,21 @@ function Execution({ value, locale }: { value: ExecutionEvidence; locale: Locale
               ? l('尚未封存', 'Unsealed')
               : timestamp(locale, value.collectionReport.sealedAt)}
           </Descriptions.Item>
-          <Descriptions.Item label={l('Inventory 投影', 'Inventory projection')}>
-            {value.collectionReport.projectionPending
-              ? l('待处理', 'Pending')
-              : l('无待处理标记', 'No pending marker')}
-          </Descriptions.Item>
+          {reportDevice && (
+            <Descriptions.Item label={l('采集报告', 'Collection report')}>
+              <DiagnosticReference
+                locale={locale}
+                selection={{
+                  mode: 'operation',
+                  address: {
+                    owner: 'collection',
+                    operationId: value.collectionReport.id,
+                    device: reportDevice,
+                  },
+                }}
+              />
+            </Descriptions.Item>
+          )}
         </>
       )}
       {value.stages?.map((stage, i) => (
@@ -277,6 +308,7 @@ function Results({
   tenant,
   context,
   locale,
+  canReadReport,
 }: {
   selection: DiagnosticSelection
   client: Diagnostics
@@ -284,6 +316,7 @@ function Results({
   tenant: string
   context: DiagnosticsContext
   locale: Locale
+  canReadReport: (device: string) => boolean
 }) {
   const l = labels(locale)
   const [includeAudit, setIncludeAudit] = useState(false)
@@ -382,7 +415,17 @@ function Results({
             value={detail.executionEvidence}
             locale={locale}
           >
-            {(evidence) => <Execution locale={locale} value={evidence} />}
+            {(evidence) => (
+              <Execution
+                locale={locale}
+                value={evidence}
+                reportDevice={
+                  detail.operation.device && canReadReport(detail.operation.device)
+                    ? detail.operation.device
+                    : undefined
+                }
+              />
+            )}
           </Section>
         </>
       )}
@@ -541,7 +584,7 @@ export function OperationDiagnostics({ runtime, locale }: { runtime: Runtime; lo
   const l = labels(locale)
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const { operationDiagnostics, binding } = useAdministration(runtime)
+  const { operationDiagnostics, authorization, binding } = useAdministration(runtime)
   const context = runtime.management ? 'management' : params.get('context') === 'da' ? 'da' : 'mdm'
   const client = operationDiagnostics[context]
   let selection: DiagnosticSelection | null = null
@@ -551,6 +594,14 @@ export function OperationDiagnostics({ runtime, locale }: { runtime: Runtime; lo
   } catch {
     invalid = true
   }
+  const needsReportPermission =
+    context === 'mdm' &&
+    selection?.mode === 'operation' &&
+    selection.address.owner === 'collection_execution'
+  const permissions = usePageRead(
+    `${binding}/diagnostic-report-grants/${needsReportPermission}`,
+    () => (needsReportPermission ? authorization.effective() : Promise.resolve(null)),
+  )
   const key = `${binding}/${context}/${params.toString()}`
   return (
     <>
@@ -587,6 +638,11 @@ export function OperationDiagnostics({ runtime, locale }: { runtime: Runtime; lo
           selection={selection}
           binding={binding}
           tenant={runtime.tenant}
+          canReadReport={(device) =>
+            !permissions.busy &&
+            !permissions.error &&
+            devicePermission(permissions.value?.grants ?? [], device, 'inventory_read')
+          }
           context={context}
           locale={locale}
         />

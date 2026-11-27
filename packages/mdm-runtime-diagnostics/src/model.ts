@@ -32,6 +32,7 @@ export type ProgressState =
   | 'running'
   | 'caught_up'
   | 'limited'
+  | 'history_expired'
   | 'failed'
   | 'unavailable'
 export interface Queue {
@@ -43,6 +44,8 @@ export interface Progress {
   readonly state: ProgressState
   readonly confirmedPosition: number | null
   readonly sourceHead: number | null
+  readonly expiredThrough: number | null
+  readonly failurePosition: number | null
   readonly lagging: boolean | null
   readonly invocationAgeMs: number | null
   readonly completedPassAgeMs: number | null
