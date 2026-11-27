@@ -1718,9 +1718,9 @@ it('applies one delayed field description to both reordered sibling rules', asyn
 it.each([
   ['found', 'projected', '已收到', '已投影'],
   ['expired', 'projected', '已收到，回执已过期', '已投影'],
-  ['expired', 'unconfirmed', '已收到，回执已过期', '尚未确认'],
-  ['not_found', 'pending_receipt', '未找到回执', '等待回执'],
-  ['no_batch', 'not_applicable', '无观察批次', '不适用'],
+  ['expired', 'unconfirmed', '已收到，回执已过期', '投影尚未确认'],
+  ['not_found', 'pending_receipt', '未找到回执', '等待接收回执'],
+  ['no_batch', 'not_applicable', '无观察批次', '无需投影'],
 ])(
   'reads and presents the collection receipt %s independently of projection %s',
   async (status, projection, receiptLabel, projectionLabel) => {
@@ -1756,7 +1756,6 @@ it.each([
       startedAt: 1,
       finishedAt: 2,
       reason: 'complete',
-      deliveryPending: false,
       coverage: { id: 'coverage', version: '1', definition: 'hash', format: 'native' },
       delivery: { receipt, projection },
     }

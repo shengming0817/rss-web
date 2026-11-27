@@ -4,19 +4,22 @@ import type { Trust, TrustChange } from '@rss/mdm-task-trust'
 import { freeze } from '@rss/mdm-inventory'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import { Failure, isUnknown, labels, ReadState, useAction, usePageRead } from './AdminUi'
+import { Failure, Heading, isUnknown, labels, ReadState, useAction, usePageRead } from './AdminUi'
 import { DataTable } from './DataTable'
 import { Status, timestamp } from './DevicePresentation'
 import { useAdministration } from './useAdministration'
-import { usePendingSelection } from './SelectionGuard'
+import { devicePermission } from './DeviceSecurity'
 export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
   const l = labels(locale),
     { taskTrust, authorization, binding } = useAdministration(runtime),
     permissions = usePageRead(`${binding}/task-trust-permissions`, authorization.effective),
     has = (operation: string) =>
-      permissions.value?.grants.some(
+      !permissions.busy &&
+      !permissions.error &&
+      (permissions.value?.grants.some(
         (g) => g.operation === operation && g.scope.kind === 'tenant',
-      ) ?? false,
+      ) ??
+        false),
     canRead = has('registration_configuration_read'),
     canWrite = has('registration_configuration_write'),
     read = usePageRead(`${binding}/task-trust/${canRead}`, () =>
@@ -29,13 +32,14 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
     [receipt, setReceipt] = useState<Trust | null>(null),
     [draft, setDraft] = useState(''),
     [device, setDevice] = useState(''),
-    observation = usePageRead(`${binding}/task-trust-observation/${device}`, () =>
-      device ? taskTrust.trustObservation(device) : Promise.resolve(null),
+    grants = permissions.value?.grants ?? [],
+    canObserve = canRead && !!device && devicePermission(grants, device, 'inventory_read'),
+    observation = usePageRead(`${binding}/task-trust-observation/${device}/${canObserve}`, () =>
+      canObserve ? taskTrust.trustObservation(device) : Promise.resolve(null),
     )
   useEffect(() => setApproved(false), [canWrite, read.value?.revision])
-  usePendingSelection(action.busy || outcome === 'unknown')
   async function change(input: TrustChange) {
-    if (!approved || !canWrite || pending) return
+    if (!approved || !canRead || !canWrite || pending || action.busy) return
     const original = freeze({ id: crypto.randomUUID(), input })
     setPending(original)
     setApproved(false)
@@ -55,7 +59,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
     }
   }
   return (
-    <Card title={l('任务签名信任', 'Task signing trust')}>
+    <Card title={<h1>{l('任务签名信任', 'Task signing trust')}</h1>}>
       <Space wrap>
         <Button
           onClick={() => {
@@ -81,7 +85,16 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
         busy={permissions.busy || read.busy}
         error={permissions.error ?? read.error}
       />
-      {read.value && (
+      {!permissions.busy && !permissions.error && !canRead && (
+        <Alert
+          type="info"
+          title={l(
+            '当前权限无法读取任务签名信任。',
+            'Current permissions restrict task signing trust.',
+          )}
+        />
+      )}
+      {canRead && read.value && (
         <>
           <p>
             {l('服务 / 租户 / 版本', 'Service / tenant / revision')}: {read.value.serviceId} /{' '}
@@ -164,7 +177,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
         </>
       )}
       <Failure locale={locale} error={action.error} />
-      {pending && (
+      {pending && canRead && (
         <>
           <p>
             {l('原操作', 'Original operation')}: {pending.id} · {outcome}
@@ -179,24 +192,31 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
           {l('原回执版本', 'Original receipt revision')}: {receipt.revision}
         </p>
       )}
-      <Form
-        layout="inline"
-        className="admin-toolbar"
-        onFinish={() => {
-          if (device === draft) observation.reload()
-          else setDevice(draft)
-        }}
-      >
-        <Form.Item label={l('设备 ID', 'Device ID')}>
-          <Input
-            aria-label={l('信任观察设备 ID', 'Trust observation device ID')}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-        </Form.Item>
-        <Button htmlType="submit">{l('读取设备信任观察', 'Read device trust observation')}</Button>
-      </Form>
-      {device && (
+      {canRead && (
+        <Form
+          layout="inline"
+          className="admin-toolbar"
+          onFinish={() => {
+            if (device === draft) observation.reload()
+            else setDevice(draft)
+          }}
+        >
+          <Form.Item label={l('设备 ID', 'Device ID')}>
+            <Input
+              aria-label={l('信任观察设备 ID', 'Trust observation device ID')}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+          </Form.Item>
+          <Button
+            htmlType="submit"
+            disabled={!draft || !devicePermission(grants, draft, 'inventory_read')}
+          >
+            {l('读取设备信任观察', 'Read device trust observation')}
+          </Button>
+        </Form>
+      )}
+      {canObserve && (
         <>
           <ReadState
             locale={locale}

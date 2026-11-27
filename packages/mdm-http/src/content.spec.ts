@@ -71,6 +71,45 @@ function binary(overrides: Partial<BinaryResponse> = {}): BinaryResponse {
     ...overrides,
   }
 }
+it('mirrors the frozen material once and reads its original receipt separately', async () => {
+  const { id: operation, target } = intent()
+  const receipt = {
+    operationId: operation,
+    resource: target.resource,
+    version: target.version,
+    reference: target.artifact.reference,
+    length: target.artifact.length,
+    sha256: target.artifact.sha256,
+    committed: true,
+  }
+  const f = fixture((options) => {
+    if (options.method === 'POST') throw { status: 503, code: 'service_unavailable' }
+    return receipt
+  })
+  const original = { id: operation, target }
+  await expect(f.content.mirror(original)).rejects.toMatchObject({ status: 503 })
+  expect(f.request.mock.calls[0]?.[0]).toMatchObject({
+    method: 'POST',
+    path: '/api/v1/tenants/{tenant}/resources/{id}/content/mirror',
+    pathParams: { tenant: id, id: target.resource },
+    query: {
+      version: target.version,
+      variant: target.variant,
+      platform: target.platform,
+      architecture: target.architecture,
+      artifact: target.artifact.reference,
+      operation,
+    },
+  })
+  expect(f.request.mock.calls[0]?.[0].body).toBeUndefined()
+  await expect(f.content.receipt(original)).resolves.toEqual(receipt)
+  expect(f.request.mock.calls[1]?.[0]).toMatchObject({
+    method: 'GET',
+    pathParams: { tenant: id, id: target.resource, operation },
+  })
+  expect(f.request).toHaveBeenCalledTimes(2)
+})
+
 it('starts an exact artifact reference without inventing a JSON body and sends only the observed offset on PATCH', async () => {
   const f = fixture((options) => session(options.method === 'PATCH' ? 3 : 0)),
     original = intent(),

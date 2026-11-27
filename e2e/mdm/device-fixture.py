@@ -206,12 +206,23 @@ try:
         class SourceHandler(BaseHTTPRequestHandler):
             def log_message(self, *_args): pass
             def do_GET(self):
+                if self.path == '/artifact.msi':
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/octet-stream')
+                    self.send_header('Content-Length', str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
                 if self.path == '/rest/information':
                     data = dict(Data=dict(SourceIdentifier='browser-rest', ServerSupportedVersions=['1.0.0']))
-                elif self.path == '/rest/packageManifests/Acme.App?Version=1.2':
+                elif self.path in {'/rest/packageManifests/Acme.App?Version=1.2',
+                                   '/rest/packageManifests/Acme.App?Version=1.3'}:
                     data = json.loads((BACKEND/'crates/winget-source/tests/fixtures/msi.json').read_text())
-                    installer = data['Data']['Versions'][0]['Installers'][0]
-                    installer['InstallerUrl'] = upstream+'/artifact.msi'
+                    version = self.path.rsplit('=', 1)[1]
+                    record = data['Data']['Versions'][0]
+                    record['PackageVersion'] = version
+                    installer = record['Installers'][0]
+                    installer['InstallerUrl'] = upstream+('/artifact.msi' if version == '1.2' else '/unavailable.msi')
                     installer['InstallerSha256'] = hashlib.sha256(payload).hexdigest()
                 else:
                     self.send_error(404); return
@@ -407,6 +418,20 @@ try:
     if browser_module == 'react-assets-browser.mjs':
         foreign_grant = str(uuid.uuid4())
         environment.sql(installation_sql()+f"SET rss.tenant_id='{TENANTS[1]}'; INSERT INTO mdm_access.certificate_grants(tenant_id,id,operation_id,source,actor,instance,device,platform,secret_digest,request_digest,state,expires_at) VALUES('{TENANTS[1]}','{foreign_grant}','{foreign_grant}','download','fixture','{INSTANCE}','316fdd38-45b8-529e-b278-8baccd6aa0e2','windows',repeat('0',64),repeat('1',64),'consumed',clock_timestamp()+interval '1 hour'); INSERT INTO mdm_access.devices(tenant_id,id,channel,certificate_grant_id,state,purpose,epoch) VALUES('{TENANTS[1]}','316fdd38-45b8-529e-b278-8baccd6aa0e2','agent','{foreign_grant}','active','primary',gen_random_uuid())", 'mdm_dev')
+    trust_reader = None
+    if browser_module == 'react-execution-access-browser.mjs':
+        login = 'fixture-task-trust-reader'
+        password = secrets.token_urlsafe(32)
+        status, reader = operator.call('POST', f'/api/v1/identity/tenants/{TENANTS[0]}/accounts',
+            dict(login=login, password=password))
+        if status != 201: raise RuntimeError('trust-reader-create')
+        reader_rule = dict(subject=dict(kind='user', user=dict(instanceId=INSTANCE,
+            tenantId=TENANTS[0], principalId=reader['principalId'])),
+            grants=[dict(operation='registration_configuration_read', scope=dict(kind='tenant'))])
+        status, _ = operator.call('PUT', operator.business_path(f'/authorization/rules/{uuid.uuid4()}'),
+            dict(operationId=str(uuid.uuid4()), expectedRevision=0, value=reader_rule))
+        if status != 200: raise RuntimeError('trust-reader-grant')
+        trust_reader = dict(login=login, passwordFile=str(private(environment.root/'trust-reader-password', password)))
     agent_fixture = None
     if uses_collector:
         phase = 'collector-registration'
@@ -419,7 +444,7 @@ try:
     if browser_module == 'react-recovery-browser.mjs':
         phase = 'recovery-prerequisites'
         recovery_fixture.prepare(operator, recovery, environment, private)
-    fixture=private(environment.root/'browser.json',dict(executionAccess=execution_access,recovery=recovery,otherTenant=TENANTS[1], foreignDevice='316fdd38-45b8-529e-b278-8baccd6aa0e2' if browser_module == 'react-assets-browser.mjs' else None, personB=person_b, console=console, backendRevision=backend_revision, devices=['d452e3d0-e318-53fa-84f0-10447d70893a','ce1bacfb-5e6f-54bf-875e-a40f1f598569'], target='internal', upstream=upstream if browser_module == 'react-software-browser.mjs' else None, collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8',agent='d452e3d0-e318-53fa-84f0-10447d70893a',alone='ce1bacfb-5e6f-54bf-875e-a40f1f598569',ruleId=rule_id,rule=rule))
+    fixture=private(environment.root/'browser.json',dict(executionAccess=execution_access,trustReader=trust_reader,recovery=recovery,otherTenant=TENANTS[1], foreignDevice='316fdd38-45b8-529e-b278-8baccd6aa0e2' if browser_module == 'react-assets-browser.mjs' else None, personB=person_b, console=console, backendRevision=backend_revision, devices=['d452e3d0-e318-53fa-84f0-10447d70893a','ce1bacfb-5e6f-54bf-875e-a40f1f598569'], target='internal', upstream=upstream if browser_module == 'react-software-browser.mjs' else None, collector=agent_fixture,origin=initialized['origin'],tenant=TENANTS[0],instance=INSTANCE,principal=ADMIN,login='admin',passwordFile=str(environment.root/'account-password'),mdm='4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8',agent='d452e3d0-e318-53fa-84f0-10447d70893a',alone='ce1bacfb-5e6f-54bf-875e-a40f1f598569',ruleId=rule_id,rule=rule))
     phase='browser'
     browser=subprocess.run(['node',str(WEB/'e2e/mdm'/browser_module)],cwd=WEB,env={**os.environ,'MDM_DEVICE_BROWSER_FIXTURE':str(fixture)},timeout=900,pass_fds=lease_fds())
     if browser.returncode: raise RuntimeError('browser')

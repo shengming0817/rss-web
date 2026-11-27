@@ -7,6 +7,7 @@ import { SnapshotDraft, SoftwareSnapshots } from './SoftwareSnapshots'
 import { SoftwareSources } from './SoftwareSources'
 import { SoftwareImport } from './SoftwareImport'
 import { SoftwareAdmission } from './SoftwareAdmission'
+import { SoftwareVersionFacts } from './SoftwareVersionFacts'
 import { SoftwarePublications } from './SoftwarePublications'
 import { SecretPanel, SecretTabs } from './SecretTabs'
 import { useAdministration } from './useAdministration'
@@ -85,6 +86,18 @@ export function Software({ runtime, locale }: { runtime: Runtime; locale: Locale
                 canWrite={resourceWrite}
                 canReadSoftware={softwareRead}
                 fixedKind="software"
+                versionFacts={(resource, version) => (
+                  <SoftwareVersionFacts
+                    key={JSON.stringify([resource, version])}
+                    software={software}
+                    publications={publications}
+                    resource={resource}
+                    version={version}
+                    locale={locale}
+                    canReadAdmission={softwareRead}
+                    canReadPublications={releaseRead}
+                  />
+                )}
                 catalog={{
                   params,
                   setParams,

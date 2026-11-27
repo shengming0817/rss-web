@@ -130,6 +130,7 @@ try {
     .getByRole('link', { name: /^打开所属配置/ })
     .click()
   await page.getByText('任务签名信任', { exact: true }).waitFor()
+  assert.equal(new URL(page.url()).pathname, `/tenants/${run.fixture.tenant}/settings/task-trust`)
   checks.push('task-signing-owner-navigation')
   await run.nav(page, '/setup', '租户初始化')
   await page.getByRole('button', { name: '下一步', exact: true }).click()

@@ -144,7 +144,6 @@ it('preserves native collection delivery and intake without fabricating agent ex
       result: 'complete',
       reason: null,
       sealedAt: 100,
-      projectionPending: true,
     },
     run = {
       kind: 'collection',

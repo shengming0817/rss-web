@@ -1,10 +1,12 @@
 import type { MaterialTarget, SoftwareFormat, SoftwareSource } from '@rss/mdm-resources'
 
 export const chunkBytes = 4 * 1024 * 1024
-export interface ResourceUploadIntent {
-  readonly purpose: 'resource'
+export interface ResourceContentIntent {
   readonly id: string
   readonly target: MaterialTarget
+}
+export interface ResourceUploadIntent extends ResourceContentIntent {
+  readonly purpose: 'resource'
 }
 export interface ResourceUploadSession {
   readonly purpose: 'resource'
@@ -70,6 +72,7 @@ export interface DownloadSink {
   abort(): Promise<void>
 }
 export interface ContentPort {
+  mirror(intent: ResourceContentIntent, signal?: AbortSignal): Promise<void>
   begin(intent: ResourceUploadIntent, signal?: AbortSignal): Promise<ResourceUploadSession>
   read(resource: string, upload: string, signal?: AbortSignal): Promise<UploadSession>
   append(

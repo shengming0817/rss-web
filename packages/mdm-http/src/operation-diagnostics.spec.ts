@@ -158,7 +158,6 @@ it('preserves a sealed partial native collection report separately from delivery
             result: 'partial',
             reason: 'incomplete',
             sealedAt: 5,
-            projectionPending: true,
           },
         },
       },
@@ -187,10 +186,10 @@ it('preserves a sealed partial native collection report separately from delivery
       owner: 'collection',
       delivery: 'sent',
       collectionReport: {
+        id,
         result: 'partial',
         reason: 'incomplete',
         sealedAt: 5,
-        projectionPending: true,
       },
     },
   })

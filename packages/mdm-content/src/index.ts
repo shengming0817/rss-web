@@ -15,6 +15,7 @@ import {
   chunkBytes,
   type ContentPort,
   type ContentReceipt,
+  type ResourceContentIntent,
   type DownloadRequest,
   type DownloadSink,
   type MaterialSource,
@@ -91,7 +92,7 @@ function observed(
 
   return freeze(value)
 }
-function receipt(intent: ResourceUploadIntent, value: ContentReceipt): ContentReceipt {
+function receipt(intent: ResourceContentIntent, value: ContentReceipt): ContentReceipt {
   if (
     value.operationId !== intent.id ||
     value.resource !== intent.target.resource ||
@@ -188,6 +189,12 @@ async function downloadToSink(
 /** Every write is explicit. An unacknowledged chunk requires a new observed frontier. */
 export function createContent(port: ContentPort) {
   return Object.freeze({
+    mirror(original: ResourceContentIntent, signal?: AbortSignal) {
+      uuid(original.id)
+      target(original.target)
+      current(signal)
+      return port.mirror(freeze(original), signal)
+    },
     intent(id: string, selection: MaterialTarget): ResourceUploadIntent {
       const value: ResourceUploadIntent = {
         purpose: 'resource',
@@ -285,8 +292,9 @@ export function createContent(port: ContentPort) {
       current(signal)
       await port.complete(freeze(value), signal)
     },
-    async receipt(value: ResourceUploadIntent) {
-      intent(value)
+    async receipt(value: ResourceContentIntent) {
+      uuid(value.id)
+      target(value.target)
       const original = freeze(value)
       return receipt(original, await port.receipt(original.target.resource, original.id))
     },

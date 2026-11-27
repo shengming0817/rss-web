@@ -549,6 +549,7 @@ it('cancels a restoring script at the content owner when permission is lost, era
         canWrite,
         blocked: false,
         canDownload: false,
+        canMirror: false,
       })
   await render(panel(true))
   await click('Prepare a new material delivery')

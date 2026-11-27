@@ -19,10 +19,17 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
       (g) => g.operation === operation && g.scope.kind === 'tenant',
     ) ??
       false)
+  const canReadTrust = !runtime.management && has('registration_configuration_read')
+  function destinationFor(id: string) {
+    const destination = setupDestination(id)
+    if (destination === '/settings/task-trust' && !canReadTrust) return null
+    if (destination === '/downloads/agent' && runtime.management) return null
+    return destination
+  }
   const links = new Map<string, string>()
   for (const domain of catalog.value?.domains ?? []) {
-    const destination = setupDestination(domain.id)
-    if (destination && (!runtime.management || destination !== '/downloads/agent')) {
+    const destination = destinationFor(domain.id)
+    if (destination && destination !== '/settings/task-trust') {
       const path =
         runtime.management && !destination.startsWith('/platform/')
           ? `${prefix}${destination}`
@@ -58,6 +65,9 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
         {!runtime.management && (
           <Link to="/diagnostics">{l('运行诊断', 'Runtime diagnostics')}</Link>
         )}
+        {canReadTrust && (
+          <Link to="/settings/task-trust">{l('任务签名信任', 'Task signing trust')}</Link>
+        )}
         <Link to={`${prefix}/security`}>{l('安全与重认证', 'Security and reauthentication')}</Link>
       </Space>
       <ReadState locale={locale} busy={catalog.busy} error={catalog.error} />
@@ -65,68 +75,72 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
       {catalog.value && (
         <>
           <div className="group-grid">
-            {catalog.value.items.map((item) => (
-              <section className="panel" key={item.id}>
-                <div className="panel-head">
-                  <h2>{setupName(locale, item.id)}</h2>
-                  <SetupStatus locale={locale} value={item.status} />
-                </div>
-                <div className="panel-body">
-                  <Descriptions
-                    column={1}
-                    size="small"
-                    items={[
-                      {
-                        key: 'scope',
-                        label: l('范围', 'Scope'),
-                        children: setupName(locale, item.scope),
-                      },
-                      { key: 'owner', label: l('所属模块', 'Owner'), children: item.owner },
-                      {
-                        key: 'custody',
-                        label: l('托管方', 'Custody'),
-                        children: setupName(locale, item.custody),
-                      },
-                      {
-                        key: 'lifecycle',
-                        label: l('生命周期', 'Lifecycle'),
-                        children: setupName(locale, item.lifecycle),
-                      },
-                      {
-                        key: 'revision',
-                        label: l('登记 / 期望 / 应用版本', 'Recorded / desired / applied revision'),
-                        children: `${item.revision ?? '—'} / ${item.desiredRevision ?? '—'} / ${item.appliedRevision ?? '—'}`,
-                      },
-                      {
-                        key: 'count',
-                        label: l('已配置数量', 'Configured count'),
-                        children: item.configuredCount ?? '—',
-                      },
-                    ]}
-                  />
-                  {item.reason && <p className="subtitle">{setupName(locale, item.reason)}</p>}
-                  {item.scope !== 'deployment' &&
-                    setupDestination(item.id) &&
-                    (!runtime.management || setupDestination(item.id) !== '/downloads/agent') && (
+            {catalog.value.items.map((item) => {
+              const destination = destinationFor(item.id)
+              return (
+                <section className="panel" key={item.id}>
+                  <div className="panel-head">
+                    <h2>{setupName(locale, item.id)}</h2>
+                    <SetupStatus locale={locale} value={item.status} />
+                  </div>
+                  <div className="panel-body">
+                    <Descriptions
+                      column={1}
+                      size="small"
+                      items={[
+                        {
+                          key: 'scope',
+                          label: l('范围', 'Scope'),
+                          children: setupName(locale, item.scope),
+                        },
+                        { key: 'owner', label: l('所属模块', 'Owner'), children: item.owner },
+                        {
+                          key: 'custody',
+                          label: l('托管方', 'Custody'),
+                          children: setupName(locale, item.custody),
+                        },
+                        {
+                          key: 'lifecycle',
+                          label: l('生命周期', 'Lifecycle'),
+                          children: setupName(locale, item.lifecycle),
+                        },
+                        {
+                          key: 'revision',
+                          label: l(
+                            '登记 / 期望 / 应用版本',
+                            'Recorded / desired / applied revision',
+                          ),
+                          children: `${item.revision ?? '—'} / ${item.desiredRevision ?? '—'} / ${item.appliedRevision ?? '—'}`,
+                        },
+                        {
+                          key: 'count',
+                          label: l('已配置数量', 'Configured count'),
+                          children: item.configuredCount ?? '—',
+                        },
+                      ]}
+                    />
+                    {item.reason && <p className="subtitle">{setupName(locale, item.reason)}</p>}
+                    {item.scope !== 'deployment' && destination && (
                       <Link
-                        reloadDocument={setupDestination(item.id) === '/downloads/agent'}
+                        reloadDocument={destination === '/downloads/agent'}
                         to={
-                          runtime.management && !setupDestination(item.id)!.startsWith('/platform/')
-                            ? `/platform${setupDestination(item.id)!}`
-                            : setupDestination(item.id)!
+                          runtime.management && !destination.startsWith('/platform/')
+                            ? `/platform${destination}`
+                            : destination
                         }
                       >
                         {l('打开配置', 'Open configuration')} →
                       </Link>
                     )}
-                  {item.scope === 'deployment' && (
-                    <p className="subtitle">
-                      {l('由部署运维维护。', 'Managed by the deployment operator.')}
-                    </p>
-                  )}
-                </div>
-              </section>
-            ))}
+                    {item.scope === 'deployment' && (
+                      <p className="subtitle">
+                        {l('由部署运维维护。', 'Managed by the deployment operator.')}
+                      </p>
+                    )}
+                  </div>
+                </section>
+              )
+            })}
           </div>
           {!catalog.value.items.length && (
             <Alert

@@ -343,7 +343,6 @@ export interface QualityRun {
   readonly coverage: Coverage
   readonly complete: boolean
   readonly result: 'pending' | 'snapshot' | 'partial' | 'failed'
-  readonly deliveryPending: boolean
   readonly fields: readonly QualityField[]
 }
 export interface InventoryView {
@@ -403,7 +402,6 @@ export interface CollectionRun {
   readonly coverage: Coverage
   readonly complete: boolean
   readonly result: QualityRun['result']
-  readonly deliveryPending: boolean
   readonly fields: readonly QualityField[]
   readonly startedAt: number
   readonly finishedAt: number | null

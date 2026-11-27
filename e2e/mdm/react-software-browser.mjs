@@ -519,6 +519,119 @@ try {
     'direct-without-native-target-publication-independent-admission-and-withdrawal-revokes-download',
   )
 
+  run.step('fixed-artifact-mirror-and-original-content-receipt')
+  const mirrorId = 'react-mirror-' + randomUUID()
+  const missingId = 'react-missing-' + randomUUID()
+  const importsPath = `/api/v1/tenants/${f.tenant}/software/imports`
+  for (const [id, packageVersion] of [
+    [mirrorId, '1.2'],
+    [missingId, '1.3'],
+  ]) {
+    await api('POST', importsPath, {
+      ...importLoss.calls[0],
+      operationId: randomUUID(),
+      input: { ...importLoss.calls[0].input, resource: id, packageVersion },
+    })
+  }
+  const mirrorDetails = async (id) => {
+    const version = (await api('GET', resourcePath(id))).versions[0]
+    const { definition } = version.variants[0].declaration
+    const artifact = definition.artifacts[definition.material.installer]
+    await run.nav(
+      p,
+      '/software?' + new URLSearchParams({ resource: id, version: version.id }),
+      '软件目录',
+    )
+    await run.choose(p, label('交付材料引用'), `${artifact.reference} · 3`)
+    await button('镜像到内容仓').waitFor()
+    return artifact
+  }
+  const mirror = resourcePath(mirrorId) + '/content/mirror'
+  const selected = await mirrorDetails(mirrorId)
+  let posted
+  await intercept('**' + mirror + '?*', async (route) => {
+    assert.equal(route.request().method(), 'POST')
+    posted = new URL(route.request().url()).searchParams
+    const response = await route.fetch()
+    assert.equal(response.status(), 201)
+    await route.abort('failed')
+  })
+  await button('镜像到内容仓').click()
+  await p.getByText('镜像入库尚未确认。请查询原回执。', { exact: true }).waitFor()
+  assert.ok(posted?.get('operation'))
+  assert.deepEqual(Object.fromEntries(posted), {
+    version: 'resource-v1',
+    variant: 'main',
+    platform: 'windows',
+    architecture: 'x86_64',
+    artifact: selected.reference,
+    operation: posted.get('operation'),
+  })
+  assert.equal(await button('镜像到内容仓').isDisabled(), true)
+  await p.unroute('**' + mirror + '?*')
+  const mirrorReceipt = resourcePath(mirrorId) + '/content/operations/' + posted.get('operation')
+  const confirmed = await run.response(p, 'GET', mirrorReceipt, () =>
+    button('查询原镜像回执').click(),
+  )
+  assert.deepEqual(await confirmed.json(), {
+    operationId: posted.get('operation'),
+    resource: mirrorId,
+    version: 'resource-v1',
+    reference: selected.reference,
+    length: 3,
+    sha256: sha,
+    committed: true,
+  })
+  await p.getByText('产物入库已确认', { exact: true }).waitFor()
+  await p.getByText('软件版本准入', { exact: true }).waitFor()
+  await p.getByText('软件发布状态', { exact: true }).waitFor()
+  assert.equal((await api('GET', versionPath(mirrorId))).lifecycle, null)
+  assert.equal(run.count(p, 'POST', mirror), 1)
+  assert.equal(await button('准备新的材料交付').isEnabled(), true)
+
+  await mirrorDetails(missingId)
+  await run.response(
+    p,
+    'POST',
+    resourcePath(missingId) + '/content/mirror',
+    () => button('镜像到内容仓').click(),
+    503,
+  )
+  await p.getByText('镜像入库尚未确认。请查询原回执。', { exact: true }).waitFor()
+  assert.equal(await button('镜像到内容仓').isDisabled(), true)
+  assert.equal(await p.getByText('产物入库已确认', { exact: true }).count(), 0)
+
+  const wrong = new URLSearchParams(posted)
+  wrong.set('operation', randomUUID())
+  wrong.set('artifact', 'absent-material')
+  await api('POST', mirror + '?' + wrong, undefined, 400)
+  const accessRules = `/api/v1/tenants/${f.tenant}/authorization/rules`
+  const currentRule = (await api('GET', accessRules)).items.find((row) => row.id === f.ruleId)
+  const restricted = await api('PUT', accessRules + '/' + f.ruleId, {
+    operationId: randomUUID(),
+    expectedRevision: currentRule.revision,
+    value: {
+      ...f.rule,
+      grants: f.rule.grants.filter((grant) => grant.operation !== 'resource_write'),
+    },
+  })
+  try {
+    await mirrorDetails(mirrorId)
+    assert.equal(await button('镜像到内容仓').isDisabled(), true)
+    const denied = new URLSearchParams(posted)
+    denied.set('operation', randomUUID())
+    await api('POST', mirror + '?' + denied, undefined, 403)
+  } finally {
+    await api('PUT', accessRules + '/' + f.ruleId, {
+      operationId: randomUUID(),
+      expectedRevision: restricted.revision,
+      value: f.rule,
+    })
+  }
+  checks.push(
+    'fixed-mirror-committed-response-loss-original-receipt-source-condition-and-permission',
+  )
+
   run.step('resource-script-authoring-content-and-original-source')
   const scriptId = 'react-script-' + randomUUID(),
     sourceText = 'Write-Output 0\n'

@@ -1,4 +1,10 @@
-import { freeze, identifier, uuid } from '@rss/mdm-inventory'
+import {
+  freeze,
+  identifier,
+  uuid,
+  type CollectionRun,
+  type DeliveryReceipt,
+} from '@rss/mdm-inventory'
 import type { AuditFact, AuditPage, AuditQuery } from './model'
 import { validateAuditQuery } from './query'
 
@@ -69,11 +75,15 @@ export interface ExecutionEvidence {
   readonly nativeReceipts?: number
   readonly cancellation?: string
   readonly complete?: boolean
+  readonly inventoryReport?: {
+    readonly observation: DeliveryReceipt['status']
+    readonly projection: CollectionRun['delivery']['projection']
+  }
   readonly collectionReport?: {
+    readonly id: string
     readonly result: string
     readonly reason: string | null
     readonly sealedAt: number | null
-    readonly projectionPending: boolean
   }
   readonly stages?: readonly { name: string; state: string; effect?: string }[]
 }

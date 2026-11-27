@@ -1,4 +1,3 @@
-import { TaskTrust } from './TaskTrust'
 import { ControlRecoveryPanel } from './ControlRecovery'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, Space } from 'antd'
@@ -424,7 +423,6 @@ export function Executions({ runtime, locale }: { runtime: Runtime; locale: Loca
           />
         </>
       )}
-      <TaskTrust runtime={runtime} locale={locale} />
       {reference && (
         <>
           <Space>

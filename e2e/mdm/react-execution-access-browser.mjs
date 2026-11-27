@@ -610,6 +610,82 @@ try {
   await button('读取详细结果与证据').click()
   await deviceExecution.getByText('成功', { exact: true }).waitFor()
   checks.push('real-collection-mtls-report-global-directory-evidence-and-original-run')
+  run.step('historical-collection-evidence')
+  const reportRow = await until(
+    () => api('GET', `${base}/policies/${collectionPolicy}/runs?limit=100`),
+    (value) => value.items.some((row) => row.taskId === collected.task && row.report),
+  )
+  const { device: reportDevice, report } = reportRow.items.find(
+    (row) => row.taskId === collected.task,
+  )
+  const reportPath = `${base}/operation-diagnostics/operations/collection/${report.id}`
+  const reportQuery = new URLSearchParams({ device: reportDevice })
+  const managementReport = () => api('GET', `${reportPath}?${reportQuery}`)
+  const diagnosticLocation =
+    '/operation-diagnostics?' +
+    new URLSearchParams({
+      mode: 'operation',
+      owner: 'collection',
+      operationId: report.id,
+      device: reportDevice,
+    })
+  const recorded = await until(
+    managementReport,
+    (detail) => detail.executionEvidence.value?.projection === 'projected',
+  )
+  assert.equal(recorded.executionEvidence.value.observation, 'found')
+  assert.equal(recorded.originalResult.availability, 'available')
+  await run.nav(p, `/policies?policy=${collectionPolicy}&tab=records&record=runs`, '策略与部署')
+  const runRow = p.getByRole('row').filter({ hasText: collected.task })
+  await runRow.getByRole('link', { name: '查看操作排障', exact: true }).click()
+  await p.getByRole('heading', { name: '操作排障', exact: true }).waitFor()
+  assert.equal(new URL(p.url()).searchParams.get('operationId'), report.id)
+  await p.getByText('已投影', { exact: true }).waitFor()
+  async function history(state) {
+    const change = await executeBounded(
+      'python3',
+      [
+        fileURLToPath(new URL('./report-history-fixture.py', import.meta.url)),
+        process.env.MDM_DEVICE_BROWSER_FIXTURE,
+        report.id,
+        state,
+      ],
+      { timeoutMs: 70000, graceMs: 2000, stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    assert.equal(change.status, 0, 'report evidence fixture: ' + state)
+  }
+  await history('unavailable')
+  await run.nav(p, diagnosticLocation, '操作排障')
+  const originalSection = p.locator('.ant-card').filter({ hasText: '原操作结果' })
+  await originalSection.getByText(report.id, { exact: true }).waitFor()
+  await p.getByText('当前无法读取此证据。', { exact: true }).waitFor()
+  const unavailable = await managementReport()
+  assert.deepEqual(unavailable.originalResult, recorded.originalResult)
+  assert.equal(unavailable.executionEvidence.availability, 'unavailable')
+  for (const [state, receipt, projection, receiptLabel, projectionLabel] of [
+    ['expired', 'expired', 'projected', '已收到，回执已过期', '已投影'],
+    ['unconfirmed', 'expired', 'unconfirmed', '已收到，回执已过期', '投影尚未确认'],
+    ['not_found', 'not_found', 'pending_receipt', '未找到回执', '等待接收回执'],
+  ]) {
+    await history(state)
+    await run.nav(p, `/devices/endpoint/${reportDevice}?tab=inventory`, '设备详情')
+    await label('采集运行标识').fill(report.id)
+    const response = await run.response(
+      p,
+      'GET',
+      `${base}/devices/${reportDevice}/collections/${report.id}`,
+      () => button('读取采集运行').click(),
+    )
+    const { delivery } = (await response.json()).asset.run
+    assert.deepEqual([delivery.receipt.status, delivery.projection], [receipt, projection])
+    await p.getByText(receiptLabel, { exact: true }).waitFor()
+    await p.getByText(projectionLabel, { exact: true }).waitFor()
+    if (receipt === 'expired')
+      assert.equal(await p.getByText('等待接收回执', { exact: true }).count(), 0)
+  }
+  checks.push(
+    'real-inventory-report-history-independent-observation-projection-and-original-receipt',
+  )
 
   run.step('configuration-publication-assignment-native-command')
   const configurationResource = randomUUID(),
@@ -935,15 +1011,42 @@ try {
   }
 
   run.step('task-signing-trust-management-and-public-layout')
+  const trustPath = `${base}/task-signing/trust`
   await run.nav(p, '/operations', '执行与结果')
-  await button('读取信任与当前权限').click()
+  assert.equal(await p.getByText('任务签名信任', { exact: true }).count(), 0)
+  await run.nav(p, '/settings', '设置')
+  await p.getByRole('link', { name: '任务签名信任', exact: true }).click()
+  await p.getByRole('heading', { name: '任务签名信任', exact: true }).waitFor()
+  await p.reload()
+  const prepare = button('准备新的签名 Key')
+  await prepare.waitFor()
+  assert.equal(await prepare.isDisabled(), true)
   await p.getByRole('checkbox', { name: '已核对信任版本、设备分发与轮换影响', exact: true }).check()
-  await run.response(p, 'POST', `/api/v1/tenants/${run.fixture.tenant}/task-signing/trust`, () =>
-    button('准备新的签名 Key').click(),
+  let trustOperation
+  await p.route('**' + trustPath, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue()
+    trustOperation = route.request().headers()['idempotency-key']
+    const response = await route.fetch()
+    if (response.status() !== 200) return route.fulfill({ response })
+    await route.abort('failed')
+  })
+  await prepare.click()
+  await p.getByText('结果未确认。请查询原操作', { exact: false }).waitFor()
+  assert.equal(await prepare.isDisabled(), true)
+  await p.unroute('**' + trustPath)
+  await run.response(p, 'GET', `${base}/task-signing/operations/${trustOperation}`, () =>
+    button('查询原信任变更').click(),
   )
-  await button('查询原信任变更').click()
+  assert.equal(run.count(p, 'POST', trustPath), 1)
   await p.getByText('原回执版本:', { exact: false }).waitFor()
-  checks.push('real-trust-prepare-and-original-receipt-distinct-from-device-observations')
+  const reader = await run.page()
+  await run.login(reader, f.trustReader)
+  await run.nav(reader, '/settings', '设置')
+  await reader.getByRole('link', { name: '任务签名信任', exact: true }).click()
+  await reader.getByText('服务 / 租户 / 版本:', { exact: false }).waitFor()
+  assert.equal(await reader.getByRole('button', { name: '准备新的签名 Key' }).isDisabled(), true)
+  assert.equal(run.count(reader, 'POST', trustPath), 0)
+  checks.push('real-trust-settings-navigation-reload-read-only-and-original-receipt')
   const directory = await api(
     'GET',
     `/api/v1/tenants/${run.fixture.tenant}/operations?filter=${encodeURIComponent(`device=='${f.mdm}'`)}&limit=100`,

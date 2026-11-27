@@ -328,6 +328,7 @@ export function Policies({ runtime, locale }: { runtime: Runtime; locale: Locale
                 canRerun={has('policy_write')}
                 canInventory={canInventory}
                 canOperations={canOperations}
+                grants={permissions.value?.grants ?? []}
                 doneLabel={returnSource ? l('返回来源', 'Return to source') : undefined}
                 done={close}
               />

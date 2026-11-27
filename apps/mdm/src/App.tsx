@@ -1,6 +1,7 @@
 import { OperationDiagnostics } from './OperationDiagnostics'
 import { TenantSetup } from './TenantSetup'
 import { Settings } from './Settings'
+import { TaskTrust } from './TaskTrust'
 import { Diagnostics } from './Diagnostics'
 import { SetupEntry } from './SetupEntry'
 import { Telemetry } from './Telemetry'
@@ -250,6 +251,13 @@ const featureRoutes: readonly FeatureRoute[] = [
     render: (ui) => <TenantSetup {...ui} />,
   },
   { path: '/settings', label: 'settings', render: (ui) => <Settings {...ui} /> },
+  {
+    path: '/settings/task-trust',
+    label: 'taskTrust',
+    realm: 'tenant',
+    navigation: false,
+    render: (ui) => <TaskTrust {...ui} />,
+  },
   {
     path: '/diagnostics',
     label: 'diagnostics',
@@ -593,7 +601,7 @@ function Navigation({ runtime, locale, close }: Ui & { close: () => void }) {
                 : `${runtime.management ? '/platform' : ''}${route.path}`
             const active =
               location.pathname === href ||
-              ((route.path === '/devices' || route.path === '/inventory') &&
+              (['/devices', '/inventory', '/settings'].includes(route.path) &&
                 location.pathname.startsWith(`${href}/`))
             return (
               <Link
