@@ -599,7 +599,7 @@ try {
     .filter({ has: p.getByText('软件发布状态', { exact: true }) })
     .last()
   await admissionFacts.getByText('尚未准入', { exact: true }).waitFor()
-  await publicationFacts.getByText('没有数据', { exact: true }).waitFor()
+  await publicationFacts.getByText('此版本没有发布记录。', { exact: true }).waitFor()
   assert.equal(run.count(p, 'POST', mirror), 1)
   assert.equal(await button('准备新的材料交付').isEnabled(), true)
 

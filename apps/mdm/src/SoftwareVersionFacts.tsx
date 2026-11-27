@@ -111,28 +111,31 @@ export function SoftwareVersionFacts({
               busy={records.busy}
               error={records.error}
               onRetry={records.reload}
-              empty={records.value?.items.length === 0}
             />
             {records.value && !records.busy && !records.error && (
               <>
-                <DataTable
-                  locale={locale}
-                  rowKey="id"
-                  dataSource={records.value.items}
-                  columns={[
-                    { title: l('发布目标', 'Publication target'), dataIndex: 'target' },
-                    {
-                      title: l('原发布结果', 'Original publication outcome'),
-                      dataIndex: 'outcome',
-                    },
-                    {
-                      title: l('撤回结果', 'Withdrawal outcome'),
-                      render: (_, row) =>
-                        row.withdrawal ??
-                        (row.withdrawn ? l('已请求撤回', 'Withdrawal requested') : '—'),
-                    },
-                  ]}
-                />
+                {records.value.items.length === 0 ? (
+                  <p>{l('此版本没有发布记录。', 'This version has no publication records.')}</p>
+                ) : (
+                  <DataTable
+                    locale={locale}
+                    rowKey="id"
+                    dataSource={records.value.items}
+                    columns={[
+                      { title: l('发布目标', 'Publication target'), dataIndex: 'target' },
+                      {
+                        title: l('原发布结果', 'Original publication outcome'),
+                        dataIndex: 'outcome',
+                      },
+                      {
+                        title: l('撤回结果', 'Withdrawal outcome'),
+                        render: (_, row) =>
+                          row.withdrawal ??
+                          (row.withdrawn ? l('已请求撤回', 'Withdrawal requested') : '—'),
+                      },
+                    ]}
+                  />
+                )}
                 <CursorControls
                   locale={locale}
                   query={query}

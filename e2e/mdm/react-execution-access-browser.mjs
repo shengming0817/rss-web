@@ -642,6 +642,10 @@ try {
   assert.equal(new URL(p.url()).searchParams.get('operationId'), report.id)
   await p.getByText('已投影', { exact: true }).waitFor()
   async function history(state) {
+    // The isolated backend owner validates its inherited worktree and target lease.
+    const { fds } = JSON.parse(process.env._MDM_BUILD_LEASE)
+    const stdio = ['ignore', 'pipe', 'pipe']
+    for (const fd of fds) stdio[fd] = fd
     const change = await executeBounded(
       'python3',
       [
@@ -650,8 +654,20 @@ try {
         report.id,
         state,
       ],
-      { timeoutMs: 70000, graceMs: 2000, stdio: ['ignore', 'pipe', 'pipe'] },
+      { timeoutMs: 70000, graceMs: 2000, stdio },
     )
+    if (change.status !== 0) {
+      const classification = change.stderr.match(
+        /^(?:RuntimeError|ValueError|OSError|PermissionError): .*$/m,
+      )?.[0]
+      console.error(
+        JSON.stringify({
+          phase: 'report-history',
+          state,
+          classification: classification?.split(':')[0],
+        }),
+      )
+    }
     assert.equal(change.status, 0, 'report evidence fixture: ' + state)
   }
   await history('unavailable')
