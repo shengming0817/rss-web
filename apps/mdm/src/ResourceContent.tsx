@@ -154,13 +154,14 @@ export function ResourceMaterialUpload({
     [intent, setIntent] = useState<ResourceUploadIntent | null>(null),
     [finished, setFinished] = useState(false),
     action = useAction(),
+    [mirrorSelectionReleased, setMirrorSelectionReleased] = useState(false),
     [mirror, setMirror] = useState<{
       request: ResourceContentIntent
       receipt: ContentReceipt | null
       rejected: boolean
     } | null>(null)
   const mirrorPending = mirror !== null && !mirror.receipt && !mirror.rejected
-  usePendingSelection(action.busy || (mirrorPending && !finished))
+  usePendingSelection(action.busy || (mirrorPending && !finished && !mirrorSelectionReleased))
   const selectedArtifact = artifacts.find((artifact) => artifact.reference === reference)
   const mirrorable =
     canMirror &&
@@ -185,6 +186,7 @@ export function ResourceMaterialUpload({
   async function startMirror() {
     if (!canWrite || !mirrorable || locked || !selectedArtifact) return
     const request = { id: crypto.randomUUID(), target: target() }
+    setMirrorSelectionReleased(false)
     setMirror({ request, receipt: null, rejected: false })
     const result = await action.run(() => content.mirror(request))
     if (result.ok) await readMirror(request)
@@ -260,6 +262,19 @@ export function ResourceMaterialUpload({
               <Button disabled={action.busy} onClick={() => void readMirror(mirror.request)}>
                 {l('查询原镜像回执', 'Read original mirror receipt')}
               </Button>
+              {mirrorPending && !mirrorSelectionReleased && (
+                <Button disabled={action.busy} onClick={() => setMirrorSelectionReleased(true)}>
+                  {l('稍后查询并解锁资源选择', 'Unlock resource selection and look up later')}
+                </Button>
+              )}
+              {mirrorPending && mirrorSelectionReleased && (
+                <p>
+                  {l(
+                    '离开前可复制原编号，在资源库的材料恢复中继续查询。',
+                    'Copy the original ID before leaving to continue in Material recovery.',
+                  )}
+                </p>
+              )}
             </>
           )}
           <Failure locale={locale} error={action.error} kind={mirror.rejected ? 'write' : 'read'} />

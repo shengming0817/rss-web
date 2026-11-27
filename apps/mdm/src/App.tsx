@@ -1,7 +1,7 @@
 import { OperationDiagnostics } from './OperationDiagnostics'
 import { TenantSetup } from './TenantSetup'
 import { Settings } from './Settings'
-import { TaskTrust } from './TaskTrust'
+import { TaskTrust, TaskTrustSession } from './TaskTrust'
 import { Diagnostics } from './Diagnostics'
 import { SetupEntry } from './SetupEntry'
 import { Telemetry } from './Telemetry'
@@ -568,7 +568,11 @@ function Protected({ runtime, locale, children }: Ui & { children: ReactNode }) 
   return (
     <>
       {state.revalidating && <PageLoading>{checking}</PageLoading>}
-      {children}
+      <TaskTrustSession
+        key={`${runtime.tenant}/${state.identity?.principalId}/${state.session?.id}`}
+      >
+        {children}
+      </TaskTrustSession>
     </>
   )
 }

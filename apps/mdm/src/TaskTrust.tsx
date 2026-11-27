@@ -1,7 +1,14 @@
-import { useEffect, useState } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import { Alert, Button, Card, Checkbox, Form, Input, Space, Typography } from 'antd'
 import type { Trust, TrustChange } from '@rss/mdm-task-trust'
-import { freeze } from '@rss/mdm-inventory'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { Failure, isUnknown, labels, ReadState, useAction, usePageRead } from './AdminUi'
@@ -9,7 +16,23 @@ import { DataTable } from './DataTable'
 import { Status, timestamp } from './DevicePresentation'
 import { useAdministration } from './useAdministration'
 import { devicePermission } from './DeviceSecurity'
+type TrustOperation = {
+  id: string
+  status: 'submitting' | 'confirmed' | 'unknown' | 'rejected'
+}
+const TaskTrustOperation = createContext<
+  [TrustOperation | null, Dispatch<SetStateAction<TrustOperation | null>>] | null
+>(null)
+
+export function TaskTrustSession({ children }: { children: ReactNode }) {
+  const operation = useState<TrustOperation | null>(null)
+  return <TaskTrustOperation.Provider value={operation}>{children}</TaskTrustOperation.Provider>
+}
+
 export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Locale }) {
+  const operation = useContext(TaskTrustOperation)
+  if (!operation) throw new Error('Missing authenticated task trust scope')
+  const [pending, setPending] = operation
   const l = labels(locale),
     { taskTrust, authorization, binding } = useAdministration(runtime),
     permissions = usePageRead(`${binding}/task-trust-permissions`, authorization.effective),
@@ -25,10 +48,10 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
     read = usePageRead(`${binding}/task-trust/${canRead}`, () =>
       canRead ? taskTrust.trust() : Promise.resolve(null),
     ),
-    action = useAction(),
+    write = useAction(),
+    lookup = useAction(),
+    busy = write.busy || lookup.busy || pending?.status === 'submitting',
     [approved, setApproved] = useState(false),
-    [pending, setPending] = useState<{ id: string; input: TrustChange } | null>(null),
-    [outcome, setOutcome] = useState('none'),
     [receipt, setReceipt] = useState<{ id: string; trust: Trust } | null>(null),
     [knownOperation, setKnownOperation] = useState(''),
     [draft, setDraft] = useState(''),
@@ -44,25 +67,31 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
       canObserve ? taskTrust.trustObservation(device) : Promise.resolve(null),
     )
   useEffect(() => setApproved(false), [canWrite, read.value?.revision])
+  function settle(id: string, status: TrustOperation['status']) {
+    setPending((current) => (current?.id === id ? { id, status } : current))
+  }
   async function change(input: TrustChange) {
-    if (!approved || !canRead || !canWrite || pending || action.busy) return
-    const original = freeze({ id: crypto.randomUUID(), input })
-    setPending(original)
+    if (!approved || !canRead || !canWrite || pending || busy) return
+    const id = crypto.randomUUID()
+    setPending({ id, status: 'submitting' })
     setApproved(false)
-    const result = await action.run(() => taskTrust.changeTrust(original.id, original.input))
-    setOutcome(result.ok ? 'confirmed' : isUnknown(result.error) ? 'unknown' : 'rejected')
+    setReceipt(null)
+    lookup.clear()
+    const result = await write.run(() => taskTrust.changeTrust(id, input))
+    settle(id, result.ok ? 'confirmed' : isUnknown(result.error) ? 'unknown' : 'rejected')
     if (result.ok) {
-      setReceipt({ id: original.id, trust: result.value })
+      setReceipt({ id, trust: result.value })
       read.reload()
     }
   }
   async function original(id: string) {
-    if (!canRead || !id || action.busy) return
+    if (!canRead || !id || busy) return
     setReceipt(null)
-    const result = await action.run(() => taskTrust.trustOperation(id))
+    if (pending?.id === id) write.clear()
+    const result = await lookup.run(() => taskTrust.trustOperation(id))
     if (result.ok) {
       setReceipt({ id, trust: result.value })
-      if (pending?.id === id) setOutcome('confirmed')
+      settle(id, 'confirmed')
       read.reload()
     }
   }
@@ -78,11 +107,12 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
           {l('读取信任与当前权限', 'Read trust and current permissions')}
         </Button>
         <Button
-          disabled={!canRead || action.busy || outcome === 'unknown'}
+          disabled={!canRead || busy || pending?.status === 'unknown'}
           onClick={() => {
             setPending(null)
             setReceipt(null)
-            setOutcome('none')
+            write.clear()
+            lookup.clear()
           }}
         >
           {l('开始下一次信任变更', 'Start another trust change')}
@@ -125,11 +155,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
                   <Space wrap>
                     <Button
                       disabled={
-                        !canWrite ||
-                        !approved ||
-                        !!pending ||
-                        action.busy ||
-                        row.state !== 'prepared'
+                        !canWrite || !approved || !!pending || busy || row.state !== 'prepared'
                       }
                       onClick={() =>
                         void change({
@@ -143,11 +169,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
                     </Button>
                     <Button
                       disabled={
-                        !canWrite ||
-                        !approved ||
-                        !!pending ||
-                        action.busy ||
-                        row.state !== 'verify_only'
+                        !canWrite || !approved || !!pending || busy || row.state !== 'verify_only'
                       }
                       onClick={() =>
                         void change({
@@ -166,7 +188,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
           />
           <Checkbox
             checked={approved}
-            disabled={!canWrite || !!pending || action.busy}
+            disabled={!canWrite || !!pending || busy}
             onChange={(e) => setApproved(e.target.checked)}
           >
             {l(
@@ -175,7 +197,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
             )}
           </Checkbox>
           <Button
-            disabled={!canWrite || !approved || !!pending || action.busy}
+            disabled={!canWrite || !approved || !!pending || busy}
             onClick={() =>
               void change({ action: 'prepare', expectedRevision: read.value!.revision })
             }
@@ -184,7 +206,8 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
           </Button>
         </>
       )}
-      <Failure locale={locale} error={action.error} />
+      <Failure locale={locale} error={write.error} />
+      <Failure locale={locale} error={lookup.error} kind="read" />
       {pending && canRead && (
         <>
           <p>
@@ -192,17 +215,25 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
             <Typography.Text code copyable={{ text: pending.id }}>
               {pending.id}
             </Typography.Text>{' '}
-            · {outcome}
+            ·{' '}
+            {
+              {
+                submitting: l('正在提交', 'Submitting'),
+                confirmed: l('已确认', 'Confirmed'),
+                unknown: l('结果未确认', 'Outcome unconfirmed'),
+                rejected: l('已拒绝', 'Rejected'),
+              }[pending.status]
+            }
           </p>
-          {outcome === 'unknown' && (
+          {pending.status === 'unknown' && (
             <p>
               {l(
-                '离开此页前可复制编号，返回后按编号查询原回执。',
-                'Copy the ID before leaving to recover the original receipt when you return.',
+                '可复制编号，在刷新或重新登录后按编号查询原回执。',
+                'Copy the ID to recover the original receipt after a refresh or new sign-in.',
               )}
             </p>
           )}
-          <Button disabled={action.busy} onClick={() => void original(pending.id)}>
+          <Button disabled={busy} onClick={() => void original(pending.id)}>
             {l('查询原信任变更', 'Read original trust change')}
           </Button>
         </>
@@ -217,14 +248,15 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
             <Input
               aria-label={l('原信任操作编号', 'Original trust operation ID')}
               value={knownOperation}
-              disabled={action.busy}
+              disabled={busy}
               onChange={(event) => {
                 setKnownOperation(event.target.value)
                 setReceipt(null)
+                lookup.clear()
               }}
             />
           </Form.Item>
-          <Button htmlType="submit" disabled={action.busy || !knownOperation.trim()}>
+          <Button htmlType="submit" disabled={busy || !knownOperation.trim()}>
             {l('按编号查询原信任变更', 'Read original trust change by ID')}
           </Button>
         </Form>

@@ -1040,27 +1040,63 @@ try {
   await prepare.waitFor()
   assert.equal(await prepare.isDisabled(), true)
   await p.getByRole('checkbox', { name: '已核对信任版本、设备分发与轮换影响', exact: true }).check()
-  let trustOperation
+  const trustCommit = Promise.withResolvers()
+  const releaseTrustResponse = Promise.withResolvers()
   await p.route('**' + trustPath, async (route) => {
     if (route.request().method() !== 'POST') return route.continue()
-    trustOperation = route.request().headers()['idempotency-key']
-    const response = await route.fetch()
-    if (response.status() !== 200) return route.fulfill({ response })
-    await route.abort('failed')
+    try {
+      const response = await route.fetch()
+      const id = route.request().headers()['idempotency-key']
+      trustCommit.resolve({ id, status: response.status() })
+      await releaseTrustResponse.promise
+      await route.abort('failed').catch(() => {})
+    } catch {
+      trustCommit.resolve({ id: null, status: 0 })
+      await route.abort('failed').catch(() => {})
+    }
   })
   await prepare.click()
-  await p.getByText('结果未确认。请查询原操作', { exact: false }).waitFor()
-  assert.equal(await prepare.isDisabled(), true)
-  await p.getByText(trustOperation, { exact: true }).waitFor()
+  const { id: trustOperation, status: trustStatus } = await trustCommit.promise
+  try {
+    assert.equal(trustStatus, 200)
+    await p.getByText(trustOperation, { exact: true }).waitFor()
+    assert.equal(await prepare.isDisabled(), true)
+    await p.getByRole('link', { name: '设置', exact: true }).filter({ visible: true }).click()
+    await p.getByRole('heading', { name: '设置', exact: true }).waitFor()
+  } finally {
+    releaseTrustResponse.resolve()
+  }
   await p.unroute('**' + trustPath)
-  await run.nav(p, '/settings', '设置')
-  await run.nav(p, '/settings/task-trust', '任务签名信任')
-  await label('原信任操作编号').fill(trustOperation)
-  await run.response(p, 'GET', `${base}/task-signing/operations/${trustOperation}`, () =>
-    button('按编号查询原信任变更').click(),
-  )
+  await p.getByRole('link', { name: '任务签名信任', exact: true }).click()
+  await p.getByText(trustOperation, { exact: true }).waitFor()
+  assert.equal(await prepare.isDisabled(), true)
+  const originalTrustPath = `${base}/task-signing/operations/${trustOperation}`
+  await run.response(p, 'GET', originalTrustPath, () => button('查询原信任变更').click())
   assert.equal(run.count(p, 'POST', trustPath), 1)
   await p.getByText('原回执版本:', { exact: false }).waitFor()
+
+  await p.reload()
+  const missingTrust = randomUUID()
+  await label('原信任操作编号').fill(missingTrust)
+  await run.response(
+    p,
+    'GET',
+    `${base}/task-signing/operations/${missingTrust}`,
+    () => button('按编号查询原信任变更').click(),
+    404,
+  )
+  await p.getByText('无法读取当前数据，请检查查询或连接后重新读取。', { exact: true }).waitFor()
+  await label('原信任操作编号').fill(trustOperation)
+  await run.response(p, 'GET', originalTrustPath, () => button('按编号查询原信任变更').click())
+  await p.getByText('原回执版本:', { exact: false }).waitFor()
+  await p.getByRole('checkbox', { name: '已核对信任版本、设备分发与轮换影响', exact: true }).check()
+  await p.route('**' + trustPath, (route) =>
+    route.request().method() === 'POST' ? route.abort('failed') : route.continue(),
+  )
+  await prepare.click()
+  await p.getByText('结果未确认。请查询原操作', { exact: false }).waitFor()
+  assert.equal(await p.getByText('原回执版本:', { exact: false }).count(), 0)
+  await p.unroute('**' + trustPath)
   const reader = await run.page()
   await run.login(reader, f.trustReaders.config)
   await run.nav(reader, '/settings', '设置')

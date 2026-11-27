@@ -345,6 +345,32 @@ try {
   } while (Date.now() < publicationDeadline)
   assert.equal(published.outcome, 'published')
   assert.equal(published.resource, resource)
+  const versionPage = await run.page(p.context())
+  try {
+    await run.nav(
+      versionPage,
+      '/software?' + new URLSearchParams({ resource, version: 'resource-v1' }),
+      '软件目录',
+    )
+    const admission = versionPage
+      .locator('.ant-card')
+      .filter({
+        has: versionPage.getByText('软件版本准入', { exact: true }),
+      })
+      .last()
+    await admission.getByText('enabled', { exact: true }).waitFor()
+    const publication = versionPage
+      .locator('.ant-card')
+      .filter({
+        has: versionPage.getByText('软件发布状态', { exact: true }),
+      })
+      .last()
+    const target = publication.getByRole('row').filter({ hasText: f.target })
+    await target.getByText('published', { exact: true }).waitFor()
+    checks.push('exact-software-version-shows-enabled-admission-and-published-target')
+  } finally {
+    await versionPage.close()
+  }
   await button('请求撤回此源发布').click()
   await button('结束此操作并重新编辑或读取').click()
   const withdrawalDeadline = Date.now() + 60000
@@ -625,6 +651,11 @@ try {
   await button('转用手工上传').click()
   await label('选择原材料文件').waitFor()
   await p.getByText(unavailableOperation, { exact: true }).waitFor()
+  assert.equal(await button('关闭资源详情').isDisabled(), true)
+  await button('稍后查询并解锁资源选择').click()
+  await p.getByText(unavailableOperation, { exact: true }).waitFor()
+  assert.equal(await button('镜像到内容仓').isDisabled(), true)
+  await button('关闭资源详情').click()
   assert.equal(run.count(p, 'POST', resourcePath(missingId) + '/content/mirror'), 1)
 
   const wrong = new URLSearchParams(posted)
