@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Button, Card, Form, Input, Select } from 'antd'
+import { Alert, Button, Card, Form, Input, Select, Typography } from 'antd'
 import {
   declarationMaterials,
   materialTarget,
@@ -160,7 +160,7 @@ export function ResourceMaterialUpload({
       rejected: boolean
     } | null>(null)
   const mirrorPending = mirror !== null && !mirror.receipt && !mirror.rejected
-  usePendingSelection(action.busy || mirrorPending)
+  usePendingSelection(action.busy || (mirrorPending && !finished))
   const selectedArtifact = artifacts.find((artifact) => artifact.reference === reference)
   const mirrorable =
     canMirror &&
@@ -211,13 +211,22 @@ export function ResourceMaterialUpload({
         }}
       />
       <Button
-        disabled={!canWrite || locked || !selectedArtifact}
+        disabled={
+          !canWrite ||
+          !selectedArtifact ||
+          action.busy ||
+          (intent !== null && !finished) ||
+          (blocked && !mirrorPending)
+        }
         onClick={() => {
-          setIntent(content.intent(crypto.randomUUID(), target()))
+          const uploadTarget = mirrorPending ? mirror.request.target : target()
+          setIntent(content.intent(crypto.randomUUID(), uploadTarget))
           setFinished(false)
         }}
       >
-        {l('准备新的材料交付', 'Prepare a new material delivery')}
+        {mirrorPending
+          ? l('转用手工上传', 'Continue with manual upload')
+          : l('准备新的材料交付', 'Prepare a new material delivery')}
       </Button>
       {mirrorable && (
         <Button disabled={!canWrite || locked} onClick={() => void startMirror()}>
@@ -227,7 +236,10 @@ export function ResourceMaterialUpload({
       {mirror && (
         <>
           <p>
-            {l('原内容操作标识', 'Original content operation ID')} <code>{mirror.request.id}</code>
+            {l('原内容操作标识', 'Original content operation ID')}{' '}
+            <Typography.Text code copyable={{ text: mirror.request.id }}>
+              {mirror.request.id}
+            </Typography.Text>
           </p>
           {mirror.receipt ? (
             <Alert
@@ -286,6 +298,12 @@ function ContentReceiptFacts({ locale, receipt }: { locale: Locale; receipt: Con
   const sha256 = receipt.sha256.map((byte) => byte.toString(16).padStart(2, '0')).join('')
   return (
     <dl className="device-facts">
+      <div>
+        <dt>{l('原内容操作标识', 'Original content operation ID')}</dt>
+        <dd>
+          <code>{receipt.operationId}</code>
+        </dd>
+      </div>
       <div>
         <dt>{l('固定产物', 'Fixed artifact')}</dt>
         <dd>
@@ -368,14 +386,22 @@ export function ResourceContentRecovery({
           <Input
             aria-label={l('恢复资源标识', 'Recovery resource ID')}
             value={resource}
-            onChange={(event) => setResource(event.target.value)}
+            onChange={(event) => {
+              setResource(event.target.value)
+              setReceipt(null)
+              action.clear()
+            }}
           />
         </Form.Item>
         <Form.Item label={l('原内容操作标识', 'Original content operation ID')}>
           <Input
             aria-label={l('原内容操作标识', 'Original content operation ID')}
             value={operation}
-            onChange={(event) => setOperation(event.target.value)}
+            onChange={(event) => {
+              setOperation(event.target.value)
+              setReceipt(null)
+              action.clear()
+            }}
           />
         </Form.Item>
         <Button
@@ -386,18 +412,19 @@ export function ResourceContentRecovery({
         </Button>
         <Button
           disabled={!resource || !operation || action.busy || original !== null}
-          onClick={() =>
+          onClick={() => {
+            setReceipt(null)
             void action
               .run(() => content.originalReceipt(resource, operation))
               .then((response) => {
                 if (response.ok) setReceipt(response.value)
               })
-          }
+          }}
         >
           {l('查询原材料提交回执', 'Read original material commit receipt')}
         </Button>
       </Form>
-      <Failure error={action.error} locale={locale} />
+      <Failure error={action.error} locale={locale} kind="read" />
       {finished && (
         <Button
           onClick={() => {

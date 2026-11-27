@@ -523,14 +523,21 @@ try {
   const mirrorId = 'react-mirror-' + randomUUID()
   const missingId = 'react-missing-' + randomUUID()
   const importsPath = `/api/v1/tenants/${f.tenant}/software/imports`
+  const importRequest = importLoss.calls[0]
   for (const [id, packageVersion] of [
     [mirrorId, '1.2'],
     [missingId, '1.3'],
   ]) {
+    const { behavior } = importRequest.input
     await api('POST', importsPath, {
-      ...importLoss.calls[0],
+      ...importRequest,
       operationId: randomUUID(),
-      input: { ...importLoss.calls[0].input, resource: id, packageVersion },
+      input: {
+        ...importRequest.input,
+        resource: id,
+        packageVersion,
+        behavior: { ...behavior, detect: { ...behavior.detect, version: packageVersion } },
+      },
     })
   }
   const mirrorDetails = async (id) => {
@@ -583,14 +590,21 @@ try {
     committed: true,
   })
   await p.getByText('产物入库已确认', { exact: true }).waitFor()
-  await p.getByText('软件版本准入', { exact: true }).waitFor()
-  await p.getByText('软件发布状态', { exact: true }).waitFor()
-  assert.equal((await api('GET', versionPath(mirrorId))).lifecycle, null)
+  const admissionFacts = p
+    .locator('.ant-card')
+    .filter({ has: p.getByText('软件版本准入', { exact: true }) })
+    .last()
+  const publicationFacts = p
+    .locator('.ant-card')
+    .filter({ has: p.getByText('软件发布状态', { exact: true }) })
+    .last()
+  await admissionFacts.getByText('尚未准入', { exact: true }).waitFor()
+  await publicationFacts.getByText('没有数据', { exact: true }).waitFor()
   assert.equal(run.count(p, 'POST', mirror), 1)
   assert.equal(await button('准备新的材料交付').isEnabled(), true)
 
   await mirrorDetails(missingId)
-  await run.response(
+  const unavailable = await run.response(
     p,
     'POST',
     resourcePath(missingId) + '/content/mirror',
@@ -600,6 +614,18 @@ try {
   await p.getByText('镜像入库尚未确认。请查询原回执。', { exact: true }).waitFor()
   assert.equal(await button('镜像到内容仓').isDisabled(), true)
   assert.equal(await p.getByText('产物入库已确认', { exact: true }).count(), 0)
+  const unavailableOperation = new URL(unavailable.url()).searchParams.get('operation')
+  await run.response(
+    p,
+    'GET',
+    resourcePath(missingId) + '/content/operations/' + unavailableOperation,
+    () => button('查询原镜像回执').click(),
+    404,
+  )
+  await button('转用手工上传').click()
+  await label('选择原材料文件').waitFor()
+  await p.getByText(unavailableOperation, { exact: true }).waitFor()
+  assert.equal(run.count(p, 'POST', resourcePath(missingId) + '/content/mirror'), 1)
 
   const wrong = new URLSearchParams(posted)
   wrong.set('operation', randomUUID())

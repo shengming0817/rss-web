@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Card, Checkbox, Form, Input, Space } from 'antd'
+import { Alert, Button, Card, Checkbox, Form, Input, Space, Typography } from 'antd'
 import type { Trust, TrustChange } from '@rss/mdm-task-trust'
 import { freeze } from '@rss/mdm-inventory'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
-import { Failure, Heading, isUnknown, labels, ReadState, useAction, usePageRead } from './AdminUi'
+import { Failure, isUnknown, labels, ReadState, useAction, usePageRead } from './AdminUi'
 import { DataTable } from './DataTable'
 import { Status, timestamp } from './DevicePresentation'
 import { useAdministration } from './useAdministration'
@@ -29,11 +29,17 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
     [approved, setApproved] = useState(false),
     [pending, setPending] = useState<{ id: string; input: TrustChange } | null>(null),
     [outcome, setOutcome] = useState('none'),
-    [receipt, setReceipt] = useState<Trust | null>(null),
+    [receipt, setReceipt] = useState<{ id: string; trust: Trust } | null>(null),
+    [knownOperation, setKnownOperation] = useState(''),
     [draft, setDraft] = useState(''),
     [device, setDevice] = useState(''),
-    grants = permissions.value?.grants ?? [],
-    canObserve = canRead && !!device && devicePermission(grants, device, 'inventory_read'),
+    grants = permissions.busy || permissions.error ? [] : (permissions.value?.grants ?? []),
+    canObserveDevices = grants.some(
+      (grant) =>
+        grant.operation === 'inventory_read' &&
+        (grant.scope.kind === 'all_devices' || grant.scope.kind === 'device'),
+    ),
+    canObserve = !!device && devicePermission(grants, device, 'inventory_read'),
     observation = usePageRead(`${binding}/task-trust-observation/${device}/${canObserve}`, () =>
       canObserve ? taskTrust.trustObservation(device) : Promise.resolve(null),
     )
@@ -46,16 +52,18 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
     const result = await action.run(() => taskTrust.changeTrust(original.id, original.input))
     setOutcome(result.ok ? 'confirmed' : isUnknown(result.error) ? 'unknown' : 'rejected')
     if (result.ok) {
-      setReceipt(result.value)
+      setReceipt({ id: original.id, trust: result.value })
       read.reload()
     }
   }
-  async function original() {
-    if (!pending) return
-    const result = await action.run(() => taskTrust.trustOperation(pending.id))
+  async function original(id: string) {
+    if (!canRead || !id || action.busy) return
+    setReceipt(null)
+    const result = await action.run(() => taskTrust.trustOperation(id))
     if (result.ok) {
-      setReceipt(result.value)
-      setOutcome('confirmed')
+      setReceipt({ id, trust: result.value })
+      if (pending?.id === id) setOutcome('confirmed')
+      read.reload()
     }
   }
   return (
@@ -85,7 +93,7 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
         busy={permissions.busy || read.busy}
         error={permissions.error ?? read.error}
       />
-      {!permissions.busy && !permissions.error && !canRead && (
+      {!permissions.busy && !permissions.error && !canRead && !canObserveDevices && (
         <Alert
           type="info"
           title={l(
@@ -180,19 +188,54 @@ export function TaskTrust({ runtime, locale }: { runtime: Runtime; locale: Local
       {pending && canRead && (
         <>
           <p>
-            {l('原操作', 'Original operation')}: {pending.id} · {outcome}
+            {l('原操作', 'Original operation')}{' '}
+            <Typography.Text code copyable={{ text: pending.id }}>
+              {pending.id}
+            </Typography.Text>{' '}
+            · {outcome}
           </p>
-          <Button disabled={!canRead || action.busy} onClick={() => void original()}>
+          {outcome === 'unknown' && (
+            <p>
+              {l(
+                '离开此页前可复制编号，返回后按编号查询原回执。',
+                'Copy the ID before leaving to recover the original receipt when you return.',
+              )}
+            </p>
+          )}
+          <Button disabled={action.busy} onClick={() => void original(pending.id)}>
             {l('查询原信任变更', 'Read original trust change')}
           </Button>
         </>
       )}
+      {canRead && !pending && (
+        <Form
+          layout="inline"
+          className="admin-toolbar"
+          onFinish={() => void original(knownOperation.trim())}
+        >
+          <Form.Item label={l('原信任操作编号', 'Original trust operation ID')}>
+            <Input
+              aria-label={l('原信任操作编号', 'Original trust operation ID')}
+              value={knownOperation}
+              disabled={action.busy}
+              onChange={(event) => {
+                setKnownOperation(event.target.value)
+                setReceipt(null)
+              }}
+            />
+          </Form.Item>
+          <Button htmlType="submit" disabled={action.busy || !knownOperation.trim()}>
+            {l('按编号查询原信任变更', 'Read original trust change by ID')}
+          </Button>
+        </Form>
+      )}
       {receipt && canRead && (
         <p>
-          {l('原回执版本', 'Original receipt revision')}: {receipt.revision}
+          {l('原回执版本', 'Original receipt revision')}: {receipt.trust.revision} ·{' '}
+          <code>{receipt.id}</code>
         </p>
       )}
-      {canRead && (
+      {canObserveDevices && (
         <Form
           layout="inline"
           className="admin-toolbar"

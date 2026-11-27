@@ -19,7 +19,16 @@ export function Settings({ runtime, locale }: { runtime: Runtime; locale: Locale
       (g) => g.operation === operation && g.scope.kind === 'tenant',
     ) ??
       false)
-  const canReadTrust = !runtime.management && has('registration_configuration_read')
+  const canReadTrust =
+    !runtime.management &&
+    (has('registration_configuration_read') ||
+      (!permissions.busy &&
+        !permissions.error &&
+        permissions.value?.grants.some(
+          (grant) =>
+            grant.operation === 'inventory_read' &&
+            (grant.scope.kind === 'all_devices' || grant.scope.kind === 'device'),
+        )))
   function destinationFor(id: string) {
     const destination = setupDestination(id)
     if (destination === '/settings/task-trust' && !canReadTrust) return null

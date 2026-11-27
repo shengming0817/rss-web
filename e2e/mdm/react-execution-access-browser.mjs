@@ -1033,20 +1033,40 @@ try {
   await prepare.click()
   await p.getByText('结果未确认。请查询原操作', { exact: false }).waitFor()
   assert.equal(await prepare.isDisabled(), true)
+  await p.getByText(trustOperation, { exact: true }).waitFor()
   await p.unroute('**' + trustPath)
+  await run.nav(p, '/settings', '设置')
+  await run.nav(p, '/settings/task-trust', '任务签名信任')
+  await label('原信任操作编号').fill(trustOperation)
   await run.response(p, 'GET', `${base}/task-signing/operations/${trustOperation}`, () =>
-    button('查询原信任变更').click(),
+    button('按编号查询原信任变更').click(),
   )
   assert.equal(run.count(p, 'POST', trustPath), 1)
   await p.getByText('原回执版本:', { exact: false }).waitFor()
   const reader = await run.page()
-  await run.login(reader, f.trustReader)
+  await run.login(reader, f.trustReaders.config)
   await run.nav(reader, '/settings', '设置')
   await reader.getByRole('link', { name: '任务签名信任', exact: true }).click()
   await reader.getByText('服务 / 租户 / 版本:', { exact: false }).waitFor()
   assert.equal(await reader.getByRole('button', { name: '准备新的签名 Key' }).isDisabled(), true)
   assert.equal(run.count(reader, 'POST', trustPath), 0)
-  checks.push('real-trust-settings-navigation-reload-read-only-and-original-receipt')
+  const observer = await run.page()
+  await run.login(observer, f.trustReaders.device)
+  await run.nav(observer, '/settings', '设置')
+  await observer.getByRole('link', { name: '任务签名信任', exact: true }).click()
+  await observer.getByLabel('信任观察设备 ID', { exact: true }).fill(f.mdm)
+  await run.response(observer, 'GET', trustPath + `/devices/${f.mdm}/observation`, () =>
+    observer.getByRole('button', { name: '读取设备信任观察', exact: true }).click(),
+  )
+  assert.equal(run.count(observer, 'GET', trustPath), 0)
+  const denied = await run.page()
+  await run.login(denied, f.trustReaders.denied)
+  await run.nav(denied, '/settings/task-trust', '任务签名信任')
+  await denied.getByText('当前权限无法读取任务签名信任。', { exact: true }).waitFor()
+  assert.equal(run.count(denied, 'GET', trustPath), 0)
+  checks.push(
+    'real-trust-settings-read-only-device-observation-denied-and-original-receipt-after-navigation',
+  )
   const directory = await api(
     'GET',
     `/api/v1/tenants/${run.fixture.tenant}/operations?filter=${encodeURIComponent(`device=='${f.mdm}'`)}&limit=100`,
