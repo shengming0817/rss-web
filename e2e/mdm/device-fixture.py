@@ -386,7 +386,10 @@ try:
         profile_path = f'/api/v1/identity/tenants/{TENANTS[0]}/accounts/{ADMIN}/profile'
         status, profile = operator.call('GET', profile_path)
         if status != 200: raise RuntimeError('personnel-profile-read')
-        status, _ = operator.call('PUT', profile_path, dict(operationId=str(uuid.uuid4()),expectedRevision=profile['revision'],value=dict(displayName='Device Browser Person',username='person-source-alias',email=None,extensions={},maxAgeSeconds=14400)))
+        profile_operation = subprocess.check_output(
+            ['node', '--input-type=module', '-e', "import {v7} from 'uuid'; console.log(v7())"],
+            cwd=WEB, text=True, timeout=10).strip()
+        status, _ = operator.call('PUT', profile_path, dict(operationId=profile_operation,expectedRevision=profile['revision'],value=dict(displayName='Device Browser Person',username='person-source-alias',email=None,extensions={},maxAgeSeconds=14400)))
         if status != 200: raise RuntimeError('personnel-profile-write')
         status, _ = operator.call('PUT', operator.business_path('/devices/4cb04b2e-9edb-5fe4-9c31-20e82ea7cef8/registration-user'), dict(expectedRevision=0,user=dict(tenantId=TENANTS[0],instanceId=INSTANCE,principalId=ADMIN)), operation=str(uuid.uuid4()))
         if status != 200: raise RuntimeError('personnel-owner-write')

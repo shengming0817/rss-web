@@ -1,5 +1,6 @@
 // React administration over disposable real PG, Identity, Keycloak and HTTPS MDM.
 import { chromium } from 'playwright'
+import { v7 as profileOperationId, version as uuidVersion } from 'uuid'
 import { readFileSync, statSync, mkdtempSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -183,6 +184,13 @@ try {
 
   phase = 'local-profile-unknown'
   await admin.getByRole('tab', { name: '本人本地资料', exact: true }).click()
+  await result(admin, 'PUT', '/profile', () =>
+    admin.getByRole('button', { name: '清除本地资料', exact: true }).click(),
+  )
+  const cleared = await result(admin, 'GET', '/profile', () =>
+    admin.getByRole('button', { name: '读取本地资料', exact: true }).click(),
+  )
+  assert.equal(cleared.value, null)
   await admin.getByLabel('显示名称', { exact: true }).fill('React administrator')
   const extensions = {
     employeeNumber: 'LOCAL-REACT',
@@ -197,7 +205,10 @@ try {
   const localPath = `/api/v1/identity/tenants/${f.tenant}/accounts/${f.principal}/profile`
   const loseLocal = async (route) => {
     if (route.request().method() !== 'PUT') return route.fallback()
-    localOperation = route.request().postDataJSON().operationId
+    const id = route.request().postDataJSON().operationId
+    assert.equal(uuidVersion(id), 7)
+    if (localOperation) assert.equal(id, localOperation)
+    localOperation = id
     const response = await route.fetch()
     assert.equal(response.status(), 200)
     await route.abort('failed')
@@ -213,6 +224,11 @@ try {
     await admin.getByRole('button', { name: '放弃已拒绝请求并读取最新版本', exact: true }).count(),
     0,
   )
+  const replay = admin.waitForEvent('requestfailed', {
+    predicate: (r) => r.method() === 'PUT' && new URL(r.url()).pathname === localPath,
+  })
+  await admin.getByRole('button', { name: '显式重提原请求', exact: true }).click()
+  await replay
   const localReads = requestCount(admin, 'GET', `${localPath}/operations/${localOperation}`)
   await admin.getByRole('button', { name: '查询原资料操作', exact: true }).click()
   await admin
@@ -225,15 +241,45 @@ try {
     extensions,
   )
   await admin.unroute('**/accounts/*/profile', loseLocal)
-  assert.equal(requestCount(admin, 'PUT', localPath), 1)
+  assert.equal(requestCount(admin, 'PUT', localPath), 3)
   assert.equal(
     requestCount(admin, 'GET', `${localPath}/operations/${localOperation}`),
     localReads + 1,
   )
   checks.push(
-    'real-local-profile-commit-loss-original-query-no-replay',
+    'real-local-profile-commit-loss-explicit-retry-original-receipt',
     'unknown-extension-roundtrip',
   )
+
+  const expireChange = async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback()
+    const original = route.request().postDataJSON()
+    assert.equal(original.value, null)
+    assert.equal(uuidVersion(original.operationId), 7)
+    await route.continue({
+      postData: JSON.stringify({
+        ...original,
+        operationId: profileOperationId({ msecs: Date.now() - 600_000 }),
+      }),
+    })
+  }
+  await admin.route('**/accounts/*/profile', expireChange)
+  await result(
+    admin,
+    'PUT',
+    '/profile',
+    () => admin.getByRole('button', { name: '清除本地资料', exact: true }).click(),
+    410,
+  )
+  await admin
+    .getByText('此资料操作的回执已过期。请重新读取资料，确认后再开始新的修改。', { exact: true })
+    .waitFor()
+  assert.equal(await admin.getByRole('button', { name: '显式重提原请求', exact: true }).count(), 0)
+  await admin.unroute('**/accounts/*/profile', expireChange)
+  await result(admin, 'GET', '/profile', () =>
+    admin.getByRole('button', { name: '读取本地资料', exact: true }).click(),
+  )
+  checks.push('expired-clear-requires-current-profile')
 
   phase = 'local-profile-real-conflict-recovery'
   // A concurrent real write advances the revision before the original reaches the backend.
@@ -241,7 +287,9 @@ try {
   const conflictLocal = async (route) => {
     if (route.request().method() !== 'PUT') return route.fallback()
     const original = route.request().postDataJSON()
-    const concurrent = await route.fetch({ postData: { ...original, operationId: randomUUID() } })
+    const concurrent = await route.fetch({
+      postData: { ...original, operationId: profileOperationId() },
+    })
     assert.equal(concurrent.status(), 200)
     await route.continue()
   }

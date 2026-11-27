@@ -1,3 +1,5 @@
+export { v7 as newProfileOperationId } from 'uuid'
+
 /** Identity account management is independent from MDM resource authorization. */
 export interface Account {
   readonly principalId: string

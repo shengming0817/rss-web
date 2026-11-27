@@ -1,10 +1,15 @@
 import { useState } from 'react'
 import { Alert, Button, Form, Input, InputNumber, Space } from 'antd'
-import { profileExtensions, validateLocalProfile, type LocalProfileChange } from '@rss/auth-core'
+import {
+  newProfileOperationId,
+  profileExtensions,
+  validateLocalProfile,
+  type LocalProfileChange,
+} from '@rss/auth-core'
 import type { Runtime } from './runtime'
 import type { Locale } from './i18n'
 import { useAdministration } from './useAdministration'
-import { Failure, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'
+import { codeOf, Failure, isUnknown, labels, ReadState, useAction, useRead } from './AdminUi'
 export function LocalProfile({
   runtime,
   locale,
@@ -22,14 +27,22 @@ export function LocalProfile({
   )
   const [pending, setPending] = useState<LocalProfileChange | null>(null),
     [writeOutcome, setWriteOutcome] = useState<
-      'none' | 'pending' | 'unknown' | 'rejected' | 'confirmed'
+      'none' | 'pending' | 'unknown' | 'rejected' | 'confirmed' | 'expired'
     >('none'),
     [invalid, setInvalid] = useState(false)
   const confirmed = writeOutcome === 'confirmed'
   async function submit(change: LocalProfileChange) {
     setWriteOutcome('pending')
     const r = await action.run(() => identity.saveLocalProfile(principal, change))
-    setWriteOutcome(r.ok ? 'confirmed' : isUnknown(r.error) ? 'unknown' : 'rejected')
+    setWriteOutcome(
+      r.ok
+        ? 'confirmed'
+        : codeOf(r.error) === 'profile_operation_expired'
+          ? 'expired'
+          : isUnknown(r.error)
+            ? 'unknown'
+            : 'rejected',
+    )
   }
   return (
     <>
@@ -52,6 +65,16 @@ export function LocalProfile({
           role="alert"
         />
       )}
+      {writeOutcome === 'expired' && (
+        <Alert
+          type="warning"
+          role="alert"
+          title={l(
+            '此资料操作的回执已过期。请重新读取资料，确认后再开始新的修改。',
+            'The receipt for this change has expired. Read the current profile before starting another change.',
+          )}
+        />
+      )}
       {confirmed && (
         <Alert
           type="success"
@@ -62,7 +85,7 @@ export function LocalProfile({
         />
       )}
       <Button
-        disabled={action.busy || (pending !== null && !confirmed)}
+        disabled={action.busy || (pending !== null && !confirmed && writeOutcome !== 'expired')}
         onClick={() => {
           setPending(null)
           setWriteOutcome('none')
@@ -108,7 +131,7 @@ export function LocalProfile({
               }
               validateLocalProfile(value)
               const change = {
-                operationId: crypto.randomUUID(),
+                operationId: newProfileOperationId(),
                 expectedRevision: read.value!.revision,
                 value,
               }
@@ -152,7 +175,7 @@ export function LocalProfile({
               danger
               onClick={() => {
                 const change = {
-                  operationId: crypto.randomUUID(),
+                  operationId: newProfileOperationId(),
                   expectedRevision: read.value!.revision,
                   value: null,
                 }
@@ -178,7 +201,7 @@ export function LocalProfile({
           {l('放弃已拒绝请求并读取最新版本', 'Discard rejected request and read latest version')}
         </Button>
       )}
-      {pending && !confirmed && writeOutcome !== 'rejected' && (
+      {pending && !confirmed && writeOutcome !== 'rejected' && writeOutcome !== 'expired' && (
         <div className="admin-recovery">
           <code>{pending.operationId}</code>
           <Space>
@@ -190,6 +213,8 @@ export function LocalProfile({
                   .then((r) => {
                     if (r.ok && r.value?.revision === pending.expectedRevision + 1)
                       setWriteOutcome('confirmed')
+                    else if (!r.ok && codeOf(r.error) === 'profile_operation_expired')
+                      setWriteOutcome('expired')
                   })
               }
             >
