@@ -93,6 +93,9 @@ catalogs:
     typescript-eslint:
       specifier: ^8.20.0
       version: 8.60.0
+    uuid:
+      specifier: 13.0.2
+      version: 13.0.2
     vite:
       specifier: ^6.0.7
       version: 6.4.2
@@ -182,6 +185,9 @@ importers:
       typescript-eslint:
         specifier: 'catalog:'
         version: 8.60.0(eslint@9.39.4)(typescript@5.7.3)
+      uuid:
+        specifier: 'catalog:'
+        version: 13.0.2
       vite:
         specifier: 'catalog:'
         version: 6.4.2(@types/node@22.19.19)(yaml@2.6.1)
@@ -486,6 +492,10 @@ importers:
         version: 3.2.6(@types/node@22.19.19)(jsdom@25.0.1)(yaml@2.6.1)
 
   packages/auth-core:
+    dependencies:
+      uuid:
+        specifier: 'catalog:'
+        version: 13.0.2
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
@@ -3403,6 +3413,10 @@ packages:
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
+  uuid@13.0.2:
+    resolution: {integrity: sha512-vzi9uRZ926x4XV73S/4qQaTwPXM2JBj6/6lI/byHH1jOpCzb0zDbfytgA9LcN/hzb2l7WQSQnxITOVx5un/wGw==}
+    hasBin: true
+
   vite-node@3.2.4:
     resolution: {integrity: sha512-EbKSKh+bh1E1IFxeO0pg1n4dvoOTt0UDiXMd/qn++r98+jPO1xtJilvXldeuQ8giIB5IkpjCgMleHMNEsGH6pg==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
@@ -5907,6 +5921,8 @@ snapshots:
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
+
+  uuid@13.0.2: {}
 
   vite-node@3.2.4(@types/node@22.19.19)(yaml@2.6.1):
     dependencies:

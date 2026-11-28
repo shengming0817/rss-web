@@ -8,6 +8,11 @@ describe('Identity errors never fall back to the RSS bearer wire', () => {
       'insufficient_privilege',
     )
     expect(decodeIdentityError(401, { code: 'invalid_credential' }).status).toBe(401)
+    expect(decodeIdentityError(410, { code: 'profile_operation_expired' })).toMatchObject({
+      cause: 'wire',
+      status: 410,
+      code: 'profile_operation_expired',
+    })
     expect(decodeIdentityError(409, { code: 'profile_receipt_capacity_reached' })).toMatchObject({
       cause: 'wire',
       status: 409,

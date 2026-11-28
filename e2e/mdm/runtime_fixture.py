@@ -59,7 +59,8 @@ def storage(environment, binary, config):
         password_file=str(private(directory/'runtime-password', secrets.token_hex(24))))
     cursor = private(directory/'cursor-key', '')
     cursor.write_bytes(secrets.token_bytes(32))
-    telemetry = dict(resource_id=str(uuid.uuid4()), backend=dict(kind='postgres', database=runtime),
+    telemetry = dict(resource_id=str(uuid.uuid4()), backend=dict(kind='postgres', database=runtime,
+        prepare=dict(max_prepare_batches=2, max_prepare_bytes=64*1024*1024)),
         connections=2, maintenance=dict(authorization_bytes=65536, rows=4096, buckets=64, step_seconds=6),
         cursor_key_file=str(cursor), ingress=dict(requestBytes=1048576, pendingBatches=64,
         batchesPerMinute=120, bytesPerMinute=8388608), limits=dict(max_points=4096,

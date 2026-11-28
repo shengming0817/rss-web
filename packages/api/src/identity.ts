@@ -20,6 +20,7 @@ const statuses: Readonly<Record<string, number>> = {
   operation_conflict: 409,
   provider_limit_reached: 409,
   profile_receipt_capacity_reached: 409,
+  profile_operation_expired: 410,
   account_already_exists: 409,
   identity_link_conflict: 409,
   rate_limited: 429,
